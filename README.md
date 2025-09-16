@@ -1,10 +1,12 @@
 # Prometheus
+
 Prometheus is a database of 'sabermetric' like stats that evaluate League of Legends esports teams and players. The `prometheus` repository will contain a database that records these stats as well as a self-hosted website to browse stats across different teams, seasons, and regions.
 ## Goals
 - [ ] One advanced metric (LORE) that evaluates team performance
 - [ ] One advanced metric that evaluates individual player performance
 - [ ] SQL database that stores match, team, player, and stat tables
 - [ ] Self-hosted webpage for exploring stat rankings
+- [ ] CLI for dynamically viewing metrics
 - [ ] Metrics span 5+ years of data over all major regions
 ## Metrics
 ### Team-based
@@ -30,7 +32,7 @@ LORE is prometheus' flagship stat for team performance. At a high level, it is a
 We also include slightly more advanced metrics in this calculation:
 
 ```
-- Objective_conversion = fraction of team kills that directly preceded (within X seconds) an objective take
+- Kill_conversion = fraction of team kills that directly preceded (within X seconds) an objective take
 ```
 
 In LORE, weights are calculated using logistic regression with the winning team as a prediction target. 
@@ -42,6 +44,10 @@ LORB is very similar to LORE, except all categories are weighted equally. It pro
 Determining the weights for WOBA involves creating a table where each match has two rows: one for Blue side and one for Red side. The features in a row are the stats described above.
 
 The match data will be stored in an sqlite3 database. Initially, the only table in the database will be a match table that stores the weights for LORB/LORE. 
+
+When a user requests the metrics for a certain team, region, or split, we will query the database to grab the relevant matches for that metric request. Then, we will fit a model using scikit-learn. The weights for those models will be cached or stored on the disk, depending on the time it fit the model. 
+
+The Prometheus API will return metrics and rankings for use in the CLI and website.
 ## Challenges
 #### Strength-based schedules
 Unlike traditional sports, most modern League regions don't follow a traditional round-robin based format for their regular season. For example, here is the LTA North Split 1 season: 
@@ -50,3 +56,11 @@ Unlike traditional sports, most modern League regions don't follow a traditional
 As a team advances farther in the bracket, they face more difficult opponents, which results in worse metrics. Stronger teams that advance farther are "punished" by the metrics for winning their games and moving through the bracket. 
 
 One solution to this problem is to factor in opponent team strength when calculating metrics. This can be simply by using opponent win percentage to adjust scores, or calculating a team's elo. 
+#### Disparity in region strength
+Weighting by elo will also help the model learn weights that reflect the tendencies of top regions as opposed, which is the ultimate goal of these metrics. Take the following contrived example.
+
+T1 (LCK) is undefeated during the spring split. Every game, they sack all dragons and only focus on taking voidgrubs and heralds. C9 (LCS) is also undefeated. Every game, they sack voidgrubs/heralds and only focus on taking dragons.
+
+Because T1 is playing in a more difficult region, intuitively their games (where top-side is prioritized much more heavily) should 'count' more in the models. Thus, our model should favor teams that are great at taking voidgrubs/heralds over their counterparts that focus on dragons. 
+
+If we weight matches by the opponent's elo, then matches against stronger opponents will count more in the rankings, solving this problem. The difficulty with this is implementing an elo system that works across regions and across the 10+ league seasons.
