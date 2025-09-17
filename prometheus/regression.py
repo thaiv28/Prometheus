@@ -7,14 +7,14 @@ from sklearn.model_selection import train_test_split
 from prometheus.matches import get_matches_frame
 
 
-def fit_lore_model(region=None, year=None, evaluate=False):
+def fit_lore_model(league=None, year=None, evaluate=False):
     """
-    Reads from match_lore_stats table, filters by region and year, and trains a linear regression model to predict win probability.
+    Reads from match_lore_stats table, filters by league and year, and trains a linear regression model to predict win probability.
     The model is implemented as a scikit-learn pipeline that first scales features using StandardScaler,
     then fits a LinearRegression model. The pipeline can be used for prediction and will automatically scale input features.
 
     Args:
-        region (str, optional): League/region to filter by (e.g., 'LCK').
+        league (str, optional): League/region to filter by (e.g., 'LCK').
         year (int, optional): Year to filter by (e.g., 2022).
         evaluate (bool, optional): If True, prints model weights and accuracy, and shows a plot of predicted scores.
 
@@ -24,8 +24,8 @@ def fit_lore_model(region=None, year=None, evaluate=False):
         y_test: Test labels.
     """
     filters = {}
-    if region:
-        filters["region"] = region
+    if league:
+        filters["league"] = league
     if year:
         filters["year"] = year
     df = get_matches_frame("match_lore_stats", filters)
@@ -50,7 +50,7 @@ def fit_lore_model(region=None, year=None, evaluate=False):
     pipeline.fit(X_train, y_train)
 
     if evaluate:
-        print(f"Evaluating model for region={region}, year={year}")
+        print(f"Evaluating model for league={league}, year={year}")
         print(
             f"Model weights: {pipeline.named_steps['regressor'].coef_}, Intercept: {pipeline.named_steps['regressor'].intercept_}"
         )
@@ -81,4 +81,4 @@ def _evaluate_model(pipeline, X_test, y_test):
 
 
 if __name__ == "__main__":
-    model, X_test, y_test = fit_lore_model(region="LPL", year=2018, evaluate=True)
+    model, X_test, y_test = fit_lore_model(league="LPL", year=2018, evaluate=True)
