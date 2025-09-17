@@ -1,57 +1,74 @@
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
 
 from prometheus.matches import get_matches_frame
 
+
 def fit_lore_model(region=None, year=None, evaluate=False):
     """
-    Reads from match_lore_stats table, filters by region and year, and trains a logistic regression model to predict win probability.
+    Reads from match_lore_stats table, filters by region and year, and trains a linear regression model to predict win probability.
+    The model is implemented as a scikit-learn pipeline that first scales features using StandardScaler,
+    then fits a LinearRegression model. The pipeline can be used for prediction and will automatically scale input features.
+
     Args:
         region (str, optional): League/region to filter by (e.g., 'LCK').
         year (int, optional): Year to filter by (e.g., 2022).
+        evaluate (bool, optional): If True, prints model weights and accuracy, and shows a plot of predicted scores.
+
     Returns:
-        model: Trained scikit-learn logistic regression model.
-        X_test: Test features.
+        pipeline: Trained scikit-learn Pipeline (StandardScaler + LinearRegression).
+        X_test: Test features (unscaled).
         y_test: Test labels.
     """
     filters = {}
     if region:
-        filters['region'] = region
+        filters["region"] = region
     if year:
-        filters['year'] = year
-    df = get_matches_frame('match_lore_stats', filters)
-    if df.empty:
-        raise ValueError("No data found for given criteria.")
-    
-    feature_cols = ['gpm', 'golddiffat15', 'turrets_per_10', 'baron_per_10', 'dragon_per_10']
-    X = df[feature_cols]
-    y = df['result'].astype(int)
-    
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
-    
-    model = LinearRegression()
-    model.fit(X_train, y_train)
-    
-    if evaluate:
-        _evaluate_model(model, X_test, y_test)
-    
-    return model, X_test, y_test
+        filters["year"] = year
+    df = get_matches_frame("match_lore_stats", filters)
 
-def _evaluate_model(model, X_test, y_test):
-    y_pred = model.predict(X_test)
+    feature_cols = [
+        "gpm",
+        "golddiffat15",
+        "turrets_per_10",
+        "baron_per_10",
+        "dragon_per_10",
+    ]
+    X = df[feature_cols]
+    y = df["result"].astype(int)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
+    pipeline = Pipeline(
+        [("scaler", StandardScaler()), ("regressor", LinearRegression())]
+    )
+    pipeline.fit(X_train, y_train)
+
+    if evaluate:
+        print(f"Evaluating model for region={region}, year={year}")
+        print(
+            f"Model weights: {pipeline.named_steps['regressor'].coef_}, Intercept: {pipeline.named_steps['regressor'].intercept_}"
+        )
+        _evaluate_model(pipeline, X_test, y_test)
+
+    return pipeline, X_test, y_test
+
+
+def _evaluate_model(pipeline, X_test, y_test):
+    y_pred = pipeline.predict(X_test)
     y_pred_binary = (y_pred > 0.5).astype(int)
     acc = accuracy_score(y_test, y_pred_binary)
     print(f"Accuracy: {acc:.3f}")
 
     import matplotlib.pyplot as plt
+
     # Prepare colors: red for loss (0), blue for win (1)
-    colors = ['red' if actual == 0 else 'blue' for actual in y_test]
+    colors = ["red" if actual == 0 else "blue" for actual in y_test]
     # Plot 1D line with colored points for each score
     plt.figure(figsize=(10, 2))
     y_line = [1] * len(y_pred)  # All points on y=1
@@ -62,5 +79,6 @@ def _evaluate_model(model, X_test, y_test):
     plt.tight_layout()
     plt.show()
 
+
 if __name__ == "__main__":
-    model, X_test, y_test = fit_lore_model(region='LPL', year=2018, evaluate=True)
+    model, X_test, y_test = fit_lore_model(region="LPL", year=2018, evaluate=True)
