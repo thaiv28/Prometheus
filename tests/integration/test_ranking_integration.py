@@ -8,7 +8,7 @@ def test_get_lore_ranking_integration(mock_get_engine_and_tables, inmemory_table
     engine, stat_table, match_raw_stats = inmemory_tables
     mock_get_engine_and_tables.return_value = (engine, stat_table, match_raw_stats)
 
-    df = get_lore_ranking(year=2022)
+    df = get_lore_ranking(year=2022, features=["gpm", "dragon_per_10"])
     assert "teamname" in df.columns
     assert "score" in df.columns
     # Expected order: B, A, D, C

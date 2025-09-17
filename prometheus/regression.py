@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from prometheus.matches import get_matches_frame
 
 
-def fit_lore_model(league=None, year=None, evaluate=False):
+def _fit_lore_model(features, league=None, year=None, evaluate=False):
     """
     Reads from match_lore_stats table, filters by league and year, and trains a linear regression model to predict win probability.
     The model is implemented as a scikit-learn pipeline that first scales features using StandardScaler,
@@ -30,12 +30,7 @@ def fit_lore_model(league=None, year=None, evaluate=False):
         filters["year"] = year
     df = get_matches_frame("match_lore_stats", filters)
 
-    feature_cols = [
-        col
-        for col in df.columns
-        if col not in ["teamid", "gameid", "teamname", "league", "year", "result"]
-    ]
-    X = df[feature_cols]
+    X = df[features]
     y = df["result"].astype(int)
 
     X_train, X_test, y_train, y_test = train_test_split(
