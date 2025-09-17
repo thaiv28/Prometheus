@@ -7,7 +7,7 @@ CREATE TABLE match_raw_stats (
     teamname           TEXT NOT NULL,       -- ex: "T1", "G2 Esports", etc.
     side               TEXT CHECK (side IN ('Red','Blue')) NOT NULL, 
     gamelength         REAL NOT NULL,
-    result             TEXT CHECK (result IN ('Win','Loss')) NOT NULL,
+    result             BOOLEAN NOT NULL,
 
     -- raw totals
     totalgold           INT NOT NULL,
@@ -22,6 +22,7 @@ CREATE TABLE match_raw_stats (
 CREATE TABLE match_lore_stats (
     gameid           TEXT NOT NULL,
     teamid           TEXT NOT NULL,
+    result           BOOLEAN NOT NULL,
     -- derived stats
     gpm                 REAL NOT NULL,
     golddiffat15        REAL NOT NULL,
