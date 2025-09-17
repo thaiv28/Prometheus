@@ -20,7 +20,6 @@ def compute_lore_stats(df):
             "turrets_per_10",
             "baron_per_10",
             "dragon_per_10",
-            "result",
         ]
     ]
 

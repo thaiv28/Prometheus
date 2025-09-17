@@ -11,9 +11,12 @@ def _get_engine_and_tables(stat_table_name, db_path=DB_PATH):
     match_raw_stats = Table("match_raw_stats", metadata, autoload_with=engine)
     return engine, stat_table, match_raw_stats
 
+
 def _build_select_stmt(stat_table, match_raw_stats, filters):
     column_table_map = {col: stat_table for col in stat_table.columns.keys()}
-    column_table_map.update({col: match_raw_stats for col in match_raw_stats.columns.keys()})
+    column_table_map.update(
+        {col: match_raw_stats for col in match_raw_stats.columns.keys()}
+    )
     sql_filters = []
     if filters:
         for key, val in filters.items():
@@ -27,21 +30,27 @@ def _build_select_stmt(stat_table, match_raw_stats, filters):
                 else:
                     sql_filters.append(col == val)
 
-    join_condition = (stat_table.c.gameid == match_raw_stats.c.gameid) & (stat_table.c.teamid == match_raw_stats.c.teamid)
+    join_condition = (stat_table.c.gameid == match_raw_stats.c.gameid) & (
+        stat_table.c.teamid == match_raw_stats.c.teamid
+    )
     stmt = select("*").select_from(stat_table.join(match_raw_stats, join_condition))
     if sql_filters:
         stmt = stmt.where(and_(*sql_filters))
     return stmt
 
+
 def _retrieve_dataframe_from_table(stat_table_name, filters=None, db_path=DB_PATH):
-    engine, stat_table, match_raw_stats = _get_engine_and_tables(stat_table_name, db_path)
+    engine, stat_table, match_raw_stats = _get_engine_and_tables(
+        stat_table_name, db_path
+    )
     stmt = _build_select_stmt(stat_table, match_raw_stats, filters)
-    
+
     df = pd.read_sql(stmt, engine)
     if df.empty:
         raise ValueError("No data found for given criteria.")
-    
+
     return df, stat_table
+
 
 def get_team_averages_frame(stat_table_name, filters=None):
     """
@@ -57,8 +66,12 @@ def get_team_averages_frame(stat_table_name, filters=None):
     df, stat_table = _retrieve_dataframe_from_table(stat_table_name, filters)
     group_cols = ["teamname"]
     # Only include numeric columns for averaging
-    features = [col for col in stat_table.columns.keys() if col not in ['teamid', 'gameid', 'teamname']]
-    
+    features = [
+        col
+        for col in stat_table.columns.keys()
+        if col not in ["teamid", "gameid", "teamname"]
+    ]
+
     avg_df = df.groupby(group_cols)[features].mean().reset_index()
     # Add teamname back to the result
     # avg_df = df[group_cols].drop_duplicates().merge(avg_df, on="teamname")
@@ -74,5 +87,5 @@ def get_matches_frame(stat_table_name, filters=None):
     Returns:
         pd.DataFrame: Resulting DataFrame
     """
-    df, _ =  _retrieve_dataframe_from_table(stat_table_name, filters)
+    df, _ = _retrieve_dataframe_from_table(stat_table_name, filters)
     return df
