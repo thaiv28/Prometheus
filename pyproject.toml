@@ -6,6 +6,11 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "black>=25.1.0",
+    "matplotlib>=3.10.6",
     "pandas>=2.3.2",
+    "scikit-learn>=1.7.2",
     "sqlalchemy>=2.0.43",
 ]
+
+[tool.setuptools]
+packages = ["prometheus"]
