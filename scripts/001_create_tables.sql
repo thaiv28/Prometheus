@@ -22,7 +22,6 @@ CREATE TABLE match_raw_stats (
 CREATE TABLE match_lore_stats (
     gameid           TEXT NOT NULL,
     teamid           TEXT NOT NULL,
-    result           BOOLEAN NOT NULL,
     -- derived stats
     gpm                 REAL NOT NULL,
     golddiffat15        REAL NOT NULL,
