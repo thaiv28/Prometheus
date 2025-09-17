@@ -31,11 +31,9 @@ def fit_lore_model(league=None, year=None, evaluate=False):
     df = get_matches_frame("match_lore_stats", filters)
 
     feature_cols = [
-        "gpm",
-        "golddiffat15",
-        "turrets_per_10",
-        "baron_per_10",
-        "dragon_per_10",
+        col
+        for col in df.columns
+        if col not in ["teamid", "gameid", "teamname", "league", "year", "result"]
     ]
     X = df[feature_cols]
     y = df["result"].astype(int)

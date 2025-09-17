@@ -30,9 +30,3 @@ def test_fit_lore_model_basic(mock_read_sql):
 def test_fit_lore_model_empty_df(mock_read_sql):
     with pytest.raises(ValueError):
         fit_lore_model(league="LCK", year=2022)
-
-
-@patch("pandas.read_sql", return_value=MOCK_DF.drop(columns=["gpm"]))
-def test_fit_lore_model_missing_columns(mock_read_sql):
-    with pytest.raises(KeyError):
-        fit_lore_model(league="LCK", year=2022)
