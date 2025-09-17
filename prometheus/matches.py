@@ -17,6 +17,8 @@ def _build_select_stmt(stat_table, match_raw_stats, filters):
     sql_filters = []
     if filters:
         for key, val in filters.items():
+            if not val:
+                continue
             table = column_table_map.get(key)
             if table is not None:
                 col = getattr(table.c, key)
