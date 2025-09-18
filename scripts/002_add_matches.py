@@ -44,6 +44,7 @@ def main():
 
         df = pd.read_csv(file)
         df_sql = preprocess_match_raw_stats(df)
+        df_sql = df_sql.drop_duplicates(subset=["gameid", "teamid"])
         df_sql.to_sql("match_raw_stats", engine, if_exists="append", index=False)
 
 
