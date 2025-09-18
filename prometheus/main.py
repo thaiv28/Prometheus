@@ -15,7 +15,7 @@ console = Console()
 
 @app.command("rankings")
 def rankings(
-    metric: Annotated[Metric, typer.Argument(help="Metric to rank (e.g. glory)")],
+    metric: Annotated[Metric, typer.Argument(help="Metric to rank")],
     league: Annotated[list[League], typer.Option(help="List of leagues to filter")] = [
         League.MAJOR
     ],
@@ -28,6 +28,10 @@ def rankings(
         match metric:
             case "glory":
                 df = get_glory_ranking(year=year, league=filtered_leagues)
+            case "glorb":
+                df = get_glory_ranking(
+                    year=year, league=filtered_leagues, baseline=True
+                )
             case _:
                 typer.echo(f"Metric {metric} not supported.")
     except ValueError:

@@ -3,6 +3,7 @@ from enum import Enum
 
 class Metric(str, Enum):
     glory = "glory"
+    glorb = "glorb"
 
 
 class League(str, Enum):
@@ -25,8 +26,9 @@ class League(str, Enum):
     LCL = "LCL"
     LCO = "LCO"
     WCS = "WCS"
+    # TODO: make international events work
     MSI = "MSI"
-    WORLDS = "WORLDS"
+    WORLDS = "WLDs"
 
 
 PRE_2019_MAJOR_LEAGUES = [
@@ -53,3 +55,11 @@ CURRENT_MAJOR_LEAGUES = [
 ALL_MAJOR_LEAGUES = list(
     set(PRE_2019_MAJOR_LEAGUES + PRE_2025_MAJOR_LEAGUES + CURRENT_MAJOR_LEAGUES)
 )
+
+GLORY_FEATURES = [
+    "gpm",
+    "golddiffat15",
+    "turrets_per_10",
+    "baron_per_10",
+    "dragon_per_10",
+]

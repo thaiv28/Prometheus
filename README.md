@@ -4,6 +4,7 @@ Prometheus is a database of 'sabermetric' like stats that evaluate League of Leg
 
 An overview of prometheus' stats (described more in the [metrics](#metrics) section):
 - **Global League Offensive Rankings Yield (GLORY)**: Prometheus' flagship metric. Weights gold/objectives by their importance in the meta, and calculates the best teams at securing those advantages across all regions.
+- **Global League Offensive Rankings Baseline (GLORB)**: Baseline for GLORY. Weights all objective/gold equally.
 ## CLI
 The prometheus CLI provides users the ability to view past of current ratings for any of prometheus' metrics.
 

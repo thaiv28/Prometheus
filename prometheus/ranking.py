@@ -1,16 +1,13 @@
 from prometheus.regression import _fit_glory_model
 from prometheus.matches import get_team_averages_frame
+from prometheus.types import GLORY_FEATURES
 
 
-def get_glory_ranking(features=None, year=None, league=None, rescale=True):
+def get_glory_ranking(
+    features=None, year=None, league=None, rescale=True, baseline=False
+):
     if features is None:
-        features = [
-            "gpm",
-            "golddiffat15",
-            "turrets_per_10",
-            "baron_per_10",
-            "dragon_per_10",
-        ]
+        features = GLORY_FEATURES
 
     pipeline, _, _ = _fit_glory_model(features, league=league, year=year)
 
@@ -19,7 +16,15 @@ def get_glory_ranking(features=None, year=None, league=None, rescale=True):
         "match_glory_stats", filters={"year": year, "league": league}
     )
 
-    scores = pipeline.predict(averages[features])
+    if not baseline:
+        # predict scores for each team using the regression model
+        scores = pipeline.predict(averages[features])
+    else:
+        # scale scores using only the StandardScaler step of the pipeline, then weight all features equally
+        scaled_df = pipeline.steps[0][1].transform(averages[features])
+        scores = scaled_df.sum(axis=1)
+        # Normalize to 0-1. Necessary since sum is not necessarily in 0-1 range, unlike regression output
+        scores = (scores - scores.min()) / (scores.max() - scores.min())
 
     # Create a DataFrame with teamname and scores
     ranking_df = averages[["teamname"]].copy()
@@ -40,5 +45,7 @@ def _rescale(series, scale):
 
 
 if __name__ == "__main__":
-    df = get_glory_ranking(year=2018, league=["LPL", "LCK", "EU LCS", "NA LCS"])
+    df = get_glory_ranking(
+        year=2018, league=["LPL", "LCK", "EU LCS", "NA LCS"], baseline=True
+    )
     print(df)
