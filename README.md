@@ -1,12 +1,39 @@
 # Prometheus
 
 Prometheus is a database of 'sabermetric' like stats that evaluate League of Legends esports teams and players. The `prometheus` repository will contain a database that records these stats as well as a self-hosted website to browse stats across different teams, seasons, and regions.
+## CLI
+The prometheus CLI provides users the ability to view past of current ratings for any of prometheus' metrics.
+
+![Rankings CLI help message](./docs/images/cli_rankings.png)
+
+For example, the following command will show the top rankings of the `GLORY` metric for all major regions in a given year.
+
+```
+$ python main.py rankings glory --league MAJOR --year 2024
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ GLORY Rankings (MAJOR | 2024) ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│               teamname  score │
+│ 0                Gen.G  84.05 │
+│ 1           G2 Esports  77.65 │
+│ 2          Team Liquid  71.24 │
+│ 3                   T1  66.36 │
+│ 4  Hanwha Life Esports  66.04 │
+│ 5               Fnatic  61.59 │
+│ 6             FlyQuest  60.99 │
+│ 7             Team BDS  58.41 │
+│ 8               Cloud9  54.44 │
+│ 9            Dplus KIA  54.19 │
+└───────────────────────────────┘
+```
+
 ## Goals
-- [ ] One advanced metric (GLORY) that evaluates team performance
+- [x] One advanced metric (GLORY) that evaluates team performance
 - [ ] One advanced metric that evaluates individual player performance
 - [ ] SQL database that stores match, team, player, and stat tables
 - [ ] Self-hosted webpage for exploring stat rankings
-- [ ] CLI for dynamically viewing metrics
+- [x] CLI for dynamically viewing metrics
 - [ ] Metrics span 5+ years of data over all major regions
 ## Metrics
 ### Team-based
