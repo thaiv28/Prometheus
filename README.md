@@ -1,6 +1,9 @@
 # Prometheus
 
 Prometheus is a database of 'sabermetric' like stats that evaluate League of Legends esports teams and players. The `prometheus` repository will contain a database that records these stats as well as a self-hosted website to browse stats across different teams, seasons, and regions.
+
+An overview of prometheus' stats (described more in the [metrics](#metrics) section):
+- **Global League Offensive Rankings Yield (GLORY)**: Prometheus' flagship metric. Weights gold/objectives by their importance in the meta, and calculates the best teams at securing those advantages across all regions.
 ## CLI
 The prometheus CLI provides users the ability to view past of current ratings for any of prometheus' metrics.
 
