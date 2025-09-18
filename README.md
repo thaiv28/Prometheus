@@ -14,22 +14,43 @@ For example, the following command will show the top rankings of the `GLORY` met
 
 ```
 $ prometheus rankings glory --league MAJOR --year 2024
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ GLORY Rankings (MAJOR | [2024])            ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│               teamname  score  year league │
+│ 0                Gen.G  83.60  2024    LCK │
+│ 1           G2 Esports  77.11  2024    LEC │
+│ 2          Team Liquid  70.83  2024    LCS │
+│ 3                   T1  65.70  2024    LCK │
+│ 4  Hanwha Life Esports  65.46  2024    LCK │
+│ 5               Fnatic  60.97  2024    LEC │
+│ 6             FlyQuest  60.41  2024    LCS │
+│ 7             Team BDS  57.71  2024    LEC │
+│ 8               Cloud9  53.86  2024    LCS │
+│ 9            Dplus KIA  53.51  2024    LCK │
+└────────────────────────────────────────────┘
+```
 
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ GLORY Rankings (MAJOR | 2024) ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│               teamname  score │
-│ 0                Gen.G  84.05 │
-│ 1           G2 Esports  77.65 │
-│ 2          Team Liquid  71.24 │
-│ 3                   T1  66.36 │
-│ 4  Hanwha Life Esports  66.04 │
-│ 5               Fnatic  61.59 │
-│ 6             FlyQuest  60.99 │
-│ 7             Team BDS  58.41 │
-│ 8               Cloud9  54.44 │
-│ 9            Dplus KIA  54.19 │
-└───────────────────────────────┘
+Provide lists of arguments to filter results for all of those parameters.
+
+```
+$ prometheus rankings glory --year 2021 --year 2022 --league LPL --league LCK
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ GLORY Rankings (LPL, LCK | [2021, 2022])   ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│               teamname  score  year league │
+│ 0                Gen.G  77.18  2022    LCK │
+│ 1      FunPlus Phoenix  76.00  2021    LPL │
+│ 2  Royal Never Give Up  74.74  2021    LPL │
+│ 3          Top Esports  74.40  2021    LPL │
+│ 4                   T1  72.67  2022    LCK │
+│ 5            Dplus KIA  72.38  2021    LCK │
+│ 6        EDward Gaming  64.63  2021    LPL │
+│ 7      Invictus Gaming  63.38  2021    LPL │
+│ 8            JD Gaming  62.46  2021    LPL │
+│ 9               Suning  60.10  2021    LPL │
+└────────────────────────────────────────────┘
 ```
 
 ## Goals
