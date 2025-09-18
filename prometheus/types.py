@@ -26,7 +26,6 @@ class League(str, Enum):
     LCL = "LCL"
     LCO = "LCO"
     WCS = "WCS"
-    # TODO: make international events work
     MSI = "MSI"
     WORLDS = "WLDs"
 

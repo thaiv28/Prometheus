@@ -19,14 +19,15 @@ def match_major_leagues(league_list, year=None):
     return major_leagues
 
 
-def filter_leagues(league_list, year=None):
-    filtered_leagues = league_list.copy()
+def filter_leagues(league_list, years=None):
+    filtered_leagues = set(league_list).copy()
 
     if League.MAJOR in league_list:
         filtered_leagues.remove(League.MAJOR)
-        filtered_leagues += match_major_leagues(league_list, year)
+        for year in years:
+            filtered_leagues.update(match_major_leagues(league_list, year))
 
-    return filtered_leagues
+    return list(filtered_leagues)
 
 
 def print_rankings_table(df, metric, league, year, n, console=None):

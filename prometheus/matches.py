@@ -66,18 +66,15 @@ def get_team_averages_frame(stat_table_name, filters=None):
     """
 
     df, stat_table = _retrieve_dataframe_from_table(stat_table_name, filters)
-    group_cols = ["teamname"]
+    group_cols = ["teamname", "year", "league"]
     # Only include numeric columns for averaging
     features = [
         col
         for col in stat_table.columns.keys()
         if col not in ["teamid", "gameid", "teamname"]
     ]
-
-    avg_df = df.groupby(group_cols)[features].mean().reset_index()
-    # Add teamname back to the result
-    # avg_df = df[group_cols].drop_duplicates().merge(avg_df, on="teamname")
-    return avg_df
+    df = df.groupby(group_cols)[features].mean().reset_index()
+    return df
 
 
 def get_matches_frame(stat_table_name, filters=None):

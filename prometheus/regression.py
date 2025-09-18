@@ -7,7 +7,9 @@ from sklearn.model_selection import train_test_split
 from prometheus.matches import get_matches_frame
 
 
-def _fit_glory_model(features, league=None, year=None, evaluate=False):
+def _fit_glory_model(
+    features, league=None, year=None, evaluate=False, test_split=False
+):
     """
     Reads from match_glory_stats table, filters by league and year, and trains a linear regression model to predict win probability.
     The model is implemented as a scikit-learn pipeline that first scales features using StandardScaler,
@@ -33,9 +35,13 @@ def _fit_glory_model(features, league=None, year=None, evaluate=False):
     X = df[features]
     y = df["result"].astype(int)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+    if test_split:
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+    else:
+        X_train, y_train = X, y
+        X_test, y_test = None, None
 
     pipeline = Pipeline(
         [("scaler", StandardScaler()), ("regressor", LinearRegression())]

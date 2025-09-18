@@ -19,10 +19,13 @@ def rankings(
     league: Annotated[list[League], typer.Option(help="List of leagues to filter")] = [
         League.MAJOR
     ],
-    year: Annotated[int, typer.Option(help="Year to filter")] = None,
+    year: Annotated[
+        list[int], typer.Option(help="Year to filter. Default all years")
+    ] = None,
     n: Annotated[int, typer.Option(help="Number of results to show")] = 10,
 ):
     """Fetch and display rankings."""
+    # TODO: add support for range of years. ex: (2021 - 2023) vs (2021, 2022, 2023)
     filtered_leagues = filter_leagues(league, year)
     try:
         match metric:

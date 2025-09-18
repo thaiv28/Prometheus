@@ -15,4 +15,4 @@ def test_retrieve_dataframe_from_table_inmemory(
 
     assert not df.empty
     assert df["teamname"].iloc[0] == "A"
-    assert df["gpm"].iloc[0] == 1800
+    assert df["gpm"].iloc[0] == 100

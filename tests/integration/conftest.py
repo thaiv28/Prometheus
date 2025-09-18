@@ -37,53 +37,56 @@ def setup_inmemory_db():
         conn.execute(
             stat_table.insert(),
             [
+                # 2022
                 {
                     "gameid": "g1",
                     "teamid": "t1",
-                    "gpm": 1800,
-                    "dragon_per_10": 0.3,
+                    "gpm": 100.0,
+                    "dragon_per_10": 200.0,
                 },  # A
                 {
                     "gameid": "g2",
                     "teamid": "t2",
-                    "gpm": 2000,
-                    "dragon_per_10": 0.5,
+                    "gpm": 200.0,
+                    "dragon_per_10": 400.0,
                 },  # B (strongest)
                 {
                     "gameid": "g3",
                     "teamid": "t3",
-                    "gpm": 1600,
-                    "dragon_per_10": 0.1,
+                    "gpm": 10.0,
+                    "dragon_per_10": 20.0,
                 },  # C (weakest)
                 {
                     "gameid": "g4",
                     "teamid": "t4",
-                    "gpm": 1700,
-                    "dragon_per_10": 0.2,
+                    "gpm": 50.0,
+                    "dragon_per_10": 100.0,
                 },  # D
+                # 2023. values are 1/10th of 2022 to mimic meta changes. however, team B is still strongest
+                # with a greater margin than in 2022
                 {
                     "gameid": "g5",
                     "teamid": "t1",
-                    "gpm": 1850,
-                    "dragon_per_10": 0.35,
+                    "gpm": 10.0,
+                    "dragon_per_10": 20.0,
                 },  # A
                 {
                     "gameid": "g6",
                     "teamid": "t2",
-                    "gpm": 2100,
-                    "dragon_per_10": 0.6,
+                    "gpm": 20.0,
+                    "dragon_per_10": 40.0,
                 },  # B (strongest)
                 {
                     "gameid": "g7",
                     "teamid": "t3",
-                    "gpm": 1650,
-                    "dragon_per_10": 0.15,
+                    "gpm": 1.0,
+                    "dragon_per_10": 2.0,
                 },  # C (weakest)
                 {
                     "gameid": "g8",
                     "teamid": "t4",
-                    "gpm": 1750,
-                    "dragon_per_10": 0.25,
+                    "gpm": 5.0,
+                    "dragon_per_10": 10.0,
                 },  # D
             ],
         )
@@ -132,7 +135,7 @@ def setup_inmemory_db():
                     "teamname": "D",
                     "side": "Red",
                     "gamelength": 33.0,
-                    "result": 1.0,
+                    "result": 0.0,
                 },
                 {
                     "gameid": "g5",
@@ -143,7 +146,7 @@ def setup_inmemory_db():
                     "teamname": "A",
                     "side": "Blue",
                     "gamelength": 36.0,
-                    "result": 0.0,
+                    "result": 1.0,
                 },
                 {
                     "gameid": "g6",
