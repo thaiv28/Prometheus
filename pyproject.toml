@@ -17,3 +17,6 @@ dependencies = [
 
 [tool.setuptools]
 packages = ["prometheus"]
+
+[project.scripts]
+prometheus = "prometheus.main:app"

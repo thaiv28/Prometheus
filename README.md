@@ -12,7 +12,7 @@ The prometheus CLI provides users the ability to view past of current ratings fo
 For example, the following command will show the top rankings of the `GLORY` metric for all major regions in a given year.
 
 ```
-$ python main.py rankings glory --league MAJOR --year 2024
+$ prometheus rankings glory --league MAJOR --year 2024
 
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
 ┃ GLORY Rankings (MAJOR | 2024) ┃
@@ -34,10 +34,10 @@ $ python main.py rankings glory --league MAJOR --year 2024
 ## Goals
 - [x] One advanced metric (GLORY) that evaluates team performance
 - [ ] One advanced metric that evaluates individual player performance
-- [ ] SQL database that stores match, team, player, and stat tables
+- [ ] SQL database that stores ~~match~~, player, and ~~stat~~ tables
 - [ ] Self-hosted webpage for exploring stat rankings
 - [x] CLI for dynamically viewing metrics
-- [ ] Metrics span 5+ years of data over all major regions
+- [x] Metrics span 5+ years of data over all major regions
 ## Metrics
 ### Team-based
 These metrics evaluate the strength of a team. Their main purpose is to compare the strength of a given team compared to teams across regions. 
