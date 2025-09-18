@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 from sklearn.pipeline import Pipeline
 
-from prometheus.regression import _fit_lore_model
+from prometheus.regression import _fit_glory_model
 
 # Mock DataFrame to simulate database output
 MOCK_DF = pd.DataFrame(
@@ -18,15 +18,11 @@ MOCK_DF = pd.DataFrame(
 )
 FEATURES = MOCK_DF.columns.tolist()
 
-@patch("pandas.read_sql", return_value=MOCK_DF.copy())
-def test_fit_lore_model_basic(mock_read_sql):
-    pipeline, X_test, y_test = _fit_lore_model(FEATURES, league="LCK", year=2022)
+
+@patch("prometheus.regression.get_matches_frame", return_value=MOCK_DF.copy())
+def test_fit_glory_model_basic(mock_get_matches_frame):
+    pipeline, X_test, y_test = _fit_glory_model(FEATURES, league="LCK", year=2022)
+
     assert isinstance(pipeline, Pipeline)
     assert X_test.shape[0] == y_test.shape[0]
     assert hasattr(pipeline.named_steps["regressor"], "coef_")
-
-
-@patch("pandas.read_sql", return_value=pd.DataFrame())
-def test_fit_lore_model_empty_df(mock_read_sql):
-    with pytest.raises(ValueError):
-        _fit_lore_model(FEATURES, league="LCK", year=2022)

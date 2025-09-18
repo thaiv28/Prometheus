@@ -1,8 +1,8 @@
-from prometheus.regression import _fit_lore_model
+from prometheus.regression import _fit_glory_model
 from prometheus.matches import get_team_averages_frame
 
 
-def get_lore_ranking(features=None, year=None, league=None, rescale=True):
+def get_glory_ranking(features=None, year=None, league=None, rescale=True):
     if features is None:
         features = [
             "gpm",
@@ -12,14 +12,13 @@ def get_lore_ranking(features=None, year=None, league=None, rescale=True):
             "dragon_per_10",
         ]
 
-    pipeline, _, _ = _fit_lore_model(features, league=league, year=year)
+    pipeline, _, _ = _fit_glory_model(features, league=league, year=year)
 
     # get average stats for each team in a year
     averages = get_team_averages_frame(
-        "match_lore_stats", filters={"year": year, "league": league}
+        "match_glory_stats", filters={"year": year, "league": league}
     )
 
-    # Drop teamname before applying pipeline
     scores = pipeline.predict(averages[features])
 
     # Create a DataFrame with teamname and scores
@@ -41,5 +40,5 @@ def _rescale(series, scale):
 
 
 if __name__ == "__main__":
-    df = get_lore_ranking(year=2018, league=["LPL", "LCK", "EU LCS", "NA LCS"])
+    df = get_glory_ranking(year=2018, league=["LPL", "LCK", "EU LCS", "NA LCS"])
     print(df)

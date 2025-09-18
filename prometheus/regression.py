@@ -7,9 +7,9 @@ from sklearn.model_selection import train_test_split
 from prometheus.matches import get_matches_frame
 
 
-def _fit_lore_model(features, league=None, year=None, evaluate=False):
+def _fit_glory_model(features, league=None, year=None, evaluate=False):
     """
-    Reads from match_lore_stats table, filters by league and year, and trains a linear regression model to predict win probability.
+    Reads from match_glory_stats table, filters by league and year, and trains a linear regression model to predict win probability.
     The model is implemented as a scikit-learn pipeline that first scales features using StandardScaler,
     then fits a LinearRegression model. The pipeline can be used for prediction and will automatically scale input features.
 
@@ -28,7 +28,7 @@ def _fit_lore_model(features, league=None, year=None, evaluate=False):
         filters["league"] = league
     if year:
         filters["year"] = year
-    df = get_matches_frame("match_lore_stats", filters)
+    df = get_matches_frame("match_glory_stats", filters)
 
     X = df[features]
     y = df["result"].astype(int)
@@ -62,7 +62,7 @@ def _evaluate_model(pipeline, X_test, y_test):
 
     # Prepare colors: red for loss (0), blue for win (1)
     colors = ["red" if actual == 0 else "blue" for actual in y_test]
-    # Plot 1D line with colored points for each score
+    # Plot 1D line with cogloryd points for each score
     plt.figure(figsize=(10, 2))
     y_line = [1] * len(y_pred)  # All points on y=1
     plt.scatter(y_pred, y_line, c=colors, alpha=0.7, s=40)
@@ -74,4 +74,4 @@ def _evaluate_model(pipeline, X_test, y_test):
 
 
 if __name__ == "__main__":
-    model, X_test, y_test = fit_lore_model(league="LPL", year=2018, evaluate=True)
+    model, X_test, y_test = _fit_glory_model(league="LPL", year=2018, evaluate=True)

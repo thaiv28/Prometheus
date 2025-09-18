@@ -20,7 +20,7 @@ def test_get_team_averages_frame_team_averages(mock_retrieve):
     # stat_table.columns.keys() must match df columns
     metadata = MetaData()
     stat_table = Table(
-        "match_lore_stats",
+        "match_glory_stats",
         metadata,
         Column("gameid", String, primary_key=True),
         Column("teamid", String),
@@ -29,7 +29,7 @@ def test_get_team_averages_frame_team_averages(mock_retrieve):
         Column("feature2", Float),
     )
     mock_retrieve.return_value = (df, stat_table)
-    result = get_team_averages_frame("match_lore_stats")
+    result = get_team_averages_frame("match_glory_stats")
     # Should average feature1 and feature2 by teamname
     assert set(result["teamname"]) == {"A", "B"}
     assert result.loc[result["teamname"] == "A", "feature1"].iloc[0] == pytest.approx(

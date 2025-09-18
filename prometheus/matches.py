@@ -20,15 +20,17 @@ def _build_select_stmt(stat_table, match_raw_stats, filters):
     sql_filters = []
     if filters:
         for key, val in filters.items():
-            if not val:
+            if val is None:
                 continue
             table = column_table_map.get(key)
-            if table is not None:
-                col = getattr(table.c, key)
-                if isinstance(val, list):
-                    sql_filters.append(col.in_(val))
-                else:
-                    sql_filters.append(col == val)
+            if table is None:
+                continue
+
+            col = getattr(table.c, key)
+            if isinstance(val, list):
+                sql_filters.append(col.in_(val))
+            else:
+                sql_filters.append(col == val)
 
     join_condition = (stat_table.c.gameid == match_raw_stats.c.gameid) & (
         stat_table.c.teamid == match_raw_stats.c.teamid

@@ -2,7 +2,7 @@
 
 Prometheus is a database of 'sabermetric' like stats that evaluate League of Legends esports teams and players. The `prometheus` repository will contain a database that records these stats as well as a self-hosted website to browse stats across different teams, seasons, and regions.
 ## Goals
-- [ ] One advanced metric (LORE) that evaluates team performance
+- [ ] One advanced metric (GLORY) that evaluates team performance
 - [ ] One advanced metric that evaluates individual player performance
 - [ ] SQL database that stores match, team, player, and stat tables
 - [ ] Self-hosted webpage for exploring stat rankings
@@ -17,8 +17,8 @@ These metrics are heavily dependent on the strength of opposing teams and the me
 To account for this, Prometheus calculates stats based on a per-season basis. Each metric is weighted appropriately for a single season. Thus, teams are scored based on how well they accomplish the goals of that specific "meta". 
 
 Prometheus also includes z-scores to compare the strength of a team relative to other teams in its region. We can calculate which teams were most "dominant" in specific eras. 
-#### League Outstanding Rankings Extrapolated (LORE)
-LORE is prometheus' flagship stat for team performance. At a high level, it is a weighted sum of basic per-game stats listed below.
+#### Global League Offensive Rankings Yield (GLORY)
+GLORY is prometheus' flagship stat for team performance. At a high level, it is a weighted sum of basic per-game stats listed below.
 
 ```
 - GPM = team_gold / game_length_minutes
@@ -35,15 +35,15 @@ We also include slightly more advanced metrics in this calculation:
 - Kill_conversion = fraction of team kills that directly preceded (within X seconds) an objective take
 ```
 
-In LORE, weights are calculated using logistic regression with the winning team as a prediction target. 
-#### League Outstanding Rankings Baseline (LORB)
-LORB is very similar to LORE, except all categories are weighted equally. It provides a baseline to compare LORE against and is much easier to implement. 
+In GLORY, weights are calculated using logistic regression with the winning team as a prediction target. 
+#### Global League Offensive Rankings Baseline (GLORB)
+GLORB is very similar to GLORY, except all categories are weighted equally. It provides a baseline to compare GLORY against and is much easier to implement.
 ### Player-based
 `TBD`
 ## Implementation
 Determining the weights for WOBA involves creating a table where each match has two rows: one for Blue side and one for Red side. The features in a row are the stats described above.
 
-The match data will be stored in an sqlite3 database. Initially, the only table in the database will be a match table that stores the weights for LORB/LORE. 
+The match data will be stored in an sqlite3 database. Initially, the only table in the database will be a match table that stores the weights for LORB/GLORY. 
 
 When a user requests the metrics for a certain team, region, or split, we will query the database to grab the relevant matches for that metric request. Then, we will fit a model using scikit-learn. The weights for those models will be cached or stored on the disk, depending on the time it fit the model. 
 

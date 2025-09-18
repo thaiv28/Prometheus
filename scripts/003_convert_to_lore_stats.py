@@ -3,8 +3,8 @@ from sqlalchemy import create_engine
 from pathlib import Path
 
 
-def compute_lore_stats(df):
-    # Derived stats for match_lore_stats
+def compute_glory_stats(df):
+    # Derived stats for match_glory_stats
     gamelength_mins = df["gamelength"] / 60
     df["gpm"] = df["totalgold"] / gamelength_mins
     df["turrets_per_10"] = df["towers"] / (gamelength_mins / 10)
@@ -31,10 +31,10 @@ def main():
 
     # Read raw stats
     df_raw = pd.read_sql("SELECT * FROM match_raw_stats", engine)
-    df_lore = compute_lore_stats(df_raw)
+    df_glory = compute_glory_stats(df_raw)
 
-    # Write lore stats to DB
-    df_lore.to_sql("match_lore_stats", engine, if_exists="append", index=False)
+    # Write glory stats to DB
+    df_glory.to_sql("match_glory_stats", engine, if_exists="append", index=False)
 
 
 if __name__ == "__main__":

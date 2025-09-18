@@ -19,7 +19,7 @@ CREATE TABLE match_raw_stats (
     PRIMARY KEY(gameid, teamid)
 );
 
-CREATE TABLE match_lore_stats (
+CREATE TABLE match_glory_stats (
     gameid           TEXT NOT NULL,
     teamid           TEXT NOT NULL,
     -- derived stats

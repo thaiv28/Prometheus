@@ -11,7 +11,7 @@ def test_retrieve_dataframe_from_table_inmemory(
     mock_get_engine_and_tables.return_value = (engine, stat_table, match_raw_stats)
 
     filters = {"league": "LCK", "year": 2022}
-    df, _ = _retrieve_dataframe_from_table("match_lore_stats", filters)
+    df, _ = _retrieve_dataframe_from_table("match_glory_stats", filters)
 
     assert not df.empty
     assert df["teamname"].iloc[0] == "A"
