@@ -23,7 +23,7 @@ def get_glory_ranking(
         cols_to_return = list(set(cols_to_return + ["teamname"]))
 
     if year is None:
-        years = [2025]
+        years = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
     elif isinstance(year, (list, tuple, set)):
         years = list(year)
     else:
