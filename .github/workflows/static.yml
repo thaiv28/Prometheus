@@ -5,6 +5,9 @@ on:
   # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
+  schedule:
+    - cron: "0 10 * * *"   # run daily at 3am PST 
+
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -36,11 +39,14 @@ jobs:
         uses: astral-sh/setup-uv@v6
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen && uv pip install -e .
+
+      - name: Setup database
+        run: uv run bash scripts/setup_db.sh
 
       - name: Build static site
-        run: uv run python build.py   # script should output to ./site
-        
+        run: uv run python scripts/build_site.py   # script should output to ./site
+      
       - name: Setup Pages
         uses: actions/configure-pages@v5
         

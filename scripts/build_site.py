@@ -13,7 +13,9 @@ from prometheus.ranking import get_glory_ranking
 from prometheus.types import GLORY_FEATURES, ALL_MAJOR_LEAGUES
 from jinja2 import Environment, FileSystemLoader
 
-OUTPUT_DIR = "../sites"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+OUTPUT_DIR = os.path.join(ROOT_DIR, "sites")
 CSS_FILE = "style.css"
 
 METRICS = {
@@ -35,13 +37,16 @@ METRICS = {
 
 LATEST_YEAR = datetime.datetime.now().year
 
+
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Copy CSS file
+
 if not os.path.exists(os.path.join(OUTPUT_DIR, CSS_FILE)):
     import shutil
 
-    shutil.copyfile(f"../output/{CSS_FILE}", os.path.join(OUTPUT_DIR, CSS_FILE))
+    css_src = os.path.join(OUTPUT_DIR, CSS_FILE)
+    shutil.copyfile(css_src, os.path.join(OUTPUT_DIR, CSS_FILE))
 
 
 # Helper: HTML table from DataFrame
@@ -52,7 +57,7 @@ def df_to_html_table(df):
 # Homepage
 
 # Jinja2 setup
-env = Environment(loader=FileSystemLoader("../templates"))
+env = Environment(loader=FileSystemLoader(os.path.join(ROOT_DIR, "templates")))
 
 # Render homepage
 template = env.get_template("index.html.j2")
