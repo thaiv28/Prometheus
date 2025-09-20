@@ -2,7 +2,7 @@ import pandas as pd
 
 from prometheus.regression import _fit_glory_model
 from prometheus.matches import get_team_averages_frame
-from prometheus.types import GLORY_FEATURES
+from prometheus.types import GLORY_FEATURES, ALL_MAJOR_LEAGUES
 
 
 def get_glory_ranking(
@@ -32,7 +32,8 @@ def get_glory_ranking(
     all_rankings = []
     # we have to fit the glory model separately for each year
     for yr in years:
-        pipeline, _, _ = _fit_glory_model(features, league=league, year=yr)
+        # we always want to model off all major leagues, then filter down to requested league later
+        pipeline, _, _ = _fit_glory_model(features, league=ALL_MAJOR_LEAGUES, year=yr)
 
         averages = get_team_averages_frame(
             "match_glory_stats", filters={"year": yr, "league": league}
@@ -56,6 +57,7 @@ def get_glory_ranking(
         if rescale:
             ranking_df["score"] = ranking_df["score"] * 100
 
+        ranking_df = _filter_leagues(ranking_df, league)
         all_rankings.append(ranking_df)
 
     # combine individual year rankings into combined ranking
@@ -64,6 +66,14 @@ def get_glory_ranking(
         drop=True
     )
     return combined_df
+
+
+def _filter_leagues(df, leagues):
+    if leagues is None:
+        return df
+    if not isinstance(leagues, (list, tuple, set)):
+        leagues = [leagues]
+    return df[df["league"].isin(leagues)]
 
 
 if __name__ == "__main__":

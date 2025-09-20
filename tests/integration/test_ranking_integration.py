@@ -65,3 +65,17 @@ def test_get_glory_ranking_integration(mock_get_engine_and_tables, inmemory_tabl
 
     for score in df["score"]:
         assert 0 <= score <= 300, f"Score {score} out of expected range 0-300"
+
+
+@patch("prometheus.matches._get_engine_and_tables")
+def test_get_glory_single_league_integration(
+    mock_get_engine_and_tables, inmemory_tables
+):
+    mock_get_engine_and_tables.return_value = inmemory_tables
+
+    df = get_glory_ranking(league="LPL", year=2022, features=["gpm", "dragon_per_10"])
+
+    assert len(df) == 1
+    # even though we just have one league, score should not be maxed out. the
+    # model should still weight features based on ALL leagues
+    assert df.iloc[0]["score"] != 100
