@@ -6,26 +6,12 @@ from prometheus.types import League
 from prometheus import types
 
 
-def match_major_leagues(league_list, year=None):
-    if year is None:
-        major_leagues = types.ALL_MAJOR_LEAGUES
-    elif year < 2019:
-        major_leagues = types.PRE_2019_MAJOR_LEAGUES
-    elif year < 2025:
-        major_leagues = types.PRE_2025_MAJOR_LEAGUES
-    else:
-        major_leagues = types.CURRENT_MAJOR_LEAGUES
-
-    return major_leagues
-
-
 def filter_leagues(league_list, years=None):
     filtered_leagues = set(league_list).copy()
 
     if League.MAJOR in league_list:
+        filtered_leagues.update(types.ALL_MAJOR_LEAGUES)
         filtered_leagues.remove(League.MAJOR)
-        for year in years:
-            filtered_leagues.update(match_major_leagues(league_list, year))
 
     return list(filtered_leagues)
 
