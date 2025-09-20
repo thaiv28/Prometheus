@@ -1,6 +1,6 @@
 data/
 db/
-sites/
+sites/*.html
 .DS_Store
 
 # Byte-compiled / optimized / DLL files
