@@ -11,7 +11,6 @@ CREATE TABLE match_raw_stats (
 
     -- raw totals
     totalgold           INT NOT NULL,
-    golddiffat15        INT NOT NULL,
     towers              INT NOT NULL,
     barons              INT NOT NULL,
     dragons             INT NOT NULL,
@@ -24,7 +23,6 @@ CREATE TABLE match_glory_stats (
     teamid           TEXT NOT NULL,
     -- derived stats
     gpm                 REAL NOT NULL,
-    golddiffat15        REAL NOT NULL,
     turrets_per_10      REAL NOT NULL,
     baron_per_10        REAL NOT NULL,
     dragon_per_10       REAL NOT NULL,

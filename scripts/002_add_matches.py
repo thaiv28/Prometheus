@@ -2,13 +2,14 @@ import pandas as pd
 from sqlalchemy import create_engine
 from pathlib import Path
 
+from prometheus.types import RAW_FEATURES
+
 
 def preprocess_match_raw_stats(df):
     # include only team stats (not player stats)
     df = df[df["position"] == "team"]
-    df = df[df["datacompleteness"] == "complete"]
 
-    columns = [
+    required_columns = [
         "gameid",
         "year",
         "split",
@@ -18,14 +19,22 @@ def preprocess_match_raw_stats(df):
         "side",
         "gamelength",
         "result",
-        "totalgold",
-        "golddiffat15",
-        "towers",
-        "barons",
-        "dragons",
     ]
+    columns = required_columns + RAW_FEATURES
     df = df[columns]
+
+    # fill missing raw features with mean of that feature. drop any that don't have required features
+    df[RAW_FEATURES] = df[RAW_FEATURES].fillna(df[RAW_FEATURES].mean())
     df = df.dropna(axis="index", how="any")
+
+    # Remap league names to standard values
+    league_mapping = {
+        "LCS": ["LCS", "NA LCS", "LTA N"],
+        "LEC": ["LEC", "EU LCS"],
+        "Worlds": ["Wlds"],
+    }
+    reverse_league_mapping = {v: k for k, vals in league_mapping.items() for v in vals}
+    df["league"] = df["league"].map(reverse_league_mapping).fillna(df["league"])
 
     return df
 

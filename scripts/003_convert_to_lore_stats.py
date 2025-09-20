@@ -2,6 +2,8 @@ import pandas as pd
 from sqlalchemy import create_engine
 from pathlib import Path
 
+from prometheus.types import GLORY_FEATURES
+
 
 def compute_glory_stats(df):
     # Derived stats for match_glory_stats
@@ -15,12 +17,8 @@ def compute_glory_stats(df):
         [
             "gameid",
             "teamid",
-            "gpm",
-            "golddiffat15",
-            "turrets_per_10",
-            "baron_per_10",
-            "dragon_per_10",
         ]
+        + GLORY_FEATURES
     ]
 
 
