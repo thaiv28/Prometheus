@@ -10,11 +10,8 @@ class League(str, Enum):
     MAJOR = "MAJOR"
     LCK = "LCK"
     LPL = "LPL"
-    EU_LCS = "EU LCS"
     LEC = "LEC"
-    NA_LCS = "NA LCS"
     LCS = "LCS"
-    LTA_N = "LTA N"
     LTA_S = "LTA S"
     PCS = "PCS"
     VCS = "VCS"
@@ -27,38 +24,26 @@ class League(str, Enum):
     LCO = "LCO"
     WCS = "WCS"
     MSI = "MSI"
-    WORLDS = "WLDs"
+    WORLDS = "Worlds"
 
 
-PRE_2019_MAJOR_LEAGUES = [
-    League.LCK,
-    League.LPL,
-    League.EU_LCS,
-    League.NA_LCS,
-]
-
-PRE_2025_MAJOR_LEAGUES = [
+ALL_MAJOR_LEAGUES = [
     League.LCK,
     League.LPL,
     League.LEC,
     League.LCS,
 ]
 
-CURRENT_MAJOR_LEAGUES = [
-    League.LCK,
-    League.LPL,
-    League.LEC,
-    League.LTA_N,
-]
-
-ALL_MAJOR_LEAGUES = list(
-    set(PRE_2019_MAJOR_LEAGUES + PRE_2025_MAJOR_LEAGUES + CURRENT_MAJOR_LEAGUES)
-)
-
 GLORY_FEATURES = [
     "gpm",
-    "golddiffat15",
     "turrets_per_10",
     "baron_per_10",
     "dragon_per_10",
+]
+
+RAW_FEATURES = [
+    "totalgold",
+    "towers",
+    "barons",
+    "dragons",
 ]
