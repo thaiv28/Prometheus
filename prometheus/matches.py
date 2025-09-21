@@ -51,10 +51,11 @@ def _retrieve_dataframe_from_table(stat_table_name, filters=None, db_path=DB_PAT
     if df.empty:
         raise ValueError("No data found for given criteria.")
 
+    df = df.loc[:, ~df.columns.duplicated()]
     return df, stat_table
 
 
-def get_team_averages_frame(stat_table_name, filters=None):
+def get_team_averages_frame(stat_table_name, minimum_matches=0, filters=None):
     """
     Reads from the given stat_table_name, joins with match_raw_stats, applies filters, and returns a pandas DataFrame
     with one row per team, containing the team's averages for all feature columns in the stat table.
@@ -66,7 +67,16 @@ def get_team_averages_frame(stat_table_name, filters=None):
     """
 
     df, stat_table = _retrieve_dataframe_from_table(stat_table_name, filters)
-    group_cols = ["teamname", "year", "league"]
+
+    # Define potential grouping columns and filter to ones that exist in the DataFrame
+    potential_group_cols = ["teamname", "year", "league"]
+    group_cols = [col for col in potential_group_cols if col in df.columns]
+
+    if minimum_matches and minimum_matches > 0:
+        # keep groups with at least `minimum_matches` unique games
+        mask = df.groupby(group_cols)["gameid"].transform("nunique") >= minimum_matches
+        df = df[mask].copy()
+
     # Only include numeric columns for averaging
     features = [
         col

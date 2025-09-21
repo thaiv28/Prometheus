@@ -30,10 +30,12 @@ def rankings(
     try:
         match metric:
             case "glory":
-                df = get_glory_ranking(year=year, league=filtered_leagues)
+                df = get_glory_ranking(
+                    year=year, league=filtered_leagues, minimum_matches=5
+                )
             case "glorb":
                 df = get_glory_ranking(
-                    year=year, league=filtered_leagues, baseline=True
+                    year=year, league=filtered_leagues, baseline=True, minimum_matches=5
                 )
             case _:
                 typer.echo(f"Metric {metric} not supported.")

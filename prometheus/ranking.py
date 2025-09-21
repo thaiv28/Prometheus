@@ -13,6 +13,7 @@ def get_glory_ranking(
     baseline=False,
     z_scores=False,
     cols_to_return=None,
+    minimum_matches=0,
 ):
     if features is None:
         features = GLORY_FEATURES
@@ -36,7 +37,9 @@ def get_glory_ranking(
         pipeline, _, _ = _fit_glory_model(features, league=ALL_MAJOR_LEAGUES, year=yr)
 
         averages = get_team_averages_frame(
-            "match_glory_stats", filters={"year": yr, "league": league}
+            "match_glory_stats",
+            minimum_matches=minimum_matches,
+            filters={"year": yr, "league": league},
         )
 
         if not baseline:

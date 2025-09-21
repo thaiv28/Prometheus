@@ -75,7 +75,10 @@ def render_metric_page(metric_key, metric):
     # Get all years and all leagues from the database
     # If you want to restrict to a specific set, you can change the arguments below
     df = get_glory_ranking(
-        year=None, league=ALL_MAJOR_LEAGUES, baseline=metric["baseline"]
+        year=None,
+        league=ALL_MAJOR_LEAGUES,
+        baseline=metric["baseline"],
+        minimum_matches=5,
     )
     years = sorted(df["year"].unique())
     leagues = sorted(df["league"].unique())

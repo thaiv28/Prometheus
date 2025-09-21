@@ -1,4 +1,6 @@
 from unittest.mock import patch
+
+import pytest
 from prometheus.ranking import get_glory_ranking
 
 
@@ -79,3 +81,23 @@ def test_get_glory_single_league_integration(
     # even though we just have one league, score should not be maxed out. the
     # model should still weight features based on ALL leagues
     assert df.iloc[0]["score"] != 100
+
+
+@patch("prometheus.matches._get_engine_and_tables")
+def test_get_glory_minimum_matches_integration(
+    mock_get_engine_and_tables, inmemory_tables
+):
+    mock_get_engine_and_tables.return_value = inmemory_tables
+
+    with pytest.raises(ValueError):
+        five_min_df = get_glory_ranking(
+            league="LPL",
+            year=2022,
+            features=["gpm", "dragon_per_10"],
+            minimum_matches=5,
+        )
+
+    no_min_df = get_glory_ranking(
+        league="LPL", year=2022, features=["gpm", "dragon_per_10"], minimum_matches=0
+    )
+    assert len(no_min_df) > 0
