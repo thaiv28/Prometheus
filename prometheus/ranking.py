@@ -57,6 +57,8 @@ def get_glory_ranking(
         if rescale:
             ranking_df["score"] = ranking_df["score"] * 100
 
+        ranking_df["score"] = ranking_df["score"].round(2)
+
         ranking_df = _filter_leagues(ranking_df, league)
         all_rankings.append(ranking_df)
 
