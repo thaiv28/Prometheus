@@ -1,0 +1,43 @@
+.metric-summary { display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); margin:1.25rem 0 1.75rem; }
+.metric-summary .summary-card { background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius); padding:.85rem 1rem 1rem; position:relative; overflow:hidden; }
+.metric-summary .summary-card h4 { margin:.15rem 0 .4rem; font-size:.75rem; letter-spacing:.5px; font-weight:600; text-transform:uppercase; color:var(--text-dim); }
+.metric-summary .summary-card .value { font-size:1.35rem; font-weight:600; }
+.badge { display:inline-block; padding:.25rem .55rem; border-radius:999px; font-size:.65rem; font-weight:500; letter-spacing:.5px; background:var(--bg-alt); border:1px solid var(--border); color:var(--text-dim); }
+.badge.league-LCK { background:#193a80; color:#d9e6ff; }
+.badge.league-LEC { background:#5c1f37; color:#ffd4e4; }
+.badge.league-LCS { background:#144d3a; color:#d4ffee; }
+.badge.league-LPL { background:#5a2605; color:#ffd9c2; }
+.rank-positive { color:var(--accent-alt); }
+.rank-negative { color:#ff8f5f; }
+.inline-spark { height:24px; width:80px; display:inline-flex; align-items:center; }
+#active-filters { display:flex; flex-wrap:wrap; gap:.4rem; }
+.hidden { display:none !important; }
+
+/* Multi-select dropdown */
+.multi-select { position:relative; }
+.multi-select .multi-trigger { background:var(--bg-alt); border:1px solid var(--border); color:var(--text-dim); border-radius:var(--radius-sm); padding:.45rem .65rem; font-size:.75rem; font-weight:500; letter-spacing:.5px; cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; min-width:140px; text-align:left; }
+.multi-select .multi-trigger:hover, .multi-select.open .multi-trigger { color:var(--text); border-color:#3b4d5d; }
+.multi-select .multi-panel { position:absolute; top:calc(100% + 4px); left:0; background:var(--bg-elevated); border:1px solid var(--border); box-shadow:var(--shadow); border-radius:var(--radius); padding:.5rem .65rem .6rem; width:210px; display:none; z-index:50; animation:fadeSlide .15s ease; }
+.multi-select.open .multi-panel { display:block; }
+@keyframes fadeSlide { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+.multi-panel .multi-actions { display:flex; justify-content:space-between; gap:.5rem; margin-bottom:.4rem; }
+.multi-panel .multi-actions button { background:var(--bg-alt); border:1px solid var(--border); color:var(--text-dim); padding:.25rem .5rem; font-size:.65rem; border-radius:var(--radius-sm); cursor:pointer; }
+.multi-panel .multi-actions button:hover { color:var(--text); }
+.multi-panel ul { list-style:none; margin:0; padding:0; max-height:240px; overflow:auto; scrollbar-width:thin; }
+.multi-panel li { margin:0; padding:0; }
+.multi-panel label { display:flex; align-items:center; gap:.45rem; font-size:.7rem; padding:.25rem .3rem; border-radius:var(--radius-sm); cursor:pointer; color:var(--text-dim); }
+.multi-panel label:hover { background:var(--bg-alt); color:var(--text); }
+.multi-panel input[type="checkbox"] { accent-color:var(--accent); width:14px; height:14px; }
+
+/* Reset button */
+.reset-btn { background:linear-gradient(135deg,var(--bg-alt),#1F2C3B); border:1px solid #354556; color:var(--text-dim); padding:.45rem .85rem; font-size:.7rem; font-weight:600; letter-spacing:.5px; text-transform:uppercase; border-radius:var(--radius-sm); cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; box-shadow:0 0 0 1px rgba(255,255,255,0.03), 0 1px 2px rgba(0,0,0,0.4); transition:.25s; }
+.reset-btn:hover { color:var(--text); border-color:#46607a; box-shadow:0 0 0 1px #355372, 0 2px 4px rgba(0,0,0,0.45); }
+.reset-btn:active { transform:translateY(1px); box-shadow:0 0 0 1px #355372, 0 1px 2px rgba(0,0,0,0.5); }
+.reset-btn svg { width:12px; height:12px; stroke:currentColor; stroke-width:2; fill:none; }
+.reset-btn:focus-visible { outline:none; box-shadow:var(--focus-ring); }
+
+/* GitHub footer icon */
+.gh-link { display:inline-flex; align-items:center; justify-content:center; padding:.35rem .45rem; margin-left:.25rem; color:var(--text-dim); border:1px solid var(--border); border-radius:8px; background:var(--bg-alt); transition:.25s; }
+.gh-link:hover { color:var(--text); border-color:#3b4d5d; }
+.gh-link:focus-visible { outline:none; box-shadow:var(--focus-ring); }
+

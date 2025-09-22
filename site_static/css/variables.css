@@ -1,0 +1,17 @@
+:root {
+  --bg: #0E1116;
+  --bg-elevated: #1B222C;
+  --bg-alt: #222B36;
+  --border: #2F3A47;
+  --text: #E6ECF3;
+  --text-dim: #9AA8B5;
+  --accent: #4F9DFF;
+  --accent-alt: #4ED4A8;
+  --danger: #FF5F56;
+  --radius-sm: 6px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --shadow: 0 4px 16px -4px rgba(0,0,0,0.4), 0 2px 4px -2px rgba(0,0,0,0.3);
+  --font-stack: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  --focus-ring: 0 0 0 3px rgba(79,157,255,0.35);
+}

@@ -1,0 +1,76 @@
+{% extends 'base.html.j2' %}
+{% block title %}{{ metric.name }} Rankings • Prometheus{% endblock %}
+{% block metric_switch %}
+  {% for m in metrics %}
+  <button class="{% if m.key == metric.key %}active{% endif %}" onclick="window.location='{{ m.key }}.html'">{{ m.name }}</button>
+  {% endfor %}
+{% endblock %}
+{% block filters %}
+  <div class="filter-group">
+    <div class="multi-select" data-multi="years">
+      <button type="button" class="multi-trigger" aria-haspopup="listbox" aria-expanded="false" id="years-trigger">Years: All</button>
+      <div class="multi-panel" role="listbox" aria-multiselectable="true" aria-labelledby="years-trigger">
+        <div class="multi-actions">
+          <button type="button" data-action="select-all" data-target="years">All</button>
+          <button type="button" data-action="clear-all" data-target="years">Clear</button>
+        </div>
+        <ul class="multi-options" data-options="years">
+          {% for y in years %}
+          <li><label><input type="checkbox" value="{{ y }}" data-year-option> <span>{{ y }}</span></label></li>
+          {% endfor %}
+        </ul>
+      </div>
+      <select id="year-filter" multiple class="hidden" aria-hidden="true" tabindex="-1">
+        <option value="ALL">All</option>
+        {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="filter-group">
+    <div class="multi-select" data-multi="leagues">
+      <button type="button" class="multi-trigger" aria-haspopup="listbox" aria-expanded="false" id="leagues-trigger">Leagues: All</button>
+      <div class="multi-panel" role="listbox" aria-multiselectable="true" aria-labelledby="leagues-trigger">
+        <div class="multi-actions">
+          <button type="button" data-action="select-all" data-target="leagues">All</button>
+          <button type="button" data-action="clear-all" data-target="leagues">Clear</button>
+        </div>
+        <ul class="multi-options" data-options="leagues">
+          {% for l in leagues %}
+          <li><label><input type="checkbox" value="{{ l }}" data-league-option> <span>{{ l }}</span></label></li>
+          {% endfor %}
+        </ul>
+      </div>
+      <select id="league-filter" multiple class="hidden" aria-hidden="true" tabindex="-1">
+        <option value="ALL">All</option>
+        {% for l in leagues %}<option value="{{ l }}">{{ l }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div id="active-filters"></div>
+  <button id="reset-filters" class="reset-btn" title="Reset filters">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10a9 9 0 0 1 15.36-5.36L21 7M21 7h-5M21 7v5"/><path d="M21 14a9 9 0 0 1-15.36 5.36L3 17M3 17h5M3 17v-5"/></svg>
+    Reset
+  </button>
+  <div id="results-count" style="margin-left:auto; font-size:.75rem; opacity:.75;"></div>
+{% endblock %}
+{% block content %}
+  <section style="margin:1.1rem 0 1.4rem; max-width:900px; font-size:.85rem; line-height:1.5; color:var(--text-dim);">
+    <h1 style="margin:.1rem 0 .65rem; font-size:1.4rem; letter-spacing:.5px; font-weight:600; background:linear-gradient(135deg,var(--accent),#7F5BFF); -webkit-background-clip:text; color:transparent;">{{ metric.name }} ({{ metric.full_name }})</h1>
+    <p style="margin:0; color:var(--text-dim);">{{ metric.description }}</p>
+  </section>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th data-sort="rank">Rank</th>
+          <th data-sort="teamname">Team</th>
+          <th data-sort="score">Score</th>
+          <th data-sort="league">League</th>
+          <th data-sort="year">Year</th>
+        </tr>
+      </thead>
+      <tbody id="rankings-body"></tbody>
+    </table>
+  </div>
+  <script id="metric-data" type="application/json">{{ rows | tojson }}</script>
+{% endblock %}

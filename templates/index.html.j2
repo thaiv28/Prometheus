@@ -1,26 +1,25 @@
-<!DOCTYPE html>
-<html lang='en'>
-<head>
-    <meta charset='UTF-8'>
-    <title>Prometheus Rankings</title>
-    <link rel='stylesheet' href='{{ css_file }}'>
-</head>
-<body>
-<header>
-    <h1>Prometheus Esports Rankings</h1>
-</header>
-<main>
-    <h2>Overview</h2>
-    <p>Date of last update: {{ last_update }}</p>
-    <nav>
+{% extends 'base.html.j2' %}
+{% block title %}Prometheus Esports Rankings{% endblock %}
+{% block metric_switch %}
+    {% for m in metrics %}
+        <button onclick="window.location='{{ m.key }}.html'">{{ m.name }}</button>
+    {% endfor %}
+{% endblock %}
+{% block content %}
+    <section style="margin:0 0 1.75rem; font-size:.9rem; line-height:1.55; max-width:900px; color:var(--text-dim);">
+        <h1 style="margin:.1rem 0 .65rem; font-size:1.55rem; font-weight:600; letter-spacing:.5px; background:linear-gradient(135deg,var(--accent),#7F5BFF); -webkit-background-clip:text; color:transparent;">Prometheus</h1>
+        <p style="margin:.4rem 0 0;">Prometheus is a sabermetric-inspired analytics hub for League of Legends esports. Explore advanced team performance metrics across regions and seasons. Each metric page offers powerful client-side filtering, sorting, and exploration tools.</p>
+    </section>
+    <section class="cards">
         {% for metric in metrics %}
-            <a href="{{ metric.key }}.html">{{ metric.name }} Rankings</a>{% if not loop.last %} | {% endif %}
+        <div class="card" onclick="window.location='{{ metric.key }}.html'" style="cursor:pointer;">
+            <h3>{{ metric.name }}</h3>
+            <p><b>{{ metric.full_name }}</b></p><br>
+            <p>{{ metric.description }}</p>
+        </div>
         {% endfor %}
-    </nav>
-    <p>Prometheus is a database of sabermetric-like stats for League of Legends esports teams and players. Explore advanced metrics below.</p>
-</main>
-<footer>
-    <a href='index.html'>Home</a>
-</footer>
-</body>
-</html>
+    </section>
+    <section style="margin-top:2.25rem; font-size:.75rem; line-height:1.4; color:var(--text-dim); max-width:860px;">
+        <p style="margin:0;"><strong>Last Update:</strong> {{ last_update }}</p>
+    </section>
+{% endblock %}
