@@ -27,6 +27,12 @@ class League(str, Enum):
     WORLDS = "Worlds"
 
 
+class ScoreCols(str, Enum):
+    score = "score"
+    era_score = "era_score"
+    league_score = "league_score"
+
+
 ALL_MAJOR_LEAGUES = [
     League.LCK,
     League.LPL,

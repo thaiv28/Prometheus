@@ -45,6 +45,7 @@ LATEST_YEAR = datetime.datetime.now().year
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+
 # Copy static assets (css/js)
 def copy_static():
     if not os.path.isdir(STATIC_SRC):
@@ -55,6 +56,7 @@ def copy_static():
         dest_dir.mkdir(parents=True, exist_ok=True)
         for f in src_dir.glob("*.*"):
             shutil.copy2(f, dest_dir / f.name)
+
 
 copy_static()
 
@@ -69,13 +71,20 @@ def df_to_html_table(df):
 # Jinja2 setup
 env = Environment(loader=FileSystemLoader(os.path.join(ROOT_DIR, "templates")))
 
+
 # Render homepage
 def render_index():
     # Use GLORY ranking (non-baseline) as representative dataset for global stats
-    df = get_glory_ranking(year=None, league=ALL_MAJOR_LEAGUES, baseline=False)
-    total_teams = df['teamname'].nunique()
-    years = sorted(df['year'].unique())
-    leagues = sorted(df['league'].unique())
+    df = get_glory_ranking(
+        year=None,
+        league=ALL_MAJOR_LEAGUES,
+        baseline=False,
+        z_scores=True,
+        minimum_matches=5,
+    )
+    total_teams = df["teamname"].nunique()
+    years = sorted(df["year"].unique())
+    leagues = sorted(df["league"].unique())
     template = env.get_template("index.html.j2")
     html = template.render(
         last_update=datetime.datetime.now().strftime("%B %d, %Y"),
@@ -96,6 +105,8 @@ def render_metric_page(metric_key, metric):
         year=None,
         league=ALL_MAJOR_LEAGUES,
         baseline=metric["baseline"],
+        z_scores=True,
+        minimum_matches=5,
     )
     years = sorted(df["year"].unique())
     leagues = sorted(df["league"].unique())
@@ -117,6 +128,7 @@ def main():
     for metric_key, metric in METRICS.items():
         render_metric_page(metric_key, metric)
     print(f"Static site generated in {OUTPUT_DIR}/")
+
 
 if __name__ == "main" or __name__ == "__main__":
     main()

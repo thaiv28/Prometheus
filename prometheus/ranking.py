@@ -2,7 +2,7 @@ import pandas as pd
 
 from prometheus.regression import _fit_glory_model
 from prometheus.matches import get_team_averages_frame
-from prometheus.types import GLORY_FEATURES, ALL_MAJOR_LEAGUES
+from prometheus.types import GLORY_FEATURES, ALL_MAJOR_LEAGUES, ScoreCols
 
 
 def get_glory_ranking(
@@ -11,8 +11,9 @@ def get_glory_ranking(
     league=None,
     rescale=True,
     baseline=False,
-    z_scores=True,
+    z_scores=False,
     cols_to_return=None,
+    sort_by="score",
     minimum_matches=0,
 ):
     """Compute GLORY (or GLORB baseline) team rankings.
@@ -86,33 +87,39 @@ def get_glory_ranking(
         ranking_df = ranking_df.sort_values("score", ascending=False).reset_index(
             drop=True
         )
-        
+
         if z_scores:
+            overall_std = ranking_df["score"].std()
+            if overall_std is None or pd.isna(overall_std) or overall_std == 0:
+                overall_std = 1
             ranking_df["era_score"] = (
-                (ranking_df["score"] - ranking_df["score"].mean())
-                / ranking_df["score"].std()
-            )
-            
-            # Group by league and calculate z-scores within each league
-            ranking_df["league_score"] = ranking_df.groupby("league")["score"].transform(
-                lambda x: (x - x.mean()) / x.std()
-            )
-        
+                ranking_df["score"] - ranking_df["score"].mean()
+            ) / overall_std
+
+            # Group by league and calculate z-scores within each league (safe divide)
+            def _league_z(g):
+                std = g.std()
+                if std is None or pd.isna(std) or std == 0:
+                    return (g - g.mean()) / 1
+                return (g - g.mean()) / std
+
+            ranking_df["league_score"] = ranking_df.groupby("league")[
+                "score"
+            ].transform(_league_z)
+
         # rescale to 0-100 for easier interpretability
         if rescale:
             ranking_df["score"] = ranking_df["score"] * 100
 
-        score_cols = ["score", "era_score", "league_score"] if z_scores else ["score"]
+        score_cols = [col for col in ScoreCols.__members__ if col in ranking_df.columns]
         ranking_df[score_cols] = ranking_df[score_cols].round(2)
-        
-        
 
         ranking_df = _filter_leagues(ranking_df, league)
         all_rankings.append(ranking_df)
 
     # combine individual year rankings into combined ranking
     combined_df = pd.concat(all_rankings, ignore_index=True)
-    combined_df = combined_df.sort_values("score", ascending=False).reset_index(
+    combined_df = combined_df.sort_values(sort_by, ascending=False).reset_index(
         drop=True
     )
     return combined_df

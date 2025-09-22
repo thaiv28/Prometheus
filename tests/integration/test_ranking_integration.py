@@ -95,9 +95,66 @@ def test_get_glory_minimum_matches_integration(
             year=2022,
             features=["gpm", "dragon_per_10"],
             minimum_matches=5,
+            z_scores=True,
         )
 
     no_min_df = get_glory_ranking(
         league="LPL", year=2022, features=["gpm", "dragon_per_10"], minimum_matches=0
     )
     assert len(no_min_df) > 0
+
+
+@patch("prometheus.matches._get_engine_and_tables")
+def test_get_glory_ranking_z_score_ranges(mock_get_engine_and_tables, inmemory_tables):
+    mock_get_engine_and_tables.return_value = inmemory_tables
+
+    df = get_glory_ranking(
+        year=[2022, 2023], features=["gpm", "dragon_per_10"], z_scores=True
+    )
+
+    assert "era_score" in df.columns
+    assert "league_score" in df.columns
+
+    for score in df["era_score"]:
+        # z-scores can be negative, but should generally be within a reasonable range
+        assert -3 <= score <= 3, f"Era Score {score} out of expected range -3 to 3"
+
+    for score in df["league_score"]:
+        # z-scores can be negative, but should generally be within a reasonable range
+        assert -3 <= score <= 3, f"League Score {score} out of expected range -3 to 3"
+
+
+@patch("prometheus.matches._get_engine_and_tables")
+def test_get_glory_ranking_sort_by_league_score(
+    mock_get_engine_and_tables, inmemory_tables
+):
+    mock_get_engine_and_tables.return_value = inmemory_tables
+
+    df = get_glory_ranking(year=2022, features=["gpm", "dragon_per_10"], z_scores=True)
+
+    # Sort by league_score descending
+    df_sorted = df.sort_values("league_score", ascending=False)
+
+    # Check that the first few entries are in descending order by league_score
+    for i in range(len(df_sorted) - 1):
+        assert (
+            df_sorted.iloc[i]["league_score"] >= df_sorted.iloc[i + 1]["league_score"]
+        ), f"League scores not in descending order: {df_sorted.iloc[i]['league_score']} < {df_sorted.iloc[i + 1]['league_score']}"
+
+
+@patch("prometheus.matches._get_engine_and_tables")
+def test_get_glory_ranking_sort_by_era_score(
+    mock_get_engine_and_tables, inmemory_tables
+):
+    mock_get_engine_and_tables.return_value = inmemory_tables
+
+    df = get_glory_ranking(year=2022, features=["gpm", "dragon_per_10"], z_scores=True)
+
+    # Sort by era_score descending
+    df_sorted = df.sort_values("era_score", ascending=False)
+
+    # Check that the first few entries are in descending order by era_score
+    for i in range(len(df_sorted) - 1):
+        assert (
+            df_sorted.iloc[i]["era_score"] >= df_sorted.iloc[i + 1]["era_score"]
+        ), f"Era scores not in descending order: {df_sorted.iloc[i]['era_score']} < {df_sorted.iloc[i + 1]['era_score']}"

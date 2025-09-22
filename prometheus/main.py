@@ -1,12 +1,10 @@
-from enum import Enum
+from typing import Annotated
 
 import typer
 from rich.console import Console
-from rich.table import Table
 
 from prometheus.ranking import get_glory_ranking
-from prometheus.types import Metric, League
-from typing import Annotated
+from prometheus.types import Metric, League, ScoreCols
 from prometheus.utils import filter_leagues, print_rankings_table
 
 app = typer.Typer()
@@ -23,6 +21,9 @@ def rankings(
         list[int], typer.Option(help="Year to filter. Default all years")
     ] = None,
     n: Annotated[int, typer.Option(help="Number of results to show")] = 10,
+    sort_by: Annotated[
+        ScoreCols, typer.Option(help="Column to sort by", show_default=True)
+    ] = "score",
 ):
     """Fetch and display rankings."""
     # TODO: add support for range of years. ex: (2021 - 2023) vs (2021, 2022, 2023)
@@ -31,11 +32,20 @@ def rankings(
         match metric:
             case "glory":
                 df = get_glory_ranking(
-                    year=year, league=filtered_leagues, minimum_matches=5
+                    year=year,
+                    league=filtered_leagues,
+                    minimum_matches=5,
+                    sort_by=sort_by,
+                    z_scores=True,
                 )
             case "glorb":
                 df = get_glory_ranking(
-                    year=year, league=filtered_leagues, baseline=True, minimum_matches=5
+                    year=year,
+                    league=filtered_leagues,
+                    baseline=True,
+                    minimum_matches=5,
+                    sort_by=sort_by,
+                    z_scores=True,
                 )
             case _:
                 typer.echo(f"Metric {metric} not supported.")
