@@ -11,10 +11,41 @@ def get_glory_ranking(
     league=None,
     rescale=True,
     baseline=False,
-    z_scores=False,
+    z_scores=True,
     cols_to_return=None,
     minimum_matches=0,
 ):
+    """Compute GLORY (or GLORB baseline) team rankings.
+
+    Fits the GLORY regression model separately for each requested year (always
+    using all major leagues for modeling), scores team season averages, then
+    optionally filters to the leagues provided and concatenates yearly results.
+
+    Parameters
+    ----------
+    features : list[str] | None, optional
+        Feature columns to use. Defaults to `GLORY_FEATURES` when None.
+    year : int | iterable[int] | None, optional
+        Single year, multiple years, or None for all supported years.
+    league : str | iterable[str] | None, optional
+        League code(s) to include in final output; modeling always uses all major leagues.
+    rescale : bool, default True
+        If True, rescales raw model scores (or baseline sum) to 0–100.
+    baseline : bool, default False
+        If True, compute GLORB baseline (equal weights) instead of GLORY regression output.
+    z_scores : bool, default True
+        If True, adds `era_score` (overall z) and `league_score` (within-league z).
+    cols_to_return : list[str] | None, optional
+        Additional columns (besides teamname/score/year/league) to keep in output.
+    minimum_matches : int, default 0
+        Minimum number of matches required for a team-season to be included.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Combined ranking across requested years, sorted by score descending. Columns include
+        at least teamname, score, year, league, and optionally era_score / league_score when z_scores is True.
+    """
     if features is None:
         features = GLORY_FEATURES
 
@@ -55,12 +86,26 @@ def get_glory_ranking(
         ranking_df = ranking_df.sort_values("score", ascending=False).reset_index(
             drop=True
         )
-
+        
+        if z_scores:
+            ranking_df["era_score"] = (
+                (ranking_df["score"] - ranking_df["score"].mean())
+                / ranking_df["score"].std()
+            )
+            
+            # Group by league and calculate z-scores within each league
+            ranking_df["league_score"] = ranking_df.groupby("league")["score"].transform(
+                lambda x: (x - x.mean()) / x.std()
+            )
+        
         # rescale to 0-100 for easier interpretability
         if rescale:
             ranking_df["score"] = ranking_df["score"] * 100
 
-        ranking_df["score"] = ranking_df["score"].round(2)
+        score_cols = ["score", "era_score", "league_score"] if z_scores else ["score"]
+        ranking_df[score_cols] = ranking_df[score_cols].round(2)
+        
+        
 
         ranking_df = _filter_leagues(ranking_df, league)
         all_rankings.append(ranking_df)
