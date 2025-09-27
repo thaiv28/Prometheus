@@ -23,9 +23,11 @@ def preprocess_match_raw_stats(df):
     columns = required_columns + RAW_FEATURES
     df = df[columns]
 
-    # fill missing raw features with mean of that feature. drop any that don't have required features
+    # fill missing raw features with mean of that feature. for years without means (e.g. atakhans pre 2025), fill with 0
     df[RAW_FEATURES] = df[RAW_FEATURES].fillna(df[RAW_FEATURES].mean())
-    df = df.dropna(axis="index", how="any")
+    df[RAW_FEATURES] = df[RAW_FEATURES].fillna(0)
+
+    df = df.dropna(subset=required_columns + RAW_FEATURES, how="any")
 
     # Remap league names to standard values
     league_mapping = {

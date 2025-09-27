@@ -11,9 +11,17 @@ CREATE TABLE match_raw_stats (
 
     -- raw totals
     totalgold           INT NOT NULL,
+    kills               INT NOT NULL,
     towers              INT NOT NULL,
     barons              INT NOT NULL,
     dragons             INT NOT NULL,
+    atakhans            INT NOT NULL,
+    heralds             INT NOT NULL,
+    firstherald         BOOLEAN NOT NULL,
+    firstdragon         BOOLEAN NOT NULL,
+    firstbaron          BOOLEAN NOT NULL,
+    firsttower          BOOLEAN NOT NULL,
+    visionscore         INT NOT NULL,
 
     PRIMARY KEY(gameid, teamid)
 );
@@ -23,9 +31,17 @@ CREATE TABLE match_glory_stats (
     teamid           TEXT NOT NULL,
     -- derived stats
     gpm                 REAL NOT NULL,
+    kills_per_10        REAL NOT NULL,
     turrets_per_10      REAL NOT NULL,
     baron_per_10        REAL NOT NULL,
     dragon_per_10       REAL NOT NULL,
+    heralds_per_10      REAL NOT NULL,
+    atakhans            INT NOT NULL,
+    firstherald         BOOLEAN NOT NULL,
+    firstdragon         BOOLEAN NOT NULL,
+    firstbaron          BOOLEAN NOT NULL,
+    firsttower          BOOLEAN NOT NULL,
+    visionscore_per_10  REAL NOT NULL,
 
     PRIMARY KEY(gameid, teamid),
     FOREIGN KEY(gameid, teamid) REFERENCES match_raw_stats(gameid, teamid)

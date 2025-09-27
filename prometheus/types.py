@@ -42,9 +42,17 @@ ALL_MAJOR_LEAGUES = [
 
 GLORY_FEATURES = [
     "gpm",
+    "kills_per_10",
     "turrets_per_10",
     "baron_per_10",
     "dragon_per_10",
+    "atakhans",
+    "heralds_per_10",
+    "firstherald",
+    "firstdragon",
+    "firstbaron",
+    "firsttower",
+    "visionscore_per_10",
 ]
 
 RAW_FEATURES = [
@@ -52,4 +60,12 @@ RAW_FEATURES = [
     "towers",
     "barons",
     "dragons",
+    "kills",
+    "atakhans",
+    "heralds",
+    "firstherald",
+    "firstdragon",
+    "firstbaron",
+    "firsttower",
+    "visionscore",
 ]

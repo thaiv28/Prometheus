@@ -12,6 +12,9 @@ def compute_glory_stats(df):
     df["turrets_per_10"] = df["towers"] / (gamelength_mins / 10)
     df["baron_per_10"] = df["barons"] / (gamelength_mins / 10)
     df["dragon_per_10"] = df["dragons"] / (gamelength_mins / 10)
+    df["kills_per_10"] = df["kills"] / (gamelength_mins / 10)
+    df["heralds_per_10"] = df["heralds"] / (gamelength_mins / 10)
+    df["visionscore_per_10"] = df["visionscore"] / (gamelength_mins / 10)
 
     return df[
         [
