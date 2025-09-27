@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 from prometheus.regression import _fit_glory_model
 from prometheus.matches import get_team_averages_frame
@@ -77,10 +78,21 @@ def get_glory_ranking(
         if not baseline:
             scores = pipeline.predict(averages[features])
         else:
-            # Rescale to 0-1 because baseline (GLORB) does not ensure 0-1 range like regression output
+            # GLORB baseline: equal weights for each feature
             scaled_df = pipeline.steps[0][1].transform(averages[features])
-            scores = scaled_df.sum(axis=1)
-            scores = (scores - scores.min()) / (scores.max() - scores.min())
+            raw = scaled_df.sum(axis=1)
+
+            # 1. Standardize raw baseline scores
+            mu = raw.mean()
+            sigma = raw.std(ddof=0)
+            if sigma == 0 or pd.isna(sigma):
+                sigma = 1
+            z = (raw - mu) / sigma
+
+            # Baseline scaling: keep values on 0–1 so the later generic *100 produces ~0–100.
+            target_mean = 0.8
+            target_std = 0.15
+            scores = target_mean + target_std * z
 
         averages["score"] = scores
         ranking_df = averages[cols_to_return]
