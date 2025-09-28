@@ -59,6 +59,7 @@
     <p style="margin:0; color:var(--text-dim);">{{ metric.description }}</p>
   </section>
   <div class="table-wrapper">
+    <div class="table-scroll">
     <table>
       <thead>
         <tr>
@@ -73,6 +74,7 @@
       </thead>
   <tbody id="rankings-body"></tbody>
     </table>
+    </div>
   </div>
   <script id="metric-data" type="application/json">{{ rows | tojson }}</script>
 {% endblock %}

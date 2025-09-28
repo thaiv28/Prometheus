@@ -10,7 +10,7 @@
   <nav style="font-size:.8rem; margin-bottom:1rem; opacity:.8;"><a href="{{ root_path }}index.html">Home</a> / <a href="{{ root_path }}glory.html">Rankings</a> / {{ teamname }}</nav>
   <h1 style="margin:.2rem 0 1rem; font-size:1.6rem; letter-spacing:.5px; font-weight:600; background:linear-gradient(135deg,var(--accent),#7F5BFF); -webkit-background-clip:text; color:transparent;">{{ teamname }}</h1>
   <p style="max-width:700px; font-size:.85rem; line-height:1.5; color:var(--text-dim);">Historical GLORY & GLORB scores across all recorded seasons.</p>
-  <div class="card" style="padding:.85rem 1rem; margin:1rem 0 1.2rem; position:relative; display:flex; gap:.9rem; align-items:flex-start;">
+  <div class="card chart" style="padding:.85rem 1rem; margin:1rem 0 1.2rem; position:relative; display:flex; gap:.9rem; align-items:flex-start;">
     <div style="flex:1; min-width:0;">
       <canvas id="teamChart" height="170" aria-label="Team metric time series" role="img" style="max-height:170px;"></canvas>
       <div id="noChartData" style="display:none; position:absolute; inset:0; align-items:center; justify-content:center; font-size:.8rem; color:var(--text-dim); background:rgba(0,0,0,0.4);">No metric data available.</div>
@@ -46,6 +46,7 @@
     }
   </style>
   <div class="table-wrapper">
+    <div class="table-scroll">
     <table>
       <thead>
         <tr><th>Year</th><th>GLORY</th><th>GLORB</th></tr>
@@ -61,6 +62,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
   </div>
   <script id="team-series" type="application/json">{{ series | tojson }}</script>
 {% endblock %}

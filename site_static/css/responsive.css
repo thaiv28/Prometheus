@@ -1,0 +1,51 @@
+/* Responsive adjustments (minimal first pass) */
+
+/* 1. Metric switch horizontal scroll on narrow screens */
+@media (max-width: 900px) {
+  .metric-switch { overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+  .metric-switch::-webkit-scrollbar { display:none; }
+  .site-header { padding:0.6rem 1rem; gap:.75rem; }
+  .header-actions input { width:130px; }
+  .main-content { padding:0 1rem; }
+}
+
+/* 2. Stack chart + legend on team page */
+@media (max-width: 900px) {
+  .card .chart-and-legend, .card.chart { flex-direction:column !important; }
+  .card .chart-and-legend aside, .card.chart aside { width:100% !important; order:2; }
+  .card .chart-and-legend canvas, .card.chart canvas { max-height:200px; }
+  .card .chart-and-legend form { flex-direction:row; flex-wrap:wrap; }
+  .card .chart-and-legend form label { width:calc(50% - .5rem); }
+}
+
+/* 3. Small-screen: preserve table structure, allow horizontal scroll within wrapper */
+html, body { overflow-x:hidden; }
+@media (max-width: 560px) {
+  .table-wrapper { position:relative; padding:.55rem .75rem .65rem .75rem; margin:0 6px; overflow:visible; }
+  /* Horizontal scroll contained; add spacer so content never flush with rounded edge */
+  .table-wrapper .table-scroll { overflow-x:auto; overflow-y:hidden; padding-right:0; -webkit-overflow-scrolling:touch; }
+  .table-wrapper .table-scroll table { min-width:720px; margin-right:0; }
+  /* Spacer so last column does not sit flush with rounded border */
+  .table-wrapper .table-scroll table::after { content:''; display:block; width:18px; height:1px; }
+  .table-wrapper .table-scroll::-webkit-scrollbar { height:8px; }
+  .table-wrapper .table-scroll::-webkit-scrollbar-track { background:var(--bg-alt); }
+  .table-wrapper .table-scroll::-webkit-scrollbar-thumb { background:#2f4254; border-radius:6px; }
+  thead th { position:static; }
+  /* Keep subtle left gradient hint only */
+  .table-wrapper::before { content:''; position:absolute; top:0; bottom:0; left:0; width:18px; pointer-events:none; z-index:5; background:linear-gradient(90deg,var(--bg-elevated) 0%, rgba(0,0,0,0) 100%); border-top-left-radius:inherit; border-bottom-left-radius:inherit; }
+  .table-wrapper::after { display:none; }
+}
+
+/* 4. Reduce heading sizes */
+@media (max-width: 560px) {
+  h1 { font-size:clamp(1.05rem, 6vw, 1.35rem) !important; }
+  .metric-switch button { padding:.4rem .65rem; font-size:.65rem; }
+  .filters-bar { padding:.5rem .8rem; }
+  .table-wrapper { padding:.75rem .75rem 1rem; }
+}
+
+/* 5. Improve tap targets */
+@media (max-width: 560px) {
+  .metric-switch button { min-height:38px; }
+  input[type=checkbox] { transform:scale(1.15); }
+}
