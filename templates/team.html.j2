@@ -1,0 +1,152 @@
+{% extends 'base.html.j2' %}
+{% block title %}{{ teamname }} • Team Metrics • Prometheus{% endblock %}
+{% block metric_switch %}
+  {% for m in metrics %}
+  <button onclick="window.location='{{ root_path }}{{ m.key }}.html'">{{ m.name }}</button>
+  {% endfor %}
+{% endblock %}
+{% block filters %}{% endblock %}
+{% block content %}
+  <nav style="font-size:.8rem; margin-bottom:1rem; opacity:.8;"><a href="{{ root_path }}index.html">Home</a> / <a href="{{ root_path }}glory.html">Rankings</a> / {{ teamname }}</nav>
+  <h1 style="margin:.2rem 0 1rem; font-size:1.6rem; letter-spacing:.5px; font-weight:600; background:linear-gradient(135deg,var(--accent),#7F5BFF); -webkit-background-clip:text; color:transparent;">{{ teamname }}</h1>
+  <p style="max-width:700px; font-size:.85rem; line-height:1.5; color:var(--text-dim);">Historical GLORY & GLORB scores across all recorded seasons.</p>
+  <div class="card" style="padding:.85rem 1rem; margin:1rem 0 1.2rem; position:relative; display:flex; gap:.9rem; align-items:flex-start;">
+    <div style="flex:1; min-width:0;">
+      <canvas id="teamChart" height="170" aria-label="Team metric time series" role="img" style="max-height:170px;"></canvas>
+      <div id="noChartData" style="display:none; position:absolute; inset:0; align-items:center; justify-content:center; font-size:.8rem; color:var(--text-dim); background:rgba(0,0,0,0.4);">No metric data available.</div>
+    </div>
+    <aside style="width:160px; font-size:.68rem; line-height:1.3; display:flex; flex-direction:column; gap:.55rem;">
+      <div style="font-size:.75rem; font-weight:600; letter-spacing:.5px; text-transform:uppercase; opacity:.75;">Series</div>
+      <form id="seriesToggles" style="display:flex; flex-direction:column; gap:.4rem;">
+        <label style="display:flex; align-items:center; gap:.45rem; cursor:pointer;">
+          <input type="checkbox" name="glory" checked style="accent-color:#7F5BFF;" />
+          <span style="display:inline-flex; align-items:center; gap:.35rem;"><span style="width:10px; height:10px; background:#7F5BFF; border-radius:2px;"></span>GLORY</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:.45rem; cursor:pointer;">
+          <input type="checkbox" name="glorb" checked style="accent-color:#42B883;" />
+          <span style="display:inline-flex; align-items:center; gap:.35rem;"><span style="width:10px; height:10px; background:#42B883; border-radius:2px;"></span>GLORB</span>
+        </label>
+        <hr style="border:none; border-top:1px solid var(--border); margin:.35rem 0;" />
+        <div style="font-size:.65rem; font-weight:600; letter-spacing:.5px; text-transform:uppercase; opacity:.6;">Historical Averages</div>
+        <label style="display:flex; align-items:center; gap:.45rem; cursor:pointer;">
+          <input type="checkbox" name="glory_avg" />
+          <span style="display:inline-flex; align-items:center; gap:.35rem;"><span style="width:10px; height:10px; background:#B39DFF; border-radius:2px;"></span>GLORY Avg</span>
+        </label>
+        <label style="display:flex; align-items:center; gap:.45rem; cursor:pointer;">
+          <input type="checkbox" name="glorb_avg" />
+          <span style="display:inline-flex; align-items:center; gap:.35rem;"><span style="width:10px; height:10px; background:#7DD7AC; border-radius:2px;"></span>GLORB Avg</span>
+        </label>
+      </form>
+      <div style="margin-top:.25rem; font-size:.55rem; opacity:.55; line-height:1.25;">Toggle series. Yearly averages are dashed.</div>
+    </aside>
+  </div>
+  <style>
+    @media (max-height: 800px) {
+      #teamChart { max-height:200px !important; height:200px !important; }
+    }
+  </style>
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr><th>Year</th><th>GLORY</th><th>GLORB</th></tr>
+      </thead>
+      <tbody>
+        {# Display most recent year first in table #}
+        {% for row in series|sort(attribute='year', reverse=True) %}
+        <tr>
+          <td>{{ row.year }}</td>
+          <td>{% if row.glory is not none %}{{ '%.2f'|format(row.glory) }}{% else %}&mdash;{% endif %}</td>
+          <td>{% if row.glorb is not none %}{{ '%.2f'|format(row.glorb) }}{% else %}&mdash;{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <script id="team-series" type="application/json">{{ series | tojson }}</script>
+{% endblock %}
+{% block scripts %}
+  <!-- Chart.js (no SRI to avoid mismatch causing load failure locally); consider pinning with correct hash later -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+  (function(){
+    const el = document.getElementById('team-series'); if(!el) return;
+    let data=[]; try { data = JSON.parse(el.textContent); } catch(e){}
+  const years = data.map(d=>d.year);
+  const toNum = v => (v===null || v===undefined || v==='') ? null : (isNaN(Number(v))? null : Number(v));
+  const glory = data.map(d=> toNum(d.glory));
+  const glorb = data.map(d=> toNum(d.glorb));
+    const ctx = document.getElementById('teamChart'); if(!ctx) return;
+  const hasAny = glory.some(v=>v!==null) || glorb.some(v=>v!==null);
+  console.log('Team series', {years, glory, glorb, hasAny});
+    if(!hasAny){
+      const nd = document.getElementById('noChartData'); if(nd) nd.style.display='flex';
+      return;
+    }
+    if(typeof Chart === 'undefined') {
+      console.error('Chart.js not loaded');
+      const nd = document.getElementById('noChartData'); if(nd){ nd.textContent='Chart library failed to load.'; nd.style.display='flex'; }
+      return;
+    }
+  const palette = { glory:'#7F5BFF', glorb:'#42B883', gloryAvg:'#B39DFF', glorbAvg:'#7DD7AC' };
+  const gloryYearMeans = {{ glory_year_means|tojson|default('{}') }};
+  const glorbYearMeans = {{ glorb_year_means|tojson|default('{}') }};
+    const baseDatasets = {
+      glory: { id:'glory', label:'GLORY', data:glory, borderColor:palette.glory, backgroundColor:palette.glory+'33', spanGaps:true, tension:.25, pointRadius:3 },
+      glorb: { id:'glorb', label:'GLORB', data:glorb, borderColor:palette.glorb, backgroundColor:palette.glorb+'33', spanGaps:true, tension:.25, pointRadius:3 },
+  glory_avg: { id:'glory_avg', label:'GLORY Avg', data:years.map(y=> gloryYearMeans[y] ?? null), borderColor:palette.gloryAvg, borderDash:[6,4], backgroundColor:'transparent', pointRadius:0, spanGaps:true, tension:0 },
+  glorb_avg: { id:'glorb_avg', label:'GLORB Avg', data:years.map(y=> glorbYearMeans[y] ?? null), borderColor:palette.glorbAvg, borderDash:[6,4], backgroundColor:'transparent', pointRadius:0, spanGaps:true, tension:0 }
+    };
+    const chart = new Chart(ctx, {
+      type:'line',
+      data:{ labels: years, datasets:[ baseDatasets.glory, baseDatasets.glorb ] },
+      options:{
+        responsive:true,
+        interaction:{mode:'nearest', intersect:false},
+        plugins:{ legend:{ display:false }, tooltip:{callbacks:{ label:(c)=> c.parsed.y===null? c.dataset.label+': —' : c.dataset.label+': '+c.parsed.y.toFixed(2) }} },
+  scales:{ x:{ticks:{color:'#fff'}}, y:{ticks:{color:'#fff'}, grid:{color:'rgba(255,255,255,0.07)'}} }
+      }
+    });
+    function updateYAxis(){
+      const vals = [];
+      chart.data.datasets.forEach(ds=>{ if(!ds.hidden){ ds.data.forEach(v=>{ if(v!==null && typeof v==='number' && !isNaN(v)) vals.push(v); }); }});
+      if(!vals.length){ return; }
+      let minV = Math.min(...vals);
+      let maxV = Math.max(...vals);
+      if(minV===maxV){ minV -= 1; maxV += 1; }
+      // Fixed absolute padding of 10 on each side
+      minV = minV - 10;
+      maxV = maxV + 10;
+      // Do not allow negative min below 0 (optional safeguard)
+      if(minV < 0) minV = 0;
+      // Round to nearest integer for cleaner ticks
+      const roundInt = x => Math.round(x);
+      minV = roundInt(minV);
+      maxV = roundInt(maxV);
+      chart.options.scales.y.min = minV;
+      chart.options.scales.y.max = maxV;
+    }
+    updateYAxis();
+    // Checkbox binding
+    const form = document.getElementById('seriesToggles');
+    if(form){
+      form.addEventListener('change', ()=>{
+        const fd = new FormData(form);
+        const desired = new Set(fd.getAll('glory').length? ['glory'] : []); // placeholder logic not used
+      });
+      form.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+        cb.addEventListener('change', ()=>{
+          const id = cb.name;
+          const existsIdx = chart.data.datasets.findIndex(d=>d.id===id);
+          if(cb.checked && existsIdx===-1){
+            chart.data.datasets.push(baseDatasets[id]);
+          } else if(!cb.checked && existsIdx!==-1){
+            chart.data.datasets.splice(existsIdx,1);
+          }
+          updateYAxis();
+          chart.update();
+        });
+      });
+    }
+  })();
+  </script>
+{% endblock %}

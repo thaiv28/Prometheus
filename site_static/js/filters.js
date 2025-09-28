@@ -76,16 +76,19 @@
       if(search && !String(r.teamname).toLowerCase().includes(search)) return false;
       return true;
     });
-    tbody.innerHTML = filtered.map((r,i)=>`
+    tbody.innerHTML = filtered.map((r,i)=>{
+      const teamCell = r.slug ? `<a href="teams/${r.slug}.html" class="team-link">${r.teamname}</a>` : r.teamname;
+      return `
       <tr data-year="${r.year}" data-league="${r.league}">
         <td class="rank-col">${i+1}</td>
-        <td class="team-col">${r.teamname}</td>
+        <td class="team-col">${teamCell}</td>
         <td class="score-col"><span class="tooltip" data-tooltip="Score: Composite metric 0-100">${Number(r.score).toFixed(2)}</span></td>
         <td><span class="tooltip" data-tooltip="Era Z: Dominance vs global field">${Number(r.era_score).toFixed(2)}</span></td>
         <td><span class="tooltip" data-tooltip="League Z: Dominance vs league field">${Number(r.league_score).toFixed(2)}</span></td>
         <td><span class="badge league-${r.league.replace(/\s+/g,'')} tooltip" data-tooltip="League">${r.league}</span></td>
         <td><span class="tooltip" data-tooltip="Season Year">${r.year}</span></td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   qs('#results-count').textContent = filtered.length + ' rows';
     if(!filtered.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No results</td></tr>'; }
     window.dispatchEvent(new CustomEvent('prometheus:rows-updated',{detail:{count:filtered.length}}));

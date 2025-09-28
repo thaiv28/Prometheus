@@ -41,16 +41,19 @@
     const base = getRaw();
     const filtered = applyActiveFilters(base);
     const sorted = sortRows(filtered);
-    body.innerHTML = sorted.map((r,i)=>`
+    body.innerHTML = sorted.map((r,i)=>{
+      const teamCell = r.slug ? `<a href="teams/${r.slug}.html" class="team-link">${r.teamname}</a>` : r.teamname;
+      return `
       <tr data-year="${r.year}" data-league="${r.league}">
         <td class="rank-col">${i+1}</td>
-        <td class="team-col">${r.teamname}</td>
+        <td class="team-col">${teamCell}</td>
         <td class="score-col"><span class="tooltip" data-tooltip="Score: Composite metric 0-100">${format(Number(r.score))}</span></td>
         <td><span class="tooltip" data-tooltip="Era Z: Dominance vs global field">${format(Number(r.era_score))}</span></td>
         <td><span class="tooltip" data-tooltip="League Z: Dominance vs league field">${format(Number(r.league_score))}</span></td>
         <td><span class="badge league-${String(r.league).replace(/\s+/g,'')} tooltip" data-tooltip="League">${r.league}</span></td>
         <td><span class="tooltip" data-tooltip="Season Year">${r.year}</span></td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
     if(!sorted.length){ body.innerHTML = '<tr><td colspan="7" class="empty-state">No results</td></tr>'; }
   }
 
