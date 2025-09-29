@@ -57,7 +57,7 @@ $ prometheus rankings glory --year 2021 --year 2022 --league LPL --league LCK
 - [x] One advanced metric (GLORY) that evaluates team performance
 - [ ] One advanced metric that evaluates individual player performance
 - [ ] SQL database that stores ~~match~~, player, and ~~stat~~ tables
-- [ ] Self-hosted webpage for exploring stat rankings
+- [x] Self-hosted webpage for exploring stat rankings
 - [x] CLI for dynamically viewing metrics
 - [x] Metrics span 5+ years of data over all major regions
 ## Metrics
@@ -69,7 +69,7 @@ These metrics are heavily dependent on the strength of opposing teams and the me
 To account for this, Prometheus calculates stats based on a per-season basis. Each metric is weighted appropriately for a single season. Thus, teams are scored based on how well they accomplish the goals of that specific "meta". 
 
 Prometheus also includes z-scores to compare the strength of a team relative to other teams in its region. We can calculate which teams were most "dominant" in specific eras. 
-#### Global League Offensive Rankings Yield (GLORY)
+#### GLORY - Global League Offensive Rankings Yield
 GLORY is prometheus' flagship stat for team performance. At a high level, it is a weighted sum of basic per-game stats listed below.
 
 ```
@@ -88,10 +88,42 @@ We also include slightly more advanced metrics in this calculation:
 ```
 
 In GLORY, weights are calculated using logistic regression with the winning team as a prediction target. 
-#### Global League Offensive Rankings Baseline (GLORB)
+#### GLORB - Global League Offensive Rankings Baseline
 GLORB is very similar to GLORY, except all categories are weighted equally. It provides a baseline to compare GLORY against and is much easier to implement.
 ### Player-based
-`TBD`
+
+#### AURA - Attributable Utility (via) Role Analytics
+The goal with our player-based metric is to assign a score to every player's season for every year. The scores should be directly comparable to other players in that region across years. Ideally, it should be comparable across different regions as well. 
+Because roles and what they require are so different, we create a separate ranking for each role.
+
+In a perfect world, the model is built as follows:
+1. Train a win-probability model that takes a game state as input
+2. Assign actions to each player
+3. Sum the increase/decrease in win-probability for that player's actions
+
+However, we don't have readily accessible play-by-play data for esports matches. However, we do have game stats taken at the 10, 15, 20, and 25 minute marks of every match. So we do the following:
+1. Train a win probability model for each time-window (i.e. 10-minute win prob model, 15-minute win prob model, ...)
+2. Calculate the actions that each player took during that time-window (e.g. kills, deaths, assists, dragons)
+
+At this point, we can determine what player A did during a time window, and the change in win-probability for their team during that window.
+We do NOT know if that change in win-probability is due to player A or any of their teammates. We need a way of modeling how much a player contributed to the overall win delta.
+
+3. Create role-specific models that take in the stats of a player and predicts the win-probability.
+
+We can use these models to find the win-prbability delta for every player on a team. This will tell us how much each player should be credited for the change in win-probability, as shown by the below formula.
+
+$$
+\Delta W_{player} \;=\; \Delta W_{team} \times 
+\frac{\hat{\Delta W}_{player}}{\sum_{p} \hat{\Delta W}_{p}}
+$$
+
+4. Sum up $\Delta W_{player}$ for the 10, 15, 20, 25 minute marks to get that player's win impact.
+
+
+Using an intermediate delta win-probability model, as opposed to modeling win probability based on stats, allows us to evaluate the extent that a player's actions impacted the game. A top-laner on a great team might have amazing stats, but their
+impact on the game is relatively low. In contrast, a top-laner on a poor team might have worse stats (because they have worse teammates), but their actions more consistently swing the game in their team's favor. The goal is to build a model that 
+rewards the second player.
+
 ## Implementation
 Determining the weights for WOBA involves creating a table where each match has two rows: one for Blue side and one for Red side. The features in a row are the stats described above.
 
