@@ -2,32 +2,42 @@ import pandas as pd
 from sqlalchemy import create_engine
 from pathlib import Path
 
-from prometheus.types import RAW_FEATURES
+from prometheus.types import MATCH_RAW_FEATURES, PLAYER_RAW_FEATURES, MATCHES_FEATURES
 
 
-def preprocess_match_raw_stats(df):
-    # include only team stats (not player stats)
-    df = df[df["position"] == "team"]
+def preprocess_player_raw_stats(df):
+    # include only player stats (not team stats)
+    df = df[df["position"] != "team"]
 
     required_columns = [
         "gameid",
-        "year",
-        "split",
-        "league",
+        "playerid",
+        "playername",
         "teamid",
-        "teamname",
-        "side",
-        "gamelength",
-        "result",
+        "position",
+        "champion",
     ]
-    columns = required_columns + RAW_FEATURES
+    columns = required_columns + PLAYER_RAW_FEATURES
     df = df[columns]
+    df = df.dropna(how="any")
+
+    return df
+
+def preprocess_matches(df):
+    # include only team stats (not player stats)
+    df = df[df["position"] == "team"]
+
+    
+    columns = MATCHES_FEATURES + MATCH_RAW_FEATURES
+    df = df[columns].drop_duplicates(subset=["gameid", "teamid"])
 
     # fill missing raw features with mean of that feature. for years without means (e.g. atakhans pre 2025), fill with 0
-    df[RAW_FEATURES] = df[RAW_FEATURES].fillna(df[RAW_FEATURES].mean())
-    df[RAW_FEATURES] = df[RAW_FEATURES].fillna(0)
+    df[MATCH_RAW_FEATURES] = df[MATCH_RAW_FEATURES].fillna(
+        df[MATCH_RAW_FEATURES].mean()
+    )
+    df[MATCH_RAW_FEATURES] = df[MATCH_RAW_FEATURES].fillna(0)
 
-    df = df.dropna(subset=required_columns + RAW_FEATURES, how="any")
+    df = df.dropna(how="any")
 
     # Remap league names to standard values
     league_mapping = {
@@ -54,9 +64,18 @@ def main():
             continue
 
         df = pd.read_csv(file)
-        df_sql = preprocess_match_raw_stats(df)
-        df_sql = df_sql.drop_duplicates(subset=["gameid", "teamid"])
-        df_sql.to_sql("match_raw_stats", engine, if_exists="append", index=False)
+        df_matches = preprocess_matches(df)
+        matches = df_matches[MATCHES_FEATURES]
+        match_stats = df_matches[['gameid', 'teamid'] + MATCH_RAW_FEATURES]
+        
+        matches.to_sql("matches", engine, if_exists="append", index=False)
+        match_stats.to_sql("match_stats", engine, if_exists="append", index=False)
+
+        df_player_sql = preprocess_player_raw_stats(df)
+        df_player_sql = df_player_sql.drop_duplicates(subset=["gameid", "playerid"])
+        df_player_sql.to_sql(
+            "player_stats", engine, if_exists="append", index=False
+        )
 
 
 if __name__ == "__main__":
