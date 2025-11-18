@@ -8,7 +8,7 @@ from prometheus.matches import get_matches_frame
 
 
 def _fit_glory_model(
-    features, league=None, year=None, evaluate=False, test_split=False
+    features, leagues=None, years=None, evaluate=False, test_split=False
 ):
     """
     Reads from match_glory_stats table, filters by league and year, and trains a linear regression model to predict win probability.
@@ -26,10 +26,10 @@ def _fit_glory_model(
         y_test: Test labels.
     """
     filters = {}
-    if league:
-        filters["league"] = league
-    if year:
-        filters["year"] = year
+    if leagues:
+        filters["leagues"] = leagues
+    if years:
+        filters["years"] = years
     df = get_matches_frame("match_glory_stats", filters)
 
     X = df[features]
@@ -49,7 +49,7 @@ def _fit_glory_model(
     pipeline.fit(X_train, y_train)
 
     if evaluate:
-        print(f"Evaluating model for league={league}, year={year}")
+        print(f"Evaluating model for league={leagues}, year={years}")
         print(
             f"Model weights: {pipeline.named_steps['regressor'].coef_}, Intercept: {pipeline.named_steps['regressor'].intercept_}"
         )
@@ -80,4 +80,4 @@ def _evaluate_model(pipeline, X_test, y_test):
 
 
 if __name__ == "__main__":
-    model, X_test, y_test = _fit_glory_model(league="LPL", year=2018, evaluate=True)
+    model, X_test, y_test = _fit_glory_model(leagues="LPL", years=2018, evaluate=True)

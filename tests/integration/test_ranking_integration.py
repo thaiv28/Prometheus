@@ -4,11 +4,11 @@ import pytest
 from prometheus.ranking import get_glory_ranking
 
 
-@patch("prometheus.matches._get_engine_and_tables")
+@patch("prometheus.utils.get_engine")
 def test_get_glory_ranking_multiyear_integration(
-    mock_get_engine_and_tables, inmemory_tables
+    mock_get_engine, inmemory_engine
 ):
-    mock_get_engine_and_tables.return_value = inmemory_tables
+    mock_get_engine.return_value = inmemory_engine 
 
     years = [2022, 2023]
     df = get_glory_ranking(year=years, features=["gpm", "dragon_per_10"])
@@ -50,9 +50,9 @@ def test_get_glory_ranking_multiyear_integration(
     ), f"Expected {expected_order}, got {actual_order}"
 
 
-@patch("prometheus.matches._get_engine_and_tables")
-def test_get_glory_ranking_integration(mock_get_engine_and_tables, inmemory_tables):
-    mock_get_engine_and_tables.return_value = inmemory_tables
+@patch("prometheus.utils.get_engine")
+def test_get_glory_ranking_integration(mock_get_engine, inmemory_engine):
+    mock_get_engine.return_value = inmemory_engine
 
     df = get_glory_ranking(year=2022, features=["gpm", "dragon_per_10"])
 
@@ -69,11 +69,11 @@ def test_get_glory_ranking_integration(mock_get_engine_and_tables, inmemory_tabl
         assert 0 <= score <= 300, f"Score {score} out of expected range 0-300"
 
 
-@patch("prometheus.matches._get_engine_and_tables")
+@patch("prometheus.utils.get_engine")
 def test_get_glory_single_league_integration(
-    mock_get_engine_and_tables, inmemory_tables
+    mock_get_engine, inmemory_engine
 ):
-    mock_get_engine_and_tables.return_value = inmemory_tables
+    mock_get_engine.return_value = inmemory_engine
 
     df = get_glory_ranking(league="LPL", year=2022, features=["gpm", "dragon_per_10"])
 
@@ -83,11 +83,11 @@ def test_get_glory_single_league_integration(
     assert df.iloc[0]["score"] != 100
 
 
-@patch("prometheus.matches._get_engine_and_tables")
+@patch("prometheus.utils.get_engine")
 def test_get_glory_minimum_matches_integration(
-    mock_get_engine_and_tables, inmemory_tables
+    mock_get_engine, inmemory_engine
 ):
-    mock_get_engine_and_tables.return_value = inmemory_tables
+    mock_get_engine.return_value = inmemory_engine
 
     with pytest.raises(ValueError):
         five_min_df = get_glory_ranking(
@@ -104,9 +104,9 @@ def test_get_glory_minimum_matches_integration(
     assert len(no_min_df) > 0
 
 
-@patch("prometheus.matches._get_engine_and_tables")
-def test_get_glory_ranking_z_score_ranges(mock_get_engine_and_tables, inmemory_tables):
-    mock_get_engine_and_tables.return_value = inmemory_tables
+@patch("prometheus.utils.get_engine")
+def test_get_glory_ranking_z_score_ranges(mock_get_engine, inmemory_engine):
+    mock_get_engine.return_value = inmemory_engine
 
     df = get_glory_ranking(
         year=[2022, 2023], features=["gpm", "dragon_per_10"], z_scores=True
@@ -124,11 +124,11 @@ def test_get_glory_ranking_z_score_ranges(mock_get_engine_and_tables, inmemory_t
         assert -3 <= score <= 3, f"League Score {score} out of expected range -3 to 3"
 
 
-@patch("prometheus.matches._get_engine_and_tables")
+@patch("prometheus.utils.get_engine")
 def test_get_glory_ranking_sort_by_league_score(
-    mock_get_engine_and_tables, inmemory_tables
+    mock_get_engine, inmemory_engine
 ):
-    mock_get_engine_and_tables.return_value = inmemory_tables
+    mock_get_engine.return_value = inmemory_engine
 
     df = get_glory_ranking(year=2022, features=["gpm", "dragon_per_10"], z_scores=True)
 
@@ -142,11 +142,11 @@ def test_get_glory_ranking_sort_by_league_score(
         ), f"League scores not in descending order: {df_sorted.iloc[i]['league_score']} < {df_sorted.iloc[i + 1]['league_score']}"
 
 
-@patch("prometheus.matches._get_engine_and_tables")
+@patch("prometheus.utils.get_engine")
 def test_get_glory_ranking_sort_by_era_score(
-    mock_get_engine_and_tables, inmemory_tables
+    mock_get_engine, inmemory_engine
 ):
-    mock_get_engine_and_tables.return_value = inmemory_tables
+    mock_get_engine.return_value = inmemory_engine
 
     df = get_glory_ranking(year=2022, features=["gpm", "dragon_per_10"], z_scores=True)
 

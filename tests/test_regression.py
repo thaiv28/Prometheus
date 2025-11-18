@@ -22,7 +22,7 @@ FEATURES = MOCK_DF.columns.tolist()
 @patch("prometheus.regression.get_matches_frame", return_value=MOCK_DF.copy())
 def test_fit_glory_model_basic(mock_get_matches_frame):
     pipeline, X_test, y_test = _fit_glory_model(
-        FEATURES, league="LCK", year=2022, test_split=True
+        FEATURES, leagues="LCK", years=2022, test_split=True
     )
 
     assert isinstance(pipeline, Pipeline)

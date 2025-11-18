@@ -3,7 +3,7 @@ from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, 
 
 
 @pytest.fixture
-def inmemory_tables():
+def inmemory_engine():
     return setup_inmemory_db()
 
 
@@ -18,8 +18,8 @@ def setup_inmemory_db():
         Column("gpm", Float),
         Column("dragon_per_10", Float),
     )
-    match_raw_stats = Table(
-        "match_raw_stats",
+    matches = Table(
+        "matches",
         metadata,
         Column("gameid", String, primary_key=True),
         Column("year", Integer),
@@ -91,7 +91,7 @@ def setup_inmemory_db():
             ],
         )
         conn.execute(
-            match_raw_stats.insert(),
+            matches.insert(),
             [
                 {
                     "gameid": "g1",
@@ -183,4 +183,4 @@ def setup_inmemory_db():
                 },
             ],
         )
-    return engine, stat_table, match_raw_stats
+    return engine
