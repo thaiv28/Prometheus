@@ -13,8 +13,8 @@ def test_glory_custom_leagues_e2e():
     
     
 def test_glory_min_matches_e2e():
-    all_teams_df = get_glory_ranking(league=['LCS'], minimum_matches=0)
-    qualified_teams_df = get_glory_ranking(league=['LCS'], minimum_matches=5)
+    all_teams_df = get_glory_ranking(league=['LCS'], year=2017, minimum_matches=0)
+    qualified_teams_df = get_glory_ranking(league=['LCS'], year=2017, minimum_matches=5)
 
     # when minimum matches is 5, we shouldn't have Cloud9 Challengers in the list
     assert not all_teams_df.iloc[0].equals(qualified_teams_df.iloc[0])
