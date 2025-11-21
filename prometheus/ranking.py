@@ -5,6 +5,7 @@ from prometheus.matches import get_team_averages_frame
 from prometheus.types import GLORY_FEATURES, ALL_MAJOR_LEAGUES, ScoreCols
 from prometheus import utils
 
+
 def get_glory_ranking(
     features=None,
     year=None,
@@ -66,7 +67,9 @@ def get_glory_ranking(
     # we have to fit the glory model separately for each year
     for yr in years:
         # we always want to model off all major leagues, then filter down to requested league later
-        pipeline, _, _ = _fit_glory_model(features, leagues=ALL_MAJOR_LEAGUES, years=[yr])
+        pipeline, _, _ = _fit_glory_model(
+            features, leagues=ALL_MAJOR_LEAGUES, years=[yr]
+        )
 
         averages = get_team_averages_frame(
             "match_glory_stats",
@@ -98,7 +101,7 @@ def get_glory_ranking(
         ranking_df = ranking_df.sort_values("score", ascending=False).reset_index(
             drop=True
         )
-        
+
         if z_scores:
             overall_std = ranking_df["score"].std()
             if overall_std is None or pd.isna(overall_std) or overall_std == 0:

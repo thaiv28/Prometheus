@@ -1,12 +1,10 @@
 from unittest.mock import patch
 
-from prometheus.matches import get_matches_frame 
+from prometheus.matches import get_matches_frame
 
 
 @patch("prometheus.utils.get_engine")
-def test_retrieve_dataframe_from_table_inmemory(
-    mock_get_engine, inmemory_engine
-):
+def test_retrieve_dataframe_from_table_inmemory(mock_get_engine, inmemory_engine):
     mock_get_engine.return_value = inmemory_engine
 
     filters = {"league": "LCK", "year": 2022}

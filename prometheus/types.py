@@ -57,6 +57,7 @@ GLORY_FEATURES = [
 
 MATCHES_FEATURES = [
     "gameid",
+    "date",
     "year",
     "split",
     "league",
@@ -65,7 +66,7 @@ MATCHES_FEATURES = [
     "side",
     "gamelength",
     "result",
-    ]
+]
 
 MATCH_RAW_FEATURES = [
     "totalgold",

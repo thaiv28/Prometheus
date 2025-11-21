@@ -46,6 +46,8 @@ def _fetch_player_base_frame(
     stmt = _build_player_match_query(player_raw, match_raw, years)
     df = pd.read_sql(stmt, engine)
     if df.empty:
-        raise ValueError("No player snapshot data found for the provided filters/years.")
+        raise ValueError(
+            "No player snapshot data found for the provided filters/years."
+        )
     df = df.loc[:, ~df.columns.duplicated()]
     return df

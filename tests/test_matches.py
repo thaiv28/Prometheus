@@ -149,7 +149,7 @@ def test_get_team_averages_frame_team_averages(mock_retrieve):
         Column("feature1", Float),
         Column("feature2", Float),
     )
-    mock_retrieve.return_value = df 
+    mock_retrieve.return_value = df
     result = get_team_averages_frame("match_glory_stats")
     # Should average feature1 and feature2 by teamname and year
     # For 2022: A: (1.0+3.0+2.5+1.0)/4=1.625, (10.0+30.0+12.0+10.0)/4=15.5
