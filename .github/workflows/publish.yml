@@ -25,7 +25,17 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
         run: uv sync --frozen && uv pip install -e .
+      # Google Drive rate-limits the shared CSVs; keep the last good copy so a
+      # throttled day rebuilds from yesterday's data instead of failing.
+      - name: Restore cached CSVs
+        uses: actions/cache@v4
+        with:
+          path: data/raw
+          key: oracles-elixir-${{ github.run_id }}
+          restore-keys: oracles-elixir-
       - name: Build database
+        env:
+          REFRESH_DATA: "1"
         run: uv run bash scripts/setup_db.sh
       - name: Test
         run: uv run pytest -q

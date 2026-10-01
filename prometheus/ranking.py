@@ -133,9 +133,10 @@ def get_glory_ranking(
 
     # combine individual year rankings into combined ranking
     combined_df = pd.concat(all_rankings, ignore_index=True)
-    combined_df = combined_df.sort_values(sort_by, ascending=False).reset_index(
-        drop=True
-    )
+    # Scores are rounded, so ties are common; break them by year for a stable order.
+    combined_df = combined_df.sort_values(
+        [sort_by, "year"], ascending=[False, True], kind="mergesort"
+    ).reset_index(drop=True)
     return combined_df
 
 
