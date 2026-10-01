@@ -1,0 +1,53 @@
+@font-face {
+  font-family: "Graduate";
+  src: url("../fonts/graduate-latin.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+
+  /* Arena steel: the ground under the rafters */
+  --ground: #1a1917;
+  --ground-raised: #23221f;
+  --ground-sunk: #141312;
+  --rule: #34312c;
+  --rule-strong: #4b473f;
+
+  /* Stitch thread: all non-league ink */
+  --thread: #ede6d6;
+  --thread-dim: #aba393;
+
+  /* Steel rod */
+  --rod-hi: #8a847a;
+  --rod-mid: #4d4943;
+  --rod-lo: #2b2926;
+
+  /* League felts. Color appears only where it encodes a league. */
+  --felt-lck: #24479c;
+  --felt-lpl: #9c2338;
+  --felt-lec: #1f6346;
+  --felt-lcs: #c9971f;
+  --felt-other: #4a4844;
+  --felt-ink: #f3ecdc;
+  --felt-ink-dark: #1d1a14;
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-varsity: "Graduate", "Rockwell", Georgia, serif;
+
+  --topbar-h: 52px;
+  --page-max: 1240px;
+  --gutter: clamp(16px, 3vw, 32px);
+  --radius: 4px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* One hue per league, used identically by banners, tags, swatches, and chart lines. */
+/* --line is a lighter tint of the same hue for strokes and swatches on the dark ground (>= 3:1). */
+[data-league] { --felt: var(--felt-other); --ink: var(--felt-ink); --line: #9b968c; }
+[data-league="LCK"] { --felt: var(--felt-lck); --line: #7d9ef0; }
+[data-league="LPL"] { --felt: var(--felt-lpl); --line: #e5707f; }
+[data-league="LEC"] { --felt: var(--felt-lec); --line: #5cbf92; }
+[data-league="LCS"] { --felt: var(--felt-lcs); --ink: var(--felt-ink-dark); --line: #d9a83a; }

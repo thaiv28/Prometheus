@@ -1,0 +1,639 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-01T04:03:05.257286+00:00",
+  "title": "Design System: Prometheus",
+  "extensions": {
+    "colorMeta": {
+      "felt-lck": {
+        "role": "primary",
+        "displayName": "LCK Royal Felt",
+        "canonical": "#24479c",
+        "oklch": "oklch(42.4% 0.145 264.2)",
+        "tonalRamp": [
+          "#000036",
+          "#011468",
+          "#16378b",
+          "#3358ae",
+          "#5179d3",
+          "#709bf8",
+          "#a8c4fc",
+          "#e7effe"
+        ],
+        "note": "Line tint for strokes on the ground: line-lck. Felt ink: felt-ink."
+      },
+      "felt-lpl": {
+        "role": "primary",
+        "displayName": "LPL Crimson Felt",
+        "canonical": "#9c2338",
+        "oklch": "oklch(46.0% 0.156 16.6)",
+        "tonalRamp": [
+          "#220002",
+          "#4a0111",
+          "#780a24",
+          "#a32a3d",
+          "#c94e5c",
+          "#ef717c",
+          "#faacaf",
+          "#fee9e9"
+        ]
+      },
+      "felt-lec": {
+        "role": "primary",
+        "displayName": "LEC Forest Felt",
+        "canonical": "#1f6346",
+        "oklch": "oklch(44.9% 0.083 161.5)",
+        "tonalRamp": [
+          "#001006",
+          "#002d1a",
+          "#004d31",
+          "#296c4f",
+          "#4c8d6e",
+          "#6daf8e",
+          "#93d5b3",
+          "#c2ffdf"
+        ]
+      },
+      "felt-lcs": {
+        "role": "primary",
+        "displayName": "LCS Gold Felt",
+        "canonical": "#c9971f",
+        "oklch": "oklch(70.6% 0.137 83.2)",
+        "tonalRamp": [
+          "#140900",
+          "#302100",
+          "#523c05",
+          "#765814",
+          "#9d761d",
+          "#c7951c",
+          "#efbb4f",
+          "#feeccb"
+        ],
+        "note": "Light felt: numerals and chain stitch use felt-ink-dark."
+      },
+      "felt-other": {
+        "role": "primary",
+        "displayName": "Neutral Felt",
+        "canonical": "#4a4844",
+        "oklch": "oklch(40.2% 0.007 84.6)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#262420",
+          "#413f3c",
+          "#5f5d59",
+          "#7f7d79",
+          "#a09e99",
+          "#c6c4bf",
+          "#f1eee9"
+        ]
+      },
+      "line-lck": {
+        "role": "secondary",
+        "displayName": "LCK Line",
+        "canonical": "#7d9ef0",
+        "oklch": "oklch(70.9% 0.126 266.6)",
+        "tonalRamp": [
+          "#010035",
+          "#091960",
+          "#213981",
+          "#3d58a4",
+          "#5b79c8",
+          "#7a9bed",
+          "#acc3fb",
+          "#e7efff"
+        ]
+      },
+      "line-lpl": {
+        "role": "secondary",
+        "displayName": "LPL Line",
+        "canonical": "#e5707f",
+        "oklch": "oklch(68.6% 0.146 13.7)",
+        "tonalRamp": [
+          "#210004",
+          "#4a0014",
+          "#7a0328",
+          "#9e3044",
+          "#c45263",
+          "#ea7483",
+          "#fbabb2",
+          "#fee8ea"
+        ]
+      },
+      "line-lec": {
+        "role": "secondary",
+        "displayName": "LEC Line",
+        "canonical": "#5cbf92",
+        "oklch": "oklch(73.3% 0.115 161.9)",
+        "tonalRamp": [
+          "#001006",
+          "#022c1c",
+          "#0b4c33",
+          "#056f4b",
+          "#289268",
+          "#51b588",
+          "#79dcad",
+          "#c1ffdf"
+        ]
+      },
+      "line-lcs": {
+        "role": "secondary",
+        "displayName": "LCS Line",
+        "canonical": "#d9a83a",
+        "oklch": "oklch(75.8% 0.135 83.7)",
+        "tonalRamp": [
+          "#130900",
+          "#302101",
+          "#523c07",
+          "#785800",
+          "#9f7600",
+          "#c69620",
+          "#eebc51",
+          "#feedcb"
+        ]
+      },
+      "line-other": {
+        "role": "secondary",
+        "displayName": "Neutral Line",
+        "canonical": "#9b968c",
+        "oklch": "oklch(67.4% 0.016 84.6)",
+        "tonalRamp": [
+          "#0e0b05",
+          "#28241b",
+          "#443f37",
+          "#625d54",
+          "#827d73",
+          "#a39e94",
+          "#c9c3b9",
+          "#f3eee3"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Arena Steel",
+        "canonical": "#1a1917",
+        "oklch": "oklch(21.4% 0.004 84.6)",
+        "tonalRamp": [
+          "#0c0b09",
+          "#252422",
+          "#41403d",
+          "#5f5d5b",
+          "#7e7d7a",
+          "#9f9e9b",
+          "#c5c4c1",
+          "#f0eeeb"
+        ]
+      },
+      "ground-raised": {
+        "role": "neutral",
+        "displayName": "Raised Steel",
+        "canonical": "#23221f",
+        "oklch": "oklch(25.2% 0.006 91.6)",
+        "tonalRamp": [
+          "#0c0b09",
+          "#252421",
+          "#41403c",
+          "#5f5d5a",
+          "#7e7d79",
+          "#a09e9a",
+          "#c5c4c0",
+          "#f0eeea"
+        ]
+      },
+      "ground-sunk": {
+        "role": "neutral",
+        "displayName": "Sunk Steel",
+        "canonical": "#141312",
+        "oklch": "oklch(18.7% 0.003 67.7)",
+        "tonalRamp": [
+          "#0c0b0a",
+          "#252423",
+          "#413f3e",
+          "#5f5d5c",
+          "#7e7d7c",
+          "#9f9e9d",
+          "#c5c4c2",
+          "#f0eeed"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Seam",
+        "canonical": "#34312c",
+        "oklch": "oklch(31.5% 0.010 80.7)",
+        "tonalRamp": [
+          "#0d0b07",
+          "#26241f",
+          "#423f3a",
+          "#605d58",
+          "#807d77",
+          "#a19e98",
+          "#c7c3bd",
+          "#f2eee7"
+        ]
+      },
+      "rule-strong": {
+        "role": "neutral",
+        "displayName": "Strong Seam",
+        "canonical": "#4b473f",
+        "oklch": "oklch(39.9% 0.014 84.6)",
+        "tonalRamp": [
+          "#0e0b05",
+          "#27241c",
+          "#433f37",
+          "#615d55",
+          "#817d74",
+          "#a29e95",
+          "#c8c4ba",
+          "#f3eee4"
+        ]
+      },
+      "thread": {
+        "role": "neutral",
+        "displayName": "Stitch Thread",
+        "canonical": "#ede6d6",
+        "oklch": "oklch(92.6% 0.023 87.2)",
+        "tonalRamp": [
+          "#0f0a02",
+          "#292317",
+          "#453f32",
+          "#635d4f",
+          "#837d6e",
+          "#a49e8f",
+          "#cac4b4",
+          "#f5eede"
+        ]
+      },
+      "thread-dim": {
+        "role": "neutral",
+        "displayName": "Faded Thread",
+        "canonical": "#aba393",
+        "oklch": "oklch(71.8% 0.024 84.6)",
+        "tonalRamp": [
+          "#100a02",
+          "#2a2316",
+          "#463f31",
+          "#645d4e",
+          "#847c6d",
+          "#a59e8e",
+          "#cbc3b3",
+          "#f6eedc"
+        ]
+      },
+      "felt-ink": {
+        "role": "neutral",
+        "displayName": "Felt Ink",
+        "canonical": "#f3ecdc",
+        "oklch": "oklch(94.4% 0.023 87.2)",
+        "tonalRamp": [
+          "#0f0a02",
+          "#292317",
+          "#453f32",
+          "#635d4f",
+          "#837d6e",
+          "#a49e8f",
+          "#cac4b4",
+          "#f5eede"
+        ]
+      },
+      "felt-ink-dark": {
+        "role": "neutral",
+        "displayName": "Dark Felt Ink",
+        "canonical": "#1d1a14",
+        "oklch": "oklch(21.9% 0.012 84.5)",
+        "tonalRamp": [
+          "#0e0b06",
+          "#27241d",
+          "#433f39",
+          "#615d56",
+          "#817d75",
+          "#a29e96",
+          "#c8c4bb",
+          "#f2eee5"
+        ]
+      },
+      "rod-hi": {
+        "role": "neutral",
+        "displayName": "Rod Highlight",
+        "canonical": "#8a847a",
+        "oklch": "oklch(61.6% 0.016 80.7)",
+        "tonalRamp": [
+          "#0f0a04",
+          "#28231b",
+          "#443f36",
+          "#625d53",
+          "#827c73",
+          "#a49e93",
+          "#cac3b8",
+          "#f4eee2"
+        ]
+      },
+      "rod-mid": {
+        "role": "neutral",
+        "displayName": "Rod Steel",
+        "canonical": "#4d4943",
+        "oklch": "oklch(40.7% 0.011 78.2)",
+        "tonalRamp": [
+          "#0e0b06",
+          "#27231e",
+          "#433f39",
+          "#615d57",
+          "#817d76",
+          "#a29e97",
+          "#c8c3bc",
+          "#f3eee6"
+        ]
+      },
+      "rod-lo": {
+        "role": "neutral",
+        "displayName": "Rod Shadow",
+        "canonical": "#2b2926",
+        "oklch": "oklch(28.2% 0.006 78.2)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#262421",
+          "#413f3c",
+          "#5f5d5a",
+          "#7f7d79",
+          "#a09e9a",
+          "#c6c4c0",
+          "#f1eeea"
+        ]
+      }
+    },
+    "leagueMapping": {
+      "LCK": {
+        "felt": "felt-lck",
+        "line": "line-lck",
+        "ink": "felt-ink"
+      },
+      "LPL": {
+        "felt": "felt-lpl",
+        "line": "line-lpl",
+        "ink": "felt-ink"
+      },
+      "LEC": {
+        "felt": "felt-lec",
+        "line": "line-lec",
+        "ink": "felt-ink"
+      },
+      "LCS": {
+        "felt": "felt-lcs",
+        "line": "line-lcs",
+        "ink": "felt-ink-dark"
+      },
+      "*": {
+        "felt": "felt-other",
+        "line": "line-other",
+        "ink": "felt-ink"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Page titles: metric name, team name. Graduate varsity slab; lowercase renders as small caps."
+      },
+      "display-home": {
+        "displayName": "Display (home)",
+        "purpose": "The home intro statement only."
+      },
+      "numeral": {
+        "displayName": "Banner Numeral",
+        "purpose": "Rank numeral on a felt banner; 1.125rem for season year numerals."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Metric names in the home metric index; banner captions use the face at 0.8125rem."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section headings in system sans."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Ledes and explanations, 68-72ch."
+      },
+      "table": {
+        "displayName": "Table",
+        "purpose": "Table cells, tabular numerals; value column at 700."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Sortable table column headers, uppercase."
+      }
+    },
+    "fonts": [
+      {
+        "family": "Graduate",
+        "source": "site_static/fonts/graduate-latin.woff2",
+        "weight": 400,
+        "display": "swap"
+      }
+    ],
+    "shadows": [
+      {
+        "name": "banner-hang",
+        "value": "drop-shadow(0 8px 10px rgb(0 0 0 / 0.4))",
+        "purpose": "filter on each banner list item so the swallowtail clip does not cut it."
+      },
+      {
+        "name": "panel-lift",
+        "value": "0 6px 12px -4px rgb(0 0 0 / 0.5)",
+        "purpose": "Open picker dropdown panels only."
+      },
+      {
+        "name": "header-seam",
+        "value": "inset 0 -1px var(--rule-strong)",
+        "purpose": "Sticky table header bottom rule."
+      }
+    ],
+    "textures": [
+      {
+        "name": "felt-twill",
+        "value": "fractalNoise SVG (baseFrequency .9, 2 octaves, alpha .22) over the felt hue",
+        "purpose": "Felt surface."
+      },
+      {
+        "name": "felt-shading",
+        "value": "linear-gradient(90deg, rgb(0 0 0/.22), transparent 16% 84%, rgb(0 0 0/.22)), linear-gradient(rgb(0 0 0/.18), transparent 28px)",
+        "purpose": "Darkened selvedges and shadow under the rod."
+      },
+      {
+        "name": "chain-stitch",
+        "value": "12px SVG looped-link border-image, 4px, inset 5px; thread-colored, dark on LCS gold",
+        "purpose": "Inner border of every felt."
+      },
+      {
+        "name": "rod",
+        "value": "linear-gradient(rod-hi, rod-mid 45%, rod-lo), 7px tall, with 6x18px end brackets",
+        "purpose": "The rafters rod."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Re-hang and average-line transitions."
+      },
+      {
+        "name": "rehang",
+        "value": "clip-path unfurl from the rod, 260ms ease-out, 16ms stagger per banner",
+        "purpose": "Signature: banners re-hang when filters or metric change. None under reduced motion."
+      },
+      {
+        "name": "mean-slide",
+        "value": "transform 240ms ease-out",
+        "purpose": "Team-page average line moving between metrics. None under reduced motion."
+      },
+      {
+        "name": "state",
+        "value": "150ms (color, border-color, background, filter); 120ms row hover",
+        "purpose": "Hover and selection state changes."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "rafters-scroll",
+        "value": "900px",
+        "purpose": "Rafters become a sideways-scrolling rod (92px columns, 180px felt scale)."
+      },
+      {
+        "name": "tablet",
+        "value": "720px",
+        "purpose": "Wordmark text hides, search collapses, table scrolls, wide-only columns drop."
+      },
+      {
+        "name": "phone",
+        "value": "480px",
+        "purpose": "Phone-hide columns drop, header unsticks, picker panels pin to gutters."
+      }
+    ],
+    "layout": {
+      "pageMax": "1240px",
+      "gutter": "clamp(16px, 3vw, 32px)",
+      "topbarHeight": "52px",
+      "raftersFeltScale": "220px",
+      "feltMin": "68px",
+      "captionBand": "86px",
+      "raftersGap": "12px"
+    }
+  },
+  "components": [
+    {
+      "name": "Felt Banner",
+      "kind": "custom",
+      "refersTo": "banner-felt",
+      "description": "Signature: a league-felt banner hanging from the rod; length is the score on a zero baseline, caption hangs below the hem.",
+      "html": "<ol class=\"ds-rafters\"><li class=\"ds-banner\" style=\"--felt:#24479c;--drop:.92\"><a class=\"ds-banner-link\" href=\"#\"><span class=\"ds-felt\"><span class=\"ds-numeral\">1</span></span><span class=\"ds-caption\"><span class=\"ds-title\">Gen.G</span><span class=\"ds-meta\">2024 · LCK</span><span class=\"ds-value\">83.31</span></span></a></li><li class=\"ds-banner\" style=\"--felt:#c9971f;--ink:#1d1a14;--drop:.7\"><a class=\"ds-banner-link\" href=\"#\"><span class=\"ds-felt\"><span class=\"ds-numeral\">2</span></span><span class=\"ds-caption\"><span class=\"ds-title\">Cloud9</span><span class=\"ds-meta\">2020 · LCS</span><span class=\"ds-value\">79.04</span></span></a></li></ol>",
+      "css": ".ds-rafters{--H:160px;display:grid;grid-template-columns:repeat(2,104px);gap:12px;margin:0;padding:0 14px 8px;list-style:none;background:linear-gradient(#8a847a,#2b2926) 0 0/6px 18px no-repeat,linear-gradient(#8a847a,#2b2926) 100% 0/6px 18px no-repeat,linear-gradient(#8a847a,#4d4943 45%,#2b2926) 0 5px/100% 7px no-repeat;font-family:system-ui,sans-serif}.ds-banner{position:relative;height:calc(16px + var(--H) + 86px);filter:drop-shadow(0 8px 10px rgb(0 0 0/.4))}.ds-banner-link{display:block;height:100%;color:#ede6d6;text-decoration:none}.ds-banner-link::before{content:\"\";position:absolute;top:1px;left:16%;right:16%;height:20px;border-inline:7px solid color-mix(in srgb,var(--felt) 78%,black);border-radius:3px 3px 0 0}.ds-felt{position:absolute;left:0;right:0;top:16px;height:max(calc(var(--drop)*var(--H)),68px);display:flex;justify-content:center;padding-top:18px;color:var(--ink,#f3ecdc);background:linear-gradient(90deg,rgb(0 0 0/.22),transparent 16% 84%,rgb(0 0 0/.22)),linear-gradient(rgb(0 0 0/.18),transparent 28px),var(--felt);clip-path:polygon(0 0,100% 0,100% 100%,50% calc(100% - 14px),0 100%);transition:filter 150ms}.ds-felt::before{content:\"\";position:absolute;inset:5px 5px 17px;border:1px dashed currentColor;opacity:.6}.ds-numeral{font-family:Graduate,Rockwell,Georgia,serif;font-size:1.875rem;line-height:1}.ds-caption{position:absolute;left:0;right:0;top:calc(24px + max(calc(var(--drop)*var(--H)),68px));display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center}.ds-title{font-family:Graduate,Rockwell,Georgia,serif;font-size:.8125rem}.ds-meta{font-size:.6875rem;color:#aba393}.ds-value{font-weight:700;font-size:.875rem;font-variant-numeric:tabular-nums}.ds-banner-link:hover .ds-felt{filter:brightness(1.12)}.ds-banner-link:hover .ds-title{text-decoration:underline;text-underline-offset:3px}.ds-banner-link:focus-visible{outline:2px solid #ede6d6;outline-offset:4px}"
+    },
+    {
+      "name": "Top Bar",
+      "kind": "nav",
+      "refersTo": "topbar",
+      "description": "Sticky sunk-steel bar: varsity wordmark, metric links with a thread underline on the current page.",
+      "html": "<header class=\"ds-topbar\"><a class=\"ds-wordmark\" href=\"#\">Prometheus</a><nav class=\"ds-topnav\"><a href=\"#\" aria-current=\"page\">GLORY</a><a href=\"#\">GLORB</a><a href=\"#\">Elo</a></nav></header>",
+      "css": ".ds-topbar{height:52px;display:flex;align-items:center;gap:28px;padding:0 24px;background:var(--ground-sunk,#141312);border-bottom:1px solid var(--rule,#34312c);font-family:system-ui,sans-serif}.ds-wordmark{font-family:Graduate,Rockwell,Georgia,serif;font-size:1.125rem;letter-spacing:.02em;color:#ede6d6;text-decoration:none}.ds-topnav{display:flex;height:100%;gap:4px}.ds-topnav a{display:flex;align-items:center;padding:0 12px;height:100%;color:#aba393;text-decoration:none;font-weight:600;font-size:.875rem;border-bottom:2px solid transparent;transition:color 150ms,border-color 150ms}.ds-topnav a:hover{color:#ede6d6}.ds-topnav a[aria-current=page]{color:#ede6d6;border-bottom-color:#ede6d6}.ds-topnav a:focus-visible{outline:2px solid #ede6d6;outline-offset:2px}"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "search-input",
+      "description": "34px steel field with an inset magnifier; focus turns the border to thread.",
+      "html": "<label class=\"ds-search\"><svg viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"7\" cy=\"7\" r=\"4.5\"/><path d=\"M10.5 10.5 14 14\"/></svg><input type=\"search\" placeholder=\"Search teams\"></label>",
+      "css": ".ds-search{position:relative;display:inline-block}.ds-search svg{position:absolute;left:10px;top:50%;width:14px;height:14px;translate:0 -50%;fill:none;stroke:#aba393;stroke-width:1.5;stroke-linecap:round}.ds-search input{width:220px;height:34px;padding:0 10px 0 32px;font:400 .875rem system-ui,sans-serif;color:#ede6d6;background:#1a1917;border:1px solid #34312c;border-radius:4px;transition:border-color 150ms}.ds-search input::placeholder{color:#aba393}.ds-search input:hover{border-color:#4b473f}.ds-search input:focus-visible{outline:none;border-color:#ede6d6}"
+    },
+    {
+      "name": "Filter Picker",
+      "kind": "button",
+      "refersTo": "picker",
+      "description": "Raised-steel dropdown trigger with muted label, bold value and rotating chevron.",
+      "html": "<button class=\"ds-picker\" type=\"button\"><span class=\"ds-picker-label\">Leagues</span> <span class=\"ds-picker-value\">All</span></button>",
+      "css": ".ds-picker{position:relative;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 30px 0 12px;font:400 .875rem system-ui,sans-serif;color:#ede6d6;background:#23221f;border:1px solid #34312c;border-radius:4px;cursor:pointer;transition:border-color 150ms}.ds-picker::after{content:\"\";position:absolute;right:12px;top:50%;width:6px;height:6px;border-right:1.5px solid #aba393;border-bottom:1.5px solid #aba393;translate:0 -70%;rotate:45deg}.ds-picker:hover{border-color:#4b473f}.ds-picker:focus-visible{outline:2px solid #ede6d6;outline-offset:2px}.ds-picker-label{color:#aba393}.ds-picker-value{font-weight:600}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action (e.g. Major four only): transparent with a strong-seam border that turns to thread on hover.",
+      "html": "<button class=\"ds-btn-outline\" type=\"button\">Major four only</button>",
+      "css": ".ds-btn-outline{height:30px;padding:0 10px;font:600 .8125rem system-ui,sans-serif;color:#ede6d6;background:none;border:1px solid #4b473f;border-radius:4px;cursor:pointer;transition:border-color 150ms}.ds-btn-outline:hover{border-color:#ede6d6}.ds-btn-outline:focus-visible{outline:2px solid #ede6d6;outline-offset:2px}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "chip",
+      "refersTo": "segmented-option",
+      "description": "Metric toggle; the selected option inverts to thread on ground.",
+      "html": "<div class=\"ds-seg\" role=\"radiogroup\"><label><input type=\"radio\" name=\"ds-m\" checked>GLORY</label><label><input type=\"radio\" name=\"ds-m\">GLORB</label></div>",
+      "css": ".ds-seg{display:inline-flex;border:1px solid #4b473f;border-radius:4px;overflow:hidden;font-family:system-ui,sans-serif}.ds-seg label{position:relative;padding:5px 12px;font-size:.8125rem;font-weight:600;color:#aba393;cursor:pointer;transition:color 150ms,background 150ms}.ds-seg label+label{border-left:1px solid #4b473f}.ds-seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}.ds-seg label:has(input:checked){background:#ede6d6;color:#1a1917}.ds-seg label:hover:not(:has(input:checked)){color:#ede6d6}.ds-seg label:has(input:focus-visible){outline:2px solid #ede6d6;outline-offset:2px}"
+    },
+    {
+      "name": "League Tag",
+      "kind": "chip",
+      "refersTo": "league-tag",
+      "description": "League code with a swallowtail pennant swatch in the league's line tint.",
+      "html": "<span class=\"ds-tag\" style=\"--line:#7d9ef0\">LCK</span> <span class=\"ds-tag\" style=\"--line:#e5707f\">LPL</span> <span class=\"ds-tag\" style=\"--line:#5cbf92\">LEC</span> <span class=\"ds-tag\" style=\"--line:#d9a83a\">LCS</span>",
+      "css": ".ds-tag{display:inline-flex;align-items:center;gap:6px;font:400 .875rem system-ui,sans-serif;color:#ede6d6;margin-right:12px}.ds-tag::before{content:\"\";display:inline-block;width:9px;height:12px;background:var(--line);clip-path:polygon(0 0,100% 0,100% 100%,50% 75%,0 100%)}"
+    },
+    {
+      "name": "Rankings Table",
+      "kind": "custom",
+      "refersTo": "table-row",
+      "description": "Dense 29px rows, tracked uppercase sortable headers, right-aligned tabular numbers, raised-steel row hover.",
+      "html": "<table class=\"ds-table\"><thead><tr><th class=\"n\">Rank</th><th>Team</th><th class=\"n\" aria-sort=\"descending\">Score</th><th class=\"n\">Era Z</th></tr></thead><tbody><tr><td class=\"n r\">1</td><td class=\"t\">Fnatic</td><td class=\"n v\">85.55</td><td class=\"n\">+2.73</td></tr><tr><td class=\"n r\">2</td><td class=\"t\">Gen.G</td><td class=\"n v\">83.31</td><td class=\"n\">+2.28</td></tr></tbody></table>",
+      "css": ".ds-table{width:100%;border-collapse:collapse;font:400 .875rem system-ui,sans-serif;font-variant-numeric:tabular-nums;color:#ede6d6}.ds-table th{height:34px;padding:0 10px;text-align:left;background:#1a1917;box-shadow:inset 0 -1px #4b473f;font-size:.6875rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#aba393}.ds-table th[aria-sort]{color:#ede6d6}.ds-table td{height:29px;padding:3px 10px;border-bottom:1px solid #34312c}.ds-table tbody tr{transition:background 120ms}.ds-table tbody tr:hover{background:#23221f}.ds-table .n{text-align:right}.ds-table .r{color:#aba393;width:4.5em}.ds-table .t{font-weight:600}.ds-table .v{font-weight:700}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Rafters",
+    "overview": "Every team-season is a championship banner hung in the rafters, and the ranking is the order they hang in. The ground is dim arena steel, warm charcoal and never pure black, under a single steel rod. Banners are twill felt with a chain-stitched inner border and a swallowtail hem, set in varsity block numerals. A banner's length is its score on a zero baseline, so the rafters are a bar chart that reads as a gym ceiling.\n\nColor is encoding, not decoration. Each major league owns one felt hue (LCK royal, LPL crimson, LEC forest, LCS gold), used identically on banners, league tags, filter swatches and chart lines. Every other league hangs in neutral felt. Everything that is not a league is cream stitch thread on steel. Below the rafters sits a dense, quiet table (about 29px rows, tabular numerals, right-aligned numbers), because the table is the product and the banners only stage it.\n\nThe world explicitly refuses the dark-neon esports dashboard and the card-grid stat hub. There are no cards, no glows, no gradients other than the rod's metal and the felt's shading.",
+    "keyCharacteristics": [
+      "Warm charcoal steel ground, single cream ink.",
+      "League hue is the only color, and it always means the league.",
+      "Banner length is data on a zero baseline; nothing is lengthened to fit text.",
+      "Varsity block face for names, numerals and titles; system sans for reading and numbers.",
+      "Dense, sortable, sticky-header table directly under the rafters.",
+      "Motion only conveys state change (the re-hang), and is instant under reduced motion."
+    ],
+    "rules": [
+      {
+        "name": "The Felt Means League Rule",
+        "body": "A league hue appears only where it encodes that league, and the same league always gets the same hue on every surface (banner, tag, swatch, chart line). Never use a felt for emphasis, status or decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Ink Rule",
+        "body": "Everything that is not a league is drawn in stitch thread or faded thread on steel. There is no other accent; selected and focused states invert to thread rather than borrowing a hue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Varsity Is Sewn Rule",
+        "body": "Graduate is for names, numerals and titles that would be stitched onto a banner. Never set paragraphs, table cells or controls in it.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Every number that can be compared (scores, z-scores, Elo, counts, years in pickers) uses tabular numerals and right alignment in tables.",
+        "section": "typography"
+      },
+      {
+        "name": "The Only Things That Hang Rule",
+        "body": "Shadows belong to objects that physically hang or float (banners, an open dropdown). Rows, sections and controls are flat.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do set banner length from data on a zero baseline (value / max), with only the 68px numeral floor as a lift.",
+      "Do use the league's felt for banners and its line tint for any stroke or small mark, identically everywhere.",
+      "Do keep table rows near 29px, numbers right-aligned in tabular numerals.",
+      "Do draw selected and focused states by inverting to stitch thread or a 2px thread ring.",
+      "Do let the rafters scroll sideways on narrow screens rather than shrinking banners.",
+      "Do make every motion express a state change, and drop it under reduced motion."
+    ],
+    "donts": [
+      "Don't use a league hue for anything that is not that league: no colored buttons, highlights, status colors or decorative accents.",
+      "Don't use pure black or neon; the ground is warm charcoal steel.",
+      "Don't introduce cards, glows, glassmorphism or gradient fills; the rod and the felt shading are the only gradients.",
+      "Don't put names or values on the felt; the felt carries only its numeral, text hangs in the caption.",
+      "Don't set body copy, table cells or controls in Graduate."
+    ]
+  }
+}

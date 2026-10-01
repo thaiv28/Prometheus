@@ -45,7 +45,7 @@ jobs:
         run: uv run bash scripts/setup_db.sh
 
       - name: Build static site
-        run: uv run python scripts/build_site.py   # script should output to ./site
+        run: uv run python scripts/build_site.py   # writes ./output, including CNAME
       
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -53,7 +53,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
+          # Upload the built site
           path: './output'
           
       - name: Deploy to GitHub Pages
