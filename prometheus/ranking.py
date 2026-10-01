@@ -24,6 +24,7 @@ def get_glory_ranking(
     sort_by="score",
     minimum_matches=0,
     opponent_adjusted=False,
+    before=None,
 ):
     """Compute GLORY (or GLORB baseline) team rankings.
 
@@ -53,6 +54,9 @@ def get_glory_ranking(
         If True (GLORY+), each game's stats are first adjusted to what they would
         have been against an average major-league opponent that year, using the
         opponent's pre-game Elo. See `adjust_for_opponent_elo`.
+    before : str | datetime.date | None, optional
+        If set, only games before this date are used, both to fit the yearly model and
+        to average each team-season. Gives the metric as it stood on that date.
 
     Returns
     -------
@@ -80,14 +84,14 @@ def get_glory_ranking(
     for yr in years:
         # we always want to model off all major leagues, then filter down to requested league later
         pipeline, _, _ = _fit_glory_model(
-            features, leagues=ALL_MAJOR_LEAGUES, years=[yr]
+            features, leagues=ALL_MAJOR_LEAGUES, years=[yr], before=before
         )
 
         if opponent_adjusted:
             # Adjustment coefficients come from every major-league game that year.
             games = get_matches_frame(
                 "match_glory_stats",
-                filters={"years": [yr], "leagues": ALL_MAJOR_LEAGUES},
+                filters={"years": [yr], "leagues": ALL_MAJOR_LEAGUES, "before": before},
             )
             games = adjust_for_opponent_elo(games, features)
             averages = team_season_averages(
@@ -97,7 +101,7 @@ def get_glory_ranking(
             averages = get_team_averages_frame(
                 "match_glory_stats",
                 minimum_matches=minimum_matches,
-                filters={"years": [yr], "leagues": league},
+                filters={"years": [yr], "leagues": league, "before": before},
             )
 
         if not baseline:

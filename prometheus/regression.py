@@ -8,7 +8,7 @@ from prometheus.matches import get_matches_frame
 
 
 def _fit_glory_model(
-    features, leagues=None, years=None, evaluate=False, test_split=False
+    features, leagues=None, years=None, evaluate=False, test_split=False, before=None
 ):
     """
     Reads from match_glory_stats table, filters by league and year, and trains a linear regression model to predict win probability.
@@ -30,6 +30,8 @@ def _fit_glory_model(
         filters["leagues"] = leagues
     if years:
         filters["years"] = years
+    if before:
+        filters["before"] = before
     df = get_matches_frame("match_glory_stats", filters)
 
     X = df[features]

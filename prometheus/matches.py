@@ -1,3 +1,5 @@
+import datetime
+
 import pandas as pd
 from collections.abc import Iterable
 from enum import Enum
@@ -48,13 +50,19 @@ def get_matches_frame(stat_table_name, filters=None):
     Reads from the given stat_table_name, joins with match_raw_stats, applies filters, and returns a pandas DataFrame.
     Args:
         stat_table_name (str): Name of the stats table (e.g., 'match_lore_stats').
-        filters (dict, optional): Dictionary of filters, e.g. {'league': 'LPL', 'year': 2018}
+        filters (dict, optional): Dictionary of filters, e.g. {'leagues': ['LPL'], 'years': [2018],
+            'before': '2018-07-01'} ('before' keeps games strictly before that date).
     Returns:
         pd.DataFrame: Resulting DataFrame
     """
     condition = "TRUE"
     for filter_key, filter_value in filters.items():
         if filter_value is None:
+            continue
+        if filter_key == "before":
+            # Only games played before this date, for point-in-time (backtest) metrics.
+            cutoff = datetime.date.fromisoformat(str(filter_value)[:10])
+            condition += f" AND m.date < '{cutoff.isoformat()}'"
             continue
         if isinstance(filter_value, str):
             filter_value = f"('{filter_value}')"

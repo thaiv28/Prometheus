@@ -99,6 +99,9 @@ GLORY averages a team's per-game stats without asking who those stats came again
 3. Average the adjusted games per team-season and score them with that year's GLORY model, exactly as GLORY does.
 
 Controlling for the team's own Elo keeps the opponent coefficient from absorbing the fact that strong teams post big stats. Elo connects regions only through international events (Worlds, MSI, EWC, First Stand, ...), so GLORY+ probably understates the gap between regions rather than overstating it.
+### How accurate are the metrics?
+`scripts/evaluate_metrics.py` backtests every team metric. At the start of each month, each metric is computed from that season's earlier games only, then used to predict the winner of every game played that month. Results are scored by accuracy, Brier score and log loss, and compared with a simple baseline (win % so far this season) using a paired bootstrap. International games between teams from different major regions are scored separately, because they are the only direct test of cross-region strength. Latest results: [docs/metric_backtest.md](docs/metric_backtest.md).
+
 ### Player-based
 
 #### AURA - Attributable Utility (via) Role Analytics

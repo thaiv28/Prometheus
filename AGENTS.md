@@ -17,6 +17,7 @@ bash scripts/setup_db.sh                # download raw CSVs (gdown), rebuild db/
 uv run python scripts/build_site.py     # render static site to output/
 uv run pytest -q                        # run tests (unit + integration + e2e; e2e needs a built DB)
 uv run prometheus rankings glory --league MAJOR --year 2024
+uv run python scripts/evaluate_metrics.py --out docs/metric_backtest.md   # backtest metrics (~90s)
 python -m http.server -d output 8000    # preview the built site locally
 ```
 
@@ -36,6 +37,7 @@ python -m http.server -d output 8000    # preview the built site locally
 | `prometheus/main.py` | Typer CLI entry point (`prometheus` script) |
 | `scripts/NNN_*.sql\|py` | DB build steps. `setup_db.sh` runs them **in numeric order**. |
 | `scripts/build_site.py` | Static site generator |
+| `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Rolling monthly backtest: how well each metric, computed only from earlier games, predicts winners (domestic and cross-region). Results in `docs/metric_backtest.md` |
 | `templates/*.html.j2` | Jinja2 templates: `base` (shell), `index`, `rankings` (every metric page, driven by a column config), `team`, `404`, and the `_marks` macros (league mark, signed number, ordinal) |
 | `site_static/{css,js,fonts}` | Hand-written CSS (`tokens.css` holds all colors and the `@font-face` rules, including league inks), vanilla JS (`rankings.js` for filtering, sorting and the distribution figure, `team.js` for the season switch and the SVG Elo chart), and the self-hosted Source Serif 4 font (OFL), all copied verbatim into `output/` |
 | `PRODUCT.md`, `.impeccable/surfaces/` | Product record and visual direction contract used by the impeccable design skill. Read them before UI work. |
@@ -67,4 +69,4 @@ python -m http.server -d output 8000    # preview the built site locally
 1. `uv run pytest -q` passes.
 2. If you touched the DB scripts or metrics, rebuild with `setup_db.sh`, then `build_site.py`, and spot-check `output/`.
 3. If you touched templates, CSS, or JS, build the site and look at it in a browser at desktop and phone widths.
-4. Keep `README.md` metric descriptions in sync with any metric change.
+4. Keep `README.md` metric descriptions in sync with any metric change, and rerun `evaluate_metrics.py` to check the change helps.
