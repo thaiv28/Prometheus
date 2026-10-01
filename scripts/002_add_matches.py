@@ -36,6 +36,10 @@ def preprocess_matches(df):
         df[MATCH_RAW_FEATURES].mean()
     )
     df[MATCH_RAW_FEATURES] = df[MATCH_RAW_FEATURES].fillna(0)
+    # Oracle's Elixir leaves split empty for international events (Worlds, MSI, ...)
+    # and some regional leagues. Keep those games: internationals are the only
+    # games that connect regions for Elo.
+    df["split"] = df["split"].fillna("")
 
     df = df.dropna(how="any")
 
@@ -43,7 +47,7 @@ def preprocess_matches(df):
     league_mapping = {
         "LCS": ["LCS", "NA LCS", "LTA N"],
         "LEC": ["LEC", "EU LCS"],
-        "Worlds": ["Wlds"],
+        "Worlds": ["WLDs"],
     }
     reverse_league_mapping = {v: k for k, vals in league_mapping.items() for v in vals}
     df["league"] = df["league"].map(reverse_league_mapping).fillna(df["league"])

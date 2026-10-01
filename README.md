@@ -5,6 +5,7 @@ Prometheus is a database of 'sabermetric' like stats that evaluate League of Leg
 An overview of prometheus' stats (described more in the [metrics](#metrics) section):
 - **Global League Offensive Rankings Yield (GLORY)**: Prometheus' flagship metric. Weights gold/objectives by their importance in the meta, and calculates the best teams at securing those advantages across all regions.
 - **Global League Offensive Rankings Baseline (GLORB)**: Baseline for GLORY. Weights all objective/gold equally.
+- **GLORY+**: GLORY with every game adjusted for the opponent's Elo, so stats piled up against weak opponents count for less.
 ## CLI
 The prometheus CLI provides users the ability to view past of current ratings for any of prometheus' metrics.
 
@@ -90,6 +91,14 @@ We also include slightly more advanced metrics in this calculation:
 In GLORY, weights are calculated using logistic regression with the winning team as a prediction target. 
 #### GLORB - Global League Offensive Rankings Baseline
 GLORB is very similar to GLORY, except all categories are weighted equally. It provides a baseline to compare GLORY against and is much easier to implement.
+#### GLORY+ - Opponent-adjusted GLORY
+GLORY averages a team's per-game stats without asking who those stats came against, so a team in a weak league (or with an easy schedule) looks better than it is. GLORY+ fixes this using game-length Elo:
+
+1. For each year and each GLORY feature, fit `feature ~ own_pre_game_elo + opponent_pre_game_elo` over all major-league games.
+2. Restate every game against an average opponent: `adjusted = feature - b_opponent * (opponent_elo - mean_opponent_elo)`.
+3. Average the adjusted games per team-season and score them with that year's GLORY model, exactly as GLORY does.
+
+Controlling for the team's own Elo keeps the opponent coefficient from absorbing the fact that strong teams post big stats. Elo connects regions only through international events (Worlds, MSI, EWC, First Stand, ...), so GLORY+ probably understates the gap between regions rather than overstating it.
 ### Player-based
 
 #### AURA - Attributable Utility (via) Role Analytics

@@ -1,7 +1,14 @@
 import pandas as pd
+from sklearn.linear_model import LinearRegression
 
 from prometheus.regression import _fit_glory_model
-from prometheus.matches import get_team_averages_frame, get_available_years
+from prometheus.matches import (
+    get_team_averages_frame,
+    get_available_years,
+    get_matches_frame,
+    team_season_averages,
+)
+from prometheus.elo import get_pregame_elos
 from prometheus.types import GLORY_FEATURES, ALL_MAJOR_LEAGUES, ScoreCols
 from prometheus import utils
 
@@ -16,6 +23,7 @@ def get_glory_ranking(
     cols_to_return=None,
     sort_by="score",
     minimum_matches=0,
+    opponent_adjusted=False,
 ):
     """Compute GLORY (or GLORB baseline) team rankings.
 
@@ -41,6 +49,10 @@ def get_glory_ranking(
         Additional columns (besides teamname/score/year/league) to keep in output.
     minimum_matches : int, default 0
         Minimum number of matches required for a team-season to be included.
+    opponent_adjusted : bool, default False
+        If True (GLORY+), each game's stats are first adjusted to what they would
+        have been against an average major-league opponent that year, using the
+        opponent's pre-game Elo. See `adjust_for_opponent_elo`.
 
     Returns
     -------
@@ -71,11 +83,22 @@ def get_glory_ranking(
             features, leagues=ALL_MAJOR_LEAGUES, years=[yr]
         )
 
-        averages = get_team_averages_frame(
-            "match_glory_stats",
-            minimum_matches=minimum_matches,
-            filters={"years": [yr], "leagues": league},
-        )
+        if opponent_adjusted:
+            # Adjustment coefficients come from every major-league game that year.
+            games = get_matches_frame(
+                "match_glory_stats",
+                filters={"years": [yr], "leagues": ALL_MAJOR_LEAGUES},
+            )
+            games = adjust_for_opponent_elo(games, features)
+            averages = team_season_averages(
+                _filter_leagues(games, league), minimum_matches
+            )
+        else:
+            averages = get_team_averages_frame(
+                "match_glory_stats",
+                minimum_matches=minimum_matches,
+                filters={"years": [yr], "leagues": league},
+            )
 
         if not baseline:
             scores = pipeline.predict(averages[features])
@@ -138,6 +161,32 @@ def get_glory_ranking(
         [sort_by, "year"], ascending=[False, True], kind="mergesort"
     ).reset_index(drop=True)
     return combined_df
+
+
+def adjust_for_opponent_elo(games, features, method="game_length"):
+    """Adjust per-game stats for the strength of the opponent.
+
+    For each feature, fits `feature ~ own_elo + opponent_elo` over the given games
+    (controlling for the team's own strength), then removes the opponent term
+    relative to the average opponent. The same gold-per-minute against a strong
+    opponent is therefore worth more than against a weak one.
+
+    Args:
+        games: Per-game rows from `get_matches_frame` (one row per team per game).
+        features: Feature columns to adjust.
+        method: Elo method supplying pre-game ratings.
+    Returns:
+        New frame with adjusted features and `elo` / `opp_elo` columns. Games
+        without an Elo record are dropped.
+    """
+    years = sorted(int(y) for y in games["year"].unique())
+    games = games.merge(get_pregame_elos(method, years), on=["gameid", "teamid"])
+    elos = games[["elo", "opp_elo"]]
+    opp_offset = games["opp_elo"] - games["opp_elo"].mean()
+    for feature in features:
+        opp_coef = LinearRegression().fit(elos, games[feature]).coef_[1]
+        games[feature] = games[feature] - opp_coef * opp_offset
+    return games
 
 
 def _filter_leagues(df, leagues):

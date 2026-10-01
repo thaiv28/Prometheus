@@ -54,6 +54,21 @@ METRICS = {
         "baseline": True,
         "lede_note": 3,
     },
+    "glory_plus": {
+        "key": "glory_plus",
+        "name": "GLORY+",
+        "full_name": "GLORY, adjusted for opponent strength",
+        "description": "GLORY with every game adjusted for how strong the opponent was, using their Elo going into the game. A big gold lead against a top team counts for more than the same lead against a weak one.",
+        "how_to_read": [
+            "Score: on the same scale as GLORY. Higher is better.",
+            "GLORY+ minus GLORY shows how much a team's schedule helped or hurt it. Teams in weaker leagues usually drop.",
+            "Era Z and League Z: same as on GLORY.",
+        ],
+        "caveats": "Only LCK, LPL, LEC and LCS. Team-seasons with fewer than 5 games are left out. Elo links regions only through international events like MSI and Worlds, so the gap between regions is probably understated.",
+        "baseline": False,
+        "opponent_adjusted": True,
+        "lede_note": 3,
+    },
 }
 
 ELO_METRICS = {
@@ -122,13 +137,14 @@ def copy_static():
     shutil.copy2(Path(STATIC_SRC) / "favicon.svg", Path(OUTPUT_DIR) / "favicon.svg")
 
 
-def _rankings(baseline, minimum_matches, z_scores):
+def _rankings(baseline, minimum_matches, z_scores, opponent_adjusted=False):
     return get_glory_ranking(
         year=None,
         league=ALL_MAJOR_LEAGUES,
         baseline=baseline,
         z_scores=z_scores,
         minimum_matches=minimum_matches,
+        opponent_adjusted=opponent_adjusted,
     )
 
 
@@ -301,10 +317,15 @@ def main():
     glorb_df = _rankings(baseline=True, minimum_matches=5, z_scores=True)
     glory_all = _rankings(baseline=False, minimum_matches=1, z_scores=False)
     glorb_all = _rankings(baseline=True, minimum_matches=1, z_scores=False)
+    glory_plus_df = _rankings(baseline=False, minimum_matches=5, z_scores=True, opponent_adjusted=True)
 
     render_404(last_update)
 
-    for metric, df in ((METRICS["glory"], glory_df), (METRICS["glorb"], glorb_df)):
+    for metric, df in (
+        (METRICS["glory"], glory_df),
+        (METRICS["glorb"], glorb_df),
+        (METRICS["glory_plus"], glory_plus_df),
+    ):
         render_rankings_page(
             metric,
             _records(df),
@@ -338,7 +359,7 @@ def main():
     pages = _team_pages(glory_all, glorb_all, elo_history, latest_elos["game_length_elo"], glory_df)
     render_index(
         glory_df,
-        {"glory": len(glory_df), "glorb": len(glorb_df), "game_length_elo": len(latest_elos["game_length_elo"])},
+        {"glory": len(glory_df), "glorb": len(glorb_df), "glory_plus": len(glory_plus_df), "game_length_elo": len(latest_elos["game_length_elo"])},
         len(latest_elos["game_length_elo"]),
         last_update,
     )
