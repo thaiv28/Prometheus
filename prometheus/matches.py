@@ -32,6 +32,13 @@ def get_team_averages_frame(stat_table_name, minimum_matches=0, filters=None):
     return averages_df
 
 
+def get_available_years(leagues):
+    """Return the sorted years that have at least one game in the given leagues."""
+    league_list = ", ".join(repr(getattr(l, "value", l)) for l in leagues)
+    stmt = f"SELECT DISTINCT year FROM matches WHERE league IN ({league_list}) ORDER BY year"
+    return [int(y) for y in pd.read_sql(stmt, utils.get_engine())["year"]]
+
+
 def get_matches_frame(stat_table_name, filters=None):
     """
     Reads from the given stat_table_name, joins with match_raw_stats, applies filters, and returns a pandas DataFrame.

@@ -1,7 +1,7 @@
 import pandas as pd
 
 from prometheus.regression import _fit_glory_model
-from prometheus.matches import get_team_averages_frame
+from prometheus.matches import get_team_averages_frame, get_available_years
 from prometheus.types import GLORY_FEATURES, ALL_MAJOR_LEAGUES, ScoreCols
 from prometheus import utils
 
@@ -28,7 +28,7 @@ def get_glory_ranking(
     features : list[str] | None, optional
         Feature columns to use. Defaults to `GLORY_FEATURES` when None.
     year : int | iterable[int] | None, optional
-        Single year, multiple years, or None for all supported years.
+        Single year, multiple years, or None for every year in the database.
     league : str | iterable[str] | None, optional
         League code(s) to include in final output; modeling always uses all major leagues.
     rescale : bool, default True
@@ -57,7 +57,7 @@ def get_glory_ranking(
         cols_to_return = list(set(cols_to_return + ["teamname"]))
 
     if year is None:
-        years = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+        years = get_available_years(ALL_MAJOR_LEAGUES)
     elif isinstance(year, (list, tuple, set)):
         years = list(year)
     else:
