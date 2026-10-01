@@ -1,284 +1,245 @@
 ---
 name: Prometheus
-description: Sabermetrics for LoL esports. Every team-season is a championship banner hung in the rafters.
+description: The annual printed sabermetrics abstract of LoL esports. Every page is a typeset statistical register on uncoated paper.
 colors:
-  felt-lck: "#24479c"
-  felt-lpl: "#9c2338"
-  felt-lec: "#1f6346"
-  felt-lcs: "#c9971f"
-  felt-other: "#4a4844"
-  line-lck: "#7d9ef0"
-  line-lpl: "#e5707f"
-  line-lec: "#5cbf92"
-  line-lcs: "#d9a83a"
-  line-other: "#9b968c"
-  ground: "#1a1917"
-  ground-raised: "#23221f"
-  ground-sunk: "#141312"
-  rule: "#34312c"
-  rule-strong: "#4b473f"
-  thread: "#ede6d6"
-  thread-dim: "#aba393"
-  felt-ink: "#f3ecdc"
-  felt-ink-dark: "#1d1a14"
-  rod-hi: "#8a847a"
-  rod-mid: "#4d4943"
-  rod-lo: "#2b2926"
+  paper: "#f3eee3"
+  paper-wash: "#e9e2d2"
+  paper-deep: "#ded5c1"
+  ink: "#1b1914"
+  ink-2: "#4f4a41"
+  ink-3: "#6a6458"
+  hairline: "#b9ae98"
+  hairline-soft: "#d3c9b5"
+  spot: "#2342a0"
+  spot-wash: "#dfe2ee"
+  ink-lck: "#146a6c"
+  ink-lpl: "#9a2a2a"
+  ink-lec: "#4a6a1f"
+  ink-lcs: "#8a5d08"
+  ink-other: "#7a7264"
 typography:
+  title-page:
+    fontFamily: "Source Serif 4, Iowan Old Style, Palatino Linotype, Georgia, serif"
+    fontSize: "clamp(3.25rem, 11vw, 7.5rem)"
+    fontWeight: 300
+    lineHeight: 0.9
+    letterSpacing: "-0.025em"
   display:
-    fontFamily: "Graduate, Rockwell, Georgia, serif"
-    fontSize: "2rem"
+    fontFamily: "Source Serif 4, Iowan Old Style, Palatino Linotype, Georgia, serif"
+    fontSize: "clamp(2.25rem, 5vw, 3.5rem)"
     fontWeight: 400
-    lineHeight: 1.1
-    letterSpacing: "0.01em"
-  display-home:
-    fontFamily: "Graduate, Rockwell, Georgia, serif"
-    fontSize: "2.5rem"
-    fontWeight: 400
-    lineHeight: 1.1
-    letterSpacing: "0.01em"
-  numeral:
-    fontFamily: "Graduate, Rockwell, Georgia, serif"
-    fontSize: "1.875rem"
-    fontWeight: 400
-    lineHeight: 1
-    letterSpacing: "0.01em"
+    lineHeight: 1.02
+    letterSpacing: "-0.015em"
   headline:
-    fontFamily: "Graduate, Rockwell, Georgia, serif"
-    fontSize: "1.375rem"
+    fontFamily: "Source Serif 4, Iowan Old Style, Palatino Linotype, Georgia, serif"
+    fontSize: "1.625rem"
     fontWeight: 400
-  title:
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
-    fontSize: "1.0625rem"
-    fontWeight: 700
-    lineHeight: 1.3
-    letterSpacing: "-0.01em"
-  body:
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
-    fontSize: "0.9375rem"
+    lineHeight: 1.15
+  lede:
+    fontFamily: "Source Serif 4, Iowan Old Style, Palatino Linotype, Georgia, serif"
+    fontSize: "1.1875rem"
     fontWeight: 400
     lineHeight: 1.5
+    fontFeature: "onum, pnum"
+  body:
+    fontFamily: "Source Serif 4, Iowan Old Style, Palatino Linotype, Georgia, serif"
+    fontSize: "1.0625rem"
+    fontWeight: 400
+    lineHeight: 1.5
+    fontFeature: "onum, pnum"
   table:
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
+    fontFamily: "Source Serif 4, Iowan Old Style, Palatino Linotype, Georgia, serif"
+    fontSize: "0.9375rem"
+    fontWeight: 400
+    lineHeight: 1.3
+    fontFeature: "lnum, tnum"
+  label:
+    fontFamily: "Source Serif 4, Iowan Old Style, Palatino Linotype, Georgia, serif"
+    fontSize: "0.9375rem"
+    fontWeight: 400
+    letterSpacing: "0.06em"
+    fontFeature: "c2sc, smcp, lnum"
+  caption:
+    fontFamily: "Source Serif 4, Iowan Old Style, Palatino Linotype, Georgia, serif"
     fontSize: "0.875rem"
     fontWeight: 400
-    fontFeature: "tnum"
-  label:
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif"
-    fontSize: "0.6875rem"
-    fontWeight: 700
-    letterSpacing: "0.07em"
+    lineHeight: 1.45
 rounded:
-  hairline: "2px"
-  sm: "3px"
-  md: "4px"
+  none: "0"
 spacing:
   xs: "4px"
   sm: "8px"
-  md: "12px"
-  lg: "16px"
-  xl: "24px"
-  2xl: "32px"
-  section: "48px"
+  md: "14px"
+  lg: "22px"
+  xl: "36px"
+  section: "44px"
+  margin-column: "17rem"
 components:
-  topbar:
-    backgroundColor: "{colors.ground-sunk}"
-    textColor: "{colors.thread-dim}"
-    height: "52px"
-    padding: "0 clamp(16px, 3vw, 32px)"
-  search-input:
-    backgroundColor: "{colors.ground}"
-    textColor: "{colors.thread}"
-    rounded: "{rounded.md}"
-    height: "34px"
-    width: "220px"
-    padding: "0 10px 0 32px"
-  picker:
-    backgroundColor: "{colors.ground-raised}"
-    textColor: "{colors.thread}"
-    rounded: "{rounded.md}"
-    height: "34px"
-    padding: "0 30px 0 12px"
+  running-head:
+    textColor: "{colors.ink-2}"
+    typography: "{typography.label}"
+    padding: "18px 0 12px"
+  index-search:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    typography: "{typography.body}"
+    width: "12.5rem"
+    rounded: "{rounded.none}"
+  picker-summary:
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+    padding: "3px 0"
   picker-panel:
-    backgroundColor: "{colors.ground-raised}"
-    rounded: "{rounded.md}"
-    padding: "10px"
-  button-outline:
-    textColor: "{colors.thread}"
-    rounded: "{rounded.md}"
-    height: "30px"
-    padding: "0 10px"
-  segmented-option:
-    textColor: "{colors.thread-dim}"
+    backgroundColor: "{colors.paper}"
+    rounded: "{rounded.none}"
+    padding: "12px 14px 14px"
+  register-header:
+    backgroundColor: "{colors.paper}"
+    textColor: "{colors.ink-2}"
     typography: "{typography.label}"
-    padding: "5px 12px"
-  segmented-option-selected:
-    backgroundColor: "{colors.thread}"
-    textColor: "{colors.ground}"
-  table-row:
-    textColor: "{colors.thread}"
+    padding: "7px 10px 5px"
+  register-row:
+    textColor: "{colors.ink}"
     typography: "{typography.table}"
-    height: "29px"
-    padding: "3px 10px"
-  table-row-hover:
-    backgroundColor: "{colors.ground-raised}"
-  table-header:
-    backgroundColor: "{colors.ground}"
-    textColor: "{colors.thread-dim}"
-    typography: "{typography.label}"
-    height: "34px"
-  banner-felt:
-    textColor: "{colors.felt-ink}"
-    typography: "{typography.numeral}"
-    height: "196px"
+    height: "1.75rem"
+    padding: "4px 10px"
+  register-row-hover:
+    backgroundColor: "{colors.paper-wash}"
+  register-row-traced:
+    backgroundColor: "{colors.spot-wash}"
+  printed-bar:
+    backgroundColor: "{colors.ink-2}"
+    height: "5px"
+  margin-note:
+    textColor: "{colors.ink-2}"
+    typography: "{typography.caption}"
+    width: "17rem"
 ---
 
 # Design System: Prometheus
 
 ## Overview
 
-**Creative North Star: "The Rafters"**
+**Creative North Star: "The Almanac"**
 
-Every team-season is a championship banner hung in the rafters, and the ranking is the order they hang in. The ground is dim arena steel, warm charcoal and never pure black, under a single steel rod. Banners are twill felt with a chain-stitched inner border and a swallowtail hem, set in varsity block numerals. Every banner hangs at the same length with its rank, name, league and score stitched on the felt, like a real championship banner.
+Prometheus is the annual printed sabermetrics abstract of League of Legends esports, in the line of Bill James's Baseball Abstract, Wisden and the density of Baseball-Reference. Every page is set like a section of that book: a running head over a double rule, a title in the text face, a lede, numbered figures and tables with printed captions, and notes in the outer margin keyed by superscript marks. The table is the product, so it is typeset as a statistical register: booktabs rules, tabular lining figures, a light rule after every fifth row.
 
-Color is encoding, not decoration. Each major league owns one felt hue (LCK royal, LPL crimson, LEC forest, LCS gold), used identically on banners, league tags, filter swatches and chart lines. Every other league hangs in neutral felt. Everything that is not a league is cream stitch thread on steel. Below the rafters sits a dense, quiet table (about 29px rows, tabular numerals, right-aligned numbers), because the table is the product and the banners only stage it.
+The ground is warm uncoated paper and the type is real ink. There is one spot ink, ledger blue, and four restrained league inks that only ever appear as small printed league marks and chart lines. Nothing has a radius, nothing casts a shadow, and no surface is a card.
 
-The world explicitly refuses the dark-neon esports dashboard and the card-grid stat hub. There are no cards, no glows, no gradients other than the rod's metal and the felt's shading.
+The world refuses the dark-neon esports stat hub, the card grid, and the parchment costume: there is no paper texture, no stain, no distressing. The paper is a flat color; the craft is in the setting.
 
 **Key Characteristics:**
-- Warm charcoal steel ground, single cream ink.
-- League hue is the only color, and it always means the league.
-- Every banner hangs at one fixed length; the lettering lives on the felt.
-- Varsity block face for names, numerals and titles; system sans for reading and numbers.
-- Dense, sortable, sticky-header table directly under the rafters.
-- Motion only conveys state change (the re-hang), and is instant under reduced motion.
+- One serif family, Source Serif 4 with optical sizes, for everything: old-style figures in prose, tabular lining figures in tables, true small caps for labels.
+- Booktabs registers: 2px top and bottom rules, a hairline mid rule, a light rule every five rows, about 28px rows.
+- One spot ink (ledger blue) for marks, active state, focus and tracing; league inks only as marks and lines.
+- A main column plus a 17rem outer margin for marginalia; on narrow screens the margin follows the main text.
+- Small printed figures drawn from the data: a distribution histogram over every register, a column chart and an Elo line on team pages, a short printed bar beside each value.
+- One signature motion: register rows re-rank in place when the view changes.
 
 ## Colors
 
-A single-ink world: cream thread on warm steel, with four league felts as the only chroma.
+Paper and ink, plus one spot and four league inks. The strategy is Restrained.
 
-### Primary (league felts)
-- **LCK Royal Felt** (felt-lck): banner felt and hanging tabs for LCK team-seasons; also the favicon felt.
-- **LPL Crimson Felt** (felt-lpl): banner felt for LPL.
-- **LEC Forest Felt** (felt-lec): banner felt for LEC.
-- **LCS Gold Felt** (felt-lcs): banner felt for LCS. The only light felt, so its numerals and chain stitch switch to the dark felt ink.
-- **Neutral Felt** (felt-other): every league outside the major four.
+### Primary
+- **Ledger Blue** (spot): footnote marks, the current-section underline, the active sort mark, the open picker, focus outlines, the traced value on the distribution figure, hover on links and bars, the wordmark glyph. Never a fill larger than a mark, except the pale **Spot Wash** (spot-wash) behind a traced row or a targeted note.
 
-### Secondary (league lines)
-- **League Line tints** (line-lck, line-lpl, line-lec, line-lcs, line-other): lighter tints of each felt hue, used wherever the hue is a thin stroke or small mark on the dark ground: league-tag pennant swatches, filter swatches, and the Elo chart line. Each holds at least 3:1 against the ground.
+### Secondary (league inks)
+- **LCK Teal** (ink-lck), **LPL Oxblood** (ink-lpl), **LEC Olive** (ink-lec), **LCS Ochre** (ink-lcs), and **Grey Ink** (ink-other) for every other league. They appear only as the 0.5em square league mark before a league code and as the Elo line on a team page. Each holds at least 4:1 on paper even though they are used as marks, not text.
 
 ### Neutral
-- **Arena Steel** (ground): page background, table header background, caption backing.
-- **Raised Steel** (ground-raised): pickers, picker panels, row hover, chart tooltip, empty-season felt.
-- **Sunk Steel** (ground-sunk): the sticky top bar and the scrollbar track.
-- **Seam** (rule) and **Strong Seam** (rule-strong): hairline dividers, input borders, table header underline, segmented-control borders, chart grid and axis.
-- **Stitch Thread** (thread): all primary text, focus rings, selected states, the stitched average line.
-- **Faded Thread** (thread-dim): secondary text, labels, metadata, placeholders, rank column.
-- **Felt Ink** (felt-ink) and **Dark Felt Ink** (felt-ink-dark): numerals and chain stitch on felt.
-- **Rod Steel** (rod-hi, rod-mid, rod-lo): the rafter rod and its end brackets, and the wordmark's rod.
+- **Paper** (paper): the page. **Paper Wash** (paper-wash): row hover, picker option hover. **Paper Deep** (paper-deep): reserved trough tone.
+- **Ink** (ink): text, booktabs rules, values, checked boxes. 15:1 on paper.
+- **Ink 2** (ink-2): secondary text, margin notes, printed bars and histogram columns. 7.6:1.
+- **Ink 3** (ink-3): labels, ranks, trailing counts, muted figures. 5.1:1, the floor for any text.
+- **Hairline** (hairline) and **Soft Hairline** (hairline-soft): every-fifth-row rules, dot leaders, chart grid, link underlines at rest. Never text.
 
 ### Named Rules
-**The Felt Means League Rule.** A league hue appears only where it encodes that league, and the same league always gets the same hue on every surface (banner, tag, swatch, chart line). Never use a felt for emphasis, status or decoration.
+**The One Spot Rule.** Ledger blue marks state and reference: a footnote, a focus, a current section, a traced value. It is never decoration and never a large fill.
 
-**The One Ink Rule.** Everything that is not a league is drawn in stitch thread or faded thread on steel. There is no other accent; selected and focused states invert to thread rather than borrowing a hue.
+**The League Mark Rule.** A league ink appears only as that league's mark or line. Same league, same ink, on every page.
 
 ## Typography
 
-**Display Font:** Graduate (self-hosted latin woff2, with Rockwell and Georgia fallbacks)
-**Body Font:** system-ui stack
-**Label/Mono Font:** none distinct; labels are the system stack in small tracked uppercase
+**Text Face:** Source Serif 4 (self-hosted variable woff2, weights 300 to 700, optical size 8 to 60, roman and italic, SIL OFL; licence in `site_static/fonts/`), with Iowan Old Style, Palatino and Georgia fallbacks.
 
-**Character:** Graduate is a collegiate varsity slab, the lettering sewn onto banners and jerseys; it renders lowercase as small caps. The system sans does all reading and all numbers, so the varsity face stays ceremonial.
+**Character:** a transitional text serif with a full figure set and true small caps. Optical sizing makes the 7.5rem title page fine and the 15px table figures sturdy. Italic carries subtitles, caption asides, filter values and the caveat note.
 
 ### Hierarchy
-- **Display** (400, 2rem, 1.1; 2.5rem on the home intro, 1.625–1.875rem under 720px): page titles (metric name, team name, home statement). A metric's full name sits under it in the same face at 0.875rem in faded thread.
-- **Numeral** (400, 1.875rem, 1): the rank numeral on a banner; 1.125rem for year numerals on team season banners.
-- **Headline** (400, 1.375rem): metric names in the home metric index. Banner captions use the same face at 0.8125rem.
-- **Title** (700, 1.0625rem, 1.3, -0.01em): section headings in system sans.
-- **Body** (400, 0.9375rem, 1.5): ledes and explanations, capped at 68–72ch.
-- **Table** (400, 0.875rem, tabular numerals): table cells; the value column is 700.
-- **Label** (700, 0.6875rem, 0.07em, uppercase): sortable table column headers only.
+- **Title page** (300, clamp 3.25 to 7.5rem, 0.9, -0.025em): the home page name only.
+- **Display** (400, clamp 2.25 to 3.5rem, 1.02): page titles (metric name, team name, Errata). The metric's full name sits under it in italic at 1.1875rem.
+- **Headline** (400, 1.625rem, 1.15): section heads on team pages.
+- **Lede** (400, 1.1875rem, 1.5, old-style figures): the paragraph under a title, max 40rem.
+- **Body** (400, 1.0625rem, 1.5, old-style proportional figures): prose; following paragraphs indent 1.5em instead of adding space.
+- **Table** (400, 0.9375rem, 1.3, lining tabular figures): register cells; the value column is 600.
+- **Label** (all small caps, 0.06em tracking, lining figures): running head, column heads, margin heads, caption numbers, fact lines.
+- **Caption** (0.875rem, 1.45): "Table." and "Figure." captions, with the number in bold small caps.
 
 ### Named Rules
-**The Varsity Is Sewn Rule.** Graduate is for names, numerals and titles that would be stitched onto a banner. Never set paragraphs, table cells or controls in it.
+**The Figure Rule.** Prose uses old-style figures; anything compared in a column uses lining tabular figures, right-aligned. Signs use a true minus.
 
-**The Tabular Rule.** Every number that can be compared (scores, z-scores, Elo, counts, years in pickers) uses tabular numerals and right alignment in tables.
+**The Small Caps Rule.** Labels are set in true small caps with light tracking, never in faked uppercase.
 
 ## Layout
 
-Single column, max 1240px, centered, with a fluid gutter (clamp 16px to 32px). The sticky top bar is 52px: wordmark, metric links, search pushed right. Rankings pages stack: title and lede, a filter toolbar (pickers left, count right), the rafters with the current top ten, then the table starting immediately below, so the first rows sit in the first 1080p viewport.
+A page is 82rem max with a fluid gutter (16 to 48px). The running head and colophon align to the content edges. Content is a two-column spread: the main column and a 17rem margin, 32 to 56px apart; the margin is sticky on desktop. Under 1000px the margin follows the main column (on the home page, the Contents moves between the intro and the tables). Under 720px the running head stacks (wordmark, sections, full-width index search), registers scroll horizontally edge to edge, wide-only columns hide and their league and year fold under the team name, and fact lines drop their middle-dot separators. Under 480px phone-hide columns drop.
 
-The rafters are a 10-column grid with 12px gaps. Every felt is 196px long (184px under 900px), with the numeral at the top and the title, meta line and value stitched below it. Team pages use fixed 104px season columns with 132px felts.
-
-Spacing rhythm is a 4px base (4, 8, 12, 16, 24, 32), with 48px between major sections and 56px before the home metric index. The page has 32px top and 64px bottom padding.
-
-Responsive: under 900px the rafters stop shrinking and become a sideways-scrolling rod (92px columns, 180px felt scale, proximity snap, bleeding to the screen edge). Under 720px the wordmark text hides, search collapses to an icon-width field that expands on focus, the table scrolls horizontally, wide-only columns drop, and league and year fold into the team cell to keep one line per row. Under 480px phone-hide columns drop, the table header stops sticking, and picker panels pin to the gutters.
+Rhythm: 4px base, captions 8px above their table, 44px between registers, 36px between a page title and its body.
 
 ## Elevation & Depth
 
-Flat steel with physical exceptions. Depth exists only where a real object hangs or floats: the felt banners cast a soft drop shadow onto the ground, and an open picker panel lifts slightly. The rod is the only metallic gradient. Felt gets inner shading (darkened selvedges and a shadow under the rod) plus a faint fractal-noise twill texture. Nothing else has shadow, glow or blur.
-
-### Shadow Vocabulary
-- **Banner hang** (`filter: drop-shadow(0 8px 10px rgb(0 0 0 / 0.4))`): on each banner, applied to the list item so the swallowtail clip does not cut it.
-- **Panel lift** (`box-shadow: 0 6px 12px -4px rgb(0 0 0 / 0.5)`): open picker dropdowns only.
-- **Header seam** (`box-shadow: inset 0 -1px var(--rule-strong)`): the sticky table header's bottom rule.
+Flat. Hierarchy comes from rules, weight and the margin, never from shadow. An open picker sits on paper with an ink border and a 2px top rule.
 
 ### Named Rules
-**The Only Things That Hang Rule.** Shadows belong to objects that physically hang or float (banners, an open dropdown). Rows, sections and controls are flat.
+**The Printed Page Rule.** No shadows, no radius, no gradients, no textures. If it would not print, it does not ship.
 
 ## Shapes
 
-Small, mostly square forms with two signature silhouettes. Controls use a 4px radius; picker options and banner tabs 3px; focus rings 2px. The banner felt is a rectangle clipped to a swallowtail hem (a 14px center notch); the league-tag and filter swatch are a 9 by 12px pennant using the same swallowtail. The chain stitch is a looped-link border image set 5px inside the felt edge. The rod is a 7px bar with 6 by 18px end brackets.
+Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for booktabs top and bottom, and a 3px double rule under the running head. League marks are 0.5em squares. Checkboxes are 13px ink-bordered squares that fill with ink, inset by paper, when checked. Sort and picker carets are small CSS triangles.
 
 ## Components
 
-### Top bar
-- **Style:** sticky, sunk steel with a seam below. Wordmark in Graduate 1.125rem with a small banner-on-rod mark.
-- **Links:** system sans 600 0.875rem in faded thread; hover to thread; the current page gets thread text and a 2px thread underline at the bar's bottom edge.
+### Running head
+- Wordmark: a ledger-blue P glyph, PROMETHEUS in tracked small caps 600, and "Abstract YYYY" in italic.
+- Sections: Contents, GLORY, GLORB, Elo in small caps; the current one is ink 600 with a 2px ledger-blue underline.
+- Index search: an "Index" label and a bare input on a hairline baseline; focus thickens the baseline to 2px ledger blue. Off the rankings pages it submits to the Elo register, which lists every team.
 
-### Search
-- **Style:** 34px field on arena steel, seam border, 4px radius, magnifier icon inset left.
-- **Focus:** border turns to thread; no outer glow.
+### Filter line
+- Set as a sentence: "Showing years all, leagues all". The label is small caps, the value italic on a dotted underline, with a caret. Opening turns the value and caret ledger blue.
+- Panel: paper, ink border, 2px top rule, small-caps legend, a grid of square checkboxes; leagues carry their mark. "Major four only" and "Clear filters" are italic underlined text buttons.
 
-### Filter pickers
-- **Style:** native details/summary styled as 34px raised-steel buttons with a muted label, a bold value and a rotating chevron. Panel is raised steel, strong seam border, panel lift shadow.
-- **Options:** checkbox grid (3 columns for leagues, 4 for years), tabular numerals; league options carry their pennant swatch. "Major four only" is a full-width outline button.
-- **Clear filters:** a borderless underlined text button in faded thread.
+### Register (signature)
+- Booktabs table with a printed caption that describes the current view in words ("GLORY, LCK team-seasons, 2021–2024, ranked by score.") and a count.
+- Column heads are sort buttons; the sorted head goes ink 600 with a ledger-blue triangle. Superscript note numbers in heads point at the margin notes.
+- A printed bar column sits before the value: a 5px ink-2 rule whose length is the value on a fixed scale for the page.
+- Hover washes the row; hovering or focusing a row traces its value on the distribution figure in ledger blue.
 
-### Segmented control
-- **Style:** strong-seam outline, 4px radius, options in system sans 600 0.8125rem.
-- **Selected:** inverts to thread background with ground text. Focus draws the 2px thread ring.
+### Distribution figure
+- A histogram of every entry in the current view on the page's fixed scale: ink-2 columns on a ruled axis with tabular tick labels and a dashed median with an italic label.
 
-### Rankings table
-- **Style:** full width, collapsed borders, seam under every row, 29px rows, sticky header under the top bar.
-- **Header:** tracked uppercase label in faded thread with a sort glyph at 35% opacity; the sorted column goes to thread at full opacity. Numeric columns right-align.
-- **Rows:** hover to raised steel. Rank in faded thread, team name 600 and linked, value 700.
+### Franchise entry (team pages)
+- Name in display size; a small-caps fact line (league marks, seasons ranked, Elo); a prose summary with the best season, its year rank, and the Elo peak.
+- Figure 1: printed column chart of GLORY or GLORB by season, switched by a two-option small-caps control with a ledger-blue underline.
+- Season register with year rank ("2nd of 47", or "n.q." when the season had fewer than five games).
+- Figure 2: hand-drawn SVG Elo line in the league ink, dashed 1500 rule, annotated peak, and a pointer and arrow-key readout.
 
-### League tag
-- **Style:** the league code preceded by a pennant swatch in the league's line tint.
+### Margin notes
+- Small-caps head over an ink rule; numbered notes with ledger-blue marks; the dagger note is the caveat, in italic. A targeted note gets the spot wash.
 
-### Felt banner (signature)
-- **Construction:** hanging tabs wrap the rod in darkened felt; a fixed-length felt with chain stitch inside the edge and a swallowtail hem; the numeral at the top, then the Graduate title (wraps to three lines), a meta line with year and league, and the value in Graduate above the hem, all in the felt's ink.
-- **States:** hover brightens the felt 12% and underlines the title; focus draws a thread ring 4px out.
-- **Season variant:** on team pages one shorter banner per year (year, league, score); the GLORY/GLORB toggle swaps the score. Seasons without a score hang raised-steel felt.
-- **Re-hang motion:** when filters or the metric change, each felt unfurls from the rod (clip-path, 260ms, ease-out cubic-bezier(0.16, 1, 0.3, 1), 16ms stagger per banner). It is instant under reduced motion.
-
-### Elo chart
-- **Style:** a single 2px line in the team's league line tint, no points until hover, no fill, no legend. Horizontal grid in seam, axis ticks in faded thread, raised-steel tooltip with strong-seam border. No chart animation.
+### Motion
+- Rows re-rank in place: rows that stay in view slide from their old position to their new one over 360ms with cubic-bezier(0.16, 1, 0.3, 1). Season columns scale to the switched metric over 320ms. Both are instant under reduced motion.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** keep every banner the same length; the order and the stitched score carry the ranking.
-- **Do** use the league's felt for banners and its line tint for any stroke or small mark, identically everywhere.
-- **Do** keep table rows near 29px, numbers right-aligned in tabular numerals.
-- **Do** draw selected and focused states by inverting to stitch thread or a 2px thread ring.
-- **Do** let the rafters scroll sideways on narrow screens rather than shrinking banners.
-- **Do** make every motion express a state change, and drop it under reduced motion.
+- **Do** set every comparable number in lining tabular figures, right-aligned, with a true minus.
+- **Do** caption every table and figure in words that say what is in view.
+- **Do** key caveats and definitions to the margin with superscript marks.
+- **Do** keep league inks to marks and lines, and ledger blue to state and reference.
+- **Do** keep rows near 28px with a light rule every fifth row.
 
 ### Don't:
-- **Don't** use a league hue for anything that is not that league: no colored buttons, highlights, status colors or decorative accents.
-- **Don't** use pure black or neon; the ground is warm charcoal steel.
-- **Don't** introduce cards, glows, glassmorphism or gradient fills; the rod and the felt shading are the only gradients.
-- **Don't** vary banner length or let lettering spill off the felt; long names wrap, they never break mid-word.
-- **Don't** set body copy, table cells or controls in Graduate.
+- **Don't** add cards, radius, shadows, gradients or paper textures.
+- **Don't** introduce a second typeface; Source Serif 4 carries display, text, tables and labels.
+- **Don't** use a league ink or ledger blue as a fill or for emphasis.
+- **Don't** put a label or eyebrow above a heading.
+- **Don't** animate anything other than the re-rank and the season switch.

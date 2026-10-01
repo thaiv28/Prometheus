@@ -36,8 +36,8 @@ python -m http.server -d output 8000    # preview the built site locally
 | `prometheus/main.py` | Typer CLI entry point (`prometheus` script) |
 | `scripts/NNN_*.sql\|py` | DB build steps. `setup_db.sh` runs them **in numeric order**. |
 | `scripts/build_site.py` | Static site generator |
-| `templates/*.html.j2` | Jinja2 templates: `base` (shell), `index`, `rankings` (every metric page, driven by a column config), `team`, and the `_banner` macro |
-| `site_static/{css,js,fonts}` | Hand-written CSS (`tokens.css` holds all colors, including league felt hues), vanilla JS (`rankings.js` for filtering and sorting, `team.js` for team pages), and the self-hosted Graduate font, all copied verbatim into `output/` |
+| `templates/*.html.j2` | Jinja2 templates: `base` (shell), `index`, `rankings` (every metric page, driven by a column config), `team`, `404`, and the `_marks` macros (league mark, signed number, ordinal) |
+| `site_static/{css,js,fonts}` | Hand-written CSS (`tokens.css` holds all colors and the `@font-face` rules, including league inks), vanilla JS (`rankings.js` for filtering, sorting and the distribution figure, `team.js` for the season switch and the SVG Elo chart), and the self-hosted Source Serif 4 font (OFL), all copied verbatim into `output/` |
 | `PRODUCT.md`, `.impeccable/surfaces/` | Product record and visual direction contract used by the impeccable design skill. Read them before UI work. |
 | `notebooks/` | Exploratory modeling. Not imported by the package. |
 | `tests/` | `test_*.py` unit tests (mocked), `integration/` (in-memory SQLite), `e2e/` (real DB) |
@@ -51,8 +51,8 @@ python -m http.server -d output 8000    # preview the built site locally
 - `gamelength` is stored in **seconds**.
 - League names are normalized at ingest (`002_add_matches.py`): NA LCS / LTA N → `LCS`, EU LCS → `LEC`.
 - Formatting: `black`. Linting: `pylint`. Both are listed as (non-dev) dependencies.
-- Frontend: no build step and no framework. Design tokens are in `site_static/css/tokens.css`, and league color comes only from `[data-league]`. Chart.js comes from a CDN on team pages only. JS that writes HTML must escape values with `esc()` in `rankings.js`.
-- Visual direction is "The Rafters": team-seasons are fixed-length felt banners with the team info stitched on. See `.impeccable/surfaces/` and `docs/steering/ui.md` before changing the look.
+- Frontend: no build step and no framework. Design tokens are in `site_static/css/tokens.css`, and league color comes only from `[data-league]`. Charts are hand-drawn SVG; there are no third-party scripts. JS that writes HTML must escape values with `esc()` in `rankings.js`.
+- Visual direction is "The Almanac": the site is set like a printed sabermetrics annual, with booktabs registers, margin notes and small printed figures on paper. See `DESIGN.md`, `.impeccable/surfaces/` and `docs/steering/ui.md` before changing the look.
 
 ## Gotchas
 

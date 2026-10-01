@@ -1,0 +1,12 @@
+{#- Small printed marks shared across pages. -#}
+{% macro league(code, show_code=True) -%}
+<span class="league" data-league="{{ code }}"><span class="league-mark" aria-hidden="true"></span>{% if show_code %}{{ code }}{% else %}<span class="visually-hidden">{{ code }}</span>{% endif %}</span>
+{%- endmacro %}
+
+{% macro signed(v, digits=2) -%}
+{%- if v is none -%}—{%- elif v > 0 -%}+{{ ('%.' ~ digits ~ 'f') | format(v) }}{%- elif v < 0 -%}−{{ ('%.' ~ digits ~ 'f') | format(-v) }}{%- else -%}{{ ('%.' ~ digits ~ 'f') | format(v) }}{%- endif -%}
+{%- endmacro %}
+
+{% macro ordinal(n) -%}
+{{ n }}{% if n % 100 in [11, 12, 13] %}th{% elif n % 10 == 1 %}st{% elif n % 10 == 2 %}nd{% elif n % 10 == 3 %}rd{% else %}th{% endif %}
+{%- endmacro %}

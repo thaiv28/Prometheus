@@ -1,47 +1,51 @@
 # UI / Frontend
 
-The site was redesigned with the **impeccable** skill (installed at `~/.claude/skills/impeccable`). Product facts live in `PRODUCT.md`. The visual direction contract lives in `.impeccable/surfaces/templates-metric-dynamic-html-j2.md`. `DESIGN.md` records the built design system. Run `/impeccable <command>` (for example `audit`, `polish`, or `critique`) for future UI work.
+The site was designed with the **impeccable** skill (installed at `~/.claude/skills/impeccable`). Product facts live in `PRODUCT.md`. The visual direction contract lives in `.impeccable/surfaces/templates-rankings-html-j2.md`. `DESIGN.md` (with `.impeccable/design.json`) records the built design system. Run `/impeccable <command>` (for example `audit`, `polish`, or `critique`) for future UI work.
 
-## Direction: "The Rafters"
+## Direction: "The Almanac"
 
-Every team-season is a felt championship banner hanging from a steel rod. All banners hang at the **same length**, with rank, name, league and score stitched on the felt. (An earlier version made length proportional to score, but the differences between top-ten teams weren't noticeable, so it was dropped.) The ground is warm arena charcoal. Color appears only where it encodes a league:
+Prometheus is set like the annual printed sabermetrics abstract of LoL esports (Bill James's Abstract, Wisden, Baseball-Reference). Every page has a running head over a double rule, a title in the text face, captioned tables and figures, and notes in the outer margin keyed by superscript marks. The ground is flat warm paper (`#f3eee3`) with real ink (`#1b1914`). There is one spot ink, ledger blue `#2342a0`, used only for state and reference (footnote marks, current section, sort mark, focus, traced values). League inks are used only as small square league marks and the Elo line:
 
-| League | Felt |
+| League | Ink |
 |---|---|
-| LCK | royal `#24479c` |
-| LPL | crimson `#9c2338` |
-| LEC | forest `#1f6346` |
-| LCS | gold `#c9971f` (dark ink) |
-| everything else | neutral `#4a4844` |
+| LCK | teal `#146a6c` |
+| LPL | oxblood `#9a2a2a` |
+| LEC | olive `#4a6a1f` |
+| LCS | ochre `#8a5d08` |
+| everything else | grey `#7a7264` |
 
-The same hue is used for banners, league tags, picker swatches, and the team Elo chart line, all through `[data-league="…"]` in `tokens.css`.
+All of these come from `tokens.css` through `[data-league="…"]`.
 
-Type: a system UI stack for everything functional (tables, labels, copy). **Graduate**, a self-hosted varsity face, is used for page titles, the wordmark, metric names, and the lettering on banners. Don't use it in table data or controls.
+Type: one family, **Source Serif 4** (self-hosted variable woff2, OFL, licence in `site_static/fonts/`). Prose uses old-style figures; tables use lining tabular figures; labels use true small caps.
 
 ## Pages
 
 | Output | Template | Notes |
 |---|---|---|
-| `index.html` | `index.html.j2` | Intro, the all-time top ten GLORY banners, and a metric index |
-| `glory.html`, `glorb.html`, `game_length_elo.html` | `rankings.html.j2` | Filters, top-ten rafters for the current view, sortable table, and a "How to read" section. Driven by a column config from `build_site.py`. |
-| `teams/<slug>.html` | `team.html.j2` | One banner per season with a GLORY/GLORB toggle, an Elo chart (Chart.js), and a season table. Pages exist for all teams with Elo. |
+| `index.html` | `index.html.j2` | Title page, intro, Table 1 (all-time GLORY leaders), Table 2 (leader of each year), and the Contents in the margin |
+| `glory.html`, `glorb.html`, `game_length_elo.html` | `rankings.html.j2` | Title and lede, a distribution figure of the current view, the filter line, the sortable register, and "How to read" notes in the margin. Driven by a column config from `build_site.py` (`note` keys put superscripts on column heads). |
+| `teams/<slug>.html` | `team.html.j2` | Franchise entry: fact line, summary sentence, season column chart with a GLORY/GLORB switch, season register with year rank, and an SVG Elo chart. Pages exist for all teams with Elo. |
+| `404.html` | `404.html.j2` | "Errata" page with links back into the book. Links are root-absolute. |
 
 ## Behavior
 
 - Filter state (years, leagues, search, sort) is stored in the URL, so filtered views can be shared.
 - **Rank** is the position by the page's metric within the current filtered view. It doesn't change when you sort by another column.
-- **Signature motion:** when the view changes, the banners re-hang (a clip-path reveal from the rod, about 260ms). It's instant under `prefers-reduced-motion`. No other decorative motion.
-- On non-rankings pages, header search submits to the Elo page, which covers every team.
+- The table caption describes the current view in words and gives the count.
+- Hovering or focusing a row traces its value on the distribution figure.
+- **Signature motion:** when the view changes, rows that stay on screen slide from their old position to the new one (about 360ms). Instant under `prefers-reduced-motion`. No other decorative motion.
+- The Elo chart is keyboard-readable: focus it and use the arrow keys (Shift for steps of 10, Home/End).
+- On non-rankings pages, the header search submits to the Elo page, which covers every team.
 - Every value written by JS goes through `esc()`. Never interpolate raw data into `innerHTML`.
 
 ## Rules for future changes
 
-- Keep banners a fixed length. Chart lengths must stay proportional to data.
-- New colors go in `tokens.css`. Don't put inline `style=""` in templates except data-driven custom properties (`--n`, `--i`).
+- New colors go in `tokens.css`. Don't put inline `style=""` in templates except data-driven custom properties (`--v`, `--n`, `--glory`, `--glorb`).
+- No cards, radius, shadows, gradients or paper textures.
 - Navigation uses real `<a>` links.
 - Check both 1440px and 390px widths after any change. Headless Chrome won't render narrower than 500px; load the page in a 390px iframe to test mobile.
 
 ## Known gaps
 
-- There's no light theme. Dark was chosen for the use scene (fans browsing at night), not as a default.
-- Chart.js is still loaded from jsDelivr on team pages.
+- Light only; there is no night edition.
+- Phone rows are two lines tall (team, then league and year), so a phone shows about 20 rows per screen.

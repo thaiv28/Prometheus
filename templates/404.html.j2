@@ -2,14 +2,18 @@
 {% block title %}Page not found · Prometheus{% endblock %}
 {% block description %}This page doesn't exist on Prometheus.{% endblock %}
 {% block content %}
-  <section class="page-head">
-    <h1>Not in the rafters</h1>
-    <p class="lede">There's no page at this address. Team pages are named after the team, for example <a href="{{ root_path }}teams/gen-g.html">/teams/gen-g.html</a>.</p>
-  </section>
-  <ul class="not-found-links">
-    {% for item in nav %}
-    <li><a href="{{ root_path }}{{ item.key }}.html">{{ item.name }} rankings</a></li>
-    {% endfor %}
-    <li><a href="{{ root_path }}index.html">Home</a></li>
-  </ul>
+  <div class="spread">
+    <div class="spread-main">
+      <header class="section-head">
+        <h1>Errata <span class="full-name">No page at this address</span></h1>
+        <p class="lede">This entry is not in the present edition. Team pages are filed under the team’s name, for example <a href="{{ root_path }}teams/gen-g.html">/teams/gen-g.html</a>, and the index search in the running head finds any team on record.</p>
+      </header>
+      <ol class="contents contents--errata">
+        <li><a href="{{ root_path }}index.html"><span class="contents-name">Contents</span><span class="leader" aria-hidden="true"></span><span class="contents-count">Home</span></a></li>
+        {% for item in nav %}
+        <li><a href="{{ root_path }}{{ item.key }}.html"><span class="contents-name">{{ item.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">Register</span></a></li>
+        {% endfor %}
+      </ol>
+    </div>
+  </div>
 {% endblock %}
