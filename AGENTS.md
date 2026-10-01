@@ -7,7 +7,7 @@ Guidance for AI coding agents (and humans) working in this repo. Read this first
 Prometheus is a "sabermetrics for League of Legends esports" project. It ingests Oracle's Elixir match CSVs into SQLite, computes team metrics (GLORY, GLORB, game-length Elo), and publishes them two ways:
 
 1. **CLI** (`prometheus rankings glory ...`), built with Typer and Rich.
-2. **Static website**: Jinja2 templates rendered by `scripts/build_site.py` into `output/`, deployed to GitHub Pages by `.github/workflows/static.yml`. The site will move to **prometheus.thaiv.dev**.
+2. **Static website**: Jinja2 templates rendered by `scripts/build_site.py` into `output/`, published to https://prometheus.thaiv.dev (S3 + CloudFront) by `.github/workflows/publish.yml`. See `docs/steering/deployment.md`.
 
 ## Quick commands
 

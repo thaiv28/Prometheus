@@ -229,16 +229,11 @@ def _team_pages(glory_df, glorb_df, elo_history, latest_elos):
 
 
 def render_404(last_update):
-    # GitHub Pages serves 404.html at any missing path, so links must be root-absolute.
+    # CloudFront serves 404.html for any missing path, so links must be root-absolute.
     _write(
         os.path.join(OUTPUT_DIR, "404.html"),
         env.get_template("404.html.j2").render(page_key="404", root_path="/", last_update=last_update),
     )
-
-
-def write_cname():
-    # Custom domain for GitHub Pages; the repo's Pages settings must match.
-    _write(os.path.join(OUTPUT_DIR, "CNAME"), SITE_DOMAIN + "\n")
 
 
 def render_team_pages(pages, last_update):
@@ -263,7 +258,6 @@ def main():
 
     render_index(glory_df, last_update)
     render_404(last_update)
-    write_cname()
 
     for metric, df in ((METRICS["glory"], glory_df), (METRICS["glorb"], glorb_df)):
         render_rankings_page(

@@ -22,7 +22,7 @@ Most LoL stat sites dump per-game box scores. Prometheus instead fits **per-seas
 
 ## Operating Context
 
-- Fully static site. It's rebuilt daily by GitHub Actions from the latest Oracle's Elixir CSVs and deployed to GitHub Pages under a custom domain.
+- Fully static site. It's rebuilt daily by GitHub Actions from the latest Oracle's Elixir CSVs and deployed to prometheus.thaiv.dev (S3 + CloudFront on the thaiv.dev platform).
 - All interaction is client-side over JSON embedded in each page: filtering by year and league, team search, sorting, and URL-shareable filter state.
 - Pages: home, one rankings page per metric (GLORY, GLORB, Game-Length Elo), and one page per team with history charts.
 - Visitors arrive on desktop and on phones (for example, links shared in Discord or Reddit threads), so wide tables must work on small screens.
