@@ -33,7 +33,7 @@ Most LoL stat sites dump per-game box scores. Prometheus instead fits **per-seas
 - **Coverage:** the site should cover **all regions** present in the data. The Elo page already does. GLORY and GLORB are currently fit and shown for the four major leagues (LCK, LPL, LEC, LCS) only. *Open decision:* how or whether to extend GLORY and GLORB to all regions.
 - Data spans 2014 to the present.
 - There's no backend, no accounts, and no user-generated content. Anything dynamic is precomputed at build time.
-- Stack: Python and Jinja2 static generation, hand-written CSS, and vanilla JS (no build step). Chart.js is used for team charts.
+- Stack: Python and Jinja2 static generation, hand-written CSS, and vanilla JS (no build step). Team charts are hand-drawn SVG.
 - Terminology: "team-season" (a team in a given year), "split," "major leagues," and the league codes (LCK, LPL, LEC, LCS, …).
 
 ## Brand Commitments

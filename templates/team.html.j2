@@ -1,78 +1,121 @@
 {% extends 'base.html.j2' %}
+{% from '_marks.html.j2' import league, ordinal %}
 {% block title %}{{ teamname }} · Prometheus{% endblock %}
 {% block description %}{{ teamname }}: GLORY and GLORB by season and Elo history.{% endblock %}
 {% block canonical_path %}teams/{{ slug }}.html{% endblock %}
 {% block content %}
-  <section class="page-head team-head">
+  <header class="entry-head">
     <h1>{{ teamname }}</h1>
-    <ul class="team-facts">
-      {% for l in leagues %}<li><span class="league-tag" data-league="{{ l }}">{{ l }}</span></li>{% endfor %}
-      {% if series %}<li>{{ series | length }} season{{ 's' if series | length != 1 }} ranked ({{ series[0].year }}–{{ series[-1].year }})</li>{% endif %}
-      {% if current_elo is not none %}<li>Elo <strong>{{ current_elo }}</strong></li>{% endif %}
-    </ul>
-  </section>
+    <p class="entry-facts">
+      {% for l in leagues %}<span>{{ league(l) }}</span>{% endfor %}
+      {% if series %}<span>{{ series | length }} season{{ 's' if series | length != 1 }} ranked, {{ series[0].year }}{% if series | length > 1 %}–{{ series[-1].year }}{% endif %}</span>{% endif %}
+      {% if current_elo is not none %}<span>Elo {{ current_elo }}</span>{% endif %}
+    </p>
+    <p class="entry-summary">
+      {%- if best -%}
+      Best GLORY season {{ best.year }}, scoring {{ '%.2f' | format(best.glory) }}{% if best.year_rank %}, {{ ordinal(best.year_rank) }} of {{ best.field }} major-league teams that year{% endif %}.
+      {%- endif %}
+      {% if elo_summary -%}
+      Rated over {{ '{:,}'.format(elo_summary.games) }} game{{ 's' if elo_summary.games != 1 }} since {{ elo_summary.first.date | longdate }}; Elo peaked at {{ elo_summary.peak.elo | round | int }} on {{ elo_summary.peak.date | longdate }} and stood at {{ elo_summary.last.elo | round | int }} after the last game on {{ elo_summary.last.date | longdate }}.
+      {%- endif %}
+    </p>
+  </header>
 
-  {% if series %}
-  <section class="rafters-section" aria-labelledby="seasons-heading">
-    <div class="section-head">
-      <h2 id="seasons-heading">Season by season</h2>
-      <div class="segmented" role="radiogroup" aria-label="Metric">
-        <label><input type="radio" name="team-metric" value="glory" checked /> GLORY</label>
-        <label><input type="radio" name="team-metric" value="glorb" /> GLORB</label>
-      </div>
-    </div>
-    <ol class="rafters rafters--seasons" id="season-rafters" style="--n: {{ series | length }}">
-      {% for s in series %}
-      <li class="banner{% if s.glory is none %} banner--empty{% endif %}" data-league="{{ s.league }}"
-          data-glory="{{ s.glory if s.glory is not none else '' }}" data-glorb="{{ s.glorb if s.glorb is not none else '' }}">
-        <div class="banner-link">
-          <span class="banner-felt"><span class="banner-numeral">{{ s.year }}</span></span>
-          <span class="banner-caption"><span class="banner-meta">{{ s.league }}</span><span class="banner-value">{{ '%.2f' | format(s.glory) if s.glory is not none else '—' }}</span></span>
+  <div class="spread">
+    <div class="spread-main">
+      {% if series %}
+      {% set ns = namespace(top=100) %}
+      {% for s in series %}{% for v in [s.glory, s.glorb] %}{% if v is not none and v > ns.top %}{% set ns.top = v %}{% endif %}{% endfor %}{% endfor %}
+      <section class="seasons" aria-labelledby="seasons-heading">
+        <div class="block-head">
+          <h2 id="seasons-heading">Season by season</h2>
+          <div class="metric-switch" role="radiogroup" aria-label="Metric shown in the figure">
+            <label><input type="radio" name="team-metric" value="glory" checked /> <span>GLORY</span></label>
+            <label><input type="radio" name="team-metric" value="glorb" /> <span>GLORB</span></label>
+          </div>
         </div>
-      </li>
-      {% endfor %}
-    </ol>
-  </section>
-  {% else %}
-  <p class="section-note">GLORY and GLORB cover LCK, LPL, LEC and LCS, so this team has Elo only.</p>
-  {% endif %}
+        <figure class="season-figure" aria-labelledby="season-fig-cap">
+          <figcaption id="season-fig-cap" class="figure-caption"><span class="caption-num">Figure 1.</span> <span class="season-fig-metric">GLORY</span> by season, on a scale from 0 to {{ ns.top | round | int }}.</figcaption>
+          <ol class="season-chart" id="season-chart" data-metric="glory" style="--n: {{ series | length }}">
+            {% for s in series %}
+            <li class="season-col" data-league="{{ s.league }}"
+                style="--glory: {{ ((s.glory if s.glory is not none and s.glory > 0 else 0) / ns.top * 100) | round(2) }}; --glorb: {{ ((s.glorb if s.glorb is not none and s.glorb > 0 else 0) / ns.top * 100) | round(2) }}">
+              <span class="season-val season-val--glory">{{ '%.1f' | format(s.glory) if s.glory is not none else '—' }}</span>
+              <span class="season-val season-val--glorb">{{ '%.1f' | format(s.glorb) if s.glorb is not none else '—' }}</span>
+              <span class="season-bar" aria-hidden="true"></span>
+              <span class="season-year">{{ s.year }}<span class="league-mark" aria-hidden="true"></span></span>
+            </li>
+            {% endfor %}
+          </ol>
+        </figure>
 
-  {% if elo_series %}
-  <section class="elo-section" aria-labelledby="elo-heading">
-    <div class="section-head">
-      <h2 id="elo-heading">Elo after every game</h2>
-      <a class="more" href="../game_length_elo.html?search={{ teamname | urlencode }}">Compare on the Elo table</a>
-    </div>
-    <div class="chart-frame" data-league="{{ current_league or (leagues[0] if leagues else '') }}">
-      <canvas id="elo-chart" role="img" aria-label="{{ teamname }} Elo rating over {{ elo_series | length }} games, from {{ elo_series[0].date }} to {{ elo_series[-1].date }}"></canvas>
-    </div>
-  </section>
-  {% endif %}
+        <figure class="register-figure" aria-labelledby="season-table-cap">
+          <figcaption id="season-table-cap" class="table-caption"><span class="caption-num">Table.</span> {{ teamname }}, season by season. Year rank is among major-league teams with at least five games.</figcaption>
+          <div class="table-scroll">
+            <table class="register">
+              <thead>
+                <tr>
+                  <th scope="col" class="num">Year</th>
+                  <th scope="col">League</th>
+                  <th scope="col" class="num">GLORY</th>
+                  <th scope="col" class="num">Year rank</th>
+                  <th scope="col" class="num">GLORB</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in series | sort(attribute='year', reverse=True) %}
+                <tr>
+                  <td class="num year">{{ s.year }}</td>
+                  <td>{{ league(s.league) }}</td>
+                  <td class="num value">{{ '%.2f' | format(s.glory) if s.glory is not none else '—' }}</td>
+                  <td class="num muted">{% if s.year_rank %}{{ ordinal(s.year_rank) }} <span class="of">of {{ s.field }}</span>{% else %}<span title="Fewer than five games">n.q.</span>{% endif %}</td>
+                  <td class="num">{{ '%.2f' | format(s.glorb) if s.glorb is not none else '—' }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </figure>
+      </section>
+      {% else %}
+      <p class="section-note">GLORY and GLORB cover LCK, LPL, LEC and LCS, so this team appears in the Elo register only.</p>
+      {% endif %}
 
-  {% if series %}
-  <section aria-labelledby="table-heading">
-    <h2 id="table-heading" class="visually-hidden">Seasons table</h2>
-    <div class="table-wrap">
-      <table class="rankings rankings--compact">
-        <thead><tr><th scope="col">Year</th><th scope="col">League</th><th scope="col" class="num">GLORY</th><th scope="col" class="num">GLORB</th></tr></thead>
-        <tbody>
-          {% for s in series | sort(attribute='year', reverse=True) %}
-          <tr>
-            <td>{{ s.year }}</td>
-            <td><span class="league-tag" data-league="{{ s.league }}">{{ s.league }}</span></td>
-            <td class="num">{{ '%.2f' | format(s.glory) if s.glory is not none else '—' }}</td>
-            <td class="num">{{ '%.2f' | format(s.glorb) if s.glorb is not none else '—' }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      {% if elo_series %}
+      <section class="elo" aria-labelledby="elo-heading">
+        <div class="block-head">
+          <h2 id="elo-heading">Elo after every game</h2>
+          <a class="more" href="../game_length_elo.html?search={{ teamname | urlencode }}">Compare on the Elo register</a>
+        </div>
+        <figure class="elo-figure" data-league="{{ current_league or (leagues[0] if leagues else '') }}" aria-labelledby="elo-fig-cap">
+          <figcaption id="elo-fig-cap" class="figure-caption"><span class="caption-num">Figure {{ 2 if series else 1 }}.</span> Game-length Elo, {{ elo_summary.first.date | longdate }} to {{ elo_summary.last.date | longdate }}. The dashed rule marks the 1500 start.</figcaption>
+          <div class="elo-plot" id="elo-plot" tabindex="0" role="img"
+               aria-label="{{ teamname }} Elo over {{ elo_summary.games }} games: started {{ elo_summary.first.elo | round | int }}, peak {{ elo_summary.peak.elo | round | int }} on {{ elo_summary.peak.date }}, low {{ elo_summary.low.elo | round | int }} on {{ elo_summary.low.date }}, latest {{ elo_summary.last.elo | round | int }}. Use the left and right arrow keys to read individual games."></div>
+          <p class="elo-readout" id="elo-readout" aria-live="polite"></p>
+          <dl class="elo-stats">
+            <div><dt>Games</dt><dd>{{ '{:,}'.format(elo_summary.games) }}</dd></div>
+            <div><dt>Peak</dt><dd>{{ elo_summary.peak.elo | round | int }} <span class="muted">{{ elo_summary.peak.date | longdate }}</span></dd></div>
+            <div><dt>Low</dt><dd>{{ elo_summary.low.elo | round | int }} <span class="muted">{{ elo_summary.low.date | longdate }}</span></dd></div>
+            <div><dt>Latest</dt><dd>{{ elo_summary.last.elo | round | int }} <span class="muted">{{ elo_summary.last.date | longdate }}</span></dd></div>
+          </dl>
+        </figure>
+      </section>
+      {% endif %}
     </div>
-  </section>
-  {% endif %}
+
+    <aside class="margin notes" aria-labelledby="entry-notes-heading">
+      <h2 id="entry-notes-heading" class="margin-head">Reading this entry</h2>
+      <ol class="notes-list">
+        <li><span class="note-mark" aria-hidden="true">1</span><a href="../glory.html">GLORY</a> scores a team-season against what won games that year, roughly 0 to 100. <a href="../glorb.html">GLORB</a> weights the same stats equally.</li>
+        <li><span class="note-mark" aria-hidden="true">2</span>Seasons with fewer than five games are scored but not ranked in the register (marked n.q.).</li>
+        <li><span class="note-mark" aria-hidden="true">3</span><a href="../game_length_elo.html">Elo</a> starts at 1500 and moves most on short, decisive results. It compares best within a region.</li>
+      </ol>
+      {% if series %}<p class="margin-note"><a href="../glory.html?search={{ teamname | urlencode }}">Find {{ teamname }} in the GLORY register</a></p>{% endif %}
+    </aside>
+  </div>
 
   <script type="application/json" id="elo-series">{{ elo_series | tojson }}</script>
 {% endblock %}
 {% block scripts %}
-  {% if elo_series %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>{% endif %}
   <script src="../js/team.js" defer></script>
 {% endblock %}

@@ -1,53 +1,66 @@
+/* The Almanac: design tokens. Every color in the site is defined here. */
+
 @font-face {
-  font-family: "Graduate";
-  src: url("../fonts/graduate-latin.woff2") format("woff2");
-  font-weight: 400;
+  font-family: "Source Serif 4";
+  src: url("../fonts/source-serif-4-latin.woff2") format("woff2");
+  font-weight: 300 700;
   font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Source Serif 4";
+  src: url("../fonts/source-serif-4-italic-latin.woff2") format("woff2");
+  font-weight: 300 700;
+  font-style: italic;
   font-display: swap;
 }
 
 :root {
-  color-scheme: dark;
+  /* Paper and ink */
+  --paper: #f3eee3;          /* warm uncoated stock */
+  --paper-wash: #e9e2d2;     /* row hover, pressed controls */
+  --paper-deep: #ded5c1;     /* bar troughs */
+  --ink: #1b1914;            /* text, heavy rules, bars */
+  --ink-2: #4f4a41;          /* secondary text */
+  --ink-3: #6a6458;          /* labels, captions, muted figures */
+  --rule: #1b1914;           /* booktabs rules */
+  --hairline: #b9ae98;       /* light rules, every-fifth-row rules */
+  --hairline-soft: #d3c9b5;
 
-  /* Arena steel: the ground under the rafters */
-  --ground: #1a1917;
-  --ground-raised: #23221f;
-  --ground-sunk: #141312;
-  --rule: #34312c;
-  --rule-strong: #4b473f;
+  /* The one spot ink: ledger blue. Marks, active states, focus. */
+  --spot: #2342a0;
+  --spot-wash: #dfe2ee;
 
-  /* Stitch thread: all non-league ink */
-  --thread: #ede6d6;
-  --thread-dim: #aba393;
+  /* League inks: small league marks and chart lines only. */
+  --ink-lck: #146a6c;
+  --ink-lpl: #9a2a2a;
+  --ink-lec: #4a6a1f;
+  --ink-lcs: #8a5d08;
+  --ink-other: #7a7264;
 
-  /* Steel rod */
-  --rod-hi: #8a847a;
-  --rod-mid: #4d4943;
-  --rod-lo: #2b2926;
+  /* Type */
+  --serif: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --fs-body: 1.0625rem;
+  --fs-small: 0.9375rem;
+  --fs-table: 0.9375rem;
+  --fs-label: 0.875rem;
+  --fs-caption: 0.875rem;
 
-  /* League felts. Color appears only where it encodes a league. */
-  --felt-lck: #24479c;
-  --felt-lpl: #9c2338;
-  --felt-lec: #1f6346;
-  --felt-lcs: #c9971f;
-  --felt-other: #4a4844;
-  --felt-ink: #f3ecdc;
-  --felt-ink-dark: #1d1a14;
+  /* Rhythm */
+  --row-h: 1.75rem;
+  --gutter: clamp(16px, 4vw, 48px);
+  --margin-w: 17rem;
+  --hair: 1px;
 
-  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-varsity: "Graduate", "Rockwell", Georgia, serif;
-
-  --topbar-h: 52px;
-  --page-max: 1240px;
-  --gutter: clamp(16px, 3vw, 32px);
-  --radius: 4px;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* One hue per league, used identically by banners, tags, swatches, and chart lines. */
-/* --line is a lighter tint of the same hue for strokes and swatches on the dark ground (>= 3:1). */
-[data-league] { --felt: var(--felt-other); --ink: var(--felt-ink); --line: #9b968c; }
-[data-league="LCK"] { --felt: var(--felt-lck); --line: #7d9ef0; }
-[data-league="LPL"] { --felt: var(--felt-lpl); --line: #e5707f; }
-[data-league="LEC"] { --felt: var(--felt-lec); --line: #5cbf92; }
-[data-league="LCS"] { --felt: var(--felt-lcs); --ink: var(--felt-ink-dark); --line: #d9a83a; }
+@media (min-resolution: 2dppx) {
+  :root { --hair: 0.5px; }
+}
+
+[data-league] { --league: var(--ink-other); }
+[data-league="LCK"] { --league: var(--ink-lck); }
+[data-league="LPL"] { --league: var(--ink-lpl); }
+[data-league="LEC"] { --league: var(--ink-lec); }
+[data-league="LCS"] { --league: var(--ink-lcs); }

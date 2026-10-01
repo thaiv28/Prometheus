@@ -7,7 +7,7 @@
 - **pandas + SQLAlchemy engine** for reads/writes (raw SQL strings, no ORM).
 - **scikit-learn** for GLORY (StandardScaler + LinearRegression). **XGBoost** for the experimental win-probability model.
 - **Typer + Rich** for the CLI.
-- **Jinja2** static site generation. Vanilla JS + hand-written CSS. **Chart.js 4** from jsDelivr on team pages.
+- **Jinja2** static site generation. Vanilla JS + hand-written CSS. Charts are hand-drawn SVG (no chart library). Source Serif 4 is self-hosted.
 - **GitHub Actions to S3 + CloudFront** (`.github/workflows/publish.yml`): builds on every PR; deploys on push to `main`, daily at 10:00 UTC, and on manual dispatch. The AWS resources live in `project-platform-infrastructure`.
 
 ## Data pipeline

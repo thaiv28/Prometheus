@@ -1,35 +1,95 @@
 {% extends 'base.html.j2' %}
-{% from '_banner.html.j2' import banner %}
+{% from '_marks.html.j2' import league, signed, ordinal %}
 {% block title %}Prometheus · LoL esports rankings across eras and regions{% endblock %}
 {% block content %}
-  <section class="intro">
-    <h1>Every season, ranked against its own era.</h1>
-    <p class="lede">Prometheus scores League of Legends esports teams with sabermetric-style models refit for every season's meta, so a {{ first_year }} team and a {{ last_year }} team can stand side by side. {{ '{:,}'.format(total_team_seasons) }} team-seasons from LCK, LPL, LEC and LCS, plus Elo for every region.</p>
+  <section class="title-page" aria-labelledby="title">
+    <h1 id="title">Prometheus</h1>
+    <p class="title-sub">An abstract of League of Legends esports, in which every team-season since {{ first_year }} is scored against the meta of its own year.</p>
+    <p class="title-edition"><span>Abstract of {{ edition }}</span> <span>{{ '{:,}'.format(total_team_seasons) }} team-seasons</span> <span>{{ '{:,}'.format(total_elo_teams) }} teams rated</span> <span>Updated {{ last_update }}</span></p>
   </section>
 
-  <section class="rafters-section" aria-labelledby="all-time-heading">
-    <div class="section-head">
-      <h2 id="all-time-heading">Highest GLORY team-seasons, {{ first_year }}–{{ last_year }}</h2>
-      <a class="more" href="glory.html">Full GLORY rankings</a>
-    </div>
-    <ol class="rafters">
-      {% for r in all_time %}
-      {{ banner('teams/' ~ r.slug ~ '.html', r.league, r.score, loop.index,
-                title=r.teamname, meta=r.year ~ ' · ' ~ r.league,
-                label='#' ~ loop.index ~ ' ' ~ r.teamname ~ ', ' ~ r.year ~ ' ' ~ r.league ~ ', GLORY ' ~ '%.2f' | format(r.score)) }}
-      {% endfor %}
-    </ol>
-  </section>
-
-  <section class="metric-index" aria-labelledby="metrics-heading">
-    <h2 id="metrics-heading">The metrics</h2>
-    <dl>
-      {% for m in metrics %}
-      <div class="metric-entry">
-        <dt><a href="{{ m.key }}.html"><span class="metric-name">{{ m.name }}</span> <span class="metric-full">{{ m.full_name }}</span></a></dt>
-        <dd>{{ m.description }}</dd>
+  <div class="spread spread--home">
+    <div class="spread-main">
+      <div class="prose intro">
+        <p class="lede">Most esports stat sites print box scores. Prometheus fits a fresh model for every season, weighting gold and objective rates by how much they actually decided games that year. A {{ first_year }} team and a {{ last_year }} team are each judged by the game they played, so they can stand on the same page.</p>
+        <p>GLORY and GLORB cover the four major leagues, LCK, LPL, LEC and LCS. Game-Length Elo rates every team in every region on record.</p>
       </div>
-      {% endfor %}
-    </dl>
-  </section>
+
+      <figure class="register-figure" aria-labelledby="t1-cap">
+        <figcaption id="t1-cap" class="table-caption"><span class="caption-num">Table 1.</span> The leaders. Highest GLORY team-seasons, {{ first_year }}–{{ last_year }}. <a href="glory.html">Full GLORY register</a></figcaption>
+        <div class="table-scroll">
+          <table class="register">
+            <thead>
+              <tr>
+                <th scope="col" class="num rank">Rk</th>
+                <th scope="col">Team</th>
+                <th scope="col" class="num wide-only">Year</th>
+                <th scope="col" class="wide-only">League</th>
+                <th scope="col" class="bar-col" aria-hidden="true"></th>
+                <th scope="col" class="num">GLORY</th>
+                <th scope="col" class="num phone-hide">Era Z</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in all_time %}
+              <tr>
+                <td class="num rank">{{ loop.index }}</td>
+                <td class="team"><a href="teams/{{ r.slug }}.html">{{ r.teamname }}</a><span class="team-meta">{{ league(r.league, show_code=False) }}{{ r.year }}</span></td>
+                <td class="num wide-only">{{ r.year }}</td>
+                <td class="wide-only">{{ league(r.league) }}</td>
+                <td class="bar-col" aria-hidden="true"><span class="bar" style="--v: {{ r.score }}"></span></td>
+                <td class="num value">{{ '%.2f' | format(r.score) }}</td>
+                <td class="num phone-hide">{{ signed(r.era_score) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </figure>
+
+      <figure class="register-figure" aria-labelledby="t2-cap">
+        <figcaption id="t2-cap" class="table-caption"><span class="caption-num">Table 2.</span> Leader of each year. The highest GLORY team-season of the year, with the size of that year’s field.</figcaption>
+        <div class="table-scroll">
+          <table class="register">
+            <thead>
+              <tr>
+                <th scope="col" class="num">Year</th>
+                <th scope="col">Team</th>
+                <th scope="col" class="wide-only">League</th>
+                <th scope="col" class="bar-col" aria-hidden="true"></th>
+                <th scope="col" class="num">GLORY</th>
+                <th scope="col" class="num phone-hide">Field</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in annual %}
+              <tr>
+                <td class="num year">{{ r.year }}</td>
+                <td class="team"><a href="teams/{{ r.slug }}.html">{{ r.teamname }}</a><span class="team-meta team-meta--league">{{ league(r.league) }}</span></td>
+                <td class="wide-only">{{ league(r.league) }}</td>
+                <td class="bar-col" aria-hidden="true"><span class="bar" style="--v: {{ r.score }}"></span></td>
+                <td class="num value">{{ '%.2f' | format(r.score) }}</td>
+                <td class="num phone-hide muted">{{ r.field }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </figure>
+    </div>
+
+    <aside class="margin" aria-labelledby="contents-heading">
+      <h2 id="contents-heading" class="margin-head">Contents</h2>
+      <ol class="contents">
+        {% for m in metrics %}
+        <li>
+          <a href="{{ m.key }}.html"><span class="contents-name">{{ m.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">{{ '{:,}'.format(entry_counts[m.key]) }}<span class="visually-hidden"> entries</span></span></a>
+          <p class="contents-full">{{ m.full_name }}</p>
+          <p class="contents-desc">{{ m.description }}</p>
+        </li>
+        {% endfor %}
+      </ol>
+      <p class="margin-note">Figures at right of each section count its entries: team-seasons for GLORY and GLORB, teams for Elo. Every team has its own page in the register.</p>
+    </aside>
+  </div>
 {% endblock %}

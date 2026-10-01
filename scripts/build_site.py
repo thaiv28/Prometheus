@@ -38,6 +38,7 @@ METRICS = {
         ],
         "caveats": "Covers LCK, LPL, LEC and LCS. Teams with fewer than 5 games in a year are left out. Playoff runs face stronger opponents, which can pull a deep run's averages down.",
         "baseline": False,
+        "lede_note": 3,
     },
     "glorb": {
         "key": "glorb",
@@ -51,6 +52,7 @@ METRICS = {
         ],
         "caveats": "Covers LCK, LPL, LEC and LCS. Teams with fewer than 5 games in a year are left out.",
         "baseline": True,
+        "lede_note": 3,
     },
 }
 
@@ -67,6 +69,7 @@ ELO_METRICS = {
             "The table shows each team's rating after its most recent game.",
         ],
         "caveats": "Regions rarely play each other outside MSI and Worlds, so ratings compare best within a region. Team names come from the most recent game.",
+        "lede_note": 2,
     }
 }
 
@@ -77,7 +80,24 @@ NAV = [
 env = Environment(
     loader=FileSystemLoader(os.path.join(ROOT_DIR, "templates")), autoescape=True
 )
-env.globals.update(nav=NAV, site_url=SITE_URL, major_leagues=[l.value for l in ALL_MAJOR_LEAGUES])
+env.globals.update(
+    nav=NAV,
+    site_url=SITE_URL,
+    major_leagues=[l.value for l in ALL_MAJOR_LEAGUES],
+    edition=datetime.date.today().year,
+)
+
+
+def _longdate(value: str) -> str:
+    """'2024-09-08' -> '8 Sep 2024' for dates set in running prose."""
+    try:
+        d = datetime.date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return str(value)
+    return f"{d.day} {d.strftime('%b')} {d.year}"
+
+
+env.filters["longdate"] = _longdate
 
 
 def _slugify(name: str) -> str:
@@ -120,8 +140,14 @@ def _records(df):
     return df.to_dict(orient="records")
 
 
-def render_index(glory_df, last_update):
-    top = glory_df.sort_values("score", ascending=False).head(10)
+def render_index(glory_df, entry_counts, total_elo_teams, last_update):
+    top = glory_df.sort_values("score", ascending=False).head(15)
+    # The best qualified GLORY team-season in each year, newest first.
+    leaders = glory_df.loc[glory_df.groupby("year")["score"].idxmax()].sort_values("year", ascending=False)
+    year_sizes = glory_df.groupby("year").size().to_dict()
+    annual = _records(leaders)
+    for r in annual:
+        r["field"] = int(year_sizes[r["year"]])
     _write(
         os.path.join(OUTPUT_DIR, "index.html"),
         env.get_template("index.html.j2").render(
@@ -129,8 +155,11 @@ def render_index(glory_df, last_update):
             root_path="",
             last_update=last_update,
             metrics=[*METRICS.values(), *ELO_METRICS.values()],
+            entry_counts=entry_counts,
             all_time=_records(top),
+            annual=annual,
             total_team_seasons=len(glory_df),
+            total_elo_teams=total_elo_teams,
             first_year=int(glory_df["year"].min()),
             last_year=int(glory_df["year"].max()),
         ),
@@ -155,11 +184,11 @@ def render_rankings_page(metric, rows, config, filters, last_update):
 METRIC_COLUMNS = [
     {"key": "rank", "label": "Rank", "type": "rank"},
     {"key": "teamname", "label": "Team", "type": "team"},
-    {"key": "score", "label": "Score", "type": "number", "digits": 2, "bar": True},
+    {"key": "score", "label": "Score", "type": "number", "digits": 2, "bar": True, "note": 1},
     {"key": "era_score", "label": "Era Z", "type": "number", "digits": 2, "signed": True,
-     "hint": "Standard deviations above the average major-league team that year", "phoneHide": True},
+     "hint": "Standard deviations above the average major-league team that year", "phoneHide": True, "note": 2},
     {"key": "league_score", "label": "League Z", "type": "number", "digits": 2, "signed": True,
-     "hint": "Standard deviations above the average team in its league that year", "wideOnly": True},
+     "hint": "Standard deviations above the average team in its league that year", "wideOnly": True, "note": 2},
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
     {"key": "year", "label": "Year", "type": "text", "wideOnly": True},
 ]
@@ -167,14 +196,20 @@ METRIC_COLUMNS = [
 ELO_COLUMNS = [
     {"key": "rank", "label": "Rank", "type": "rank"},
     {"key": "teamname", "label": "Team", "type": "team"},
-    {"key": "elo", "label": "Elo", "type": "number", "digits": 0, "bar": True},
+    {"key": "elo", "label": "Elo", "type": "number", "digits": 0, "bar": True, "note": 1},
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
-    {"key": "latest_date", "label": "Last game", "type": "date", "wideOnly": True},
+    {"key": "latest_date", "label": "Last game", "type": "date", "wideOnly": True, "note": 3},
 ]
 
 
-def _team_pages(glory_df, glorb_df, elo_history, latest_elos):
+def _team_pages(glory_df, glorb_df, elo_history, latest_elos, glory_qualified):
     """Return {slug: context} for every team with GLORY data or Elo history."""
+
+    # Rank of each qualified team-season within its year, for the franchise register.
+    q = glory_qualified[["teamname", "year", "score"]].copy()
+    q["year_rank"] = q.groupby("year")["score"].rank(ascending=False, method="min").astype(int)
+    q["field"] = q.groupby("year")["score"].transform("size").astype(int)
+    year_rank = {(t, int(y)): (int(r), int(f)) for t, y, r, f in q[["teamname", "year", "year_rank", "field"]].itertuples(index=False)}
 
     seasons = (
         glory_df[["teamname", "year", "league", "score"]]
@@ -204,6 +239,8 @@ def _team_pages(glory_df, glorb_df, elo_history, latest_elos):
                         "league": row.league,
                         "glory": None if pd.isna(row.glory) else round(float(row.glory), 2),
                         "glorb": None if pd.isna(row.glorb) else round(float(row.glorb), 2),
+                        "year_rank": year_rank.get((team, year), (None, None))[0],
+                        "field": year_rank.get((team, year), (None, None))[1],
                     }
                 )
         elo_series = []
@@ -215,12 +252,22 @@ def _team_pages(glory_df, glorb_df, elo_history, latest_elos):
         current = latest.loc[team] if team in latest.index else None
         if isinstance(current, pd.DataFrame):  # duplicate team names across ids
             current = current.iloc[0]
+        elo_summary = None
+        if elo_series:
+            peak = max(elo_series, key=lambda d: d["elo"])
+            low = min(elo_series, key=lambda d: d["elo"])
+            elo_summary = {"games": len(elo_series), "peak": peak, "low": low,
+                           "first": elo_series[0], "last": elo_series[-1]}
+        ranked = [s for s in series if s["glory"] is not None]
+        best = max(ranked, key=lambda s: s["glory"]) if ranked else None
         leagues = sorted({s["league"] for s in series})
         pages[slug] = {
             "teamname": team,
             "slug": slug,
             "series": series,
             "elo_series": elo_series,
+            "elo_summary": elo_summary,
+            "best": best,
             "current_elo": None if current is None else round(float(current["elo"])),
             "current_league": None if current is None else current["league"],
             "leagues": leagues or ([current["league"]] if current is not None else []),
@@ -256,7 +303,6 @@ def main():
     glory_all = _rankings(baseline=False, minimum_matches=1, z_scores=False)
     glorb_all = _rankings(baseline=True, minimum_matches=1, z_scores=False)
 
-    render_index(glory_df, last_update)
     render_404(last_update)
 
     for metric, df in ((METRICS["glory"], glory_df), (METRICS["glorb"], glorb_df)):
@@ -290,7 +336,13 @@ def main():
         )
 
     elo_history = get_elo_history("game_length")
-    pages = _team_pages(glory_all, glorb_all, elo_history, latest_elos["game_length_elo"])
+    pages = _team_pages(glory_all, glorb_all, elo_history, latest_elos["game_length_elo"], glory_df)
+    render_index(
+        glory_df,
+        {"glory": len(glory_df), "glorb": len(glorb_df), "game_length_elo": len(latest_elos["game_length_elo"])},
+        len(latest_elos["game_length_elo"]),
+        last_update,
+    )
     render_team_pages(pages, last_update)
 
     print(f"Static site generated in {OUTPUT_DIR}/ ({len(pages)} team pages)")
