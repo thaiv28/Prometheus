@@ -22,10 +22,10 @@ Type: one family, **Source Serif 4** (self-hosted variable woff2, OFL, licence i
 
 | Output | Template | Notes |
 |---|---|---|
-| `index.html` | `index.html.j2` | Title page, intro, Table 1 (all-time GLORY leaders), Table 2 (leader of each year), and the Contents in the margin |
+| `index.html` | `index.html.j2` | Title, intro, top 15 GLORY team-seasons, best team-season of each year, and the list of rankings in the margin |
 | `glory.html`, `glorb.html`, `game_length_elo.html` | `rankings.html.j2` | Title and lede, a distribution figure of the current view, the filter line, the sortable register, and "How to read" notes in the margin. Driven by a column config from `build_site.py` (`note` keys put superscripts on column heads). |
 | `teams/<slug>.html` | `team.html.j2` | Franchise entry: fact line, summary sentence, season column chart with a GLORY/GLORB switch, season register with year rank, and an SVG Elo chart. Pages exist for all teams with Elo. |
-| `404.html` | `404.html.j2` | "Errata" page with links back into the book. Links are root-absolute. |
+| `404.html` | `404.html.j2` | "Page not found" with links to the home page and each ranking. Links are root-absolute. |
 
 ## Behavior
 
@@ -47,5 +47,6 @@ Type: one family, **Source Serif 4** (self-hosted variable woff2, OFL, licence i
 
 ## Known gaps
 
-- Light only; there is no night edition.
+- Light only; there is no dark mode.
+- Copy is plain and direct. Each line should explain a number, a concept, or where to go next; no book-metaphor wording ("register", "edition", "errata") in visible text.
 - Phone rows are two lines tall (team, then league and year), so a phone shows about 20 rows per screen.

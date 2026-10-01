@@ -5,13 +5,13 @@
   <div class="spread">
     <div class="spread-main">
       <header class="section-head">
-        <h1>Errata <span class="full-name">No page at this address</span></h1>
-        <p class="lede">This entry is not in the present edition. Team pages are filed under the team’s name, for example <a href="{{ root_path }}teams/gen-g.html">/teams/gen-g.html</a>, and the index search in the running head finds any team on record.</p>
+        <h1>Page not found</h1>
+        <p class="lede">Nothing exists at this address. Use the search at the top to find a team, or go to one of the pages below.</p>
       </header>
       <ol class="contents contents--errata">
-        <li><a href="{{ root_path }}index.html"><span class="contents-name">Contents</span><span class="leader" aria-hidden="true"></span><span class="contents-count">Home</span></a></li>
+        <li><a href="{{ root_path }}index.html"><span class="contents-name">Home</span><span class="leader" aria-hidden="true"></span><span class="contents-count">Overview</span></a></li>
         {% for item in nav %}
-        <li><a href="{{ root_path }}{{ item.key }}.html"><span class="contents-name">{{ item.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">Register</span></a></li>
+        <li><a href="{{ root_path }}{{ item.key }}.html"><span class="contents-name">{{ item.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">Rankings</span></a></li>
         {% endfor %}
       </ol>
     </div>
