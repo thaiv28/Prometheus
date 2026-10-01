@@ -1,0 +1,15 @@
+{% extends 'base.html.j2' %}
+{% block title %}Page not found · Prometheus{% endblock %}
+{% block description %}This page doesn't exist on Prometheus.{% endblock %}
+{% block content %}
+  <section class="page-head">
+    <h1>Not in the rafters</h1>
+    <p class="lede">There's no page at this address. Team pages are named after the team, for example <a href="{{ root_path }}teams/gen-g.html">/teams/gen-g.html</a>.</p>
+  </section>
+  <ul class="not-found-links">
+    {% for item in nav %}
+    <li><a href="{{ root_path }}{{ item.key }}.html">{{ item.name }} rankings</a></li>
+    {% endfor %}
+    <li><a href="{{ root_path }}index.html">Home</a></li>
+  </ul>
+{% endblock %}

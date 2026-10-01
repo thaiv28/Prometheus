@@ -1,6 +1,7 @@
 CREATE TABLE matches(
     gameid             TEXT NOT NULL,       -- unique match ID taken from OE
     year               INT NOT NULL,
+    date               DATE NOT NULL,
     split              TEXT,                -- Spring, Summer, etc
     league             TEXT NOT NULL,       -- LCK, LEC, VCS, etc.
     teamid             TEXT NOT NULL,       -- unique team identifier taken from OE
@@ -98,3 +99,13 @@ CREATE TABLE player_stats (
     FOREIGN KEY(gameid, teamid) REFERENCES matches(gameid, teamid)
 );
 
+CREATE TABLE game_length_elo (
+    gameid          TEXT NOT NULL,
+    teamid          TEXT NOT NULL,
+
+    pre_match_elo   REAL NOT NULL,
+    post_match_elo  REAL NULL,
+    elo_change      REAL NOT NULL,
+
+    FOREIGN KEY(gameid, teamid) REFERENCES matches(gameid, teamid)
+);

@@ -211,3 +211,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# impeccable scratch (screenshots, build state); PRODUCT.md, DESIGN.md and .impeccable/surfaces are tracked
+.impeccable/review/
+.impeccable/build/
+.impeccable/mocks/
+.impeccable/questions/

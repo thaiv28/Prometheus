@@ -7,8 +7,10 @@ from . import DB_PATH
 from prometheus.types import League
 from prometheus import types
 
+
 def get_engine():
     return create_engine(f"sqlite:///{DB_PATH}")
+
 
 def filter_leagues(league_list, years=None):
     filtered_leagues = set(league_list).copy()

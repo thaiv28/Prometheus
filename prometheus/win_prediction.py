@@ -135,7 +135,11 @@ def _build_logistic_pipeline(
     """Construct the modeling pipeline (default: tuned XGBoost) without scaling."""
     transformers = [
         ("num", "passthrough", numeric_features),
-        ("cat", OneHotEncoder(handle_unknown="ignore", sparse_output=False), categorical_features),
+        (
+            "cat",
+            OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+            categorical_features,
+        ),
     ]
     preprocessor = ColumnTransformer(transformers, remainder="drop")
 
@@ -179,22 +183,24 @@ def _evaluate_binary_classifier(
     return metrics
 
 
-def _evaluate_per_minute_metrics(model: Pipeline, X: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
+def _evaluate_per_minute_metrics(
+    model: Pipeline, X: pd.DataFrame, y: pd.Series
+) -> pd.DataFrame:
     """Compute metrics separately for each minute value in X['minutes'].
 
     Expects raw feature matrix (pre transformation) that still contains the
     'minutes' column. Returns a DataFrame sorted by minutes.
     """
-    rows = [] 
-    for minute_value, X_sub in X.groupby('minutes'):
+    rows = []
+    for minute_value, X_sub in X.groupby("minutes"):
         y_sub = y.loc[X_sub.index]
         m = _evaluate_binary_classifier(model, X_sub, y_sub)
-        m['minutes'] = minute_value
-        m['n_rows'] = len(X_sub)
+        m["minutes"] = minute_value
+        m["n_rows"] = len(X_sub)
         rows.append(m)
-    dfm = pd.DataFrame(rows).sort_values('minutes').reset_index(drop=True)
-    
-    return dfm[['minutes','n_rows','accuracy','roc_auc','brier','log_loss']]
+    dfm = pd.DataFrame(rows).sort_values("minutes").reset_index(drop=True)
+
+    return dfm[["minutes", "n_rows", "accuracy", "roc_auc", "brier", "log_loss"]]
 
 
 def _train_win_probability_model(
@@ -238,10 +244,11 @@ def _train_win_probability_model(
         "minutes_used": list(minutes),
         "rows": len(df),
     }
-    
+
+
 def get_prediction_model():
     info = _train_win_probability_model()
-    return info['model']
+    return info["model"]
 
 
 if __name__ == "__main__":

@@ -1,0 +1,14 @@
+{#- One felt banner hanging from the rafters rod, with its lettering stitched on the felt. -#}
+
+{% macro banner(href, league, value, numeral, title=None, meta=None, digits=2, label='') -%}
+<li class="banner" data-league="{{ league }}">
+  <a class="banner-link" href="{{ href }}" aria-label="{{ label }}">
+    <span class="banner-felt"><span class="banner-numeral">{{ numeral }}</span></span>
+    <span class="banner-caption">
+      {% if title %}<span class="banner-title">{{ title }}</span>{% endif %}
+      {% if meta %}<span class="banner-meta">{{ meta }}</span>{% endif %}
+      <span class="banner-value">{{ ('%.' ~ digits ~ 'f') | format(value) }}</span>
+    </span>
+  </a>
+</li>
+{%- endmacro %}

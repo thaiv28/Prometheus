@@ -1,0 +1,78 @@
+{% extends 'base.html.j2' %}
+{% block title %}{{ metric.name }} rankings · Prometheus{% endblock %}
+{% block description %}{{ metric.full_name }}: {{ metric.description }}{% endblock %}
+{% block canonical_path %}{{ metric.key }}.html{% endblock %}
+{% block content %}
+  <section class="page-head">
+    <h1>{{ metric.name }} <span class="full-name">{{ metric.full_name }}</span></h1>
+    <p class="lede">{{ metric.description }} <a href="#about">How to read it</a></p>
+  </section>
+
+  <div class="toolbar" role="group" aria-label="Filter rankings">
+    {% set year_label = 'Last active' if config.valueKey == 'elo' else 'Years' %}
+    <details class="picker" data-filter="years">
+      <summary><span class="picker-label">{{ year_label }}</span> <span class="picker-value" data-all="All">All</span></summary>
+      <fieldset class="picker-panel">
+        <legend class="visually-hidden">{{ year_label }}</legend>
+        <div class="picker-options picker-options--years">
+          {% for y in filters.years | reverse %}
+          <label><input type="checkbox" value="{{ y }}" /> {{ y }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+    </details>
+    <details class="picker" data-filter="leagues">
+      <summary><span class="picker-label">Leagues</span> <span class="picker-value" data-all="All">All</span></summary>
+      <fieldset class="picker-panel">
+        <legend class="visually-hidden">Leagues</legend>
+        {% if filters.leagues | length > 4 %}
+        <button type="button" class="picker-shortcut" data-select="{{ major_leagues | join(',') }}">Major four only</button>
+        {% endif %}
+        <div class="picker-options">
+          {% for l in filters.leagues %}
+          <label data-league="{{ l }}"><input type="checkbox" value="{{ l }}" /> <span class="swatch" aria-hidden="true"></span>{{ l }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+    </details>
+    <button type="button" class="clear-filters" hidden>Clear filters</button>
+    <p class="count" aria-live="polite"></p>
+  </div>
+
+  <section class="rafters-section" aria-label="Top ten in this view">
+    <ol class="rafters" id="rafters"></ol>
+  </section>
+
+  <div class="table-wrap">
+    <table class="rankings">
+      <caption class="visually-hidden">{{ metric.name }} rankings. Column headers sort the table.</caption>
+      <thead>
+        <tr>
+          {% for c in config.columns %}
+          <th scope="col" data-key="{{ c.key }}" data-type="{{ c.type }}"{% if c.wideOnly %} class="wide-only"{% elif c.phoneHide %} class="phone-hide"{% endif %} aria-sort="none"{% if c.hint %} title="{{ c.hint }}"{% endif %}>
+            <button type="button">{{ c.label }}<svg class="sort-icon" viewBox="0 0 10 10" aria-hidden="true"><path class="up" d="M2 4 5 1l3 3"/><path class="down" d="M2 6l3 3 3-3"/></svg></button>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody id="rows">
+        <tr><td colspan="{{ config.columns | length }}" class="empty">Loading rankings…</td></tr>
+      </tbody>
+    </table>
+    <noscript><p class="empty">The rankings table needs JavaScript to filter and sort.</p></noscript>
+  </div>
+
+  <section class="about" id="about" aria-labelledby="about-heading">
+    <h2 id="about-heading">How to read {{ metric.name }}</h2>
+    <ul>
+      {% for line in metric.how_to_read %}<li>{{ line }}</li>{% endfor %}
+    </ul>
+    <p class="caveat">{{ metric.caveats }}</p>
+  </section>
+
+  <script type="application/json" id="rows-data">{{ rows | tojson }}</script>
+  <script type="application/json" id="page-config">{{ config | tojson }}</script>
+{% endblock %}
+{% block scripts %}
+  <script src="js/rankings.js" defer></script>
+{% endblock %}
