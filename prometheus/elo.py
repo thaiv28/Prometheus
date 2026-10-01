@@ -5,6 +5,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from prometheus.utils import get_engine
+from prometheus.types import INTERNATIONAL_LEAGUES
 
 ELO_METHODS = ("game_length",)
 STARTING_ELO = 1500
@@ -172,23 +173,55 @@ def get_latest_elos(method: str, date: datetime.date | None = None) -> pd.DataFr
               this date are considered when computing latest Elo.
     Returns:
         DataFrame with columns: teamname, league, year, elo, latest_date.
+        `league` is the team's most recent home league, so a team whose last game was
+        at Worlds is still listed under its region.
     """
     table = _elo_table(method)
+    international = ", ".join(repr(l) for l in INTERNATIONAL_LEAGUES)
     stmt = f"""
     WITH ranked AS (
-        SELECT m.teamname, m.league, CAST(strftime('%Y', m.date) AS INT) AS year,
+        SELECT e.teamid, m.teamname, m.league, CAST(strftime('%Y', m.date) AS INT) AS year,
                e.post_match_elo AS elo, m.date AS latest_date,
                ROW_NUMBER() OVER (
                    PARTITION BY e.teamid ORDER BY m.date DESC, m.gameid DESC
-               ) AS rn
+               ) AS rn,
+               ROW_NUMBER() OVER (
+                   PARTITION BY e.teamid, m.league IN ({international})
+                   ORDER BY m.date DESC, m.gameid DESC
+               ) AS league_rn
         FROM {table} e
         JOIN matches m ON e.gameid = m.gameid AND e.teamid = m.teamid
         WHERE (:date IS NULL OR DATE(m.date) <= :date)
+    ),
+    home AS (
+        SELECT teamid, league FROM ranked
+        WHERE league_rn = 1 AND league NOT IN ({international})
     )
-    SELECT teamname, league, year, elo, latest_date
-    FROM ranked
-    WHERE rn = 1
-    ORDER BY elo DESC
+    SELECT r.teamname, COALESCE(h.league, r.league) AS league, r.year, r.elo, r.latest_date
+    FROM ranked r
+    LEFT JOIN home h ON h.teamid = r.teamid
+    WHERE r.rn = 1
+    ORDER BY r.elo DESC
     """
     params = {"date": date.isoformat() if date else None}
     return pd.read_sql(text(stmt), get_engine(), params=params)
+
+
+def get_pregame_elos(method: str, years: list[int] | None = None) -> pd.DataFrame:
+    """Return each team's and its opponent's Elo going into every game.
+
+    Returns:
+        DataFrame with columns: gameid, teamid, elo, opp_elo (two rows per game).
+    """
+    table = _elo_table(method)
+    year_filter = ""
+    if years is not None:
+        year_filter = f"WHERE m.year IN ({', '.join(str(int(y)) for y in years)})"
+    stmt = f"""
+    SELECT e.gameid, e.teamid, e.pre_match_elo AS elo, o.pre_match_elo AS opp_elo
+    FROM {table} e
+    JOIN {table} o ON o.gameid = e.gameid AND o.teamid != e.teamid
+    JOIN matches m ON m.gameid = e.gameid AND m.teamid = e.teamid
+    {year_filter}
+    """
+    return pd.read_sql(stmt, get_engine())

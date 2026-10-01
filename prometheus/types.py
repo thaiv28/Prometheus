@@ -40,6 +40,20 @@ ALL_MAJOR_LEAGUES = [
     League.LCS,
 ]
 
+# Events where teams from different regions meet. They are the only games that tie
+# regional Elo pools together, and they are not a team's home league.
+INTERNATIONAL_LEAGUES = [
+    "Worlds",
+    "MSI",
+    "EWC",
+    "FST",
+    "IEM",
+    "MSC",
+    "Riot",
+    "ASI",
+    "IWCI",
+]
+
 GLORY_FEATURES = [
     "gpm",
     "kills_per_10",

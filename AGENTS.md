@@ -30,7 +30,7 @@ python -m http.server -d output 8000    # preview the built site locally
 | `prometheus/types.py` | Enums (`Metric`, `League`, `ScoreCols`) and feature lists (`GLORY_FEATURES`, etc.). This is the single source of truth for column names. |
 | `prometheus/matches.py` | Raw-SQL reads that join a stats table/view with `matches` |
 | `prometheus/regression.py` | Fits the GLORY model (StandardScaler + LinearRegression, target = win) |
-| `prometheus/ranking.py` | `get_glory_ranking()` fits a model per year, scores team-season averages, and adds z-scores |
+| `prometheus/ranking.py` | `get_glory_ranking()` fits a model per year, scores team-season averages, and adds z-scores. `opponent_adjusted=True` gives GLORY+ (stats adjusted by opponent Elo) |
 | `prometheus/elo.py` | Game-length-weighted Elo: bootstrap and query helpers (WIP) |
 | `prometheus/win_prediction.py`, `players.py`, `aura.py` | Player metric (AURA) groundwork, still experimental |
 | `prometheus/main.py` | Typer CLI entry point (`prometheus` script) |
@@ -56,8 +56,8 @@ python -m http.server -d output 8000    # preview the built site locally
 
 ## Gotchas
 
-- `get_glory_ranking()` refits one regression **per year** on every call. `build_site.py` calls it 4 times (GLORY/GLORB × qualified/all), and a build takes about 6 seconds.
-- The default year list in `ranking.py` is hardcoded to 2014–2025, but the DB contains 2026 data.
+- `get_glory_ranking()` refits one regression **per year** on every call. `build_site.py` calls it 5 times (GLORY/GLORB × qualified/all, plus GLORY+), and a build takes about 15 seconds.
+- International events (Worlds, MSI, ...) are ingested as their own leagues (`INTERNATIONAL_LEAGUES` in `types.py`). They are the only games linking regional Elo pools. Oracle's Elixir leaves `split` empty for them, so don't reintroduce a blanket `dropna` over `split` in `002_add_matches.py`.
 - `setup_db.sh` **deletes** `db/prometheus.db` before rebuilding.
 - Several modules end in `if __name__ == "__main__":` scratch blocks. They aren't real entry points.
 - `scripts/004_bootstrap_elo.py` clears and refills `game_length_elo`, so it's safe to rerun.
