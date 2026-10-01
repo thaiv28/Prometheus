@@ -10,9 +10,11 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 ROOT_DIR="$SCRIPT_DIR/.."
 RAW_DIR="$ROOT_DIR/data/raw"
 DB_PATH="$ROOT_DIR/db/prometheus.db"
+FRESH_MARKER="$ROOT_DIR/data/.fresh-download" # tells CI to back up the new CSVs
 GDRIVE_ID="1gLSw0RLjBbtaNy0dgnGQDAZOHIgCe-HH" # Oracle's Elixir game data folder
 
 mkdir -p "$RAW_DIR"
+rm -f "$FRESH_MARKER"
 have_csvs() { compgen -G "$RAW_DIR/*.csv" > /dev/null; }
 
 # Download into a temp dir and only replace data/raw on full success,
@@ -30,6 +32,7 @@ download() {
             rm -f "$RAW_DIR"/*.csv
             mv "$tmp"/*.csv "$RAW_DIR"/
             rm -rf "$tmp"
+            touch "$FRESH_MARKER"
             return 0
         fi
         [ "$attempt" -lt 3 ] && sleep $((attempt * 30))

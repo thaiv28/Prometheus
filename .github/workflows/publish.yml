@@ -20,6 +20,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      CAN_USE_AWS: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
+      DATA_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/oracles-elixir/
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -33,10 +36,31 @@ jobs:
           path: data/raw
           key: oracles-elixir-${{ github.run_id }}
           restore-keys: oracles-elixir-
+      # On main, the platform artifacts bucket holds the last good CSVs as a
+      # fallback (PR builds can't assume the AWS role, so they rely on the cache).
+      - name: AWS credentials for the data backup
+        if: env.CAN_USE_AWS == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+      - name: Restore CSVs from backup when the cache is empty
+        if: env.CAN_USE_AWS == 'true'
+        run: |
+          if compgen -G "data/raw/*.csv" > /dev/null; then exit 0; fi
+          mkdir -p data/raw
+          aws s3 cp "$DATA_BACKUP" data/raw/ --recursive --only-show-errors
+          gunzip -f data/raw/*.csv.gz
       - name: Build database
         env:
           REFRESH_DATA: "1"
         run: uv run bash scripts/setup_db.sh
+      - name: Back up freshly downloaded CSVs
+        if: env.CAN_USE_AWS == 'true' && hashFiles('data/.fresh-download') != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/backup"
+          for f in data/raw/*.csv; do gzip -n -c "$f" > "$RUNNER_TEMP/backup/$(basename "$f").gz"; done
+          aws s3 sync "$RUNNER_TEMP/backup" "$DATA_BACKUP" --size-only --only-show-errors
       - name: Test
         run: uv run pytest -q
       - name: Build static site
