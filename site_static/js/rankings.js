@@ -131,7 +131,7 @@
 
   function renderTable(list) {
     if (!list.length) {
-      tbody.innerHTML = `<tr><td class="empty" colspan="${totalCols}">No ${noun} match this view. <button type="button" class="clear-filters" data-clear>Clear filters</button></td></tr>`;
+      tbody.innerHTML = `<tr><td class="empty" colspan="${totalCols}">No ${noun} match these filters. <button type="button" class="clear-filters" data-clear>Clear filters</button></td></tr>`;
       return;
     }
     tbody.innerHTML = sorted(list)
@@ -285,8 +285,8 @@
     clearBtn.hidden = !(state.years.size || state.leagues.size || state.search);
     descEl.textContent = describeView();
     countEl.textContent = count === rows.length
-      ? `${numberFormat.format(rows.length)} entries.`
-      : `${numberFormat.format(count)} of ${numberFormat.format(rows.length)} entries.`;
+      ? `${numberFormat.format(rows.length)} shown.`
+      : `${numberFormat.format(count)} of ${numberFormat.format(rows.length)} shown.`;
   }
 
   let started = false;

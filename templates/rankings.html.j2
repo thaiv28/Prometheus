@@ -4,6 +4,7 @@
 {% block canonical_path %}{{ metric.key }}.html{% endblock %}
 {% set noun = 'teams' if config.valueKey == 'elo' else 'team-seasons' %}
 {% set year_label = 'last active' if config.valueKey == 'elo' else 'years' %}
+{% set value_word = 'rating' if config.valueKey == 'elo' else 'score' %}
 {% block content %}
   <div class="spread">
     <div class="spread-main">
@@ -13,14 +14,14 @@
       </header>
 
       <figure class="dist" aria-labelledby="dist-cap">
-        <figcaption id="dist-cap" class="figure-caption"><span class="caption-num">Figure.</span> Every {{ 'team' if config.valueKey == 'elo' else 'team-season' }} in view, by {{ 'rating' if config.valueKey == 'elo' else 'score' }}. <span class="dist-hint">Point at a row to find it here.</span></figcaption>
+        <figcaption id="dist-cap" class="figure-caption">How {{ value_word }}s are spread for the {{ noun }} below. <span class="dist-hint">Hover over a row to mark it on the chart.</span></figcaption>
         <div class="dist-plot" id="dist" role="img" aria-label="Distribution of {{ metric.name }} values in the current view"></div>
       </figure>
 
-      <div class="filter-line" role="group" aria-label="Filter the register">
-        <span class="filter-lead">Showing</span>
+      <div class="filter-line" role="group" aria-label="Filters">
+        <span class="filter-lead">Filter</span>
         <details class="picker" data-filter="years">
-          <summary><span class="picker-label">{{ year_label }}</span> <span class="picker-value" data-all="all">all</span></summary>
+          <summary><span class="picker-label">{{ year_label }}</span> <span class="picker-value" data-all="All">All</span></summary>
           <fieldset class="picker-panel">
             <legend class="picker-legend">{{ year_label | capitalize }}</legend>
             <div class="picker-options picker-options--years">
@@ -31,11 +32,11 @@
           </fieldset>
         </details>
         <details class="picker" data-filter="leagues">
-          <summary><span class="picker-label">leagues</span> <span class="picker-value" data-all="all">all</span></summary>
+          <summary><span class="picker-label">leagues</span> <span class="picker-value" data-all="All">All</span></summary>
           <fieldset class="picker-panel picker-panel--leagues">
             <legend class="picker-legend">Leagues</legend>
             {% if filters.leagues | length > 4 %}
-            <button type="button" class="picker-shortcut" data-select="{{ major_leagues | join(',') }}">Major four only</button>
+            <button type="button" class="picker-shortcut" data-select="{{ major_leagues | join(',') }}">Major leagues only</button>
             {% endif %}
             <div class="picker-options">
               {% for l in filters.leagues %}
@@ -48,7 +49,7 @@
       </div>
 
       <figure class="register-figure register-figure--main" aria-labelledby="table-cap">
-        <figcaption id="table-cap" class="table-caption"><span class="caption-num">Table.</span> <span id="table-desc">{{ metric.name }}, all {{ noun }}</span>, ranked by {{ 'rating' if config.valueKey == 'elo' else 'score' }}.<a class="note-ref" href="#note-dagger" aria-label="Caveat">†</a> <span class="count" aria-live="polite"></span></figcaption>
+        <figcaption id="table-cap" class="table-caption"><span id="table-desc">{{ metric.name }}, all {{ noun }}</span>, ranked by {{ value_word }}.<a class="note-ref" href="#note-dagger" aria-label="Caveat">†</a> <span class="count" aria-live="polite"></span></figcaption>
         <div class="table-scroll">
           <table class="register register--sortable">
             <thead>
@@ -62,11 +63,11 @@
               </tr>
             </thead>
             <tbody id="rows">
-              <tr><td colspan="{{ config.columns | length + 1 }}" class="empty">Setting the register…</td></tr>
+              <tr><td colspan="{{ config.columns | length + 1 }}" class="empty">Loading…</td></tr>
             </tbody>
           </table>
         </div>
-        <noscript><p class="empty">The register needs JavaScript to filter and sort.</p></noscript>
+        <noscript><p class="empty">Turn on JavaScript to see and sort this table.</p></noscript>
       </figure>
     </div>
 

@@ -30,13 +30,13 @@ METRICS = {
         "key": "glory",
         "name": "GLORY",
         "full_name": "Global League Offensive Rankings Yield",
-        "description": "Weights gold and objective rates by how much they won games in that season's meta, then scores every team-season on that scale.",
+        "description": "Scores each team-season on gold and objective stats, weighted by how much each stat decided wins that year.",
         "how_to_read": [
-            "Score is the team-season's predicted win strength, scaled so most teams land between 0 and 100. Higher is better.",
-            "Era Z compares a team with every major-league team that year. League Z compares it only with its own league that year. A Z of +2 is two standard deviations above average.",
-            "Weights are refit every year, so a 2015 team is judged on what won in 2015.",
+            "Score: predicted win strength, roughly 0 to 100. Higher is better.",
+            "Era Z: how far a team is above the average major-league team that year, in standard deviations. League Z: the same, compared only with its own league. +2 means two standard deviations above average.",
+            "Weights are recalculated each year, so a 2015 team is judged by what won games in 2015.",
         ],
-        "caveats": "Covers LCK, LPL, LEC and LCS. Teams with fewer than 5 games in a year are left out. Playoff runs face stronger opponents, which can pull a deep run's averages down.",
+        "caveats": "Only LCK, LPL, LEC and LCS. Team-seasons with fewer than 5 games are left out. Teams that go deep in playoffs face stronger opponents, which can lower their averages.",
         "baseline": False,
         "lede_note": 3,
     },
@@ -44,13 +44,13 @@ METRICS = {
         "key": "glorb",
         "name": "GLORB",
         "full_name": "Global League Offensive Rankings Baseline",
-        "description": "The same stats as GLORY, all weighted equally. Use it to see how much GLORY's learned weights change the order.",
+        "description": "The same stats as GLORY, all weighted equally. Compare it with GLORY to see how much the yearly weights change the order.",
         "how_to_read": [
-            "Score is the equal-weight sum of standardized stats, centred near 80. Higher is better.",
-            "Era Z and League Z work as on GLORY.",
-            "A team ranked far higher on GLORY than GLORB excels at the stats that mattered most that year.",
+            "Score: the equal-weight sum of standardized stats, centred near 80. Higher is better.",
+            "Era Z and League Z: same as on GLORY.",
+            "A team ranked much higher on GLORY than on GLORB was strong in the stats that mattered most that year.",
         ],
-        "caveats": "Covers LCK, LPL, LEC and LCS. Teams with fewer than 5 games in a year are left out.",
+        "caveats": "Only LCK, LPL, LEC and LCS. Team-seasons with fewer than 5 games are left out.",
         "baseline": True,
         "lede_note": 3,
     },
@@ -62,13 +62,13 @@ ELO_METRICS = {
         "name": "Elo",
         "full_name": "Game-Length Adjusted Elo",
         "method": "game_length",
-        "description": "A running rating for every team in every region. Beating stronger teams moves it more, and fast wins count more than long ones.",
+        "description": "A rating for every team in every region, updated after each game. Wins over stronger teams and faster wins raise it more.",
         "how_to_read": [
             "Every team starts at 1500. Each game moves the winner up and the loser down by the same amount.",
-            "Short, decisive wins move ratings most. A heavy favourite who scrapes a 50-minute win can lose a little rating.",
-            "The table shows each team's rating after its most recent game.",
+            "Short games move ratings most. A heavy favourite that needs 50 minutes to win can still lose a little rating.",
+            "The table shows each team's rating after its latest game.",
         ],
-        "caveats": "Regions rarely play each other outside MSI and Worlds, so ratings compare best within a region. Team names come from the most recent game.",
+        "caveats": "Regions rarely play each other outside MSI and Worlds, so compare ratings within a region. Team names are taken from each team's latest game.",
         "lede_note": 2,
     }
 }
@@ -84,7 +84,6 @@ env.globals.update(
     nav=NAV,
     site_url=SITE_URL,
     major_leagues=[l.value for l in ALL_MAJOR_LEAGUES],
-    edition=datetime.date.today().year,
 )
 
 
@@ -205,7 +204,7 @@ ELO_COLUMNS = [
 def _team_pages(glory_df, glorb_df, elo_history, latest_elos, glory_qualified):
     """Return {slug: context} for every team with GLORY data or Elo history."""
 
-    # Rank of each qualified team-season within its year, for the franchise register.
+    # Rank of each qualified team-season within its year, for team pages.
     q = glory_qualified[["teamname", "year", "score"]].copy()
     q["year_rank"] = q.groupby("year")["score"].rank(ascending=False, method="min").astype(int)
     q["field"] = q.groupby("year")["score"].transform("size").astype(int)

@@ -24,24 +24,24 @@
 <body data-page="{{ page_key }}">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="running-head">
-    <a class="wordmark" href="{{ _root }}index.html"><svg class="wordmark-mark" viewBox="0 0 20 24" aria-hidden="true"><path d="M3 2h8.2C15.6 2 18 4.4 18 8s-2.4 6-6.8 6H8v8H3zM8 6v4h3c1.4 0 2.2-.8 2.2-2S12.4 6 11 6z"/></svg><span class="wordmark-text">Prometheus</span><span class="wordmark-edition">Abstract {{ edition }}</span></a>
+    <a class="wordmark" href="{{ _root }}index.html"><svg class="wordmark-mark" viewBox="0 0 20 24" aria-hidden="true"><path d="M3 2h8.2C15.6 2 18 4.4 18 8s-2.4 6-6.8 6H8v8H3zM8 6v4h3c1.4 0 2.2-.8 2.2-2S12.4 6 11 6z"/></svg><span class="wordmark-text">Prometheus</span></a>
     <nav class="sections" aria-label="Sections">
-      <a href="{{ _root }}index.html"{% if page_key == 'index' %} aria-current="page"{% endif %}>Contents</a>
+      <a href="{{ _root }}index.html"{% if page_key == 'index' %} aria-current="page"{% endif %}>Home</a>
       {% for item in nav %}
       <a href="{{ _root }}{{ item.key }}.html"{% if item.key == page_key %} aria-current="page"{% endif %}>{{ item.name }}</a>
       {% endfor %}
     </nav>
     <form class="index-search" role="search" action="{{ _root }}game_length_elo.html" method="get">
-      <label for="team-search">Index</label>
-      <input id="team-search" name="search" type="search" placeholder="Find a team" autocomplete="off" spellcheck="false" />
+      <label for="team-search">Search</label>
+      <input id="team-search" name="search" type="search" placeholder="Team name" autocomplete="off" spellcheck="false" />
     </form>
   </header>
   <main id="main" class="page">
     {% block content %}{% endblock %}
   </main>
   <footer class="colophon">
-    <p class="colophon-source">Data from <a href="https://oracleselixir.com/">Oracle’s Elixir</a>, refreshed daily. This edition updated {{ last_update }}.</p>
-    <p class="colophon-meta"><a href="https://github.com/thaiv28/Prometheus">Source and methodology on GitHub</a> <span aria-hidden="true">·</span> Set in Source Serif 4</p>
+    <p class="colophon-source">Data from <a href="https://oracleselixir.com/">Oracle’s Elixir</a>, updated daily. Last updated {{ last_update }}.</p>
+    <p class="colophon-meta"><a href="https://github.com/thaiv28/Prometheus">Methodology and source code on GitHub</a></p>
   </footer>
   {% block scripts %}{% endblock %}
 </body>

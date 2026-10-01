@@ -166,7 +166,7 @@ Paper and ink, plus one spot and four league inks. The strategy is Restrained.
 
 ### Hierarchy
 - **Title page** (300, clamp 3.25 to 7.5rem, 0.9, -0.025em): the home page name only.
-- **Display** (400, clamp 2.25 to 3.5rem, 1.02): page titles (metric name, team name, Errata). The metric's full name sits under it in italic at 1.1875rem.
+- **Display** (400, clamp 2.25 to 3.5rem, 1.02): page titles (metric name, team name, Page not found). The metric's full name sits under it in italic at 1.1875rem.
 - **Headline** (400, 1.625rem, 1.15): section heads on team pages.
 - **Lede** (400, 1.1875rem, 1.5, old-style figures): the paragraph under a title, max 40rem.
 - **Body** (400, 1.0625rem, 1.5, old-style proportional figures): prose; following paragraphs indent 1.5em instead of adding space.
@@ -199,9 +199,9 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 ## Components
 
 ### Running head
-- Wordmark: a ledger-blue P glyph, PROMETHEUS in tracked small caps 600, and "Abstract YYYY" in italic.
-- Sections: Contents, GLORY, GLORB, Elo in small caps; the current one is ink 600 with a 2px ledger-blue underline.
-- Index search: an "Index" label and a bare input on a hairline baseline; focus thickens the baseline to 2px ledger blue. Off the rankings pages it submits to the Elo register, which lists every team.
+- Wordmark: a ledger-blue P glyph and PROMETHEUS in tracked small caps 600.
+- Sections: Home, GLORY, GLORB, Elo in small caps; the current one is ink 600 with a 2px ledger-blue underline.
+- Search: a "Search" label and a bare input on a hairline baseline; focus thickens the baseline to 2px ledger blue. Off the rankings pages it submits to the Elo register, which lists every team.
 
 ### Filter line
 - Set as a sentence: "Showing years all, leagues all". The label is small caps, the value italic on a dotted underline, with a caret. Opening turns the value and caret ledger blue.
@@ -219,7 +219,7 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 ### Franchise entry (team pages)
 - Name in display size; a small-caps fact line (league marks, seasons ranked, Elo); a prose summary with the best season, its year rank, and the Elo peak.
 - Figure 1: printed column chart of GLORY or GLORB by season, switched by a two-option small-caps control with a ledger-blue underline.
-- Season register with year rank ("2nd of 47", or "n.q." when the season had fewer than five games).
+- Season register with year rank ("2nd of 47", or "Unranked" when the season had fewer than 5 games).
 - Figure 2: hand-drawn SVG Elo line in the league ink, dashed 1500 rule, annotated peak, and a pointer and arrow-key readout.
 
 ### Margin notes

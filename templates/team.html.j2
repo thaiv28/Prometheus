@@ -16,7 +16,7 @@
       Best GLORY season {{ best.year }}, scoring {{ '%.2f' | format(best.glory) }}{% if best.year_rank %}, {{ ordinal(best.year_rank) }} of {{ best.field }} major-league teams that year{% endif %}.
       {%- endif %}
       {% if elo_summary -%}
-      Rated over {{ '{:,}'.format(elo_summary.games) }} game{{ 's' if elo_summary.games != 1 }} since {{ elo_summary.first.date | longdate }}; Elo peaked at {{ elo_summary.peak.elo | round | int }} on {{ elo_summary.peak.date | longdate }} and stood at {{ elo_summary.last.elo | round | int }} after the last game on {{ elo_summary.last.date | longdate }}.
+      Elo peaked at {{ elo_summary.peak.elo | round | int }} on {{ elo_summary.peak.date | longdate }} and was {{ elo_summary.last.elo | round | int }} after its latest game on {{ elo_summary.last.date | longdate }}.
       {%- endif %}
     </p>
   </header>
@@ -35,7 +35,7 @@
           </div>
         </div>
         <figure class="season-figure" aria-labelledby="season-fig-cap">
-          <figcaption id="season-fig-cap" class="figure-caption"><span class="caption-num">Figure 1.</span> <span class="season-fig-metric">GLORY</span> by season, on a scale from 0 to {{ ns.top | round | int }}.</figcaption>
+          <figcaption id="season-fig-cap" class="figure-caption"><span class="season-fig-metric">GLORY</span> by season (scale 0 to {{ ns.top | round | int }}).</figcaption>
           <ol class="season-chart" id="season-chart" data-metric="glory" style="--n: {{ series | length }}">
             {% for s in series %}
             <li class="season-col" data-league="{{ s.league }}"
@@ -50,7 +50,7 @@
         </figure>
 
         <figure class="register-figure" aria-labelledby="season-table-cap">
-          <figcaption id="season-table-cap" class="table-caption"><span class="caption-num">Table.</span> {{ teamname }}, season by season. Year rank is among major-league teams with at least five games.</figcaption>
+          <figcaption id="season-table-cap" class="table-caption">Year rank compares the team with major-league teams that played 5 or more games that year.</figcaption>
           <div class="table-scroll">
             <table class="register">
               <thead>
@@ -68,7 +68,7 @@
                   <td class="num year">{{ s.year }}</td>
                   <td>{{ league(s.league) }}</td>
                   <td class="num value">{{ '%.2f' | format(s.glory) if s.glory is not none else '—' }}</td>
-                  <td class="num muted">{% if s.year_rank %}{{ ordinal(s.year_rank) }} <span class="of">of {{ s.field }}</span>{% else %}<span title="Fewer than five games">n.q.</span>{% endif %}</td>
+                  <td class="num muted">{% if s.year_rank %}{{ ordinal(s.year_rank) }} <span class="of">of {{ s.field }}</span>{% else %}<span title="Fewer than 5 games">Unranked</span>{% endif %}</td>
                   <td class="num">{{ '%.2f' | format(s.glorb) if s.glorb is not none else '—' }}</td>
                 </tr>
                 {% endfor %}
@@ -78,17 +78,17 @@
         </figure>
       </section>
       {% else %}
-      <p class="section-note">GLORY and GLORB cover LCK, LPL, LEC and LCS, so this team appears in the Elo register only.</p>
+      <p class="section-note">GLORY and GLORB only cover LCK, LPL, LEC and LCS, so this team only has an Elo rating.</p>
       {% endif %}
 
       {% if elo_series %}
       <section class="elo" aria-labelledby="elo-heading">
         <div class="block-head">
           <h2 id="elo-heading">Elo after every game</h2>
-          <a class="more" href="../game_length_elo.html?search={{ teamname | urlencode }}">Compare on the Elo register</a>
+          <a class="more" href="../game_length_elo.html?search={{ teamname | urlencode }}">See in Elo rankings</a>
         </div>
         <figure class="elo-figure" data-league="{{ current_league or (leagues[0] if leagues else '') }}" aria-labelledby="elo-fig-cap">
-          <figcaption id="elo-fig-cap" class="figure-caption"><span class="caption-num">Figure {{ 2 if series else 1 }}.</span> Game-length Elo, {{ elo_summary.first.date | longdate }} to {{ elo_summary.last.date | longdate }}. The dashed rule marks the 1500 start.</figcaption>
+          <figcaption id="elo-fig-cap" class="figure-caption">Elo from {{ elo_summary.first.date | longdate }} to {{ elo_summary.last.date | longdate }}. The dashed line is the 1500 starting rating.</figcaption>
           <div class="elo-plot" id="elo-plot" tabindex="0" role="img"
                aria-label="{{ teamname }} Elo over {{ elo_summary.games }} games: started {{ elo_summary.first.elo | round | int }}, peak {{ elo_summary.peak.elo | round | int }} on {{ elo_summary.peak.date }}, low {{ elo_summary.low.elo | round | int }} on {{ elo_summary.low.date }}, latest {{ elo_summary.last.elo | round | int }}. Use the left and right arrow keys to read individual games."></div>
           <p class="elo-readout" id="elo-readout" aria-live="polite"></p>
@@ -104,13 +104,13 @@
     </div>
 
     <aside class="margin notes" aria-labelledby="entry-notes-heading">
-      <h2 id="entry-notes-heading" class="margin-head">Reading this entry</h2>
+      <h2 id="entry-notes-heading" class="margin-head">Key terms</h2>
       <ol class="notes-list">
-        <li><span class="note-mark" aria-hidden="true">1</span><a href="../glory.html">GLORY</a> scores a team-season against what won games that year, roughly 0 to 100. <a href="../glorb.html">GLORB</a> weights the same stats equally.</li>
-        <li><span class="note-mark" aria-hidden="true">2</span>Seasons with fewer than five games are scored but not ranked in the register (marked n.q.).</li>
-        <li><span class="note-mark" aria-hidden="true">3</span><a href="../game_length_elo.html">Elo</a> starts at 1500 and moves most on short, decisive results. It compares best within a region.</li>
+        <li><span class="note-mark" aria-hidden="true">1</span><a href="../glory.html">GLORY</a> scores a team-season on the stats that won games that year, roughly 0 to 100. <a href="../glorb.html">GLORB</a> uses the same stats, weighted equally.</li>
+        <li><span class="note-mark" aria-hidden="true">2</span>Seasons with fewer than 5 games get a score but no rank (Unranked).</li>
+        <li><span class="note-mark" aria-hidden="true">3</span><a href="../game_length_elo.html">Elo</a> starts at 1500 and moves most after short, decisive games. Compare ratings within a region.</li>
       </ol>
-      {% if series %}<p class="margin-note"><a href="../glory.html?search={{ teamname | urlencode }}">Find {{ teamname }} in the GLORY register</a></p>{% endif %}
+      {% if series %}<p class="margin-note"><a href="../glory.html?search={{ teamname | urlencode }}">Show {{ teamname }} in GLORY rankings</a></p>{% endif %}
     </aside>
   </div>
 

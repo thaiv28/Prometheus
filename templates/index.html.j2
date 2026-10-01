@@ -4,19 +4,18 @@
 {% block content %}
   <section class="title-page" aria-labelledby="title">
     <h1 id="title">Prometheus</h1>
-    <p class="title-sub">An abstract of League of Legends esports, in which every team-season since {{ first_year }} is scored against the meta of its own year.</p>
-    <p class="title-edition"><span>Abstract of {{ edition }}</span> <span>{{ '{:,}'.format(total_team_seasons) }} team-seasons</span> <span>{{ '{:,}'.format(total_elo_teams) }} teams rated</span> <span>Updated {{ last_update }}</span></p>
+    <p class="title-sub">League of Legends esports team rankings that compare teams across years and regions, {{ first_year }} to today.</p>
+    <p class="title-edition"><span>{{ '{:,}'.format(total_team_seasons) }} team-seasons</span> <span>{{ '{:,}'.format(total_elo_teams) }} teams rated</span> <span>Updated {{ last_update }}</span></p>
   </section>
 
   <div class="spread spread--home">
     <div class="spread-main">
       <div class="prose intro">
-        <p class="lede">Most esports stat sites print box scores. Prometheus fits a fresh model for every season, weighting gold and objective rates by how much they actually decided games that year. A {{ first_year }} team and a {{ last_year }} team are each judged by the game they played, so they can stand on the same page.</p>
-        <p>GLORY and GLORB cover the four major leagues, LCK, LPL, LEC and LCS. Game-Length Elo rates every team in every region on record.</p>
+        <p class="lede">For each year, Prometheus measures how much gold and objective stats decided wins, then scores teams on those stats. GLORY and GLORB rank team-seasons in the four major leagues (LCK, LPL, LEC, LCS). Elo rates every team in every region.</p>
       </div>
 
       <figure class="register-figure" aria-labelledby="t1-cap">
-        <figcaption id="t1-cap" class="table-caption"><span class="caption-num">Table 1.</span> The leaders. Highest GLORY team-seasons, {{ first_year }}–{{ last_year }}. <a href="glory.html">Full GLORY register</a></figcaption>
+        <figcaption id="t1-cap" class="table-caption">Top 15 GLORY team-seasons, {{ first_year }}–{{ last_year }}. <a href="glory.html">See all GLORY rankings</a></figcaption>
         <div class="table-scroll">
           <table class="register">
             <thead>
@@ -48,7 +47,7 @@
       </figure>
 
       <figure class="register-figure" aria-labelledby="t2-cap">
-        <figcaption id="t2-cap" class="table-caption"><span class="caption-num">Table 2.</span> Leader of each year. The highest GLORY team-season of the year, with the size of that year’s field.</figcaption>
+        <figcaption id="t2-cap" class="table-caption">Best GLORY team-season each year. Teams is how many ranked team-seasons that year had.</figcaption>
         <div class="table-scroll">
           <table class="register">
             <thead>
@@ -58,7 +57,7 @@
                 <th scope="col" class="wide-only">League</th>
                 <th scope="col" class="bar-col" aria-hidden="true"></th>
                 <th scope="col" class="num">GLORY</th>
-                <th scope="col" class="num phone-hide">Field</th>
+                <th scope="col" class="num phone-hide">Teams</th>
               </tr>
             </thead>
             <tbody>
@@ -79,17 +78,17 @@
     </div>
 
     <aside class="margin" aria-labelledby="contents-heading">
-      <h2 id="contents-heading" class="margin-head">Contents</h2>
+      <h2 id="contents-heading" class="margin-head">Rankings</h2>
       <ol class="contents">
         {% for m in metrics %}
         <li>
-          <a href="{{ m.key }}.html"><span class="contents-name">{{ m.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">{{ '{:,}'.format(entry_counts[m.key]) }}<span class="visually-hidden"> entries</span></span></a>
+          <a href="{{ m.key }}.html"><span class="contents-name">{{ m.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">{{ '{:,}'.format(entry_counts[m.key]) }}<span class="visually-hidden"> {{ 'teams' if m.key == 'game_length_elo' else 'team-seasons' }}</span></span></a>
           <p class="contents-full">{{ m.full_name }}</p>
           <p class="contents-desc">{{ m.description }}</p>
         </li>
         {% endfor %}
       </ol>
-      <p class="margin-note">Figures at right of each section count its entries: team-seasons for GLORY and GLORB, teams for Elo. Every team has its own page in the register.</p>
+      <p class="margin-note">Counts are team-seasons for GLORY and GLORB, and teams for Elo. Select any team name to see its history.</p>
     </aside>
   </div>
 {% endblock %}
