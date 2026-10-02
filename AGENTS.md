@@ -1,6 +1,29 @@
 # AGENTS.md
 
-Guidance for AI coding agents (and humans) working in this repo. Read this first, then the steering docs in `docs/steering/` for deeper context.
+Guidance for AI coding agents (and humans) working in this repo.
+
+## Read before work
+
+1. [Product](docs/steering/product.md) for the vision, audience, metric status and open questions.
+2. [Current state](docs/steering/current_state.md) for what works, known limits, and **future work**.
+3. [Tech](docs/steering/tech.md) before changing the data pipeline, tables, metric algorithms or tests.
+4. [Deployment](docs/steering/deployment.md) before changing CI, publishing, data backup or AWS settings.
+5. [UI](docs/steering/ui.md), `DESIGN.md` and `PRODUCT.md` before changing templates, CSS or JS. Use the impeccable skill for UI work.
+6. [Work log](docs/steering/work_log.md) to avoid repeating work and to record what you change.
+
+Code and the built DB are the source of truth. If a document disagrees with them, verify the behavior and correct the document in the same change. The user's latest instructions override these docs.
+
+## Required document updates
+
+- **Every substantive code or behavior change:** add a dated entry at the top of `docs/steering/work_log.md` with what changed, the checks actually run, and any remaining limit.
+- **Feature status, known limit, or future work changes:** update `docs/steering/current_state.md` in the same change. Suggestions for future work go in its **Future work** section, not only in chat. Remove items once they ship.
+- **Metric added, changed, or its status changed:** update the metrics table in `docs/steering/product.md`, the metric descriptions in `README.md`, and rerun `scripts/evaluate_metrics.py` (forecasts) and `scripts/evaluate_season_stats.py` (season stats).
+- **Data pipeline, tables, algorithms, or test layout change:** update `docs/steering/tech.md`.
+- **CI, publishing, schedules, secrets, or AWS resources change:** update `docs/steering/deployment.md`.
+- **Visual design or UI components change:** update `DESIGN.md` (and `docs/steering/ui.md` if the direction changes).
+- For documentation-only work, still add a short work-log entry and check the links and commands you touched. Do not add empty entries or claim a check you did not run.
+
+`uv run pytest -q` includes `tests/test_steering.py`, which fails when code changed (uncommitted) without a `work_log.md` change. It can't judge whether the other docs are accurate, so do that review yourself.
 
 ## What this is
 
@@ -17,6 +40,9 @@ bash scripts/setup_db.sh                # download raw CSVs (gdown), rebuild db/
 uv run python scripts/build_site.py     # render static site to output/
 uv run pytest -q                        # run tests (unit + integration + e2e; e2e needs a built DB)
 uv run prometheus rankings glory --league MAJOR --year 2024
+uv run python scripts/evaluate_metrics.py --out docs/metric_backtest.md   # backtest forecasts (~8s)
+uv run python scripts/evaluate_metrics.py --write-weights   # also refresh Form and GlorELO+ weights
+uv run python scripts/evaluate_season_stats.py --out docs/season_stats_report.md   # season-stat stability (~5s)
 python -m http.server -d output 8000    # preview the built site locally
 ```
 
@@ -30,14 +56,19 @@ python -m http.server -d output 8000    # preview the built site locally
 | `prometheus/types.py` | Enums (`Metric`, `League`, `ScoreCols`) and feature lists (`GLORY_FEATURES`, etc.). This is the single source of truth for column names. |
 | `prometheus/matches.py` | Raw-SQL reads that join a stats table/view with `matches` |
 | `prometheus/regression.py` | Fits the GLORY model (StandardScaler + LinearRegression, target = win) |
-| `prometheus/ranking.py` | `get_glory_ranking()` fits a model per year, scores team-season averages, and adds z-scores. `opponent_adjusted=True` gives GLORY+ (stats adjusted by opponent Elo) |
+| `prometheus/ranking.py` | `get_glory_ranking()` fits a model per year, scores team-season averages, and adds z-scores. `opponent_adjusted="record"` is the published GLORY (stats adjusted by each opponent's season Record); `"elo"` is the retired GLORY+ |
+| `prometheus/season.py` | Season stats built on results: Record (Bradley-Terry on game-length-weighted results, every league) and Luck (wins above earned) |
+| `prometheus/form.py` | Form (Predictive GLORY): opponent-adjusted, recency-weighted per-team stat states before every game, league-relative scores; weights in `form_weights.json` |
+| `prometheus/glorelo.py` | GlorELO+: Elo + Form within a league, Elo alone between leagues; ratings and head-to-head win probability; weights in `glorelo_weights.json` |
 | `prometheus/elo.py` | Game-length-weighted Elo: bootstrap and query helpers (WIP) |
 | `prometheus/win_prediction.py`, `players.py`, `aura.py` | Player metric (AURA) groundwork, still experimental |
 | `prometheus/main.py` | Typer CLI entry point (`prometheus` script) |
 | `scripts/NNN_*.sql\|py` | DB build steps. `setup_db.sh` runs them **in numeric order**. |
 | `scripts/build_site.py` | Static site generator |
-| `templates/*.html.j2` | Jinja2 templates: `base` (shell), `index`, `rankings` (every metric page, driven by a column config), `team`, `404`, and the `_marks` macros (league mark, signed number, ordinal) |
-| `site_static/{css,js,fonts}` | Hand-written CSS (`tokens.css` holds all colors and the `@font-face` rules, including league inks), vanilla JS (`rankings.js` for filtering, sorting and the distribution figure, `team.js` for the season switch and the SVG Elo chart), and the self-hosted Source Serif 4 font (OFL), all copied verbatim into `output/` |
+| `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtest: how well each forecast, from earlier games only, predicts winners (domestic and cross-region); fits the forecast weights. Results in `docs/metric_backtest.md` |
+| `scripts/evaluate_season_stats.py` | Season-stat report: split-half reliability, games to 0.5, and fit to same-season results. Results in `docs/season_stats_report.md` |
+| `templates/*.html.j2` | Jinja2 templates: `base` (shell), `index`, `rankings` (every metric page, driven by a column config), `team`, `sunset`, `redirect`, `404`, and the `_marks` macros (league mark, signed number, ordinal) |
+| `site_static/{css,js,fonts}` | Hand-written CSS (`tokens.css` holds all colors and the `@font-face` rules, including league inks), vanilla JS (`rankings.js` for filtering, sorting and the distribution figure, `team.js` for the GLORY/Record season switch and the SVG Elo chart, `forecast.js` for the GlorELO+ head-to-head box, `search.js` for the header team search), and the self-hosted Source Serif 4 font (OFL), all copied verbatim into `output/` |
 | `PRODUCT.md`, `.impeccable/surfaces/` | Product record and visual direction contract used by the impeccable design skill. Read them before UI work. |
 | `notebooks/` | Exploratory modeling. Not imported by the package. |
 | `tests/` | `test_*.py` unit tests (mocked), `integration/` (in-memory SQLite), `e2e/` (real DB) |
@@ -47,7 +78,11 @@ python -m http.server -d output 8000    # preview the built site locally
 - **Data access is raw SQL through `pd.read_sql(stmt, utils.get_engine())`.** The project recently moved away from the SQLAlchemy ORM (`d3b361a`). Don't reintroduce ORM queries. `players.py` is a leftover that still uses table reflection.
 - **Schema changes go in a new numbered script** (`scripts/005_*.sql`), or in `001_create_tables.sql` if the change belongs to the base schema. The DB is always rebuilt from scratch, so there are no migrations.
 - **Feature and column names live in `types.py`.** If you add a metric feature, add it there and to the SQL view that produces it (for example `003_create_glory.sql`).
-- **New metrics on the site** are registered in the `METRICS` / `ELO_METRICS` dicts in `build_site.py` (including the explainer copy) and given a column config (`METRIC_COLUMNS` / `ELO_COLUMNS`). `rankings.html.j2` and `rankings.js` render any metric from that config.
+- **Retiring a metric:** give its `METRICS` entry a `sunset` note (shown on its page) and a short `sunset_why` (shown on `sunset.html`). It leaves the header and home contents; the header's one "Sunset stats" link leads to the list. The page and data stay.
+- **Static assets:** reference CSS and JS through `asset('css/…')` in templates, which adds a content-hash query so browsers pick up changes.
+- **New metrics on the site** are registered in the `METRICS` (season stats) or `FORECASTS` / `ELO_METRICS` (forecasts) dicts in `build_site.py` (including the explainer copy) and given a column config (`METRIC_COLUMNS` / `GLORELO_COLUMNS` / `ELO_COLUMNS`) with `kind` set to `"season"` (team-seasons, 0–100) or `"rating"` (teams, Elo scale). `SECTIONS` groups them in the header and contents. `rankings.html.j2` and `rankings.js` render any metric from that config.
+- **Season stats vs forecasts.** Season stats (GLORY, Record, Luck) may use the whole season; forecasts (GlorELO+, Form, Elo) use only earlier games and must not take a season stat as input. Judge season stats with `evaluate_season_stats.py` and forecasts with `evaluate_metrics.py`.
+- **Forecast weights** live in `prometheus/form_weights.json` and `glorelo_weights.json` (package data), read by `form.py` and `glorelo.py`. After a metric or data change, rerun `evaluate_metrics.py --write-weights` and commit both. CI runs `--check-weights` and warns when a blend weight moves more than 10%.
 - `gamelength` is stored in **seconds**.
 - League names are normalized at ingest (`002_add_matches.py`): NA LCS / LTA N → `LCS`, EU LCS → `LEC`.
 - Formatting: `black`. Linting: `pylint`. Both are listed as (non-dev) dependencies.
@@ -56,7 +91,7 @@ python -m http.server -d output 8000    # preview the built site locally
 
 ## Gotchas
 
-- `get_glory_ranking()` refits one regression **per year** on every call. `build_site.py` calls it 5 times (GLORY/GLORB × qualified/all, plus GLORY+), and a build takes about 15 seconds.
+- `get_glory_ranking()` reads and fits one model **per year** on every call. Reading the games is the slow part, so `build_site.py` loads them once with `load_glory_games()` and passes `games=` to its calls (GLORY qualified/all, unadjusted GLORY, GLORB, Luck), and fits Record once and passes it as `record=`. A build takes about 10 seconds, about 3 of them the Form pass over every team-game.
 - International events (Worlds, MSI, ...) are ingested as their own leagues (`INTERNATIONAL_LEAGUES` in `types.py`). They are the only games linking regional Elo pools. Oracle's Elixir leaves `split` empty for them, so don't reintroduce a blanket `dropna` over `split` in `002_add_matches.py`.
 - `setup_db.sh` **deletes** `db/prometheus.db` before rebuilding.
 - Several modules end in `if __name__ == "__main__":` scratch blocks. They aren't real entry points.
@@ -64,7 +99,7 @@ python -m http.server -d output 8000    # preview the built site locally
 
 ## Before you finish a change
 
-1. `uv run pytest -q` passes.
-2. If you touched the DB scripts or metrics, rebuild with `setup_db.sh`, then `build_site.py`, and spot-check `output/`.
+1. `uv run pytest -q` passes (including the steering guard).
+2. If you touched the DB scripts or metrics, rebuild with `setup_db.sh`, then `build_site.py`, and spot-check `output/`. Rerun `evaluate_metrics.py` to check the change helps, with `--write-weights` to refresh the forecast weights, and `evaluate_season_stats.py` for season stats.
 3. If you touched templates, CSS, or JS, build the site and look at it in a browser at desktop and phone widths.
-4. Keep `README.md` metric descriptions in sync with any metric change.
+4. Inspect the diff and make the document updates above match the code. State anything you did not verify.

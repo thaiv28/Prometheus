@@ -15,8 +15,12 @@
   const config = readJSON("#page-config") || { columns: [] };
   const valueKey = config.valueKey;
   const valueCol = config.columns.find((c) => c.key === valueKey) || { digits: 2, label: "Score" };
-  const isElo = valueKey === "elo";
-  const noun = isElo ? "teams" : "team-seasons";
+  // Rating pages (Elo, GlorELO+) are on the Elo scale. They open on "now" rows (current
+  // ratings); picking seasons switches to team-season rows rated at the end of each year.
+  // The other pages list team-seasons scored 0-100.
+  const isRating = config.kind === "rating";
+  const showingNow = () => isRating && !state.years.size;
+  const noun = () => (showingNow() ? "teams" : "team-seasons");
   const metricName = (document.querySelector("h1")?.firstChild?.textContent || "").trim();
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const totalCols = config.columns.length + config.columns.filter((c) => c.bar).length;
@@ -25,7 +29,10 @@
   const allValues = rows.map((r) => Number(r[valueKey])).filter(Number.isFinite);
   const dataMin = Math.min(...allValues);
   const dataMax = Math.max(...allValues);
-  const domain = isElo
+  // A page may set its own domain (Luck is signed and small).
+  const domain = config.domain
+    ? config.domain
+    : isRating
     ? [Math.floor(dataMin / 100) * 100, Math.ceil(dataMax / 100) * 100]
     : [Math.min(0, Math.floor(dataMin / 10) * 10), Math.max(100, Math.ceil(dataMax / 10) * 10)];
   const scale = (v) => Math.max(0, Math.min(100, ((v - domain[0]) / (domain[1] - domain[0])) * 100));
@@ -36,10 +43,10 @@
   const countEl = $(".count");
   const descEl = $("#table-desc");
   const clearBtn = $(".clear-filters");
-  const searchInput = $("#team-search");
+  const searchInput = $("#filter-search");
   const distEl = $("#dist");
   const numberFormat = new Intl.NumberFormat("en-US");
-  const rowKey = (r) => `${r.slug}|${isElo ? r.league : r.year}`;
+  const rowKey = (r) => `${r.slug}|${r.now ? "now" : r.year}|${r.league}`;
 
   function formatNumber(v, col) {
     const n = Number(v);
@@ -72,10 +79,19 @@
   }
 
   // ---- Data ------------------------------------------------------------
+  // The rows the year filter selects: every row, or for rating pages either the
+  // "now" rows or the chosen seasons' rows. "Now" shows active teams, but a search
+  // reaches every team's current rating (the header search falls back to here without JS).
+  function pool() {
+    if (!isRating) return rows.filter((r) => !state.years.size || state.years.has(String(r.year)));
+    if (!showingNow()) return rows.filter((r) => !r.now && state.years.has(String(r.year)));
+    const searching = state.search.trim() !== "";
+    return rows.filter((r) => r.now && (r.active || searching));
+  }
+
   function filtered() {
     const term = state.search.trim().toLowerCase();
-    const out = rows.filter((r) =>
-      (!state.years.size || state.years.has(String(r.year))) &&
+    const out = pool().filter((r) =>
       (!state.leagues.size || state.leagues.has(String(r.league))) &&
       (!term || String(r.teamname).toLowerCase().includes(term))
     );
@@ -102,7 +118,7 @@
 
   // On narrow screens the league and year columns hide; they reappear under the team name.
   function teamMeta(r) {
-    return isElo
+    return isRating && r.now
       ? `<span class="team-meta">${leagueMark(r.league, true)}</span>`
       : `<span class="team-meta">${leagueMark(r.league, false)}<span>${esc(r.year)}</span></span>`;
   }
@@ -131,7 +147,7 @@
 
   function renderTable(list) {
     if (!list.length) {
-      tbody.innerHTML = `<tr><td class="empty" colspan="${totalCols}">No ${noun} match these filters. <button type="button" class="clear-filters" data-clear>Clear filters</button></td></tr>`;
+      tbody.innerHTML = `<tr><td class="empty" colspan="${totalCols}">No ${noun()} match these filters. <button type="button" class="clear-filters" data-clear>Clear filters</button></td></tr>`;
       return;
     }
     tbody.innerHTML = sorted(list)
@@ -220,24 +236,36 @@
       svg.appendChild(el("text", { class: "axis-label", x: tx, y: h - 2, "text-anchor": anchor }, String(Math.round(t * 10) / 10)));
     }
 
+    let medianLabel = null;
     if (vals.length) {
       const sortedVals = vals.slice().sort((a, b) => a - b);
       const mid = sortedVals.length / 2;
       const median = sortedVals.length % 2 ? sortedVals[Math.floor(mid)] : (sortedVals[mid - 1] + sortedVals[mid]) / 2;
       const mx = x(median);
       svg.appendChild(el("line", { class: "median", x1: mx, x2: mx, y1: top - 4, y2: base }));
-      const label = `median ${median.toFixed(isElo ? 0 : 1)}`;
-      svg.appendChild(el("text", { class: "median-label", x: mx + (mx > w - 110 ? -5 : 5), y: top - 5, "text-anchor": mx > w - 110 ? "end" : "start" }, label));
+      const label = `median ${median.toFixed(isRating ? 0 : 1)}`;
+      medianLabel = el("text", { class: "median-label", x: mx + (mx > w - 110 ? -5 : 5), y: top - 5, "text-anchor": mx > w - 110 ? "end" : "start" }, label);
+      svg.appendChild(medianLabel);
     }
 
+    // The traced label goes in the band above the tallest column, so the columns
+    // never cover it; it is drawn last and knocked out of the median line.
     const t = distState.traced;
+    let traceLabel = null;
     if (t) {
       const tx = x(t.value);
       svg.appendChild(el("line", { class: "trace", x1: tx, x2: tx, y1: top - 6, y2: base + 4 }));
       const right = tx > w * 0.6;
-      svg.appendChild(el("text", { class: "trace-label", x: tx + (right ? -6 : 6), y: base - 6, "text-anchor": right ? "end" : "start" }, t.label));
+      traceLabel = el("text", { class: "trace-label", x: tx + (right ? -6 : 6), y: top - 5, "text-anchor": right ? "end" : "start" }, t.label);
+      svg.appendChild(traceLabel);
     }
     distEl.replaceChildren(svg);
+    // Both labels share the top band: while a row is traced, the median keeps its
+    // line but drops its label if the two would collide.
+    if (traceLabel && medianLabel) {
+      const a = traceLabel.getBBox(), b = medianLabel.getBBox();
+      if (a.x < b.x + b.width + 6 && b.x < a.x + a.width + 6) medianLabel.remove();
+    }
   }
 
   function trace(tr) {
@@ -263,9 +291,10 @@
   function describeView() {
     const leagues = [...state.leagues].sort();
     const leaguePart = !leagues.length ? "all" : leagues.length > 4 ? `${leagues.length} leagues’` : leagues.join(", ");
-    let s = `${metricName}, ${leaguePart} ${noun}`;
+    let s = `${metricName}, ${leaguePart} ${noun()}`;
     const years = describeYears(state.years);
-    if (years) s += isElo ? ` last active in ${years}` : `, ${years}`;
+    if (showingNow() && !state.search.trim()) s += " playing now";
+    else if (years) s += isRating ? `, ${years}, rated at season’s end` : `, ${years}`;
     if (state.search.trim()) s += `, names containing “${state.search.trim()}”`;
     return s;
   }
@@ -284,9 +313,11 @@
     });
     clearBtn.hidden = !(state.years.size || state.leagues.size || state.search);
     descEl.textContent = describeView();
-    countEl.textContent = count === rows.length
-      ? `${numberFormat.format(rows.length)} shown.`
-      : `${numberFormat.format(count)} of ${numberFormat.format(rows.length)} shown.`;
+    // Count against everything the year filter could show, so seasons don't read as a subset of "now".
+    const total = isRating ? pool().length : rows.length;
+    countEl.textContent = count === total
+      ? `${numberFormat.format(total)} shown.`
+      : `${numberFormat.format(count)} of ${numberFormat.format(total)} shown.`;
   }
 
   let started = false;
@@ -322,7 +353,7 @@
   document.addEventListener("click", (e) => {
     const shortcut = e.target.closest(".picker-shortcut");
     if (shortcut) {
-      state.leagues = new Set(shortcut.dataset.select.split(","));
+      state[shortcut.dataset.filter || "leagues"] = new Set(shortcut.dataset.select.split(",").filter(Boolean));
       update();
       return;
     }
@@ -368,7 +399,6 @@
   window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawDist, 120); });
 
   if (searchInput) {
-    searchInput.form.addEventListener("submit", (e) => e.preventDefault());
     searchInput.addEventListener("input", () => { state.search = searchInput.value; update(); });
   }
 

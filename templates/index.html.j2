@@ -11,7 +11,7 @@
   <div class="spread spread--home">
     <div class="spread-main">
       <div class="prose intro">
-        <p class="lede">For each year, Prometheus measures how much gold and objective stats decided wins, then scores teams on those stats. GLORY and GLORB rank team-seasons in the four major leagues (LCK, LPL, LEC, LCS). Elo rates every team in every region.</p>
+        <p class="lede">Prometheus keeps two kinds of numbers. Season stats describe a finished season with hindsight: GLORY measures how well a team played, Record what it achieved against its schedule, and Luck the gap between the two. Forecasts (GlorELO+, Form and Elo) estimate who wins the next game from earlier games only, and are tested against every game since 2014.</p>
       </div>
 
       <figure class="register-figure" aria-labelledby="t1-cap">
@@ -79,16 +79,20 @@
 
     <aside class="margin" aria-labelledby="contents-heading">
       <h2 id="contents-heading" class="margin-head">Rankings</h2>
+      {% for section in sections %}
+      {% set forecast = section.name == 'Forecasts' %}
+      <h3 class="contents-section">{{ section.name }}</h3>
       <ol class="contents">
-        {% for m in metrics %}
+        {% for m in section.metrics %}
         <li>
-          <a href="{{ m.key }}.html"><span class="contents-name">{{ m.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">{{ '{:,}'.format(entry_counts[m.key]) }}<span class="visually-hidden"> {{ 'teams' if m.key == 'game_length_elo' else 'team-seasons' }}</span></span></a>
+          <a href="{{ m.key }}.html"><span class="contents-name">{{ m.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">{{ '{:,}'.format(entry_counts[m.key]) }}<span class="visually-hidden"> {{ 'teams' if forecast else 'team-seasons' }}</span></span></a>
           <p class="contents-full">{{ m.full_name }}</p>
           <p class="contents-desc">{{ m.description }}</p>
         </li>
         {% endfor %}
       </ol>
-      <p class="margin-note">Counts are team-seasons for GLORY and GLORB, and teams for Elo. Select any team name to see its history.</p>
+      {% endfor %}
+      <p class="margin-note">Counts are team-seasons for season stats and teams for forecasts. Select any team name to see its history. Retired metrics are listed under <a href="sunset.html">Sunset stats</a>.</p>
     </aside>
   </div>
 {% endblock %}

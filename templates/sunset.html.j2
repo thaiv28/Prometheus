@@ -1,0 +1,23 @@
+{% extends 'base.html.j2' %}
+{% block title %}Sunset stats · Prometheus{% endblock %}
+{% block description %}Metrics Prometheus no longer develops, and why. Their pages stay up for old links.{% endblock %}
+{% block canonical_path %}sunset.html{% endblock %}
+{% block content %}
+  <div class="spread">
+    <div class="spread-main">
+      <header class="section-head">
+        <h1>Sunset stats</h1>
+        <p class="lede">Metrics that are no longer developed, or that were folded into another. Their old links keep working: a retired page is still rebuilt with the daily data, and a folded one leads to its replacement.</p>
+      </header>
+      <ol class="contents contents--sunset">
+        {% for m in metrics %}
+        <li>
+          <a href="{{ m.href or (m.key ~ '.html') }}"><span class="contents-name">{{ m.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">{{ m.link_text or 'See the page' }}</span></a>
+          <p class="contents-full">{{ m.full_name }}</p>
+          <p class="contents-desc"><span class="sunset-title">Why sunset.</span> {{ m.sunset_why }}</p>
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+  </div>
+{% endblock %}

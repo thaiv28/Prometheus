@@ -50,7 +50,7 @@ html { scrollbar-color: var(--hairline) var(--paper); }
   padding: 18px 0 10px;
   display: flex;
   align-items: baseline;
-  gap: 8px 32px;
+  gap: 8px 28px;
   flex-wrap: wrap;
   font-size: 1.0625rem;
   border-bottom: 3px double var(--rule);
@@ -61,15 +61,18 @@ html { scrollbar-color: var(--hairline) var(--paper); }
 .wordmark:hover { color: var(--ink); }
 .wordmark-mark { width: 13px; height: 16px; fill: var(--spot); align-self: center; transform: translateY(-1px); }
 .wordmark-text { font-weight: 600; letter-spacing: 0.14em; font-size: 1.125rem; }
-.sections { display: flex; gap: 4px 22px; flex-wrap: wrap; }
+.sections { display: flex; gap: 4px 18px; flex-wrap: wrap; }
 .sections a { text-decoration: none; color: var(--ink-2); padding: 2px 0; }
 .sections a:hover { color: var(--spot); }
-.sections a[aria-current="page"] { color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--spot); text-decoration-thickness: 2px; text-underline-offset: 0.3em; }
+.nav-group { display: inline-flex; align-items: baseline; gap: 4px 18px; flex-wrap: wrap; }
+.nav-group + .nav-group { padding-left: 18px; border-left: var(--hair) solid var(--hairline); }
+.nav-group-name { font-variant-caps: normal; letter-spacing: 0; font-style: italic; color: var(--ink-3); font-size: 0.9375rem; }
+.sections a[aria-current] { color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--spot); text-decoration-thickness: 2px; text-underline-offset: 0.3em; }
 
-.index-search { margin-left: auto; display: flex; align-items: baseline; gap: 8px; }
+.index-search { margin-left: auto; display: flex; align-items: baseline; gap: 8px; position: relative; }
 .index-search label { color: var(--ink-3); }
 .index-search input {
-  width: 12.5rem;
+  width: 10rem;
   border: 0;
   border-bottom: var(--hair) solid var(--ink);
   background: transparent;
@@ -83,6 +86,31 @@ html { scrollbar-color: var(--hairline) var(--paper); }
 }
 .index-search input:focus { outline: none; border-bottom: 2px solid var(--spot); margin-bottom: -1px; }
 .index-search input::-webkit-search-cancel-button { filter: grayscale(1); }
+/* Suggestions: a printed slip under the field, like an open picker. */
+.index-search-results {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  width: max(100%, 20rem);
+  max-width: calc(100vw - 2 * var(--gutter));
+  background: var(--paper);
+  border: var(--hair) solid var(--ink);
+  border-top: 2px solid var(--rule);
+  padding: 4px 0;
+  font-variant-caps: normal;
+  letter-spacing: 0;
+  font-size: 1rem;
+}
+.index-search-results a {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 5px 12px; color: var(--ink); text-decoration: none;
+}
+.index-search-results [aria-selected="true"] a, .index-search-results a:hover { background: var(--paper-wash); }
+.index-search-results [aria-selected="true"] .index-search-name { color: var(--spot); }
+.index-search-name { font-weight: 500; }
+.index-search-meta { color: var(--ink-3); font-size: var(--fs-small); font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
+.index-search-empty { padding: 5px 12px; font-style: italic; color: var(--ink-2); font-size: var(--fs-small); }
 
 /* ---- Page and spread ------------------------------------------------ */
 .page { max-width: 82rem; margin: 0 auto; padding: 36px var(--gutter) 72px; }
@@ -114,6 +142,19 @@ html { scrollbar-color: var(--hairline) var(--paper); }
 }
 .full-name { display: block; font-size: 1.1875rem; font-style: italic; letter-spacing: 0; color: var(--ink-2); margin-top: 8px; line-height: 1.35; }
 .lede { margin-top: 14px; font-size: 1.1875rem; line-height: 1.5; max-width: 40rem; color: var(--ink); }
+/* An editor's note for a retired metric: set between hairlines, like an erratum slip. */
+.sunset-note {
+  margin: -8px 0 30px;
+  max-width: 40rem;
+  padding: 9px 0 10px;
+  border-top: var(--hair) solid var(--hairline);
+  border-bottom: var(--hair) solid var(--hairline);
+  font-size: var(--fs-caption);
+  line-height: 1.5;
+  font-style: italic;
+  color: var(--ink-2);
+}
+.sunset-title { font-style: normal; font-weight: 600; font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--ink); }
 .prose p + p { margin-top: 0.75em; text-indent: 1.5em; }
 .prose { max-width: 40rem; }
 .note-ref { font-size: 0.68em; vertical-align: super; line-height: 0; margin-left: 1px; text-decoration: none; color: var(--spot); font-variant-numeric: lining-nums; font-weight: 600; padding: 0 2px; }
@@ -140,6 +181,8 @@ html { scrollbar-color: var(--hairline) var(--paper); }
 .intro { margin-bottom: 40px; }
 
 /* ---- Contents (dot leaders) ----------------------------------------- */
+.contents-section { font-size: var(--fs-small); font-style: italic; color: var(--ink-3); margin: 22px 0 8px; }
+.contents-section:first-of-type { margin-top: 4px; }
 .contents li + li { margin-top: 18px; }
 .contents a { display: flex; align-items: baseline; gap: 6px; text-decoration: none; color: var(--ink); }
 .contents-name { font-size: 1.25rem; font-weight: 600; letter-spacing: 0.02em; }
@@ -150,6 +193,7 @@ html { scrollbar-color: var(--hairline) var(--paper); }
 .contents-full { font-style: italic; color: var(--ink-2); margin-top: 1px; }
 .contents-desc { margin-top: 4px; color: var(--ink-2); }
 .contents--errata { max-width: 30rem; margin-top: 8px; }
+.contents--sunset { max-width: 40rem; margin-top: 8px; }
 
 /* ---- Notes (marginalia) --------------------------------------------- */
 .notes-list li { position: relative; padding-left: 1.4em; }
@@ -200,5 +244,9 @@ html { scrollbar-color: var(--hairline) var(--paper); }
   .title-edition, .entry-facts { gap: 4px 18px; }
   .title-edition span + span::before, .entry-facts > span + span::before { content: none; }
   .sections a { padding: 8px 0; }
+  /* Each group gets its own line, so the divider between groups is not needed. */
+  .sections { flex-direction: column; gap: 0; }
+  .nav-group { gap: 0 16px; }
+  .nav-group + .nav-group { padding-left: 0; border-left: 0; }
   .index-search input { padding: 8px 0 4px; }
 }

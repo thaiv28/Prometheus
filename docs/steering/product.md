@@ -13,13 +13,21 @@ Prometheus is a public, browsable stat site for League of Legends esports, simil
 
 | Metric | Status | What it measures |
 |---|---|---|
-| **GLORY** (Global League Offensive Rankings Yield) | Shipped | Per-season regression weights on gold/objective rates, applied to team-season averages and scaled to roughly 0–100 |
-| **GLORB** (Baseline) | Shipped | Same features as GLORY with equal weights. It's a sanity baseline for GLORY. |
-| **Era Z / League Z** | Shipped | Z-scores of a team's score within its year (all major leagues) and within its league |
-| **Game-length Elo** | In progress (uncommitted) | Elo where fast wins move ratings more. Meant to address strength-of-schedule and cross-region bias. |
+| **GLORY** (Global League Offensive Rankings Yield) | Shipped (season stat) | How well a team played: per-season regression weights on gold/objective rates, applied to team-season averages of stats adjusted for each opponent's full-season Record, scaled to roughly 0–100 |
+| **Era Z / League Z** | Shipped | Z-scores of a team's GLORY within its year (all major leagues) and within its league |
+| **Record** | Shipped (season stat) | What a team achieved: schedule-adjusted, game-length-weighted results over the season, as the chance to beat an average major-league team |
+| **Luck** | Shipped (season stat) | Wins above what a team's play earned (GLORY's per-game model, calibrated per season) |
+| **Game-length Elo** | Shipped (forecast) | Elo for every team in every region, where fast wins move ratings more. International games move a shared league offset, so a region's teams rise or fall together. |
+| **Form** (Predictive GLORY) | Shipped (forecast) | Recent, opponent-adjusted gold/objective stats weighted to predict the next game, relative to the team's league, in Elo points |
+| **GlorELO+** | Shipped (forecast) | Elo + Form within a league, Elo alone between leagues, with a head-to-head win probability |
+| **GLORY+** | Folded into GLORY | GLORY adjusted by opponents' pre-game Elo; `glory_plus.html` redirects to GLORY |
+| **GLORY (unadjusted)** | Sunset | The original GLORY with no opponent adjustment; page kept on Sunset stats |
+| **GLORB** (Baseline) | Sunset | Same features as GLORY with equal weights. On its own it predicts no better than win % so far. Its page stays up under Sunset stats. |
 | **AURA** (Attributable Utility via Role Analytics) | Research | Player win-probability attribution using 10/15/20/25-minute snapshots (see README) |
 
-Scope: the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present. Data comes from Oracle's Elixir and refreshes daily via CI.
+Season stats (GLORY, Record, Luck) describe a team-season with hindsight and are judged on stability and fit to that season's results (`scripts/evaluate_season_stats.py`). Forecasts (GlorELO+, Form, Elo) predict the next game from earlier games only and are judged by the backtest (`scripts/evaluate_metrics.py`). No forecast takes a season stat as input.
+
+Scope: season stats and GlorELO+ cover the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present; Elo and Form cover every region. Data comes from Oracle's Elixir and refreshes daily via CI.
 
 ## Product principles
 
@@ -30,6 +38,5 @@ Scope: the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present. Data comes fro
 
 ## Known open questions
 
-- How to weight matches by opponent strength (Elo) inside GLORY.
-- Whether GLORY should use logistic rather than linear regression (the README says logistic; the code uses `LinearRegression`).
+- Whether GLORY should use logistic rather than linear regression (the README says logistic; the code uses `LinearRegression`). Form already uses logistic weights.
 - Player-level metric design (AURA). The `player_stats` schema exists, and `win_prediction.py` trains an XGBoost win-probability model.

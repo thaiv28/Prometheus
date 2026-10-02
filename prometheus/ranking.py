@@ -1,14 +1,14 @@
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 
-from prometheus.regression import _fit_glory_model
+from prometheus.regression import fit_glory_pipeline
 from prometheus.matches import (
-    get_team_averages_frame,
     get_available_years,
     get_matches_frame,
     team_season_averages,
 )
 from prometheus.elo import get_pregame_elos
+from prometheus.season import get_record, load_season_games
 from prometheus.types import GLORY_FEATURES, ALL_MAJOR_LEAGUES, ScoreCols
 from prometheus import utils
 
@@ -24,6 +24,9 @@ def get_glory_ranking(
     sort_by="score",
     minimum_matches=0,
     opponent_adjusted=False,
+    before=None,
+    games=None,
+    record=None,
 ):
     """Compute GLORY (or GLORB baseline) team rankings.
 
@@ -49,10 +52,21 @@ def get_glory_ranking(
         Additional columns (besides teamname/score/year/league) to keep in output.
     minimum_matches : int, default 0
         Minimum number of matches required for a team-season to be included.
-    opponent_adjusted : bool, default False
-        If True (GLORY+), each game's stats are first adjusted to what they would
-        have been against an average major-league opponent that year, using the
-        opponent's pre-game Elo. See `adjust_for_opponent_elo`.
+    opponent_adjusted : {False, "record", "elo", True}, default False
+        Adjust each game's stats to what they would have been against an average
+        major-league opponent that year before averaging. "record" (GLORY on the
+        site) measures opponents by their full-season Record, a hindsight season stat
+        (see `adjust_for_opponent_record`). "elo" (or True) uses the opponent's
+        pre-game Elo, the retired GLORY+ (see `adjust_for_opponent_elo`).
+    before : str | datetime.date | None, optional
+        If set, only games before this date are used, both to fit the yearly model and
+        to average each team-season. Gives the metric as it stood on that date.
+    games : dict[int, pandas.DataFrame] | None, optional
+        Each year's major-league games from `load_glory_games` (same `before`), so
+        callers that rank several ways (GLORY, GLORB, GLORY+) read each year once.
+    record : pandas.DataFrame | None, optional
+        `season.get_record` output (teamid, year, rating) for the "record"
+        adjustment, computed with the same `before`. Fit here when None.
 
     Returns
     -------
@@ -79,26 +93,24 @@ def get_glory_ranking(
     # we have to fit the glory model separately for each year
     for yr in years:
         # we always want to model off all major leagues, then filter down to requested league later
-        pipeline, _, _ = _fit_glory_model(
-            features, leagues=ALL_MAJOR_LEAGUES, years=[yr]
-        )
+        year_games = games[yr] if games is not None else _major_league_games(yr, before)
+        pipeline = fit_glory_pipeline(year_games, features)
 
-        if opponent_adjusted:
+        if opponent_adjusted == "record":
+            if record is None:
+                record = get_record(load_season_games(years=years, before=before))
+            year_games = adjust_for_opponent_record(year_games, features, record)
+        elif opponent_adjusted:
             # Adjustment coefficients come from every major-league game that year.
-            games = get_matches_frame(
+            year_games = adjust_for_opponent_elo(year_games, features)
+        elif not _only_major_leagues(league):
+            year_games = get_matches_frame(
                 "match_glory_stats",
-                filters={"years": [yr], "leagues": ALL_MAJOR_LEAGUES},
+                filters={"years": [yr], "leagues": league, "before": before},
             )
-            games = adjust_for_opponent_elo(games, features)
-            averages = team_season_averages(
-                _filter_leagues(games, league), minimum_matches
-            )
-        else:
-            averages = get_team_averages_frame(
-                "match_glory_stats",
-                minimum_matches=minimum_matches,
-                filters={"years": [yr], "leagues": league},
-            )
+        averages = team_season_averages(
+            _filter_leagues(year_games, league), minimum_matches
+        )
 
         if not baseline:
             scores = pipeline.predict(averages[features])
@@ -161,6 +173,69 @@ def get_glory_ranking(
         [sort_by, "year"], ascending=[False, True], kind="mergesort"
     ).reset_index(drop=True)
     return combined_df
+
+
+def load_glory_games(years=None, before=None):
+    """Read each year's major-league games once, for reuse across `get_glory_ranking` calls.
+
+    Reading dominates a ranking's cost (fitting a year's model takes milliseconds).
+
+    Returns:
+        dict mapping year to its games.
+    """
+    if years is None:
+        years = get_available_years(ALL_MAJOR_LEAGUES)
+    return {yr: _major_league_games(yr, before) for yr in years}
+
+
+def _major_league_games(year, before):
+    """Every major-league game in a year (optionally before a date), with GLORY stats."""
+    return get_matches_frame(
+        "match_glory_stats",
+        filters={"years": [year], "leagues": ALL_MAJOR_LEAGUES, "before": before},
+    )
+
+
+def _only_major_leagues(leagues):
+    """True when a league filter keeps only major leagues (so major-league games suffice)."""
+    if leagues is None:
+        return False
+    if not isinstance(leagues, (list, tuple, set)):
+        leagues = [leagues]
+    majors = {l.value for l in ALL_MAJOR_LEAGUES}
+    return {getattr(l, "value", l) for l in leagues} <= majors
+
+
+def adjust_for_opponent_record(games, features, record):
+    """Adjust per-game stats for the opponent's full-season strength.
+
+    Like `adjust_for_opponent_elo`, but strength is each team's Record rating for
+    the whole season (hindsight), so a season stat depends only on that season's
+    games and not on a forecast. Fits `feature ~ own_rating + opponent_rating`
+    over the given games, then removes the opponent term relative to the average
+    opponent.
+
+    Args:
+        games: Per-game rows (one per team per game, both teams of each game).
+        features: Feature columns to adjust.
+        record: `season.get_record` output with teamid, year and rating.
+    Returns:
+        New frame with adjusted features and `rating` / `opp_rating` columns. Games
+        whose opponent row or rating is missing are dropped.
+    """
+    ratings = record[["teamid", "year", "rating"]].drop_duplicates(["teamid", "year"])
+    games = games.merge(ratings, on=["teamid", "year"])
+    opp = games[["gameid", "teamid", "rating"]].rename(
+        columns={"teamid": "opp_teamid", "rating": "opp_rating"}
+    )
+    games = games.merge(opp, on="gameid")
+    games = games[games["opp_teamid"] != games["teamid"]].drop(columns="opp_teamid")
+    strength = games[["rating", "opp_rating"]]
+    opp_offset = games["opp_rating"] - games["opp_rating"].mean()
+    for feature in features:
+        opp_coef = LinearRegression().fit(strength, games[feature]).coef_[1]
+        games[feature] = games[feature] - opp_coef * opp_offset
+    return games.reset_index(drop=True)
 
 
 def adjust_for_opponent_elo(games, features, method="game_length"):

@@ -24,12 +24,12 @@ Most LoL stat sites dump per-game box scores. Prometheus instead fits **per-seas
 
 - Fully static site. It's rebuilt daily by GitHub Actions from the latest Oracle's Elixir CSVs and deployed to prometheus.thaiv.dev (S3 + CloudFront on the thaiv.dev platform).
 - All interaction is client-side over JSON embedded in each page: filtering by year and league, team search, sorting, and URL-shareable filter state.
-- Pages: home, one rankings page per metric (GLORY, GLORB, Game-Length Elo), and one page per team with history charts.
+- Pages: home, one rankings page per metric, grouped as season stats (GLORY, Record, Luck), forecasts (GlorELO+, Form, Game-Length Elo) and a Sunset stats page listing retired metrics (GLORB, unadjusted GLORY, GLORY+ folded into GLORY), and one page per team with history charts. A header search jumps to any team's page.
 - Visitors arrive on desktop and on phones (for example, links shared in Discord or Reddit threads), so wide tables must work on small screens.
 
 ## Capabilities and Constraints
 
-- **Metrics:** GLORY (regression-weighted team score, roughly 0–100), GLORB (equal-weight baseline), Era Z and League Z (z-scores), and Game-Length Elo (shorter wins move ratings more). AURA (a player metric) is still research and not on the site.
+- **Metrics:** GLORY (regression-weighted, opponent-adjusted team score, roughly 0–100, with Era Z and League Z), Record (schedule-adjusted results), Luck (wins above what play earned), Game-Length Elo (shorter wins move ratings more), Form (Predictive GLORY: recent stats against the team's league), and GlorELO+ (Elo plus Form, with a head-to-head win probability); sunset: GLORB, unadjusted GLORY, GLORY+. Season stats describe a team-season with hindsight and are judged by stability (`scripts/evaluate_season_stats.py`); forecasts predict the next game from earlier games only and are judged by the backtest (`scripts/evaluate_metrics.py`). AURA (a player metric) is still research and not on the site.
 - **Coverage:** the site should cover **all regions** present in the data. The Elo page already does. GLORY and GLORB are currently fit and shown for the four major leagues (LCK, LPL, LEC, LCS) only. *Open decision:* how or whether to extend GLORY and GLORB to all regions.
 - Data spans 2014 to the present.
 - There's no backend, no accounts, and no user-generated content. Anything dynamic is precomputed at build time.

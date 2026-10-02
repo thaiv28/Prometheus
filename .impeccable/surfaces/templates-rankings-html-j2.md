@@ -7,7 +7,7 @@ related_targets: ["templates/base.html.j2","templates/index.html.j2","templates/
 
 # Surface brief: Prometheus site (all pages)
 
-Scope: the whole static site: home, the three rankings pages (GLORY, GLORB, Game-Length Elo), one page per team, and 404. Visitor mode: **Operate** (rankings, team pages) with a **Read** home and explainers. Fans look up, filter, sort and share team rankings; the home page orients them and shows the all-time leaders.
+Scope: the whole static site: home, the rankings pages, grouped as season stats (GLORY, Record, Luck) and forecasts (GlorELO+ with its head-to-head box, Form, Game-Length Elo), a Sunset stats page for retired metrics (GLORB, unadjusted GLORY, GLORY+), one page per team, and 404. Visitor mode: **Operate** (rankings, team pages) with a **Read** home and explainers. Fans look up, filter, sort and share team rankings; the home page orients them and shows the all-time leaders.
 
 Audience/job: LoL esports fans settling cross-era and cross-region arguments, on desktops and on phones from Discord/Reddit links. Task: find a team-season, see its rank and why, share the filtered view by URL. Secondary: portfolio readers judging the methodology.
 

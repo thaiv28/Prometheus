@@ -10,9 +10,10 @@
       </header>
       <ol class="contents contents--errata">
         <li><a href="{{ root_path }}index.html"><span class="contents-name">Home</span><span class="leader" aria-hidden="true"></span><span class="contents-count">Overview</span></a></li>
-        {% for item in nav %}
-        <li><a href="{{ root_path }}{{ item.key }}.html"><span class="contents-name">{{ item.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">Rankings</span></a></li>
-        {% endfor %}
+        {% for group in nav %}{% for item in group.links %}
+        <li><a href="{{ root_path }}{{ item.key }}.html"><span class="contents-name">{{ item.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">{{ group.name }}</span></a></li>
+        {% endfor %}{% endfor %}
+        <li><a href="{{ root_path }}sunset.html"><span class="contents-name">Sunset stats</span><span class="leader" aria-hidden="true"></span><span class="contents-count">Retired metrics</span></a></li>
       </ol>
     </div>
   </div>
