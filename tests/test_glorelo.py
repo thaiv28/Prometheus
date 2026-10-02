@@ -44,3 +44,24 @@ def test_rating_gap_matches_the_fitted_log_odds():
     log_odds = GLORY_PLUS_WEIGHT * (80 - 60) + ELO_WEIGHT * (1700 - 1600)
     p = win_probability(df.loc["A", "glorelo"], df.loc["B", "glorelo"])
     assert p == pytest.approx(1 / (1 + math.exp(-log_odds)))
+
+
+def test_weights_round_trip_and_changes(tmp_path):
+    from prometheus.glorelo import load_weights, save_weights, weight_changes
+
+    path = tmp_path / "weights.json"
+    save_weights({"glory_plus_weight": 0.0100049, "elo_weight": 0.006}, path)
+    weights = load_weights(path)
+    assert weights == {"glory_plus_weight": 0.01, "elo_weight": 0.006}
+
+    changes = weight_changes(weights, {"glory_plus_weight": 0.011, "elo_weight": 0.0057})
+    assert changes["glory_plus_weight"] == pytest.approx(0.10)
+    assert changes["elo_weight"] == pytest.approx(0.05)
+
+
+def test_tracked_weights_are_loaded():
+    from prometheus.glorelo import ELO_WEIGHT, GLORY_PLUS_WEIGHT, load_weights
+
+    weights = load_weights()
+    assert GLORY_PLUS_WEIGHT == weights["glory_plus_weight"] > 0
+    assert ELO_WEIGHT == weights["elo_weight"] > 0

@@ -11,7 +11,7 @@ Last reviewed: 2026-10-01. This is a code baseline. Read `db/prometheus.db` or t
   - GLORY+: GLORY with every game's stats adjusted for the opponent's pre-game Elo.
 - **Forecasts** (predict the next game):
   - Game-length Elo for every team in every region.
-  - GlorELO+: this season's GLORY+ blended with current Elo on the Elo scale, with a head-to-head win probability. Weights are constants in `prometheus/glorelo.py`, taken from the backtest.
+  - GlorELO+: this season's GLORY+ blended with current Elo on the Elo scale, with a head-to-head win probability. Weights live in `prometheus/glorelo_weights.json`, written by the backtest (`--write-weights`); CI refits them on every build and warns when one moves more than 10%.
 - **Backtest:** `scripts/evaluate_metrics.py` computes every metric as of the start of each month and scores how well it predicts that month's games (accuracy, Brier, log loss, paired bootstrap against win % so far), separately for domestic and cross-region international games. Latest results in `docs/metric_backtest.md`.
 - **Site:** home, one rankings page per metric (grouped in the header and contents as Season stats and Forecasts), one page per team, and 404, published daily to https://prometheus.thaiv.dev.
 - **CLI:** `prometheus rankings glory|glorb` with league and year filters.
@@ -22,7 +22,7 @@ Last reviewed: 2026-10-01. This is a code baseline. Read `db/prometheus.db` or t
 - Elo links regions only through international games and uses K=20, so gaps between regions are compressed. GLORY+ and GlorELO+ inherit this.
 - GLORY's weights are fit to explain each game's own result, so GLORY describes rather than predicts. In the backtest it only slightly beats plain win %, and GLORB does not beat it.
 - GlorELO+ beats Elo on log loss for domestic games, but its accuracy edge over Elo is not significant, and it ties Elo on international games.
-- GlorELO+ weights are refreshed by hand from the backtest report. They go stale if the data or metrics change and nobody reruns it.
+- CI only warns when the GlorELO+ weights drift; someone still has to run `--write-weights` and commit the file.
 - Team pages do not show GLORY+ or GlorELO+.
 - The CLI does not offer GLORY+ or GlorELO+.
 - About 1,850 team-games have no opponent row, so they get no Elo and are left out of GLORY+ (for example Gamers2 in 2015).
@@ -38,7 +38,6 @@ Last reviewed: 2026-10-01. This is a code baseline. Read `db/prometheus.db` or t
 - **GlorELO+ follow-ups.** Weight recent seasons more when fitting the blend, show a team's GlorELO+ on its team page, and consider a series (best-of-3/5) probability in the head-to-head box.
 - **Betting-odds benchmark.** Collect closing bookmaker odds for past games (one source, de-vigged to win probabilities), join them to `matches`, and score them in the backtest next to Elo and GlorELO+ (accuracy, Brier, log loss, paired bootstrap). The market is the strongest public forecast, so it tells us how close our forecast models get to the best available. Note the source, its coverage by league and year, and its licence before ingesting it.
 - **Backtest report.** Add month-cluster bootstrap intervals for accuracy and paired accuracy differences to `evaluate_metrics.py`, so the report shows every interval quoted on the site.
-- **Automate the weight refresh.** Have the backtest write the GlorELO+ weights to a tracked file that `glorelo.py` reads, and flag a large change in CI.
 - **CLI.** Add GLORY+ and GlorELO+, and year ranges (`2021-2023`, the TODO in `main.py`).
 - **Tests.** A fixture-DB test for the `before` filter; run e2e tests against a small fixture DB so they don't need the full download.
 - **Cleanup.** Remove the `if __name__ == "__main__":` scratch blocks and move `players.py` off table reflection to raw SQL.

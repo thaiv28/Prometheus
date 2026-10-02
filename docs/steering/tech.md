@@ -50,7 +50,7 @@ Each year's major-league games are read once per call and used for both the fit 
 
 ## GlorELO+
 
-`prometheus/glorelo.py`: rating = 1500 + (400 / ln 10) × (centred `GLORY_PLUS_WEIGHT × GLORY+ + ELO_WEIGHT × Elo`), so the win probability is the usual Elo formula. The weights are per-point log-odds fit by the backtest on GLORY+ and live Elo gaps; refresh them from the report's "GlorELO+ weights" line.
+`prometheus/glorelo.py`: rating = 1500 + (400 / ln 10) × (centred `GLORY_PLUS_WEIGHT × GLORY+ + ELO_WEIGHT × Elo`), so the win probability is the usual Elo formula. The weights are per-point log-odds fit by the backtest on GLORY+ and live Elo gaps, stored in `prometheus/glorelo_weights.json` (shipped as package data). `evaluate_metrics.py --write-weights` refreshes the file; `--check-weights` refits without the report and prints a GitHub warning when a weight moves more than `WEIGHT_TOLERANCE` (10%).
 
 ## Backtest
 

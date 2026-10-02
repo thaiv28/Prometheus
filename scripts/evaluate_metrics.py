@@ -18,10 +18,13 @@ using a paired bootstrap.
 
 Usage:
     uv run python scripts/evaluate_metrics.py [--years 2022 2023] [--out report.md]
+    uv run python scripts/evaluate_metrics.py --write-weights   # refresh GlorELO+ weights
+    uv run python scripts/evaluate_metrics.py --check-weights   # CI: warn if they moved
 """
 
 import argparse
 import datetime
+import sys
 
 import numpy as np
 import pandas as pd
@@ -32,6 +35,12 @@ from prometheus.evaluation import (
     game_losses,
     out_of_year_probabilities,
     paired_bootstrap,
+)
+from prometheus.glorelo import (
+    WEIGHT_TOLERANCE,
+    load_weights,
+    save_weights,
+    weight_changes,
 )
 from prometheus.matches import get_available_years
 from prometheus.ranking import get_glory_ranking
@@ -243,16 +252,37 @@ def summarize(frame, losses):
 def glorelo_weights(frame):
     """Per-point log-odds weights of the published GlorELO+ (GLORY+ and live Elo).
 
-    Fit on every backtest game. Copy these into `prometheus/glorelo.py`.
+    Fit on every backtest game. `--write-weights` saves them for `prometheus/glorelo.py`.
     """
     x = frame[["glory_plus", "elo_live"]].to_numpy()
     sd = x.std(axis=0)
     model = LogisticRegression(C=1e6).fit(x / sd, frame["won"])
     glory_plus, elo = model.coef_[0] / sd
+    return {"glory_plus_weight": glory_plus, "elo_weight": elo}
+
+
+def format_weights(weights):
     return (
         f"\nGlorELO+ weights (log-odds per point, all games): "
-        f"GLORY_PLUS_WEIGHT = {glory_plus:.5f}, ELO_WEIGHT = {elo:.5f}"
+        f"GLORY_PLUS_WEIGHT = {weights['glory_plus_weight']:.5f}, "
+        f"ELO_WEIGHT = {weights['elo_weight']:.5f}"
     )
+
+
+def check_weights(weights):
+    """Compare refit weights with the tracked ones; warn (GitHub annotation) on a big move."""
+    tracked = load_weights()
+    changes = weight_changes(tracked, weights)
+    for key, change in changes.items():
+        print(f"{key}: tracked {tracked[key]:.5f}, refit {weights[key]:.5f} ({change:+.1%})")
+    moved = [key for key, change in changes.items() if change > WEIGHT_TOLERANCE]
+    if moved:
+        print(
+            f"::warning title=GlorELO+ weights moved::{', '.join(moved)} moved more than "
+            f"{WEIGHT_TOLERANCE:.0%} on refit. Run scripts/evaluate_metrics.py "
+            "--write-weights and review the backtest."
+        )
+    return moved
 
 
 def main():
@@ -261,22 +291,43 @@ def main():
         "--years", type=int, nargs="*", help="Seasons to backtest (default: all)"
     )
     parser.add_argument("--out", help="Also write the report to this Markdown file")
+    weights_mode = parser.add_mutually_exclusive_group()
+    weights_mode.add_argument(
+        "--write-weights",
+        action="store_true",
+        help="Save the refit GlorELO+ weights to prometheus/glorelo_weights.json",
+    )
+    weights_mode.add_argument(
+        "--check-weights",
+        action="store_true",
+        help="Only refit the GlorELO+ weights and warn if they moved (skips the report)",
+    )
     args = parser.parse_args()
+    if args.years and (args.write_weights or args.check_weights):
+        sys.exit("GlorELO+ weights are fit on every season; drop --years.")
 
     years = args.years or get_available_years(ALL_MAJOR_LEAGUES)
     print("Loading games...")
     games, results, elo_timeline = load_games(), load_results(), load_elo_timeline()
     print("Backtesting:")
     frame = backtest(games, results, elo_timeline, years)
+    weights = glorelo_weights(frame)
+    if args.check_weights:
+        check_weights(weights)
+        return
+
     report = (
         f"## Metric backtest ({datetime.date.today().isoformat()})\n"
         + summarize(frame, score(frame))
-        + glorelo_weights(frame)
+        + format_weights(weights)
     )
     print(report)
     if args.out:
         with open(args.out, "w") as f:
             f.write(report + "\n")
+    if args.write_weights:
+        save_weights(weights)
+        print("Saved GlorELO+ weights to prometheus/glorelo_weights.json")
 
 
 if __name__ == "__main__":

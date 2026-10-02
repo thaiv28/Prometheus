@@ -22,5 +22,8 @@ dependencies = [
 [tool.setuptools]
 packages = ["prometheus"]
 
+[tool.setuptools.package-data]
+prometheus = ["glorelo_weights.json"]
+
 [project.scripts]
 prometheus = "prometheus.main:app"

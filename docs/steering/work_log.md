@@ -2,6 +2,14 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-01 — GlorELO+ weights in a tracked file, checked in CI
+
+- The weights moved from constants in `prometheus/glorelo.py` to `prometheus/glorelo_weights.json` (package data in `pyproject.toml`). `glorelo.py` loads them and adds `load_weights`, `save_weights` and `weight_changes`.
+- `evaluate_metrics.py --write-weights` saves the refit weights; `--check-weights` refits without scoring the report and prints a `::warning::` annotation when a weight moves more than 10% (`WEIGHT_TOLERANCE`). Both refuse `--years`, since the weights are fit on every season. `publish.yml` runs the check after the tests.
+- The backtest now takes about 22 seconds instead of about 90, a side effect of the Elo table key from the previous entry.
+- Verification: `uv run pytest -q` passed (new round-trip and loading tests); `--check-weights` on the real DB reported +0.0% and +0.1%; a forced 23% move printed the warning; `--write-weights --out docs/metric_backtest.md` left both the weights file and the report unchanged.
+- Limit: CI warns but does not commit refreshed weights; the warning has not yet been seen in a real Actions run.
+
 ## 2026-10-01 — Faster site builds (17s → 5s)
 
 - Profiled the build: model fitting took about 0.03s; the time went to SQLite reads. `game_length_elo` had no key, so each of GLORY+'s 13 pre-game Elo joins built a temporary index (about 0.5s each), and the five ranking calls read every year's games twice per call.

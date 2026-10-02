@@ -40,7 +40,8 @@ bash scripts/setup_db.sh                # download raw CSVs (gdown), rebuild db/
 uv run python scripts/build_site.py     # render static site to output/
 uv run pytest -q                        # run tests (unit + integration + e2e; e2e needs a built DB)
 uv run prometheus rankings glory --league MAJOR --year 2024
-uv run python scripts/evaluate_metrics.py --out docs/metric_backtest.md   # backtest metrics (~90s)
+uv run python scripts/evaluate_metrics.py --out docs/metric_backtest.md   # backtest metrics (~25s)
+uv run python scripts/evaluate_metrics.py --write-weights   # also refresh GlorELO+ weights
 python -m http.server -d output 8000    # preview the built site locally
 ```
 
@@ -74,7 +75,7 @@ python -m http.server -d output 8000    # preview the built site locally
 - **Schema changes go in a new numbered script** (`scripts/005_*.sql`), or in `001_create_tables.sql` if the change belongs to the base schema. The DB is always rebuilt from scratch, so there are no migrations.
 - **Feature and column names live in `types.py`.** If you add a metric feature, add it there and to the SQL view that produces it (for example `003_create_glory.sql`).
 - **New metrics on the site** are registered in the `METRICS` (season stats) or `FORECASTS` / `ELO_METRICS` (forecasts) dicts in `build_site.py` (including the explainer copy) and given a column config (`METRIC_COLUMNS` / `GLORELO_COLUMNS` / `ELO_COLUMNS`) with `kind` set to `"season"` (team-seasons, 0–100) or `"rating"` (teams, Elo scale). `SECTIONS` groups them in the header and contents. `rankings.html.j2` and `rankings.js` render any metric from that config.
-- **GlorELO+ weights** are constants in `prometheus/glorelo.py`. After a metric or data change, rerun `evaluate_metrics.py` and copy the "GlorELO+ weights" line from the report.
+- **GlorELO+ weights** live in `prometheus/glorelo_weights.json`, which `glorelo.py` reads. After a metric or data change, rerun `evaluate_metrics.py --write-weights` and commit the file. CI runs `--check-weights` and warns when a refit moves a weight more than 10%.
 - `gamelength` is stored in **seconds**.
 - League names are normalized at ingest (`002_add_matches.py`): NA LCS / LTA N → `LCS`, EU LCS → `LEC`.
 - Formatting: `black`. Linting: `pylint`. Both are listed as (non-dev) dependencies.
@@ -92,6 +93,6 @@ python -m http.server -d output 8000    # preview the built site locally
 ## Before you finish a change
 
 1. `uv run pytest -q` passes (including the steering guard).
-2. If you touched the DB scripts or metrics, rebuild with `setup_db.sh`, then `build_site.py`, and spot-check `output/`. Rerun `evaluate_metrics.py` to check the change helps, and refresh the GlorELO+ weights if they moved.
+2. If you touched the DB scripts or metrics, rebuild with `setup_db.sh`, then `build_site.py`, and spot-check `output/`. Rerun `evaluate_metrics.py` to check the change helps, with `--write-weights` to refresh the GlorELO+ weights.
 3. If you touched templates, CSS, or JS, build the site and look at it in a browser at desktop and phone widths.
 4. Inspect the diff and make the document updates above match the code. State anything you did not verify.

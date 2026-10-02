@@ -63,6 +63,9 @@ jobs:
           aws s3 sync "$RUNNER_TEMP/backup" "$DATA_BACKUP" --size-only --only-show-errors
       - name: Test
         run: uv run pytest -q
+      # Refit the GlorELO+ weights on today's data; warns (does not fail) on a big move.
+      - name: Check GlorELO+ weights
+        run: uv run python scripts/evaluate_metrics.py --check-weights
       - name: Build static site
         run: uv run python scripts/build_site.py
       - uses: actions/upload-artifact@v4
