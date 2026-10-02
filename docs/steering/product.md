@@ -14,12 +14,16 @@ Prometheus is a public, browsable stat site for League of Legends esports, simil
 | Metric | Status | What it measures |
 |---|---|---|
 | **GLORY** (Global League Offensive Rankings Yield) | Shipped | Per-season regression weights on gold/objective rates, applied to team-season averages and scaled to roughly 0–100 |
-| **GLORB** (Baseline) | Shipped | Same features as GLORY with equal weights. It's a sanity baseline for GLORY. |
+| **GLORB** (Baseline) | Shipped; sunset planned | Same features as GLORY with equal weights. A comparison baseline for GLORY with little value on its own; see Future work in `current_state.md`. |
+| **GLORY+** | Shipped | GLORY with each game's stats adjusted for the opponent's pre-game Elo |
 | **Era Z / League Z** | Shipped | Z-scores of a team's score within its year (all major leagues) and within its league |
-| **Game-length Elo** | In progress (uncommitted) | Elo where fast wins move ratings more. Meant to address strength-of-schedule and cross-region bias. |
+| **Game-length Elo** | Shipped (forecast) | Elo for every team in every region, where fast wins move ratings more. International games link the regions. |
+| **GlorELO+** | Shipped (forecast) | This season's GLORY+ blended with current Elo on the Elo scale, with a head-to-head win probability |
 | **AURA** (Attributable Utility via Role Analytics) | Research | Player win-probability attribution using 10/15/20/25-minute snapshots (see README) |
 
-Scope: the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present. Data comes from Oracle's Elixir and refreshes daily via CI.
+Season stats (GLORY, GLORB, GLORY+) describe how well a team played and are judged mainly on consistency. Forecasts (Elo, GlorELO+) predict the next game and are judged by the backtest in `scripts/evaluate_metrics.py`.
+
+Scope: season stats cover the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present; Elo covers every region. Data comes from Oracle's Elixir and refreshes daily via CI.
 
 ## Product principles
 
@@ -30,6 +34,5 @@ Scope: the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present. Data comes fro
 
 ## Known open questions
 
-- How to weight matches by opponent strength (Elo) inside GLORY.
 - Whether GLORY should use logistic rather than linear regression (the README says logistic; the code uses `LinearRegression`).
 - Player-level metric design (AURA). The `player_stats` schema exists, and `win_prediction.py` trains an XGBoost win-probability model.

@@ -16,10 +16,11 @@
 Oracle's Elixir Google Drive folder
   └─ gdown ─▶ data/raw/*.csv   (one CSV per year)
        └─ 001_create_tables.sql  → matches, match_stats, player_stats, game_length_elo
-       └─ 002_add_matches.py     → filter/normalize CSVs, append rows
+       └─ 002_add_matches.py     → filter/normalize CSVs (keeps international events), append rows
        └─ 003_create_glory.sql   → VIEW match_glory_stats (per-minute rates)
        └─ 004_bootstrap_elo.py   → fill game_length_elo
-  └─ scripts/build_site.py ─▶ output/ (index, glory, glorb, game_length_elo, teams/*.html)
+  └─ scripts/build_site.py ─▶ output/ (index, glory, glorb, glory_plus, glorelo_plus, game_length_elo, teams/*.html)
+  └─ scripts/evaluate_metrics.py ─▶ docs/metric_backtest.md (backtest; run by hand)
 ```
 
 ### Tables
@@ -39,12 +40,27 @@ For each year:
 4. GLORB instead sums the scaled features, z-normalizes them, and maps them to mean 80 and SD 15.
 5. Add `era_score` (z within the year) and `league_score` (z within league and year).
 
+`before=<date>` restricts both the fit and the averages to earlier games (used by the backtest).
+
+## GLORY+
+
+`opponent_adjusted=True`: for each year and feature, fit `feature ~ own_pre_elo + opp_pre_elo` over major-league games, then restate each game against the average opponent (`f - b_opp * (opp_elo - mean)`) before averaging. Scoring is otherwise GLORY's.
+
+## GlorELO+
+
+`prometheus/glorelo.py`: rating = 1500 + (400 / ln 10) × (centred `GLORY_PLUS_WEIGHT × GLORY+ + ELO_WEIGHT × Elo`), so the win probability is the usual Elo formula. The weights are per-point log-odds fit by the backtest on GLORY+ and live Elo gaps; refresh them from the report's "GlorELO+ weights" line.
+
+## Backtest
+
+`scripts/evaluate_metrics.py` (helpers in `prometheus/evaluation.py`): at the first of each month, compute each metric from that season's earlier games, predict that month's games with a logistic win curve fit on the other seasons, and score accuracy, Brier and log loss. Compares each metric with win % so far using a paired bootstrap; domestic and cross-region international games are reported separately.
+
 ## Testing
 
 - `tests/test_*.py`: unit tests with `get_matches_frame` mocked.
 - `tests/integration/`: in-memory SQLite fixtures (`conftest.py`).
 - `tests/e2e/`: run against the real `db/prometheus.db` and assert known outcomes (for example, Gen.G and T1 at the top in 2022).
-- There are no tests for `build_site.py`, `elo.py`, templates, or JS.
+- `tests/test_steering.py`: fails when uncommitted code changes have no `docs/steering/work_log.md` change.
+- There are no tests for `build_site.py`, templates, or JS.
 
 ## Constraints
 

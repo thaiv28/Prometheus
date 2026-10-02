@@ -1,6 +1,29 @@
 # AGENTS.md
 
-Guidance for AI coding agents (and humans) working in this repo. Read this first, then the steering docs in `docs/steering/` for deeper context.
+Guidance for AI coding agents (and humans) working in this repo.
+
+## Read before work
+
+1. [Product](docs/steering/product.md) for the vision, audience, metric status and open questions.
+2. [Current state](docs/steering/current_state.md) for what works, known limits, and **future work**.
+3. [Tech](docs/steering/tech.md) before changing the data pipeline, tables, metric algorithms or tests.
+4. [Deployment](docs/steering/deployment.md) before changing CI, publishing, data backup or AWS settings.
+5. [UI](docs/steering/ui.md), `DESIGN.md` and `PRODUCT.md` before changing templates, CSS or JS. Use the impeccable skill for UI work.
+6. [Work log](docs/steering/work_log.md) to avoid repeating work and to record what you change.
+
+Code and the built DB are the source of truth. If a document disagrees with them, verify the behavior and correct the document in the same change. The user's latest instructions override these docs.
+
+## Required document updates
+
+- **Every substantive code or behavior change:** add a dated entry at the top of `docs/steering/work_log.md` with what changed, the checks actually run, and any remaining limit.
+- **Feature status, known limit, or future work changes:** update `docs/steering/current_state.md` in the same change. Suggestions for future work go in its **Future work** section, not only in chat. Remove items once they ship.
+- **Metric added, changed, or its status changed:** update the metrics table in `docs/steering/product.md`, the metric descriptions in `README.md`, and rerun `scripts/evaluate_metrics.py`.
+- **Data pipeline, tables, algorithms, or test layout change:** update `docs/steering/tech.md`.
+- **CI, publishing, schedules, secrets, or AWS resources change:** update `docs/steering/deployment.md`.
+- **Visual design or UI components change:** update `DESIGN.md` (and `docs/steering/ui.md` if the direction changes).
+- For documentation-only work, still add a short work-log entry and check the links and commands you touched. Do not add empty entries or claim a check you did not run.
+
+`uv run pytest -q` includes `tests/test_steering.py`, which fails when code changed (uncommitted) without a `work_log.md` change. It can't judge whether the other docs are accurate, so do that review yourself.
 
 ## What this is
 
@@ -68,7 +91,7 @@ python -m http.server -d output 8000    # preview the built site locally
 
 ## Before you finish a change
 
-1. `uv run pytest -q` passes.
-2. If you touched the DB scripts or metrics, rebuild with `setup_db.sh`, then `build_site.py`, and spot-check `output/`.
+1. `uv run pytest -q` passes (including the steering guard).
+2. If you touched the DB scripts or metrics, rebuild with `setup_db.sh`, then `build_site.py`, and spot-check `output/`. Rerun `evaluate_metrics.py` to check the change helps, and refresh the GlorELO+ weights if they moved.
 3. If you touched templates, CSS, or JS, build the site and look at it in a browser at desktop and phone widths.
-4. Keep `README.md` metric descriptions in sync with any metric change, and rerun `evaluate_metrics.py` to check the change helps.
+4. Inspect the diff and make the document updates above match the code. State anything you did not verify.
