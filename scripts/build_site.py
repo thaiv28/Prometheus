@@ -15,7 +15,7 @@ import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
 from prometheus.ranking import get_glory_ranking, load_glory_games
-from prometheus.elo import get_elo_history, get_latest_elos
+from prometheus.elo import get_elo_history, get_latest_elos, get_season_elos
 from prometheus.glorelo import glorelo_ratings
 from prometheus.types import ALL_MAJOR_LEAGUES
 
@@ -25,6 +25,8 @@ OUTPUT_DIR = os.path.join(ROOT_DIR, "output")
 STATIC_SRC = os.path.join(ROOT_DIR, "site_static")
 SITE_DOMAIN = "prometheus.thaiv.dev"
 SITE_URL = f"https://{SITE_DOMAIN}"
+# Forecast pages open on teams that played within this window of the newest game.
+ACTIVE_WINDOW = pd.Timedelta(days=183)
 
 METRICS = {
     "glory": {
@@ -82,9 +84,10 @@ ELO_METRICS = {
         "how_to_read": [
             "Every team starts at 1500. Each game moves the winner up and the loser down by the same amount.",
             "Short games move ratings most. A heavy favourite that needs 50 minutes to win can still lose a little rating.",
-            "The table shows each team's rating after its latest game.",
+            "The table opens on teams that have played in the last six months, at today's rating. Pick a season to rank every team by its rating at the end of that year, or several seasons to compare across years.",
+            "International results also move a shared rating for each league, so when a region's teams win abroad, every team in that region rises, even those that stayed home.",
         ],
-        "caveats": "Regions rarely play each other outside MSI and Worlds, so compare ratings within a region. Team names are taken from each team's latest game.",
+        "caveats": "Regions meet only at international events, so a league that rarely plays abroad is measured loosely. Team names are taken from each team's last game in the period shown.",
         "lede_note": 2,
     }
 }
@@ -99,8 +102,9 @@ FORECASTS = {
             "Rating: on the Elo scale, with the average major-league team this season at 1500. A 100-point gap means about a 64% chance to win; 200 points, about 76%.",
             "Head to head turns any two ratings into a chance to win one game. It ignores side; blue side wins about 54% of games.",
             "Tested on every major-league game since 2014, using only earlier games each time: it picks the winner 64% of the time, and its odds are slightly more accurate than Elo's alone.",
+            "The table opens on this season. Pick a past season to see each team's GLORY+ for that season blended with its Elo at the end of that year; each season's average team sits at 1500.",
         ],
-        "caveats": "Only LCK, LPL, LEC and LCS teams with 5 or more games this season. Elo links regions only through international events, so gaps between regions are probably understated. Odds are for one game, not a series.",
+        "caveats": "Only LCK, LPL, LEC and LCS teams with 5 or more games in the season. Regions meet only at international events, so a league that rarely plays abroad is measured loosely. Odds are for one game, not a series.",
         "lede_note": 3,
         "matchup": True,
     },
@@ -174,6 +178,23 @@ def _rankings(games, baseline, minimum_matches, z_scores, opponent_adjusted=Fals
     )
 
 
+def _forecast_records(now, seasons, rating_cols):
+    """Rows for a forecast page: `now` rows (current ratings) then team-season rows.
+
+    A `now` row is shown by default when it is `active` (missing means active).
+    """
+    rows = []
+    for df, is_now in ((now, True), (seasons, False)):
+        for r in _records(df):
+            r["now"] = is_now
+            r["active"] = bool(r.get("active", True))
+            r["latest_date"] = str(r["latest_date"])[:10]
+            for col in rating_cols:
+                r[col] = round(float(r[col]), 1)
+            rows.append(r)
+    return rows
+
+
 def _records(df):
     df = df.copy()
     df["slug"] = df["teamname"].apply(_slugify)
@@ -241,8 +262,9 @@ GLORELO_COLUMNS = [
     {"key": "glory_plus", "label": "GLORY+", "type": "number", "digits": 1, "phoneHide": True,
      "hint": "GLORY+ this season so far"},
     {"key": "elo", "label": "Elo", "type": "number", "digits": 0, "wideOnly": True,
-     "hint": "Elo after the team's latest game"},
+     "hint": "Elo now, or at the end of the season shown"},
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
+    {"key": "year", "label": "Season", "type": "text", "wideOnly": True, "note": 4},
 ]
 
 ELO_COLUMNS = [
@@ -250,7 +272,8 @@ ELO_COLUMNS = [
     {"key": "teamname", "label": "Team", "type": "team"},
     {"key": "elo", "label": "Elo", "type": "number", "digits": 0, "bar": True, "note": 1},
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
-    {"key": "latest_date", "label": "Last game", "type": "date", "wideOnly": True, "note": 3},
+    {"key": "year", "label": "Season", "type": "text", "wideOnly": True, "note": 3},
+    {"key": "latest_date", "label": "Last game", "type": "date", "wideOnly": True},
 ]
 
 
@@ -375,39 +398,48 @@ def main():
             last_update,
         )
 
+    # Forecast pages open on "now" rows (current ratings) and also carry one row per
+    # team-season (rating at the end of that year) for the season picker.
     latest_elos = {}
+    season_elos = {}
     for key, cfg in ELO_METRICS.items():
         latest = get_latest_elos(cfg["method"])
-        latest_elos[key] = latest
-        rows = _records(latest)
-        for r in rows:
-            r["latest_date"] = str(r["latest_date"])[:10]
-            r["elo"] = round(float(r["elo"]), 1)
-        majors = [l for l in env.globals["major_leagues"] if l in set(latest["league"])]
-        others = sorted(set(latest["league"]) - set(majors))
+        seasons = get_season_elos(cfg["method"])
+        latest_elos[key], season_elos[key] = latest, seasons
+        # Every team's current rating is a "now" row, so search finds retired teams;
+        # the default view shows only the active ones.
+        last_played = pd.to_datetime(latest["latest_date"])
+        now = latest.assign(active=last_played >= last_played.max() - ACTIVE_WINDOW)
+        rows = _forecast_records(now, seasons, ("elo",))
+        leagues = set(latest["league"]) | set(seasons["league"])
+        majors = [l for l in env.globals["major_leagues"] if l in leagues]
         render_rankings_page(
             cfg,
             rows,
             {"valueKey": "elo", "columns": ELO_COLUMNS, "defaultSort": "elo", "kind": "rating"},
-            {"years": sorted(int(y) for y in latest["year"].unique()), "leagues": majors + others},
+            {"years": sorted(int(y) for y in seasons["year"].unique()), "leagues": majors + sorted(leagues - set(majors))},
             last_update,
         )
 
-    # GlorELO+ is a forecast for now: this season's GLORY+ with each team's latest Elo.
+    # GlorELO+ now: this season's GLORY+ with each team's latest Elo. For a past
+    # season: that season's GLORY+ with the team's Elo at the end of that year.
     current_year = int(glory_plus_df["year"].max())
     glorelo = glorelo_ratings(
         glory_plus_df[glory_plus_df["year"] == current_year], latest_elos["game_length_elo"]
     )
-    rows = _records(glorelo)
-    for r in rows:
-        r["latest_date"] = str(r["latest_date"])[:10]
-        r["glorelo"] = round(float(r["glorelo"]), 1)
-        r["elo"] = round(float(r["elo"]), 1)
+    elo_seasons = season_elos["game_length_elo"]
+    glorelo_seasons = pd.concat(
+        [
+            glorelo_ratings(season, elo_seasons[elo_seasons["year"] == year])
+            for year, season in glory_plus_df.groupby("year")
+        ],
+        ignore_index=True,
+    )
     render_rankings_page(
         FORECASTS["glorelo_plus"],
-        rows,
+        _forecast_records(glorelo, glorelo_seasons, ("glorelo", "elo")),
         {"valueKey": "glorelo", "columns": GLORELO_COLUMNS, "defaultSort": "glorelo", "kind": "rating"},
-        {"years": [current_year], "leagues": sorted(glorelo["league"].unique())},
+        {"years": sorted(int(y) for y in glorelo_seasons["year"].unique()), "leagues": sorted(glorelo_seasons["league"].unique())},
         last_update,
     )
 

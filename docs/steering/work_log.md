@@ -2,12 +2,20 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-01 — Forecast pages open on now; seasons show year-end ratings
+
+- Elo and GlorELO+ pages open on current ratings: Elo for teams that played in the last 183 days (`ACTIVE_WINDOW`), GlorELO+ for this season. Before, the Elo page listed every team ever at its last rating, so SK Telecom T1 (last active 2019) topped it.
+- The year picker is now "season": picking seasons switches to one row per team-season, rated at the end of that calendar year (new `elo.get_season_elos`, one query plus pandas, about 1.3s). GlorELO+ gets past seasons too (that season's GLORY+ with year-end Elo). Head to head stays on today's ratings. Search on the Elo page still reaches every team's current rating, including retired teams, since the header search lands there.
+- UI: picker empty value *Now*, a "Current ratings" text button in its panel, a Season column and caption wording for season views; Elo and GlorELO+ margin notes rewritten (including the league-offset Elo note). DESIGN.md filter-line spec, tech.md and current_state.md updated.
+- Verification: `uv run pytest -q` passed, including a new integration test for season-end ratings with offset changes. Built the site and checked Elo (now, 2019, picker open) and GlorELO+ (now, 2019+2024) at 1440px and 390px in headless Chromium: no page errors, captions and counts correct, 2019 led by FunPlus Phoenix; searches for retired teams return them.
+- Limit: GlorELO+ season ratings are centred per season, so cross-season comparisons are relative to each season's average.
+
 ## 2026-10-01 — Elo league offsets (international games move the whole region)
 
 - `compute_elo_records`: rating = own rating + home league offset. A cross-league international game also moves each league's offset by `LEAGUE_SHARE` (0.5) of the team's change. New teams start at 1500 + their league's offset. `get_latest_elos` adds offset changes since a team's last game. Schema: `home_league` and `league_offset` columns on `game_length_elo`, plus a new `game_length_elo_league_offsets` table.
 - Tuned with a scratch harness that replays Elo on the backtest's games (not committed). Kept: league share 0.5 (league_k 10 at K=20). Rejected: changing K (25–30 helps domestic by about 0.0005 but hurts international), a between-season pull to the league mean (hurts international by 0.002–0.01), an international K multiplier, and a "most common of the last 20 games" home-league rule (no measurable difference).
 - Backtest: international Elo log loss 0.6540 → 0.6405 as of cutoff, 0.6456 → 0.6297 live (accuracy 60.6% → 65.0%); domestic 0.6414 → 0.6410 and 0.6349 → 0.6345. GlorELO+ weights refreshed with `--write-weights` (0.00983 / 0.00634).
-- Verification: rebuilt the DB; `evaluate_metrics.py --write-weights --out docs/metric_backtest.md`; `build_site.py` ran. New unit and integration tests for offsets, new-team starts and latest-rating refresh pass. `pytest -q` passed 43 after the rebuild. Docs (current_state, tech, product, README) updated in a follow-up commit; the site check is covered by the forecast-page entry above.
+- Verification: rebuilt the DB; `evaluate_metrics.py --write-weights --out docs/metric_backtest.md`; `build_site.py` ran. New unit and integration tests for offsets, new-team starts and latest-rating refresh pass. `pytest -q` passed 43 after the rebuild. Docs (current_state, tech, product, README) updated in a follow-up commit; the site was checked in the forecast-page entry above.
 - Limit: the backtest's "as of cutoff" Elo uses each team's post-game rating without later offset changes; team-page Elo history is also per game.
 
 ## 2026-10-01 — GlorELO+ weights in a tracked file, checked in CI

@@ -297,6 +297,63 @@ def get_latest_elos(method: str, date: datetime.date | None = None) -> pd.DataFr
     return pd.read_sql(text(stmt), get_engine(), params=params)
 
 
+def get_season_elos(method: str) -> pd.DataFrame:
+    """Return every team's rating at the end of each calendar year it played.
+
+    A year's rating is the team's rating after its last game that year, plus any
+    change to its league's offset through the end of that year (for example from
+    Worlds, if the team did not attend). Years are calendar years of the game date,
+    as in `get_latest_elos`, because Oracle's Elixir files some autumn games under
+    the next season.
+
+    Returns:
+        DataFrame with columns: teamname, league, year, elo, latest_date. `league` is
+        the domestic league the team played most that year (its home league if it
+        only played international events); `teamname` is from its last game.
+    """
+    table = _elo_table(method)
+    stmt = f"""
+    SELECT e.teamid, m.teamname, m.league, CAST(strftime('%Y', m.date) AS INT) AS year,
+           m.date AS latest_date, m.gameid,
+           e.post_match_elo AS elo, e.home_league, e.league_offset
+    FROM {table} e
+    JOIN matches m ON e.gameid = m.gameid AND e.teamid = m.teamid
+    ORDER BY m.date, m.gameid
+    """
+    games = pd.read_sql(stmt, get_engine())
+    last = games.groupby(["teamid", "year"]).tail(1).copy()
+
+    domestic = games[~games["league"].isin(INTERNATIONAL_LEAGUES)]
+    # Most-played league, so a winter cup (KeSPA Cup, Demacia Cup) doesn't label the year.
+    season_league = domestic.groupby(["teamid", "year"])["league"].agg(
+        lambda leagues: leagues.value_counts().index[0]
+    )
+    last = last.join(season_league.rename("season_league"), on=["teamid", "year"])
+    last["league"] = last["season_league"].fillna(last["home_league"]).fillna(last["league"])
+
+    # Each league's offset at the end of each season: its last value up to then.
+    offsets = pd.read_sql(
+        f"SELECT date, league, league_offset FROM {_offsets_table(method)} ORDER BY rowid",
+        get_engine(),
+    )
+    offsets["year"] = offsets["date"].str[:4].astype(int)
+    by_season = offsets.groupby(["league", "year"])["league_offset"].last()
+    years = sorted(last["year"].unique())
+    season_end = (
+        by_season.unstack("year").reindex(columns=years).ffill(axis=1).stack()
+        .rename("season_end_offset")
+    )
+    last = last.join(season_end, on=["home_league", "year"])
+    last["elo"] = last["elo"] + (
+        last["season_end_offset"] - last["league_offset"]
+    ).fillna(0)
+    return (
+        last[["teamname", "league", "year", "elo", "latest_date"]]
+        .sort_values("elo", ascending=False)
+        .reset_index(drop=True)
+    )
+
+
 def get_pregame_elos(method: str, years: list[int] | None = None) -> pd.DataFrame:
     """Return each team's and its opponent's Elo going into every game.
 

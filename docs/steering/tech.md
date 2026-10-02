@@ -51,11 +51,15 @@ Each year's major-league games are read once per call and used for both the fit 
 
 ## Elo
 
-`prometheus/elo.py`, replayed in date order by `004_bootstrap_elo.py`. A team's rating is its own rating plus its home league's offset (home league = the last domestic league it played in). Each game changes the teams' own ratings by K=20 × (actual − expected), where the winner's "actual" falls from 1.0 for very short games to 0.65 for very long ones. When teams from two leagues meet at an international event, each league's offset also moves by `LEAGUE_SHARE` (0.5) of the team's change. A new team starts at 1500 plus its league's offset; a team that changes league keeps its rating. `get_latest_elos` adds each league's offset changes since the team's last game.
+`prometheus/elo.py`, replayed in date order by `004_bootstrap_elo.py`. A team's rating is its own rating plus its home league's offset (home league = the last domestic league it played in). Each game changes the teams' own ratings by K=20 × (actual − expected), where the winner's "actual" falls from 1.0 for very short games to 0.65 for very long ones. When teams from two leagues meet at an international event, each league's offset also moves by `LEAGUE_SHARE` (0.5) of the team's change. A new team starts at 1500 plus its league's offset; a team that changes league keeps its rating. `get_latest_elos` adds each league's offset changes since the team's last game. `get_season_elos` gives every team's rating at the end of each calendar year it played (last game that year plus offset changes through year end), labelled with its most-played domestic league that year. Calendar years, not Oracle's Elixir `year`, because some autumn games are filed under the next season.
 
 ## GlorELO+
 
 `prometheus/glorelo.py`: rating = 1500 + (400 / ln 10) × (centred `GLORY_PLUS_WEIGHT × GLORY+ + ELO_WEIGHT × Elo`), so the win probability is the usual Elo formula. The weights are per-point log-odds fit by the backtest on GLORY+ and live Elo gaps, stored in `prometheus/glorelo_weights.json` (shipped as package data). `evaluate_metrics.py --write-weights` refreshes the file; `--check-weights` refits without the report and prints a GitHub warning when a weight moves more than `WEIGHT_TOLERANCE` (10%).
+
+## Forecast pages
+
+`build_site.py` gives the Elo and GlorELO+ pages two kinds of rows, flagged `now`. Now rows are current ratings (Elo: every team's latest rating, `active` when it played within `ACTIVE_WINDOW`, 183 days, of the newest game; GlorELO+: this season). Season rows are team-seasons at year end (Elo: `get_season_elos`; GlorELO+: each season's GLORY+ blended with that year's season-end Elo, centred per season). `rankings.js` shows active now rows until seasons are picked, and searches all now rows. The head-to-head box uses now rows only.
 
 ## Backtest
 

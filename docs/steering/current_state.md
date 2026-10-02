@@ -13,7 +13,7 @@ Last reviewed: 2026-10-01. This is a code baseline. Read `db/prometheus.db` or t
   - Game-length Elo for every team in every region. Each rating includes a league offset that cross-league international games move (half of the team's own change), so a region rises or falls together; new teams start at their league's level.
   - GlorELO+: this season's GLORY+ blended with current Elo on the Elo scale, with a head-to-head win probability. Weights live in `prometheus/glorelo_weights.json`, written by the backtest (`--write-weights`); CI refits them on every build and warns when one moves more than 10%.
 - **Backtest:** `scripts/evaluate_metrics.py` computes every metric as of the start of each month and scores how well it predicts that month's games (accuracy, Brier, log loss, paired bootstrap against win % so far), separately for domestic and cross-region international games. Latest results in `docs/metric_backtest.md`.
-- **Site:** home, one rankings page per metric (grouped in the header and contents as Season stats and Forecasts), one page per team, and 404, published daily to https://prometheus.thaiv.dev.
+- **Site:** home, one rankings page per metric (grouped in the header and contents as Season stats and Forecasts), one page per team, and 404, published daily to https://prometheus.thaiv.dev. Forecast pages open on current ratings for teams active in the last six months; the season picker switches to ratings at the end of each chosen year.
 - **CLI:** `prometheus rankings glory|glorb` with league and year filters.
 
 ## Known limits
@@ -28,6 +28,7 @@ Last reviewed: 2026-10-01. This is a code baseline. Read `db/prometheus.db` or t
 - The backtest's "Elo (as of cutoff)" uses each team's rating after its last game, without league-offset changes since then, so it slightly understates the published rating.
 - About 1,850 team-games have no opponent row, so they get no Elo and are left out of GLORY+ (for example Gamers2 in 2015).
 - The `before` date filter in `get_matches_frame` is exercised only by the backtest, not by its own test.
+- GlorELO+ season rows are centred within each season, so the same rating in two seasons means "as far above that season's average", not equal strength. Elo season rows share one scale but drift over the years.
 - e2e tests need a built DB, so they only run locally and in the publish workflow after `setup_db.sh`.
 
 ## Future work

@@ -4,7 +4,7 @@
 {% block canonical_path %}{{ metric.key }}.html{% endblock %}
 {% set rating = config.kind == 'rating' %}
 {% set noun = 'teams' if rating else 'team-seasons' %}
-{% set year_label = 'last active' if rating else 'years' %}
+{% set year_label = 'season' if rating else 'years' %}
 {% set value_word = 'rating' if rating else 'score' %}
 {% block content %}
   <div class="spread">
@@ -20,12 +20,12 @@
         <p class="matchup-line">
           <label class="visually-hidden" for="matchup-a">First team</label>
           <select id="matchup-a" class="matchup-team">
-            {% for r in rows %}<option value="{{ r.teamname }}"{% if loop.index == 1 %} selected{% endif %}>{{ r.teamname }}</option>{% endfor %}
+            {% for r in rows if r.now %}<option value="{{ r.teamname }}"{% if loop.index == 1 %} selected{% endif %}>{{ r.teamname }}</option>{% endfor %}
           </select>
           <span class="matchup-verb">beats</span>
           <label class="visually-hidden" for="matchup-b">Second team</label>
           <select id="matchup-b" class="matchup-team">
-            {% for r in rows %}<option value="{{ r.teamname }}"{% if loop.index == 2 %} selected{% endif %}>{{ r.teamname }}</option>{% endfor %}
+            {% for r in rows if r.now %}<option value="{{ r.teamname }}"{% if loop.index == 2 %} selected{% endif %}>{{ r.teamname }}</option>{% endfor %}
           </select>
           <output class="matchup-result" id="matchup-result" for="matchup-a matchup-b" aria-live="polite"></output>
         </p>
@@ -42,9 +42,12 @@
         <span class="filter-lead">Filter</span>
         {% if filters.years | length > 1 %}
         <details class="picker" data-filter="years">
-          <summary><span class="picker-label">{{ year_label }}</span> <span class="picker-value" data-all="All">All</span></summary>
+          <summary><span class="picker-label">{{ year_label }}</span> <span class="picker-value" data-all="{{ 'Now' if rating else 'All' }}">{{ 'Now' if rating else 'All' }}</span></summary>
           <fieldset class="picker-panel">
-            <legend class="picker-legend">{{ year_label | capitalize }}</legend>
+            <legend class="picker-legend">{{ 'Season’s end' if rating else 'Years' }}</legend>
+            {% if rating %}
+            <button type="button" class="picker-shortcut" data-filter="years" data-select="">Current ratings</button>
+            {% endif %}
             <div class="picker-options picker-options--years">
               {% for y in filters.years | reverse %}
               <label><input type="checkbox" value="{{ y }}" /> {{ y }}</label>
@@ -71,7 +74,7 @@
       </div>
 
       <figure class="register-figure register-figure--main" aria-labelledby="table-cap">
-        <figcaption id="table-cap" class="table-caption"><span id="table-desc">{{ metric.name }}, all {{ noun }}</span>, ranked by {{ value_word }}.<a class="note-ref" href="#note-dagger" aria-label="Caveat">†</a> <span class="count" aria-live="polite"></span></figcaption>
+        <figcaption id="table-cap" class="table-caption"><span id="table-desc">{{ metric.name }}, all {{ noun }}{{ ' playing now' if rating }}</span>, ranked by {{ value_word }}.<a class="note-ref" href="#note-dagger" aria-label="Caveat">†</a> <span class="count" aria-live="polite"></span></figcaption>
         <div class="table-scroll">
           <table class="register register--sortable">
             <thead>

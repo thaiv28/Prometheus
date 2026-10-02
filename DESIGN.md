@@ -206,6 +206,7 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 ### Filter line
 - Set as a sentence: "Showing years all, leagues all". The label is small caps, the value italic on a dotted underline, with a caret. Opening turns the value and caret ledger blue.
 - Panel: paper, ink border, 2px top rule, small-caps legend, a grid of square checkboxes; leagues carry their mark. "Major four only" and "Clear filters" are italic underlined text buttons.
+- Forecast pages (Elo, GlorELO+) label the year picker "season" and show *Now* as its empty value, the way the others show *All*: the register opens on current ratings for active teams. Its panel (legend "Season's end") leads with a "Current ratings" text button that returns to Now. Choosing seasons switches the register to team-seasons rated at the end of each year, and the caption says so ("Elo, all team-seasons, 2019, rated at season's end").
 
 ### Register (signature)
 - Booktabs table with a printed caption that describes the current view in words ("GLORY, LCK team-seasons, 2021–2024, ranked by score.") and a count.

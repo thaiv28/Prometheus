@@ -15,9 +15,12 @@
   const config = readJSON("#page-config") || { columns: [] };
   const valueKey = config.valueKey;
   const valueCol = config.columns.find((c) => c.key === valueKey) || { digits: 2, label: "Score" };
-  // Rating pages (Elo, GlorELO+) list teams on the Elo scale; the others list team-seasons scored 0-100.
+  // Rating pages (Elo, GlorELO+) are on the Elo scale. They open on "now" rows (current
+  // ratings); picking seasons switches to team-season rows rated at the end of each year.
+  // The other pages list team-seasons scored 0-100.
   const isRating = config.kind === "rating";
-  const noun = isRating ? "teams" : "team-seasons";
+  const showingNow = () => isRating && !state.years.size;
+  const noun = () => (showingNow() ? "teams" : "team-seasons");
   const metricName = (document.querySelector("h1")?.firstChild?.textContent || "").trim();
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const totalCols = config.columns.length + config.columns.filter((c) => c.bar).length;
@@ -40,7 +43,7 @@
   const searchInput = $("#team-search");
   const distEl = $("#dist");
   const numberFormat = new Intl.NumberFormat("en-US");
-  const rowKey = (r) => `${r.slug}|${isRating ? r.league : r.year}`;
+  const rowKey = (r) => `${r.slug}|${r.now ? "now" : r.year}|${r.league}`;
 
   function formatNumber(v, col) {
     const n = Number(v);
@@ -73,10 +76,19 @@
   }
 
   // ---- Data ------------------------------------------------------------
+  // The rows the year filter selects: every row, or for rating pages either the
+  // "now" rows or the chosen seasons' rows. "Now" shows active teams, but a search
+  // reaches every team's current rating (the header search lands here).
+  function pool() {
+    if (!isRating) return rows.filter((r) => !state.years.size || state.years.has(String(r.year)));
+    if (!showingNow()) return rows.filter((r) => !r.now && state.years.has(String(r.year)));
+    const searching = state.search.trim() !== "";
+    return rows.filter((r) => r.now && (r.active || searching));
+  }
+
   function filtered() {
     const term = state.search.trim().toLowerCase();
-    const out = rows.filter((r) =>
-      (!state.years.size || state.years.has(String(r.year))) &&
+    const out = pool().filter((r) =>
       (!state.leagues.size || state.leagues.has(String(r.league))) &&
       (!term || String(r.teamname).toLowerCase().includes(term))
     );
@@ -103,7 +115,7 @@
 
   // On narrow screens the league and year columns hide; they reappear under the team name.
   function teamMeta(r) {
-    return isRating
+    return isRating && r.now
       ? `<span class="team-meta">${leagueMark(r.league, true)}</span>`
       : `<span class="team-meta">${leagueMark(r.league, false)}<span>${esc(r.year)}</span></span>`;
   }
@@ -132,7 +144,7 @@
 
   function renderTable(list) {
     if (!list.length) {
-      tbody.innerHTML = `<tr><td class="empty" colspan="${totalCols}">No ${noun} match these filters. <button type="button" class="clear-filters" data-clear>Clear filters</button></td></tr>`;
+      tbody.innerHTML = `<tr><td class="empty" colspan="${totalCols}">No ${noun()} match these filters. <button type="button" class="clear-filters" data-clear>Clear filters</button></td></tr>`;
       return;
     }
     tbody.innerHTML = sorted(list)
@@ -264,9 +276,10 @@
   function describeView() {
     const leagues = [...state.leagues].sort();
     const leaguePart = !leagues.length ? "all" : leagues.length > 4 ? `${leagues.length} leagues’` : leagues.join(", ");
-    let s = `${metricName}, ${leaguePart} ${noun}`;
+    let s = `${metricName}, ${leaguePart} ${noun()}`;
     const years = describeYears(state.years);
-    if (years) s += isRating ? ` last active in ${years}` : `, ${years}`;
+    if (showingNow() && !state.search.trim()) s += " playing now";
+    else if (years) s += isRating ? `, ${years}, rated at season’s end` : `, ${years}`;
     if (state.search.trim()) s += `, names containing “${state.search.trim()}”`;
     return s;
   }
@@ -285,9 +298,11 @@
     });
     clearBtn.hidden = !(state.years.size || state.leagues.size || state.search);
     descEl.textContent = describeView();
-    countEl.textContent = count === rows.length
-      ? `${numberFormat.format(rows.length)} shown.`
-      : `${numberFormat.format(count)} of ${numberFormat.format(rows.length)} shown.`;
+    // Count against everything the year filter could show, so seasons don't read as a subset of "now".
+    const total = isRating ? pool().length : rows.length;
+    countEl.textContent = count === total
+      ? `${numberFormat.format(total)} shown.`
+      : `${numberFormat.format(count)} of ${numberFormat.format(total)} shown.`;
   }
 
   let started = false;
@@ -323,7 +338,7 @@
   document.addEventListener("click", (e) => {
     const shortcut = e.target.closest(".picker-shortcut");
     if (shortcut) {
-      state.leagues = new Set(shortcut.dataset.select.split(","));
+      state[shortcut.dataset.filter || "leagues"] = new Set(shortcut.dataset.select.split(",").filter(Boolean));
       update();
       return;
     }

@@ -6,7 +6,8 @@
   const $ = (sel) => document.querySelector(sel);
   let rows = [];
   try { rows = JSON.parse($("#rows-data").textContent); } catch (e) { return; }
-  const rating = new Map(rows.map((r) => [r.teamname, Number(r.glorelo)]));
+  // Head to head is for today, so only the "now" rows count.
+  const rating = new Map(rows.filter((r) => r.now).map((r) => [r.teamname, Number(r.glorelo)]));
 
   const a = $("#matchup-a");
   const b = $("#matchup-b");
