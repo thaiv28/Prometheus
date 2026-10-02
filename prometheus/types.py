@@ -2,7 +2,14 @@ from enum import Enum
 
 
 class Metric(str, Enum):
+    # Season stats
     glory = "glory"
+    record = "record"
+    luck = "luck"
+    # Forecasts
+    glorelo_plus = "glorelo+"
+    form = "form"
+    # Sunset
     glorb = "glorb"
 
 

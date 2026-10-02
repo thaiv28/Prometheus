@@ -95,3 +95,51 @@ def paired_bootstrap(loss_a, loss_b, n_resamples=2000, seed=0):
         [diff[rng.integers(0, len(diff), len(diff))].mean() for _ in range(n_resamples)]
     )
     return diff.mean(), np.percentile(means, 2.5), np.percentile(means, 97.5)
+
+
+def elo_as_of(timeline, offsets, cutoff):
+    """Each team's published Elo just before `cutoff`, by team name.
+
+    That is its rating after its last game before the cutoff, plus every change to
+    its home league's offset since that game (for example from an international
+    event it did not attend), as `elo.get_latest_elos` does for the site.
+
+    Args:
+        timeline: Elo after every game, oldest first: teamname, date, elo,
+            home_league and league_offset (the offset after that game).
+        offsets: League-offset history, oldest first: date, league, league_offset.
+        cutoff: Timestamp; only games and offset changes strictly before it count.
+    Returns:
+        Series of Elo ratings indexed by team name.
+    """
+    last = timeline[timeline["date"] < cutoff].drop_duplicates("teamname", keep="last")
+    last = last.set_index("teamname")
+    current = offsets[offsets["date"] < cutoff].groupby("league")["league_offset"].last()
+    moved = last["home_league"].map(current) - last["league_offset"]
+    return last["elo"] + moved.fillna(0)
+
+
+def spearman_brown(r, factor):
+    """Reliability of a measure `factor` times as long, from reliability `r`."""
+    return factor * r / (1 + (factor - 1) * r)
+
+
+def games_for_reliability(r_half, games_per_half, target=0.5):
+    """Games a team needs before a stat reaches `target` reliability.
+
+    Steps the split-half reliability down to one game with Spearman-Brown, then
+    finds the length where reliability reaches `target`. Returns inf when the
+    stat never gets there (reliability at or below 0).
+    """
+    if r_half <= 0:
+        return np.inf
+    one_game = r_half / (games_per_half - (games_per_half - 1) * r_half)
+    return target * (1 - one_game) / ((1 - target) * one_game)
+
+
+def correlation_interval(r, n, z=1.96):
+    """95% interval for a Pearson correlation from `n` pairs (Fisher z)."""
+    if n <= 3:
+        return np.nan, np.nan
+    centre, half = np.arctanh(np.clip(r, -0.999999, 0.999999)), z / np.sqrt(n - 3)
+    return np.tanh(centre - half), np.tanh(centre + half)

@@ -1,0 +1,15 @@
+{% extends 'base.html.j2' %}
+{% block title %}{{ title }} · Prometheus{% endblock %}
+{% block description %}{{ title }}.{% endblock %}
+{% block canonical_path %}{{ target }}{% endblock %}
+{% block head_extra %}<meta http-equiv="refresh" content="0; url={{ target }}" />{% endblock %}
+{% block content %}
+  <div class="spread">
+    <div class="spread-main">
+      <header class="section-head">
+        <h1>{{ title }}</h1>
+        <p class="lede">This page has moved. <a href="{{ target }}">Go to {{ target | replace('.html', '') | replace('_', ' ') | upper }}</a>, or see <a href="sunset.html">Sunset stats</a> for why.</p>
+      </header>
+    </div>
+  </div>
+{% endblock %}

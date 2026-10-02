@@ -1,4 +1,4 @@
-// Team page: GLORY/GLORB switch for the season figure, and the Elo history figure drawn as SVG.
+// Team page: GLORY/Record switch for the season figure, and the Elo history figure drawn as SVG.
 (function () {
   "use strict";
 
@@ -17,7 +17,7 @@
     document.addEventListener("change", (e) => {
       if (e.target.name !== "team-metric") return;
       chart.dataset.metric = e.target.value;
-      if (figMetric) figMetric.textContent = e.target.value.toUpperCase();
+      if (figMetric) figMetric.textContent = e.target.closest("label").textContent.trim();
     });
   }
 

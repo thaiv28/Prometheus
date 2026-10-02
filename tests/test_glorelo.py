@@ -1,67 +1,47 @@
+import math
+
 import pandas as pd
 import pytest
 
-from prometheus.glorelo import CENTER, glorelo_ratings, win_probability
+from prometheus import glorelo
 
 
-def _inputs():
-    glory_plus = pd.DataFrame(
-        {
-            "teamname": ["A", "B", "C"],
-            "league": ["LCK", "LPL", "LCS"],
-            "year": 2026,
-            "score": [80.0, 60.0, 40.0],
-        }
-    )
-    elos = pd.DataFrame(
-        {
-            "teamname": ["A", "B", "C", "D"],
-            "elo": [1700.0, 1600.0, 1450.0, 1500.0],
-            "latest_date": ["2026-09-01"] * 4,
-        }
-    )
-    return glory_plus, elos
+def test_ratings_are_elo_plus_form_points():
+    forms = pd.DataFrame({"teamname": ["A", "B", "C"], "home": ["LCK", "LCK", "LCS"], "form": [0.5, -0.5, 0.0], "year": 2026,
+                          "latest_date": "2026-09-01"})
+    elos = pd.DataFrame({"teamname": ["A", "B", "C", "D"], "elo": [1700.0, 1600.0, 1450.0, 1500.0]})
+    df = glorelo.glorelo_ratings(forms, elos).set_index("teamname")
+    # D has an Elo but no Form, so it is left out.
+    assert sorted(df.index) == ["A", "B", "C"]
+    assert df.loc["A", "glorelo"] == pytest.approx(1700 + 0.5 * glorelo.FORM_POINTS)
+    assert df.loc["C", "league"] == "LCS"
 
 
-def test_ratings_are_centred_and_ordered():
-    df = glorelo_ratings(*_inputs())
-    # D has an Elo but no GLORY+ this season, so it is left out.
-    assert df["teamname"].tolist() == ["A", "B", "C"]
-    assert df["glorelo"].mean() == pytest.approx(CENTER)
+def test_same_league_odds_come_from_the_rating_gap():
+    a, b = 1650.0, 1550.0
+    p = glorelo.win_probability(a, b)
+    assert p == pytest.approx(1 / (1 + math.exp(-glorelo.ELO_WEIGHT * 100)))
+    assert glorelo.win_probability(b, a) == pytest.approx(1 - p)
+    assert glorelo.win_probability(1500, 1500) == pytest.approx(0.5)
 
 
-def test_win_probability_is_symmetric_and_elo_scaled():
-    assert win_probability(1500, 1500) == pytest.approx(0.5)
-    assert win_probability(1600, 1500) == pytest.approx(0.64, abs=0.005)
-    assert win_probability(1600, 1500) + win_probability(1500, 1600) == pytest.approx(1)
-
-
-def test_rating_gap_matches_the_fitted_log_odds():
-    from prometheus.glorelo import ELO_WEIGHT, GLORY_PLUS_WEIGHT
-    import math
-
-    df = glorelo_ratings(*_inputs()).set_index("teamname")
-    log_odds = GLORY_PLUS_WEIGHT * (80 - 60) + ELO_WEIGHT * (1700 - 1600)
-    p = win_probability(df.loc["A", "glorelo"], df.loc["B", "glorelo"])
-    assert p == pytest.approx(1 / (1 + math.exp(-log_odds)))
+def test_cross_league_odds_use_elo_only():
+    p = glorelo.win_probability(1900, 1500, same_league=False, elo=1600, opponent_elo=1600)
+    assert p == pytest.approx(0.5)
 
 
 def test_weights_round_trip_and_changes(tmp_path):
-    from prometheus.glorelo import load_weights, save_weights, weight_changes
-
     path = tmp_path / "weights.json"
-    save_weights({"glory_plus_weight": 0.0100049, "elo_weight": 0.006}, path)
-    weights = load_weights(path)
-    assert weights == {"glory_plus_weight": 0.01, "elo_weight": 0.006}
-
-    changes = weight_changes(weights, {"glory_plus_weight": 0.011, "elo_weight": 0.0057})
-    assert changes["glory_plus_weight"] == pytest.approx(0.10)
-    assert changes["elo_weight"] == pytest.approx(0.05)
+    glorelo.save_weights({"elo_weight": 0.0030000049, "form_weight": 0.7}, path)
+    weights = glorelo.load_weights(path)
+    assert weights == {"elo_weight": 0.003, "form_weight": 0.7}
+    changes = glorelo.weight_changes(weights, {"elo_weight": 0.0033, "form_weight": 0.665})
+    assert changes["elo_weight"] == pytest.approx(0.10)
+    assert changes["form_weight"] == pytest.approx(0.05)
 
 
 def test_tracked_weights_are_loaded():
-    from prometheus.glorelo import ELO_WEIGHT, GLORY_PLUS_WEIGHT, load_weights
-
-    weights = load_weights()
-    assert GLORY_PLUS_WEIGHT == weights["glory_plus_weight"] > 0
-    assert ELO_WEIGHT == weights["elo_weight"] > 0
+    weights = glorelo.load_weights()
+    assert glorelo.ELO_WEIGHT == weights["elo_weight"] > 0
+    assert glorelo.FORM_WEIGHT == weights["form_weight"] > 0
+    assert glorelo.CROSS_REGION_ELO_WEIGHT == weights["cross_region_elo_weight"] > 0

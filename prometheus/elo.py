@@ -34,6 +34,15 @@ def expected_score(elo: float, opponent_elo: float) -> float:
     return 1 / (1 + 10 ** ((opponent_elo - elo) / 400))
 
 
+def winner_score(game_length, upper_bound=1.0, lower_bound=0.65, center=30 * 60, steepness=3):
+    """The winner's "actual score" for a game of `game_length` seconds.
+
+    Ranges from `lower_bound` (very long games) to `upper_bound` (very short games);
+    the loser gets 1 minus it. Works on scalars and arrays.
+    """
+    return lower_bound + (upper_bound - lower_bound) / (1 + (game_length / center) ** steepness)
+
+
 def calculate_game_length_elo_change(
     elo,
     opponent_elo,
@@ -60,10 +69,8 @@ def calculate_game_length_elo_change(
     Returns:
         Elo change for the team. The opponent's change is the negation.
     """
-    winner_score = lower_bound + (upper_bound - lower_bound) / (
-        1 + (game_length / center) ** steepness
-    )
-    actual = winner_score if result else 1 - winner_score
+    score = winner_score(game_length, upper_bound, lower_bound, center, steepness)
+    actual = score if result else 1 - score
 
     return K * (actual - expected_score(elo, opponent_elo))
 

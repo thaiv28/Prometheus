@@ -1,7 +1,7 @@
 {% extends 'base.html.j2' %}
-{% from '_marks.html.j2' import league, ordinal %}
+{% from '_marks.html.j2' import league, ordinal, signed %}
 {% block title %}{{ teamname }} · Prometheus{% endblock %}
-{% block description %}{{ teamname }}: GLORY and GLORB by season and Elo history.{% endblock %}
+{% block description %}{{ teamname }}: GLORY, Record, Luck and GlorELO+ by season, and Elo history.{% endblock %}
 {% block canonical_path %}teams/{{ slug }}.html{% endblock %}
 {% block content %}
   <header class="entry-head">
@@ -9,6 +9,7 @@
     <p class="entry-facts">
       {% for l in leagues %}<span>{{ league(l) }}</span>{% endfor %}
       {% if series %}<span>{{ series | length }} season{{ 's' if series | length != 1 }} ranked, {{ series[0].year }}{% if series | length > 1 %}–{{ series[-1].year }}{% endif %}</span>{% endif %}
+      {% if current_glorelo is not none %}<span>GlorELO+ {{ current_glorelo }}</span>{% endif %}
       {% if current_elo is not none %}<span>Elo {{ current_elo }}</span>{% endif %}
     </p>
     <p class="entry-summary">
@@ -25,13 +26,13 @@
     <div class="spread-main">
       {% if series %}
       {% set ns = namespace(top=100) %}
-      {% for s in series %}{% for v in [s.glory, s.glorb] %}{% if v is not none and v > ns.top %}{% set ns.top = v %}{% endif %}{% endfor %}{% endfor %}
+      {% for s in series %}{% for v in [s.glory, s.record] %}{% if v is not none and v > ns.top %}{% set ns.top = v %}{% endif %}{% endfor %}{% endfor %}
       <section class="seasons" aria-labelledby="seasons-heading">
         <div class="block-head">
           <h2 id="seasons-heading">Season by season</h2>
           <div class="metric-switch" role="radiogroup" aria-label="Metric shown in the figure">
             <label><input type="radio" name="team-metric" value="glory" checked /> <span>GLORY</span></label>
-            <label><input type="radio" name="team-metric" value="glorb" /> <span>GLORB</span></label>
+            <label><input type="radio" name="team-metric" value="record" /> <span>Record</span></label>
           </div>
         </div>
         <figure class="season-figure" aria-labelledby="season-fig-cap">
@@ -39,9 +40,9 @@
           <ol class="season-chart" id="season-chart" data-metric="glory" style="--n: {{ series | length }}">
             {% for s in series %}
             <li class="season-col" data-league="{{ s.league }}"
-                style="--glory: {{ ((s.glory if s.glory is not none and s.glory > 0 else 0) / ns.top * 100) | round(2) }}; --glorb: {{ ((s.glorb if s.glorb is not none and s.glorb > 0 else 0) / ns.top * 100) | round(2) }}">
-              <span class="season-val season-val--glory">{{ '%.1f' | format(s.glory) if s.glory is not none else '—' }}</span>
-              <span class="season-val season-val--glorb">{{ '%.1f' | format(s.glorb) if s.glorb is not none else '—' }}</span>
+                style="--glory: {{ ((s.glory if s.glory is not none and s.glory > 0 else 0) / ns.top * 100) | round(2) }}; --record: {{ ((s.record if s.record is not none and s.record > 0 else 0) / ns.top * 100) | round(2) }}">
+              <span class="season-val season-val--glory">{{ ('%.1f' | format(s.glory)) | replace('-', '−') if s.glory is not none else '—' }}</span>
+              <span class="season-val season-val--record">{{ '%.1f' | format(s.record) if s.record is not none else '—' }}</span>
               <span class="season-bar" aria-hidden="true"></span>
               <span class="season-year">{{ s.year }}<span class="league-mark" aria-hidden="true"></span></span>
             </li>
@@ -50,26 +51,30 @@
         </figure>
 
         <figure class="register-figure" aria-labelledby="season-table-cap">
-          <figcaption id="season-table-cap" class="table-caption">Year rank compares the team with major-league teams that played 5 or more games that year.</figcaption>
+          <figcaption id="season-table-cap" class="table-caption">Year rank compares the team with major-league teams that played 5 or more games that year. GlorELO+ is the forecast rating (Elo plus Form) at the end of each season.</figcaption>
           <div class="table-scroll">
             <table class="register">
               <thead>
                 <tr>
                   <th scope="col" class="num">Year</th>
-                  <th scope="col">League</th>
+                  <th scope="col" class="phone-hide">League</th>
                   <th scope="col" class="num">GLORY</th>
                   <th scope="col" class="num">Year rank</th>
-                  <th scope="col" class="num">GLORB</th>
+                  <th scope="col" class="num phone-hide" title="Chance to beat the average major-league team that year">Record</th>
+                  <th scope="col" class="num phone-hide" title="Wins above what the team's play earned">Luck</th>
+                  <th scope="col" class="num">GlorELO+</th>
                 </tr>
               </thead>
               <tbody>
                 {% for s in series | sort(attribute='year', reverse=True) %}
                 <tr>
                   <td class="num year">{{ s.year }}</td>
-                  <td>{{ league(s.league) }}</td>
-                  <td class="num value">{{ '%.2f' | format(s.glory) if s.glory is not none else '—' }}</td>
+                  <td class="phone-hide">{{ league(s.league) }}</td>
+                  <td class="num value">{{ ('%.2f' | format(s.glory)) | replace('-', '−') if s.glory is not none else '—' }}</td>
                   <td class="num muted">{% if s.year_rank %}{{ ordinal(s.year_rank) }} <span class="of">of {{ s.field }}</span>{% else %}<span title="Fewer than 5 games">Unranked</span>{% endif %}</td>
-                  <td class="num">{{ '%.2f' | format(s.glorb) if s.glorb is not none else '—' }}</td>
+                  <td class="num phone-hide">{{ '%.1f' | format(s.record) if s.record is not none else '—' }}</td>
+                  <td class="num phone-hide">{{ signed(s.luck_wins, 1) }}</td>
+                  <td class="num">{{ s.glorelo if s.glorelo is not none else '—' }}</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -78,7 +83,7 @@
         </figure>
       </section>
       {% else %}
-      <p class="section-note">GLORY and GLORB only cover LCK, LPL, LEC and LCS, so this team only has an Elo rating.</p>
+      <p class="section-note">GLORY, Record, Luck and GlorELO+ only cover LCK, LPL, LEC and LCS teams, so this team only has an Elo rating.</p>
       {% endif %}
 
       {% if elo_series %}
@@ -106,9 +111,10 @@
     <aside class="margin notes" aria-labelledby="entry-notes-heading">
       <h2 id="entry-notes-heading" class="margin-head">Key terms</h2>
       <ol class="notes-list">
-        <li><span class="note-mark" aria-hidden="true">1</span><a href="../glory.html">GLORY</a> scores a team-season on the stats that won games that year, roughly 0 to 100. <a href="../glorb.html">GLORB</a> uses the same stats, weighted equally.</li>
-        <li><span class="note-mark" aria-hidden="true">2</span>Seasons with fewer than 5 games get a score but no rank (Unranked).</li>
-        <li><span class="note-mark" aria-hidden="true">3</span><a href="../game_length_elo.html">Elo</a> starts at 1500 and moves most after short, decisive games. Compare ratings within a region.</li>
+        <li><span class="note-mark" aria-hidden="true">1</span><a href="../glory.html">GLORY</a> scores how well a team played: the stats that won games that year, adjusted for opponents, roughly 0 to 100. <a href="../record.html">Record</a> scores what it achieved: its chance to beat an average major-league team, from its results and schedule. <a href="../luck.html">Luck</a> is wins above what its play earned.</li>
+        <li><span class="note-mark" aria-hidden="true">2</span>Seasons with fewer than 5 games get a score but no rank (Unranked), Record or Luck.</li>
+        <li><span class="note-mark" aria-hidden="true">3</span><a href="../glorelo_plus.html">GlorELO+</a> is the forecast: Elo plus recent <a href="../form.html">Form</a>, at the end of each season.</li>
+        <li><span class="note-mark" aria-hidden="true">4</span><a href="../game_length_elo.html">Elo</a> starts at 1500 and moves most after short, decisive games. Compare ratings within a region.</li>
       </ol>
       {% if series %}<p class="margin-note"><a href="../glory.html?search={{ teamname | urlencode }}">Show {{ teamname }} in GLORY rankings</a></p>{% endif %}
     </aside>
@@ -117,5 +123,5 @@
   <script type="application/json" id="elo-series">{{ elo_series | tojson }}</script>
 {% endblock %}
 {% block scripts %}
-  <script src="../js/team.js" defer></script>
+  <script src="../{{ asset('js/team.js') }}" defer></script>
 {% endblock %}

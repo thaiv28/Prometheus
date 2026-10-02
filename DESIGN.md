@@ -83,7 +83,7 @@ components:
     backgroundColor: "transparent"
     textColor: "{colors.ink}"
     typography: "{typography.body}"
-    width: "12.5rem"
+    width: "10rem"
     rounded: "{rounded.none}"
   picker-summary:
     textColor: "{colors.ink}"
@@ -200,11 +200,12 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 
 ### Running head
 - Wordmark: a ledger-blue P glyph and PROMETHEUS in tracked small caps 600.
-- Sections: Home, then two groups, each led by an italic ink-3 group name in normal caps: *Season stats* (GLORY, GLORB, GLORY+) and *Forecasts* (GlorELO+, Elo). Links are small caps; the current one is ink 600 with a 2px ledger-blue underline. A hairline divides the groups on desktop; under 720px each group takes its own line and the divider drops.
-- Search: a "Search" label and a bare input on a hairline baseline; focus thickens the baseline to 2px ledger blue. Off the rankings pages it submits to the Elo register, which lists every team.
+- Sections: Home, then two groups, each led by an italic ink-3 group name in normal caps: *Season stats* (GLORY, Record, Luck) and *Forecasts* (GlorELO+, Form, Elo), then a lone *Sunset stats* link (small caps, after a hairline) to the page listing retired metrics. It is marked current on that page and on a retired metric's page. With eight sections the nav fills the 82rem head, so on desktop the team search always sits on its own line, right-aligned under the sections. Links are small caps; the current one is ink 600 with a 2px ledger-blue underline. A hairline divides the groups on desktop; under 720px each group takes its own line and the divider drops.
+- Team search: a "Team" label and a bare input ("Go to a team") on a hairline baseline; focus thickens the baseline to 2px ledger blue. Typing opens a suggestion slip under the field, set like an open picker (paper, ink border, 2px top rule): up to eight teams, each a name with its league mark and last year in ink-3; the highlighted one gets the paper wash and a ledger-blue name. Enter or a click opens the team page. With no match the slip says so, and Enter (or no JS) searches the Elo register, which lists every team.
 
 ### Filter line
-- Set as a sentence: "Showing years all, leagues all". The label is small caps, the value italic on a dotted underline, with a caret. Opening turns the value and caret ledger blue.
+- Set as a sentence: "Showing years all, leagues all, team any". The label is small caps, the value italic on a dotted underline, with a caret. Opening turns the value and caret ledger blue.
+- The team search is the last clause: a small-caps "team" label and a bare italic input on the same dotted underline, its placeholder *Any* set as a value; focus turns the rule 2px ledger blue. It filters the register by name and is stored in the URL (`?search=`).
 - Panel: paper, ink border, 2px top rule, small-caps legend, a grid of square checkboxes; leagues carry their mark. "Major four only" and "Clear filters" are italic underlined text buttons.
 - Forecast pages (Elo, GlorELO+) label the year picker "season" and show *Now* as its empty value, the way the others show *All*: the register opens on current ratings for active teams. Its panel (legend "Season's end") leads with a "Current ratings" text button that returns to Now. Choosing seasons switches the register to team-seasons rated at the end of each year, and the caption says so ("Elo, all team-seasons, 2019, rated at season's end").
 
@@ -215,17 +216,25 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 - Hover washes the row; hovering or focusing a row traces its value on the distribution figure in ledger blue.
 
 ### Head to head (GlorELO+)
+- When the two teams play in different leagues, an italic caption-size note under the bar says the odds come from Elo alone.
 - Set as a sentence at headline size (lede size on phones): "[team] *beats* [team] **57 times in 100**." Each team is a bare select on an ink baseline with a small caret, sized to the chosen name; the verb is italic ink-2 and the result is ink 600 with tabular figures.
 - Captioned like a figure ("Head to head." in bold small caps) with a note mark to the margin.
 - Below it, a 5px printed bar: the first team's share in ink on a paper-deep trough, with a hairline tick at 50%. It does not animate.
 
 ### Distribution figure
 - A histogram of every entry in the current view on the page's fixed scale: ink-2 columns on a ruled axis with tabular tick labels and a dashed median with an italic label.
+- A traced row draws a 2px ledger-blue rule at its value, with the name and value in ledger blue 600 in the band above the tallest column, knocked out of the rules with a paper stroke. The columns never cover it. While it would collide with the median label, the median keeps its line and drops its label.
+
+### Sunset stats page
+- Title and lede, then the retired metrics as a dot-leader contents list (name, full name in italic) with a "Why sunset." line in bold small caps.
+
+### Sunset note
+- A retired metric's page carries an italic caption-size note under the lede, set between two hairlines like an erratum slip and led by "Sunset." in bold small caps. It says why the metric was retired and what to use instead.
 
 ### Franchise entry (team pages)
-- Name in display size; a small-caps fact line (league marks, seasons ranked, Elo); a prose summary with the best season, its year rank, and the Elo peak.
-- Figure 1: printed column chart of GLORY or GLORB by season, switched by a two-option small-caps control with a ledger-blue underline.
-- Season register with year rank ("2nd of 47", or "Unranked" when the season had fewer than 5 games).
+- Name in display size; a small-caps fact line (league marks, seasons ranked, GlorELO+ now, Elo); a prose summary with the best season, its year rank, and the Elo peak.
+- Figure 1: printed column chart of GLORY or Record by season (both 0 to 100), switched by a two-option small-caps control with a ledger-blue underline.
+- Season register: year, league, GLORY, year rank ("2nd of 47", or "Unranked" when the season had fewer than 5 games), Record, Luck (signed wins, true minus) and season-end GlorELO+. Under 480px the league, Record and Luck columns drop so the register fits without scrolling.
 - Figure 2: hand-drawn SVG Elo line in the league ink, dashed 1500 rule, annotated peak, and a pointer and arrow-key readout.
 
 ### Margin notes

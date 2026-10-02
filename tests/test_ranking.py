@@ -55,3 +55,26 @@ def test_adjustment_rewards_strong_schedule(mock_elos):
     easiest = elos["opp_elo"].idxmin()
     assert adjusted.loc[hardest, "gpm"] > games.loc[hardest, "gpm"]
     assert adjusted.loc[easiest, "gpm"] < games.loc[easiest, "gpm"]
+
+
+def test_record_adjustment_removes_full_season_opponent_effect():
+    from prometheus.ranking import adjust_for_opponent_record
+
+    rng = np.random.default_rng(1)
+    teams = [f"t{i}" for i in range(12)]
+    rating = dict(zip(teams, rng.normal(0, 1, len(teams))))
+    rows = []
+    for g in range(200):
+        a, b = rng.choice(teams, 2, replace=False)
+        for team, opp in ((a, b), (b, a)):
+            rows.append({"gameid": f"g{g}", "teamid": team, "year": 2024,
+                         "gpm": 1800 + 60 * rating[team] - 40 * rating[opp]})
+    games = pd.DataFrame(rows)
+    record = pd.DataFrame({"teamid": teams, "year": 2024, "rating": [rating[t] for t in teams]})
+
+    adjusted = adjust_for_opponent_record(games, ["gpm"], record)
+
+    assert len(adjusted) == len(games)
+    opp_mean = adjusted["opp_rating"].mean()
+    expected = 1800 + 60 * adjusted["rating"] - 40 * opp_mean
+    assert adjusted["gpm"].to_numpy() == pytest.approx(expected.to_numpy())

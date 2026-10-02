@@ -11,7 +11,7 @@
   <div class="spread spread--home">
     <div class="spread-main">
       <div class="prose intro">
-        <p class="lede">Prometheus keeps two kinds of numbers. Season stats (GLORY, GLORB and GLORY+) measure how well a team played in a year, judged by the gold and objective stats that decided wins that year. Forecasts (GlorELO+ and Elo) estimate who wins the next game, and are tested against every game since 2014.</p>
+        <p class="lede">Prometheus keeps two kinds of numbers. Season stats describe a finished season with hindsight: GLORY measures how well a team played, Record what it achieved against its schedule, and Luck the gap between the two. Forecasts (GlorELO+, Form and Elo) estimate who wins the next game from earlier games only, and are tested against every game since 2014.</p>
       </div>
 
       <figure class="register-figure" aria-labelledby="t1-cap">
@@ -92,7 +92,7 @@
         {% endfor %}
       </ol>
       {% endfor %}
-      <p class="margin-note">Counts are team-seasons for season stats and teams for forecasts. Select any team name to see its history.</p>
+      <p class="margin-note">Counts are team-seasons for season stats and teams for forecasts. Select any team name to see its history. Retired metrics are listed under <a href="sunset.html">Sunset stats</a>.</p>
     </aside>
   </div>
 {% endblock %}

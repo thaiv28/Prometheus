@@ -23,24 +23,29 @@ Type: one family, **Source Serif 4** (self-hosted variable woff2, OFL, licence i
 | Output | Template | Notes |
 |---|---|---|
 | `index.html` | `index.html.j2` | Title, intro, top 15 GLORY team-seasons, best team-season of each year, and the list of rankings in the margin |
-| `glory.html`, `glorb.html`, `game_length_elo.html` | `rankings.html.j2` | Title and lede, a distribution figure of the current view, the filter line, the sortable register, and "How to read" notes in the margin. Driven by a column config from `build_site.py` (`note` keys put superscripts on column heads). |
-| `teams/<slug>.html` | `team.html.j2` | Franchise entry: fact line, summary sentence, season column chart with a GLORY/GLORB switch, season register with year rank, and an SVG Elo chart. Pages exist for all teams with Elo. |
-| `404.html` | `404.html.j2` | "Page not found" with links to the home page and each ranking. Links are root-absolute. |
+| `glory.html`, `record.html`, `luck.html`, `glorelo_plus.html`, `form.html`, `game_length_elo.html`, and the sunset `glory_unadjusted.html` and `glorb.html` | `rankings.html.j2` | Title and lede (plus a sunset note for a retired metric), a distribution figure of the current view, the filter line, the sortable register, and "How to read" notes in the margin. Driven by a column config from `build_site.py` (`note` keys put superscripts on column heads; `domain` fixes the value scale, as for Luck; a metric's `value_word`/`value_plural` name it in captions). |
+| `teams/<slug>.html` | `team.html.j2` | Franchise entry: fact line, summary sentence, season column chart with a GLORY/Record switch, season register (GLORY, year rank, Record, Luck, season-end GlorELO+), and an SVG Elo chart. Pages exist for all teams with Elo. |
+| `sunset.html` | `sunset.html.j2` | Retired metrics (`METRICS` entries with a `sunset` note, plus `FOLDED` entries that point at their replacement) with links and why each was retired. The header shows one "Sunset stats" link here instead of the metrics. |
+| `glory_plus.html` | `redirect.html.j2` | Meta-refresh to `glory.html` (GLORY+ was folded into GLORY), with a link and canonical URL. |
+| `404.html` | `404.html.j2` | "Page not found" with links to the home page, each ranking and Sunset stats. Links are root-absolute. |
+| `teams.json` | — | Team index for the header search: name, slug, league, last game; major-league teams first, then newest. |
 
 ## Behavior
 
 - Filter state (years, leagues, search, sort) is stored in the URL, so filtered views can be shared.
 - **Rank** is the position by the page's metric within the current filtered view. It doesn't change when you sort by another column.
 - The table caption describes the current view in words and gives the count.
-- Hovering or focusing a row traces its value on the distribution figure.
+- Hovering or focusing a row traces its value on the distribution figure; the name and value sit in the band above the columns, and the median label hides while they would collide.
 - **Signature motion:** when the view changes, rows that stay on screen slide from their old position to the new one (about 360ms). Instant under `prefers-reduced-motion`. No other decorative motion.
 - The Elo chart is keyboard-readable: focus it and use the arrow keys (Shift for steps of 10, Home/End).
-- On non-rankings pages, the header search submits to the Elo page, which covers every team.
+- The header search (`search.js`, every page) suggests teams from `teams.json` and opens the team's page. With no match, or without JS, it submits to the Elo page, which lists every team.
+- Rankings pages filter the register by team name with the search box in the filter line.
 - Every value written by JS goes through `esc()`. Never interpolate raw data into `innerHTML`.
 
 ## Rules for future changes
 
-- New colors go in `tokens.css`. Don't put inline `style=""` in templates except data-driven custom properties (`--v`, `--n`, `--glory`, `--glorb`).
+- Link CSS and JS through `asset()` in templates. It adds a content hash (`?v=`), so a browser never pairs new HTML with a cached old stylesheet.
+- New colors go in `tokens.css`. Don't put inline `style=""` in templates except data-driven custom properties (`--v`, `--n`, `--glory`, `--record`).
 - No cards, radius, shadows, gradients or paper textures.
 - Navigation uses real `<a>` links.
 - Check both 1440px and 390px widths after any change. Headless Chrome won't render narrower than 500px; load the page in a 390px iframe to test mobile.

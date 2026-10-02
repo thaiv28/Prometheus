@@ -1,22 +1,34 @@
 """
 build_site.py: Generates static HTML site for Prometheus rankings.
-- Computes GLORY/GLORB rankings and Elo snapshots from db/prometheus.db
+- Computes season stats (GLORY, Record, Luck, and the sunset GLORB and unadjusted
+  GLORY) and forecasts (GlorELO+, Form, Elo) from db/prometheus.db
 - Renders index.html, one rankings page per metric, and one page per team
 - Outputs to output/ folder
 """
 
+import json
 import os
 import re
 import datetime
+import hashlib
 import shutil
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
-from prometheus.ranking import get_glory_ranking, load_glory_games
 from prometheus.elo import get_elo_history, get_latest_elos, get_season_elos
-from prometheus.glorelo import glorelo_ratings
+from prometheus.form import form_states, load_form_games, opponent_adjust
+from prometheus.glorelo import (
+    CROSS_REGION_ELO_WEIGHT,
+    ELO_WEIGHT,
+    FORM_POINTS,
+    glorelo_ratings,
+    team_forms,
+)
+from prometheus.ranking import get_glory_ranking, load_glory_games
+from prometheus.season import get_luck, get_record, load_season_games
 from prometheus.types import ALL_MAJOR_LEAGUES
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -33,15 +45,60 @@ METRICS = {
         "key": "glory",
         "name": "GLORY",
         "full_name": "Global League Offensive Rankings Yield",
-        "description": "Scores each team-season on gold and objective stats, weighted by how much each stat decided wins that year.",
+        "description": "How well a team played: each team-season's gold and objective stats, weighted by how much each stat decided wins that year, with every game adjusted for how strong the opponent was.",
         "how_to_read": [
-            "Score: predicted win strength, roughly 0 to 100. Higher is better.",
+            "Score: roughly 0 to 100. Higher is better.",
             "Era Z: how far a team is above the average major-league team that year, in standard deviations. League Z: the same, compared only with its own league. +2 means two standard deviations above average.",
-            "Weights are recalculated each year, so a 2015 team is judged by what won games in 2015.",
+            "Weights are recalculated each year, so a 2015 team is judged by what won games in 2015. Opponent strength is each opponent's Record for the whole season, so a big gold lead against a top team counts for more.",
+            "GLORY needs about 8 games before a score is more signal than noise.",
         ],
-        "caveats": "Only LCK, LPL, LEC and LCS. Team-seasons with fewer than 5 games are left out. Teams that go deep in playoffs face stronger opponents, which can lower their averages.",
-        "baseline": False,
+        "caveats": "Only LCK, LPL, LEC and LCS. Team-seasons with fewer than 5 games are left out. Regions meet only at international events, so the gap between regions is measured loosely.",
         "lede_note": 3,
+    },
+    "record": {
+        "key": "record",
+        "name": "Record",
+        "full_name": "Results, adjusted for schedule",
+        "description": "What a team achieved: its wins and losses over the whole season, adjusted for who it played, with fast wins counting for more than slow ones.",
+        "how_to_read": [
+            "Record: the chance this team-season would beat the average major-league team of the same year in one game. 50 is average.",
+            "Every game of the season counts, including international events, which is how regions are compared.",
+            "A 15-minute stomp counts as nearly a full win, a 50-minute win as about two-thirds of one, as in Elo.",
+        ],
+        "caveats": "Shown for LCK, LPL, LEC and LCS teams with 5 or more games. Teams with few games are pulled slightly toward average. Regions meet only at international events.",
+        "lede_note": 1,
+        "value_word": "Record",
+        "value_plural": "Records",
+    },
+    "luck": {
+        "key": "luck",
+        "name": "Luck",
+        "full_name": "Wins above what a team's play earned",
+        "description": "Who won more, or fewer, games than their play deserved. Earned wins come from GLORY's model of each game's stats, so a team that keeps winning games it was behind in shows up as lucky.",
+        "how_to_read": [
+            "Luck: wins above (or below) what the team's gold and objective stats earned, over the season. +3 means three more wins than its play earned.",
+            "Earned: the win % a team's stats were worth, after correcting the per-game model, which pulls everyone toward 50%.",
+            "Luck repeats only a little from one half of a season to the other, so most of it is luck. The part that repeats may be real skill the stats miss, such as closing out games.",
+        ],
+        "caveats": "Only LCK, LPL, LEC and LCS team-seasons with 5 or more games. Not adjusted for schedule.",
+        "lede_note": 1,
+        "value_word": "luck",
+        "value_plural": "luck",
+    },
+    "glory_unadjusted": {
+        "key": "glory_unadjusted",
+        "name": "GLORY (unadjusted)",
+        "full_name": "GLORY before the opponent adjustment",
+        "description": "GLORY as it was first published: the same stats and yearly weights, with no adjustment for opponent strength.",
+        "how_to_read": [
+            "Score: roughly 0 to 100. Higher is better.",
+            "Era Z and League Z: same as on GLORY.",
+            "Teams in weaker leagues score higher here than on GLORY, because their stats came against weaker opponents.",
+        ],
+        "caveats": "Only LCK, LPL, LEC and LCS. Team-seasons with fewer than 5 games are left out.",
+        "lede_note": 3,
+        "sunset_why": "Replaced by GLORY, which now adjusts every game for the opponent's strength. The adjusted score is more stable from one half of a season to the other.",
+        "sunset": "This is GLORY without the opponent adjustment. GLORY now adjusts every game for the opponent's strength, which makes it more stable and fairer to teams with hard schedules. Use GLORY instead. This page stays up for comparison and old links.",
     },
     "glorb": {
         "key": "glorb",
@@ -56,23 +113,22 @@ METRICS = {
         "caveats": "Only LCK, LPL, LEC and LCS. Team-seasons with fewer than 5 games are left out.",
         "baseline": True,
         "lede_note": 3,
+        "sunset_why": "Built as a yardstick for GLORY. On its own it predicts winners no better than a team's win % so far.",
+        "sunset": "GLORB is no longer developed. It was built as a yardstick for GLORY, and on its own it adds little: tested on every major-league game since 2014, it predicts winners no better than a team's win % so far. Use GLORY instead. This page and its numbers stay up so old links keep working.",
     },
-    "glory_plus": {
+}
+
+# Retired pages that now point somewhere else; listed on the Sunset stats page.
+FOLDED = [
+    {
         "key": "glory_plus",
         "name": "GLORY+",
         "full_name": "GLORY, adjusted for opponent strength",
-        "description": "GLORY with every game adjusted for how strong the opponent was, using their Elo going into the game. A big gold lead against a top team counts for more than the same lead against a weak one.",
-        "how_to_read": [
-            "Score: on the same scale as GLORY. Higher is better.",
-            "GLORY+ minus GLORY shows how much a team's schedule helped or hurt it. Teams in weaker leagues usually drop.",
-            "Era Z and League Z: same as on GLORY.",
-        ],
-        "caveats": "Only LCK, LPL, LEC and LCS. Team-seasons with fewer than 5 games are left out. Elo links regions only through international events like MSI and Worlds, so the gap between regions is probably understated.",
-        "baseline": False,
-        "opponent_adjusted": True,
-        "lede_note": 3,
+        "href": "glory.html",
+        "link_text": "Now part of GLORY",
+        "sunset_why": "Folded into GLORY, which is now always opponent-adjusted. GLORY+ measured opponents by their Elo going into each game, a forecast; GLORY uses each opponent's Record for the whole season, so a season stat depends only on that season.",
     },
-}
+]
 
 ELO_METRICS = {
     "game_length_elo": {
@@ -96,26 +152,44 @@ FORECASTS = {
     "glorelo_plus": {
         "key": "glorelo_plus",
         "name": "GlorELO+",
-        "full_name": "GLORY+ and Elo, blended into a forecast",
-        "description": "Who would win a game today. Each team's GLORY+ this season and its current Elo, combined with the weights that best predicted past games.",
+        "full_name": "Elo and Form, blended into a forecast",
+        "description": "Who would win a game today. Each team's Elo plus its Form, the recent play that Elo misses, weighted by what best predicted past games.",
         "how_to_read": [
-            "Rating: on the Elo scale, with the average major-league team this season at 1500. A 100-point gap means about a 64% chance to win; 200 points, about 76%.",
-            "Head to head turns any two ratings into a chance to win one game. It ignores side; blue side wins about 54% of games.",
-            "Tested on every major-league game since 2014, using only earlier games each time: it picks the winner 64% of the time, and its odds are slightly more accurate than Elo's alone.",
-            "The table opens on this season. Pick a past season to see each team's GLORY+ for that season blended with its Elo at the end of that year; each season's average team sits at 1500.",
+            "Rating: Elo plus Form, both in Elo points. Form says how much better than its own league a team has played lately.",
+            "Head to head turns two ratings into a chance to win one game. Between teams from different leagues it uses Elo alone, because Form only compares a team with its own league. It ignores side; blue side wins about 54% of games.",
+            "Tested on every major-league game since 2014, using only earlier games each time: it picks the winner 64.6% of the time within a league, and its odds are more accurate than Elo's alone.",
+            "The table opens on current ratings for teams that have played in the last six months. Pick a season to see ratings at the end of that year.",
         ],
-        "caveats": "Only LCK, LPL, LEC and LCS teams with 5 or more games in the season. Regions meet only at international events, so a league that rarely plays abroad is measured loosely. Odds are for one game, not a series.",
+        "caveats": "Only LCK, LPL, LEC and LCS teams. Regions meet only at international events, so a league that rarely plays abroad is measured loosely. Odds are for one game, not a series.",
         "lede_note": 3,
         "matchup": True,
+    },
+    "form": {
+        "key": "form",
+        "name": "Form",
+        "full_name": "Predictive GLORY: recent play against the league",
+        "description": "How well a team has been playing lately compared with the rest of its league, from its recent gold and objective stats. Built to predict the next game, not to describe a season.",
+        "how_to_read": [
+            "Form: in Elo points above or below the team's league average. +100 means it has played like a team about 100 Elo points better than its league's average.",
+            "Recent games count most: a game's weight halves every 20 games, and a new season starts from half of last season's weight. Each game's stats are adjusted for the opponent's Elo going into it.",
+            "Form compares a team only with its own league; to compare regions, use Elo or GlorELO+.",
+            "The table opens on teams that have played in the last six months. Pick a season to see Form at the end of that year.",
+        ],
+        "caveats": "Form is relative to each league, so a +100 in a weak league is not a +100 in a strong one. Teams with few games are pulled toward their league's average.",
+        "lede_note": 1,
+        "value_word": "Form",
+        "value_plural": "Form",
     },
 }
 
 # The header and contents split what happened (season stats) from what's likely
-# to happen next (forecasts).
+# to happen next (forecasts). Retired metrics keep their pages but leave the header:
+# one "Sunset stats" link leads to a page listing them.
 SECTIONS = [
-    {"name": "Season stats", "metrics": list(METRICS.values())},
+    {"name": "Season stats", "metrics": [m for m in METRICS.values() if not m.get("sunset")]},
     {"name": "Forecasts", "metrics": [*FORECASTS.values(), *ELO_METRICS.values()]},
 ]
+SUNSET = [*FOLDED, *(m for m in METRICS.values() if m.get("sunset"))]
 NAV = [
     {"name": s["name"], "links": [{"key": m["key"], "name": m["name"]} for m in s["metrics"]]}
     for s in SECTIONS
@@ -126,6 +200,7 @@ env = Environment(
 )
 env.globals.update(
     nav=NAV,
+    sunset_keys=[m["key"] for m in SUNSET],
     site_url=SITE_URL,
     major_leagues=[l.value for l in ALL_MAJOR_LEAGUES],
 )
@@ -156,6 +231,19 @@ def _write(path, html):
         f.write(html)
 
 
+def _asset_url(path: str) -> str:
+    """'css/base.css' -> 'css/base.css?v=<content hash>'.
+
+    A changed file gets a new URL, so browsers never pair new HTML with a cached
+    old stylesheet or script.
+    """
+    digest = hashlib.sha256((Path(STATIC_SRC) / path).read_bytes()).hexdigest()[:10]
+    return f"{path}?v={digest}"
+
+
+env.globals["asset"] = _asset_url
+
+
 def copy_static():
     if not os.path.isdir(STATIC_SRC):
         raise RuntimeError("Missing site_static directory.")
@@ -166,7 +254,7 @@ def copy_static():
     shutil.copy2(Path(STATIC_SRC) / "favicon.svg", Path(OUTPUT_DIR) / "favicon.svg")
 
 
-def _rankings(games, baseline, minimum_matches, z_scores, opponent_adjusted=False):
+def _rankings(games, minimum_matches, z_scores, baseline=False, opponent_adjusted=False, record=None):
     return get_glory_ranking(
         year=sorted(games),
         league=ALL_MAJOR_LEAGUES,
@@ -175,6 +263,7 @@ def _rankings(games, baseline, minimum_matches, z_scores, opponent_adjusted=Fals
         z_scores=z_scores,
         minimum_matches=minimum_matches,
         opponent_adjusted=opponent_adjusted,
+        record=record,
     )
 
 
@@ -255,16 +344,49 @@ METRIC_COLUMNS = [
     {"key": "year", "label": "Year", "type": "text", "wideOnly": True},
 ]
 
+RECORD_COLUMNS = [
+    {"key": "rank", "label": "Rank", "type": "rank"},
+    {"key": "teamname", "label": "Team", "type": "team"},
+    {"key": "record", "label": "Record", "type": "number", "digits": 1, "bar": True, "note": 1,
+     "hint": "Chance to beat the average major-league team that year"},
+    {"key": "win_pct", "label": "Win %", "type": "number", "digits": 1, "phoneHide": True},
+    {"key": "games", "label": "Games", "type": "number", "digits": 0, "wideOnly": True, "note": 2},
+    {"key": "league", "label": "League", "type": "league", "wideOnly": True},
+    {"key": "year", "label": "Year", "type": "text", "wideOnly": True},
+]
+
+LUCK_COLUMNS = [
+    {"key": "rank", "label": "Rank", "type": "rank"},
+    {"key": "teamname", "label": "Team", "type": "team"},
+    {"key": "luck_wins", "label": "Luck", "type": "number", "digits": 1, "signed": True, "note": 1,
+     "hint": "Wins above what the team's play earned"},
+    {"key": "win_pct", "label": "Win %", "type": "number", "digits": 1, "phoneHide": True},
+    {"key": "expected", "label": "Earned", "type": "number", "digits": 1, "phoneHide": True, "note": 2,
+     "hint": "The win % the team's stats were worth"},
+    {"key": "games", "label": "Games", "type": "number", "digits": 0, "wideOnly": True},
+    {"key": "league", "label": "League", "type": "league", "wideOnly": True},
+    {"key": "year", "label": "Year", "type": "text", "wideOnly": True},
+]
+
 GLORELO_COLUMNS = [
     {"key": "rank", "label": "Rank", "type": "rank"},
     {"key": "teamname", "label": "Team", "type": "team"},
     {"key": "glorelo", "label": "Rating", "type": "number", "digits": 0, "bar": True, "note": 1},
-    {"key": "glory_plus", "label": "GLORY+", "type": "number", "digits": 1, "phoneHide": True,
-     "hint": "GLORY+ this season so far"},
+    {"key": "form", "label": "Form", "type": "number", "digits": 0, "signed": True, "phoneHide": True,
+     "hint": "Elo points above or below its league's average, from recent play"},
     {"key": "elo", "label": "Elo", "type": "number", "digits": 0, "wideOnly": True,
      "hint": "Elo now, or at the end of the season shown"},
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
     {"key": "year", "label": "Season", "type": "text", "wideOnly": True, "note": 4},
+]
+
+FORM_COLUMNS = [
+    {"key": "rank", "label": "Rank", "type": "rank"},
+    {"key": "teamname", "label": "Team", "type": "team"},
+    {"key": "form", "label": "Form", "type": "number", "digits": 0, "signed": True, "bar": True, "note": 1},
+    {"key": "league", "label": "League", "type": "league", "wideOnly": True, "note": 3},
+    {"key": "year", "label": "Season", "type": "text", "wideOnly": True, "note": 4},
+    {"key": "latest_date", "label": "Last game", "type": "date", "wideOnly": True},
 ]
 
 ELO_COLUMNS = [
@@ -277,8 +399,12 @@ ELO_COLUMNS = [
 ]
 
 
-def _team_pages(glory_df, glorb_df, elo_history, latest_elos, glory_qualified):
-    """Return {slug: context} for every team with GLORY data or Elo history."""
+def _team_pages(glory_df, record_df, luck_df, glorelo_seasons, glorelo_now, elo_history, latest_elos, glory_qualified):
+    """Return {slug: context} for every team with GLORY data or Elo history.
+
+    Each season carries GLORY (every team-season with a game), Record and Luck, and
+    GlorELO+ at the end of that year. `glorelo_now` gives the current GlorELO+.
+    """
 
     # Rank of each qualified team-season within its year, for team pages.
     q = glory_qualified[["teamname", "year", "score"]].copy()
@@ -286,21 +412,22 @@ def _team_pages(glory_df, glorb_df, elo_history, latest_elos, glory_qualified):
     q["field"] = q.groupby("year")["score"].transform("size").astype(int)
     year_rank = {(t, int(y)): (int(r), int(f)) for t, y, r, f in q[["teamname", "year", "year_rank", "field"]].itertuples(index=False)}
 
+    key = ["teamname", "year"]
     seasons = (
         glory_df[["teamname", "year", "league", "score"]]
         .rename(columns={"score": "glory"})
-        .merge(
-            glorb_df[["teamname", "year", "score"]].rename(columns={"score": "glorb"}),
-            on=["teamname", "year"],
-            how="outer",
-        )
+        .merge(record_df[key + ["record"]].drop_duplicates(key), on=key, how="left")
+        .merge(luck_df[key + ["luck_wins"]].drop_duplicates(key), on=key, how="left")
+        .merge(glorelo_seasons[key + ["glorelo"]].drop_duplicates(key), on=key, how="left")
     )
+    glorelo_current = glorelo_now.drop_duplicates("teamname").set_index("teamname")["glorelo"]
 
     latest = latest_elos.set_index("teamname")
     pages = {}
     teams = sorted(set(seasons["teamname"]) | set(elo_history["teamname"]))
     seasons_by_team = dict(tuple(seasons.groupby("teamname")))
     elo_by_team = dict(tuple(elo_history.groupby("teamname")))
+    value = lambda v, digits: None if pd.isna(v) else round(float(v), digits)
 
     for team in teams:
         slug = _slugify(team)
@@ -312,8 +439,10 @@ def _team_pages(glory_df, glorb_df, elo_history, latest_elos, glory_qualified):
                     {
                         "year": year,
                         "league": row.league,
-                        "glory": None if pd.isna(row.glory) else round(float(row.glory), 2),
-                        "glorb": None if pd.isna(row.glorb) else round(float(row.glorb), 2),
+                        "glory": value(row.glory, 2),
+                        "record": value(row.record, 1),
+                        "luck_wins": value(row.luck_wins, 1),
+                        "glorelo": None if pd.isna(row.glorelo) else round(float(row.glorelo)),
                         "year_rank": year_rank.get((team, year), (None, None))[0],
                         "field": year_rank.get((team, year), (None, None))[1],
                     }
@@ -344,10 +473,30 @@ def _team_pages(glory_df, glorb_df, elo_history, latest_elos, glory_qualified):
             "elo_summary": elo_summary,
             "best": best,
             "current_elo": None if current is None else round(float(current["elo"])),
+            "current_glorelo": round(float(glorelo_current[team])) if team in glorelo_current.index else None,
             "current_league": None if current is None else current["league"],
             "leagues": leagues or ([current["league"]] if current is not None else []),
         }
     return pages
+
+
+def render_sunset(last_update):
+    _write(
+        os.path.join(OUTPUT_DIR, "sunset.html"),
+        env.get_template("sunset.html.j2").render(
+            page_key="sunset", root_path="", metrics=SUNSET, last_update=last_update
+        ),
+    )
+
+
+def render_redirect(key, target, title, last_update):
+    """A retired page that sends visitors (and search engines) to its replacement."""
+    _write(
+        os.path.join(OUTPUT_DIR, f"{key}.html"),
+        env.get_template("redirect.html.j2").render(
+            page_key=key, root_path="", target=target, title=title, last_update=last_update
+        ),
+    )
 
 
 def render_404(last_update):
@@ -356,6 +505,28 @@ def render_404(last_update):
         os.path.join(OUTPUT_DIR, "404.html"),
         env.get_template("404.html.j2").render(page_key="404", root_path="/", last_update=last_update),
     )
+
+
+def write_team_index(pages):
+    """teams.json for the header search: name, slug, league and last game.
+
+    Ordered major-league teams first, then by last game, newest first; the search
+    keeps this order among equally good matches.
+    """
+    teams = [
+        {
+            "n": p["teamname"],
+            "s": p["slug"],
+            "l": p["current_league"] or (p["leagues"][-1] if p["leagues"] else ""),
+            "d": p["elo_summary"]["last"]["date"] if p["elo_summary"] else str(p["series"][-1]["year"]),
+        }
+        for p in pages.values()
+    ]
+    majors = set(env.globals["major_leagues"])
+    teams.sort(key=lambda t: t["d"], reverse=True)
+    teams.sort(key=lambda t: t["l"] not in majors)
+    with open(os.path.join(OUTPUT_DIR, "teams.json"), "w") as f:
+        json.dump(teams, f, ensure_ascii=False, separators=(",", ":"))
 
 
 def render_team_pages(pages, last_update):
@@ -367,91 +538,125 @@ def render_team_pages(pages, last_update):
         )
 
 
+def _season_page(key, df, columns, value_key, last_update, domain=None):
+    config = {"valueKey": value_key, "columns": columns, "defaultSort": value_key, "kind": "season"}
+    if domain is not None:
+        config["domain"] = domain
+    render_rankings_page(
+        METRICS[key],
+        _records(df),
+        config,
+        {"years": sorted(int(y) for y in df["year"].unique()), "leagues": sorted(df["league"].unique())},
+        last_update,
+    )
+
+
+def _active(df):
+    """True for rows whose last game is within ACTIVE_WINDOW of the newest game."""
+    played = pd.to_datetime(df["latest_date"])
+    return played >= played.max() - ACTIVE_WINDOW
+
+
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     copy_static()
     last_update = datetime.datetime.now().strftime("%B %-d, %Y")
+    majors = env.globals["major_leagues"]
 
-    # Read each year's games once and share them across GLORY, GLORB and GLORY+.
+    # ---- Season stats ----------------------------------------------------
+    # Read each year's games once and share them across every GLORY variant.
     games = load_glory_games()
-    glory_df = _rankings(games, baseline=False, minimum_matches=5, z_scores=True)
-    glorb_df = _rankings(games, baseline=True, minimum_matches=5, z_scores=True)
-    glory_all = _rankings(games, baseline=False, minimum_matches=1, z_scores=False)
-    glorb_all = _rankings(games, baseline=True, minimum_matches=1, z_scores=False)
-    glory_plus_df = _rankings(games, baseline=False, minimum_matches=5, z_scores=True, opponent_adjusted=True)
+    record_all = get_record(load_season_games())
+    glory_df = _rankings(games, 5, True, opponent_adjusted="record", record=record_all)
+    glory_all = _rankings(games, 1, False, opponent_adjusted="record", record=record_all)
+    glory_unadjusted_df = _rankings(games, 5, True)
+    glorb_df = _rankings(games, 5, True, baseline=True)
+
+    # Record covers the same team-seasons as GLORY (5+ major-league games), with
+    # GLORY's league; its win % and games count every game of the season.
+    record_df = glory_df[["teamname", "year", "league"]].merge(
+        record_all.sort_values("games").drop_duplicates(["teamname", "year"], keep="last")[
+            ["teamname", "year", "record", "win_pct", "games"]
+        ],
+        on=["teamname", "year"],
+    ).assign(win_pct=lambda d: (d["win_pct"] * 100).round(1), record=lambda d: d["record"].round(1))
+    luck_df = get_luck(games, minimum_matches=5).assign(
+        win_pct=lambda d: (d["win_pct"] * 100).round(1),
+        expected=lambda d: (d["expected"] * 100).round(1),
+        luck_wins=lambda d: d["luck_wins"].round(1),
+    )[["teamname", "year", "league", "luck_wins", "win_pct", "expected", "games"]]
 
     render_404(last_update)
+    render_sunset(last_update)
+    render_redirect("glory_plus", "glory.html", "GLORY+ is now part of GLORY", last_update)
 
-    for metric, df in (
-        (METRICS["glory"], glory_df),
-        (METRICS["glorb"], glorb_df),
-        (METRICS["glory_plus"], glory_plus_df),
-    ):
-        render_rankings_page(
-            metric,
-            _records(df),
-            {"valueKey": "score", "columns": METRIC_COLUMNS, "defaultSort": "score", "kind": "season"},
-            {
-                "years": sorted(int(y) for y in df["year"].unique()),
-                "leagues": sorted(df["league"].unique()),
-            },
-            last_update,
-        )
+    _season_page("glory", glory_df, METRIC_COLUMNS, "score", last_update)
+    _season_page("record", record_df, RECORD_COLUMNS, "record", last_update)
+    reach = float(np.ceil(luck_df["luck_wins"].abs().max() / 5) * 5)
+    _season_page("luck", luck_df, LUCK_COLUMNS, "luck_wins", last_update, domain=[-reach, reach])
+    _season_page("glory_unadjusted", glory_unadjusted_df, METRIC_COLUMNS, "score", last_update)
+    _season_page("glorb", glorb_df, METRIC_COLUMNS, "score", last_update)
 
+    # ---- Forecasts -------------------------------------------------------
     # Forecast pages open on "now" rows (current ratings) and also carry one row per
     # team-season (rating at the end of that year) for the season picker.
-    latest_elos = {}
-    season_elos = {}
-    for key, cfg in ELO_METRICS.items():
-        latest = get_latest_elos(cfg["method"])
-        seasons = get_season_elos(cfg["method"])
-        latest_elos[key], season_elos[key] = latest, seasons
-        # Every team's current rating is a "now" row, so search finds retired teams;
-        # the default view shows only the active ones.
-        last_played = pd.to_datetime(latest["latest_date"])
-        now = latest.assign(active=last_played >= last_played.max() - ACTIVE_WINDOW)
-        rows = _forecast_records(now, seasons, ("elo",))
-        leagues = set(latest["league"]) | set(seasons["league"])
-        majors = [l for l in env.globals["major_leagues"] if l in leagues]
-        render_rankings_page(
-            cfg,
-            rows,
-            {"valueKey": "elo", "columns": ELO_COLUMNS, "defaultSort": "elo", "kind": "rating"},
-            {"years": sorted(int(y) for y in seasons["year"].unique()), "leagues": majors + sorted(leagues - set(majors))},
-            last_update,
-        )
+    cfg = ELO_METRICS["game_length_elo"]
+    latest_elos = get_latest_elos(cfg["method"])
+    season_elos = get_season_elos(cfg["method"])
+    # Every team's current rating is a "now" row, so search finds retired teams;
+    # the default view shows only the active ones.
+    leagues = set(latest_elos["league"]) | set(season_elos["league"])
+    league_order = [l for l in majors if l in leagues] + sorted(leagues - set(majors))
+    render_rankings_page(
+        cfg,
+        _forecast_records(latest_elos.assign(active=_active(latest_elos)), season_elos, ("elo",)),
+        {"valueKey": "elo", "columns": ELO_COLUMNS, "defaultSort": "elo", "kind": "rating"},
+        {"years": sorted(int(y) for y in season_elos["year"].unique()), "leagues": league_order},
+        last_update,
+    )
 
-    # GlorELO+ now: this season's GLORY+ with each team's latest Elo. For a past
-    # season: that season's GLORY+ with the team's Elo at the end of that year.
-    current_year = int(glory_plus_df["year"].max())
-    glorelo = glorelo_ratings(
-        glory_plus_df[glory_plus_df["year"] == current_year], latest_elos["game_length_elo"]
+    # Form for every team in every league, as of now and at the end of each season.
+    states = form_states(opponent_adjust(load_form_games()))
+    forms_now, forms_seasons = team_forms(states)
+    form_now = forms_now.rename(columns={"home": "league"}).assign(form=lambda d: FORM_POINTS * d["form"])
+    form_seasons = forms_seasons.rename(columns={"home": "league"}).assign(form=lambda d: FORM_POINTS * d["form"])
+    form_leagues = set(form_now["league"]) | set(form_seasons["league"])
+    render_rankings_page(
+        FORECASTS["form"],
+        _forecast_records(form_now.assign(active=_active(form_now)), form_seasons, ("form",)),
+        {"valueKey": "form", "columns": FORM_COLUMNS, "defaultSort": "form", "kind": "rating"},
+        {"years": sorted(int(y) for y in form_seasons["year"].unique()),
+         "leagues": [l for l in majors if l in form_leagues] + sorted(form_leagues - set(majors))},
+        last_update,
     )
-    elo_seasons = season_elos["game_length_elo"]
-    glorelo_seasons = pd.concat(
-        [
-            glorelo_ratings(season, elo_seasons[elo_seasons["year"] == year])
-            for year, season in glory_plus_df.groupby("year")
-        ],
-        ignore_index=True,
-    )
+
+    # GlorELO+ for major-league teams: now (active teams, current Elo) and at the end
+    # of each season (that year's season-end Elo).
+    glorelo = glorelo_ratings(forms_now[forms_now["home"].isin(majors)], latest_elos)
+    glorelo = glorelo[_active(glorelo)].reset_index(drop=True)
+    glorelo_seasons = glorelo_ratings(forms_seasons[forms_seasons["home"].isin(majors)], season_elos)
     render_rankings_page(
         FORECASTS["glorelo_plus"],
-        _forecast_records(glorelo, glorelo_seasons, ("glorelo", "elo")),
-        {"valueKey": "glorelo", "columns": GLORELO_COLUMNS, "defaultSort": "glorelo", "kind": "rating"},
+        _forecast_records(glorelo, glorelo_seasons, ("glorelo", "elo", "form")),
+        {"valueKey": "glorelo", "columns": GLORELO_COLUMNS, "defaultSort": "glorelo", "kind": "rating",
+         "weights": {"elo": ELO_WEIGHT, "crossRegionElo": CROSS_REGION_ELO_WEIGHT}},
         {"years": sorted(int(y) for y in glorelo_seasons["year"].unique()), "leagues": sorted(glorelo_seasons["league"].unique())},
         last_update,
     )
 
+    # ---- Index and team pages -----------------------------------------------
     elo_history = get_elo_history("game_length")
-    pages = _team_pages(glory_all, glorb_all, elo_history, latest_elos["game_length_elo"], glory_df)
+    pages = _team_pages(glory_all, record_df, luck_df, glorelo_seasons, glorelo, elo_history, latest_elos, glory_df)
     render_index(
         glory_df,
-        {"glory": len(glory_df), "glorb": len(glorb_df), "glory_plus": len(glory_plus_df), "glorelo_plus": len(glorelo), "game_length_elo": len(latest_elos["game_length_elo"])},
-        len(latest_elos["game_length_elo"]),
+        {"glory": len(glory_df), "record": len(record_df), "luck": len(luck_df),
+         "glorelo_plus": len(glorelo), "form": int(_active(form_now).sum()),
+         "game_length_elo": len(latest_elos)},
+        len(latest_elos),
         last_update,
     )
     render_team_pages(pages, last_update)
+    write_team_index(pages)
 
     print(f"Static site generated in {OUTPUT_DIR}/ ({len(pages)} team pages)")
 

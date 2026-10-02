@@ -5,7 +5,8 @@
 {% set rating = config.kind == 'rating' %}
 {% set noun = 'teams' if rating else 'team-seasons' %}
 {% set year_label = 'season' if rating else 'years' %}
-{% set value_word = 'rating' if rating else 'score' %}
+{% set value_word = metric.value_word or ('rating' if rating else 'score') %}
+{% set value_plural = metric.value_plural or (value_word ~ 's') %}
 {% block content %}
   <div class="spread">
     <div class="spread-main">
@@ -13,6 +14,9 @@
         <h1>{{ metric.name }} <span class="full-name">{{ metric.full_name }}</span></h1>
         <p class="lede">{{ metric.description }}<a class="note-ref" href="#note-{{ metric.lede_note }}" aria-label="Note {{ metric.lede_note }}">{{ metric.lede_note }}</a></p>
       </header>
+      {% if metric.sunset %}
+      <p class="sunset-note"><span class="sunset-title">Sunset.</span> {{ metric.sunset }}</p>
+      {% endif %}
 
       {% if metric.matchup %}
       <figure class="matchup" aria-labelledby="matchup-cap">
@@ -30,11 +34,12 @@
           <output class="matchup-result" id="matchup-result" for="matchup-a matchup-b" aria-live="polite"></output>
         </p>
         <div class="matchup-bar" aria-hidden="true"><span class="matchup-bar-a"></span></div>
+        <p class="matchup-note" id="matchup-note" hidden>These teams play in different leagues, so the odds come from Elo alone.</p>
       </figure>
       {% endif %}
 
       <figure class="dist" aria-labelledby="dist-cap">
-        <figcaption id="dist-cap" class="figure-caption">How {{ value_word }}s are spread for the {{ noun }} below. <span class="dist-hint">Hover over a row to mark it on the chart.</span></figcaption>
+        <figcaption id="dist-cap" class="figure-caption">Spread of {{ value_plural | lower }} for the {{ noun }} below. <span class="dist-hint">Hover over a row to mark it on the chart.</span></figcaption>
         <div class="dist-plot" id="dist" role="img" aria-label="Distribution of {{ metric.name }} values in the current view"></div>
       </figure>
 
@@ -70,6 +75,10 @@
             </div>
           </fieldset>
         </details>
+        <label class="filter-search" for="filter-search">
+          <span class="picker-label">team</span>
+          <input id="filter-search" type="search" placeholder="Any" autocomplete="off" spellcheck="false" />
+        </label>
         <button type="button" class="clear-filters" hidden>Clear filters</button>
       </div>
 
@@ -111,6 +120,6 @@
   <script type="application/json" id="page-config">{{ config | tojson }}</script>
 {% endblock %}
 {% block scripts %}
-  <script src="js/rankings.js" defer></script>
-  {% if metric.matchup %}<script src="js/forecast.js" defer></script>{% endif %}
+  <script src="{{ asset('js/rankings.js') }}" defer></script>
+  {% if metric.matchup %}<script src="{{ asset('js/forecast.js') }}" defer></script>{% endif %}
 {% endblock %}

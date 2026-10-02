@@ -29,7 +29,10 @@
   const allValues = rows.map((r) => Number(r[valueKey])).filter(Number.isFinite);
   const dataMin = Math.min(...allValues);
   const dataMax = Math.max(...allValues);
-  const domain = isRating
+  // A page may set its own domain (Luck is signed and small).
+  const domain = config.domain
+    ? config.domain
+    : isRating
     ? [Math.floor(dataMin / 100) * 100, Math.ceil(dataMax / 100) * 100]
     : [Math.min(0, Math.floor(dataMin / 10) * 10), Math.max(100, Math.ceil(dataMax / 10) * 10)];
   const scale = (v) => Math.max(0, Math.min(100, ((v - domain[0]) / (domain[1] - domain[0])) * 100));
@@ -40,7 +43,7 @@
   const countEl = $(".count");
   const descEl = $("#table-desc");
   const clearBtn = $(".clear-filters");
-  const searchInput = $("#team-search");
+  const searchInput = $("#filter-search");
   const distEl = $("#dist");
   const numberFormat = new Intl.NumberFormat("en-US");
   const rowKey = (r) => `${r.slug}|${r.now ? "now" : r.year}|${r.league}`;
@@ -78,7 +81,7 @@
   // ---- Data ------------------------------------------------------------
   // The rows the year filter selects: every row, or for rating pages either the
   // "now" rows or the chosen seasons' rows. "Now" shows active teams, but a search
-  // reaches every team's current rating (the header search lands here).
+  // reaches every team's current rating (the header search falls back to here without JS).
   function pool() {
     if (!isRating) return rows.filter((r) => !state.years.size || state.years.has(String(r.year)));
     if (!showingNow()) return rows.filter((r) => !r.now && state.years.has(String(r.year)));
@@ -233,6 +236,7 @@
       svg.appendChild(el("text", { class: "axis-label", x: tx, y: h - 2, "text-anchor": anchor }, String(Math.round(t * 10) / 10)));
     }
 
+    let medianLabel = null;
     if (vals.length) {
       const sortedVals = vals.slice().sort((a, b) => a - b);
       const mid = sortedVals.length / 2;
@@ -240,17 +244,28 @@
       const mx = x(median);
       svg.appendChild(el("line", { class: "median", x1: mx, x2: mx, y1: top - 4, y2: base }));
       const label = `median ${median.toFixed(isRating ? 0 : 1)}`;
-      svg.appendChild(el("text", { class: "median-label", x: mx + (mx > w - 110 ? -5 : 5), y: top - 5, "text-anchor": mx > w - 110 ? "end" : "start" }, label));
+      medianLabel = el("text", { class: "median-label", x: mx + (mx > w - 110 ? -5 : 5), y: top - 5, "text-anchor": mx > w - 110 ? "end" : "start" }, label);
+      svg.appendChild(medianLabel);
     }
 
+    // The traced label goes in the band above the tallest column, so the columns
+    // never cover it; it is drawn last and knocked out of the median line.
     const t = distState.traced;
+    let traceLabel = null;
     if (t) {
       const tx = x(t.value);
       svg.appendChild(el("line", { class: "trace", x1: tx, x2: tx, y1: top - 6, y2: base + 4 }));
       const right = tx > w * 0.6;
-      svg.appendChild(el("text", { class: "trace-label", x: tx + (right ? -6 : 6), y: base - 6, "text-anchor": right ? "end" : "start" }, t.label));
+      traceLabel = el("text", { class: "trace-label", x: tx + (right ? -6 : 6), y: top - 5, "text-anchor": right ? "end" : "start" }, t.label);
+      svg.appendChild(traceLabel);
     }
     distEl.replaceChildren(svg);
+    // Both labels share the top band: while a row is traced, the median keeps its
+    // line but drops its label if the two would collide.
+    if (traceLabel && medianLabel) {
+      const a = traceLabel.getBBox(), b = medianLabel.getBBox();
+      if (a.x < b.x + b.width + 6 && b.x < a.x + a.width + 6) medianLabel.remove();
+    }
   }
 
   function trace(tr) {
@@ -384,7 +399,6 @@
   window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(drawDist, 120); });
 
   if (searchInput) {
-    searchInput.form.addEventListener("submit", (e) => e.preventDefault());
     searchInput.addEventListener("input", () => { state.search = searchInput.value; update(); });
   }
 

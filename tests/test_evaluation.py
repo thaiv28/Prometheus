@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 from prometheus.evaluation import (
+    elo_as_of,
     fit_win_curve,
     game_losses,
     out_of_year_probabilities,
@@ -81,3 +82,43 @@ def test_out_of_year_probabilities_accept_several_columns():
     probs = out_of_year_probabilities(frame, ["a", "b"])
     assert probs.notna().all()
     assert probs[frame["a"] + frame["b"] > 1].mean() > 0.7
+
+
+def test_elo_as_of_adds_league_offset_moves_since_last_game():
+    d = pd.Timestamp
+    timeline = pd.DataFrame(
+        {
+            "teamname": ["A", "B", "A", "C"],
+            "date": [d("2024-01-01"), d("2024-01-01"), d("2024-02-01"), d("2024-03-01")],
+            "elo": [1510.0, 1490.0, 1520.0, 1600.0],
+            "home_league": ["LCK", "LCS", "LCK", None],
+            "league_offset": [0.0, 0.0, 2.0, 0.0],
+        }
+    )
+    offsets = pd.DataFrame(
+        {
+            "date": [d("2024-01-15"), d("2024-01-15"), d("2024-02-15"), d("2024-04-01")],
+            "league": ["LCK", "LCS", "LCK", "LCK"],
+            "league_offset": [2.0, -2.0, 5.0, 9.0],
+        }
+    )
+    elo = elo_as_of(timeline, offsets, d("2024-03-15"))
+    # A: last game at offset 2, LCK offset is 5 by the cutoff (the April move is later).
+    assert elo["A"] == pytest.approx(1523.0)
+    # B: LCS offset fell by 2 after its last game.
+    assert elo["B"] == pytest.approx(1488.0)
+    # C: no home league, no offset to carry.
+    assert elo["C"] == pytest.approx(1600.0)
+    # Games on or after the cutoff are ignored.
+    assert "C" not in elo_as_of(timeline, offsets, d("2024-03-01")).index
+
+
+def test_spearman_brown_and_games_for_reliability():
+    from prometheus.evaluation import games_for_reliability, spearman_brown
+
+    assert spearman_brown(0.5, 2) == pytest.approx(2 / 3)
+    # One game at reliability 0.2 needs 4 games to reach 0.5.
+    assert games_for_reliability(0.2, 1) == pytest.approx(4.0)
+    # A half of 10 games at 0.5 means 10 games reach 0.5.
+    assert games_for_reliability(0.5, 10) == pytest.approx(10.0)
+    assert games_for_reliability(0.0, 10) == np.inf
