@@ -2,6 +2,11 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-01 — Future work: betting-odds benchmark
+
+- Added a "Betting-odds benchmark" item to the Future work section of `current_state.md`: score de-vigged closing odds in the backtest as the ceiling to compare the forecast models against.
+- Verification: documentation only; no code changed.
+
 ## 2026-10-01 — Steering docs: work log, current state, future work
 
 - Adopted the steering setup from the `jobflow` repo: `AGENTS.md` now lists the steering docs to read before work and the docs each kind of change must update. Added `current_state.md` (working features, known limits, future work) and this work log, backfilled with today's sessions. A guard test (`tests/test_steering.py`) fails when code changed without a work-log change.
