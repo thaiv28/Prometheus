@@ -12,25 +12,30 @@ from sklearn.linear_model import LogisticRegression
 EPS = 1e-6
 
 
+def _as_matrix(diff):
+    x = np.asarray(diff, dtype=float)
+    return x.reshape(-1, 1) if x.ndim == 1 else x
+
+
 def fit_win_curve(diff, won):
-    """Fit P(win) = sigmoid(a + b * diff) and return a function of diff.
+    """Fit P(win) = sigmoid(a + b . diff) and return a function of diff.
 
     `diff` is the rating gap from the blue side's point of view, so the
-    intercept `a` absorbs the blue-side advantage. With diff=None only the
-    intercept is fit, which is the "blue side wins" baseline.
+    intercept `a` absorbs the blue-side advantage. It may hold one column (a
+    single metric) or several (a blend, with one weight per column). With
+    diff=None only the intercept is fit, which is the "blue side wins" baseline.
     """
     won = np.asarray(won, dtype=int)
     if diff is None:
         p = float(np.clip(won.mean(), EPS, 1 - EPS))
         return lambda d: np.full(len(d), p)
-    x = np.asarray(diff, dtype=float).reshape(-1, 1)
+    x = _as_matrix(diff)
     # Ratings live on very different scales (Elo ~1500, GLORY 0-100); scaling
     # x keeps the solver well conditioned without changing the fitted curve.
-    scale = x.std() or 1.0
+    scale = x.std(axis=0)
+    scale[scale == 0] = 1.0
     model = LogisticRegression(C=1e6).fit(x / scale, won)
-    return lambda d: model.predict_proba(
-        np.asarray(d, dtype=float).reshape(-1, 1) / scale
-    )[:, 1]
+    return lambda d: model.predict_proba(_as_matrix(d) / scale)[:, 1]
 
 
 def out_of_year_probabilities(frame, diff_col):
@@ -41,8 +46,8 @@ def out_of_year_probabilities(frame, diff_col):
 
     Args:
         frame: One row per game with columns `year`, `won` (blue won) and `diff_col`.
-        diff_col: Column holding the blue-minus-red rating gap, or None for the
-            blue-side baseline.
+        diff_col: Column (or list of columns, for a blend) holding blue-minus-red
+            rating gaps, or None for the blue-side baseline.
     Returns:
         Series of probabilities aligned with `frame`.
     """
@@ -52,10 +57,12 @@ def out_of_year_probabilities(frame, diff_col):
         # With a single season there is nothing to leave out; fit on it directly.
         train = frame[~test] if (~test).any() else frame
         curve = fit_win_curve(
-            None if diff_col is None else train[diff_col], train["won"]
+            None if diff_col is None else train[diff_col].to_numpy(), train["won"]
         )
         test_diff = (
-            np.zeros(test.sum()) if diff_col is None else frame.loc[test, diff_col]
+            np.zeros(test.sum())
+            if diff_col is None
+            else frame.loc[test, diff_col].to_numpy()
         )
         probs[test] = curve(test_diff)
     return probs

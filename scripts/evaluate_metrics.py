@@ -23,6 +23,7 @@ Usage:
 import argparse
 import datetime
 
+import numpy as np
 import pandas as pd
 from sqlalchemy import text
 
@@ -43,17 +44,34 @@ MAJORS = [l.value for l in ALL_MAJOR_LEAGUES]
 _IN_MAJORS = ", ".join(repr(l) for l in MAJORS)
 _IN_EVENTS = ", ".join(repr(l) for l in MAJORS + INTERNATIONAL_LEAGUES)
 
-# (column, label). "win_pct" is the baseline every other metric is compared with.
+# (key, label, inputs). `inputs` are the blue-minus-red gap columns the win curve
+# is fit on: None for the blue-side baseline, several columns for a blend.
+# "win_pct" is the baseline every other metric is compared with.
 METRICS = [
-    ("blue_side", "Blue side wins"),
-    ("win_pct", "Win % so far"),
-    ("glorb", "GLORB"),
-    ("glory", "GLORY"),
-    ("glory_plus", "GLORY+"),
-    ("elo", "Elo (as of cutoff)"),
-    ("elo_live", "Elo (live)"),
+    ("blue_side", "Blue side wins", None),
+    ("win_pct", "Win % so far", "win_pct"),
+    ("glorb", "GLORB", "glorb"),
+    ("glory", "GLORY", "glory"),
+    ("glory_plus", "GLORY+", "glory_plus"),
+    ("elo", "Elo (as of cutoff)", "elo"),
+    ("glorelo", "GlorELO", ["glory_plus", "elo"]),
+    # Lets the GLORY+/Elo balance shift as the season goes on.
+    (
+        "glorelo_season",
+        "GlorELO (season-weighted)",
+        ["glory_plus", "elo", "glory_plus_x_games", "elo_x_games"],
+    ),
+    ("elo_live", "Elo (live)", "elo_live"),
+    ("glorelo_live", "GlorELO (live Elo)", ["glory_plus", "elo_live"]),
 ]
 BASELINE = "win_pct"
+LABELS = {key: label for key, label, _ in METRICS}
+# Does each blend beat its strongest part on the same games?
+BLEND_CHECKS = [
+    ("glorelo", "elo"),
+    ("glorelo_season", "elo"),
+    ("glorelo_live", "elo_live"),
+]
 
 
 def load_games():
@@ -125,6 +143,7 @@ def ratings_at(year, cutoff, results, elo_timeline):
             "glorb": _scores(year, cutoff, baseline=True)["score"],
             "glory_plus": _scores(year, cutoff, opponent_adjusted=True)["score"],
             "win_pct": record["mean"],
+            "games": record["size"],
         }
     )
     elo = elo_timeline[elo_timeline["date"] < cutoff].groupby("teamname")["elo"].last()
@@ -156,6 +175,10 @@ def backtest(games, results, elo_timeline, years):
     frame = pd.concat(rows, ignore_index=True)
     for col in ("glory", "glorb", "glory_plus", "win_pct", "elo", "elo_live"):
         frame[col] = frame[f"blue_{col}"] - frame[f"red_{col}"]
+    # How far into the season the game is, as log games played by the less-played team.
+    games = np.log(frame[["blue_games", "red_games"]].min(axis=1))
+    frame["glory_plus_x_games"] = frame["glory_plus"] * games
+    frame["elo_x_games"] = frame["elo"] * games
     frame = frame.dropna(subset=["elo_live"]).reset_index(drop=True)
 
     frame["test_set"] = None
@@ -170,9 +193,9 @@ def backtest(games, results, elo_timeline, years):
 def score(frame):
     """Per-game losses for every metric, using out-of-year win curves."""
     losses = {}
-    for col, _ in METRICS:
-        p = out_of_year_probabilities(frame, None if col == "blue_side" else col)
-        losses[col] = game_losses(p, frame["won"])
+    for key, _, inputs in METRICS:
+        p = out_of_year_probabilities(frame, inputs)
+        losses[key] = game_losses(p, frame["won"])
     return losses
 
 
@@ -188,9 +211,9 @@ def summarize(frame, losses):
         )
         lines.append("|---|---:|---:|---:|---|")
         base = losses[BASELINE]["log_loss"].to_numpy()[mask]
-        for col, label in METRICS:
-            l = losses[col][mask]
-            if col == BASELINE:
+        for key, label, _ in METRICS:
+            l = losses[key][mask]
+            if key == BASELINE:
                 delta = "baseline"
             else:
                 mean, lo, hi = paired_bootstrap(l["log_loss"].to_numpy(), base)
@@ -198,6 +221,16 @@ def summarize(frame, losses):
             lines.append(
                 f"| {label} | {l['accuracy'].mean():.1%} | {l['brier'].mean():.4f} "
                 f"| {l['log_loss'].mean():.4f} | {delta} |"
+            )
+        lines.append("")
+        for blend, part in BLEND_CHECKS:
+            mean, lo, hi = paired_bootstrap(
+                losses[blend]["log_loss"].to_numpy()[mask],
+                losses[part]["log_loss"].to_numpy()[mask],
+            )
+            lines.append(
+                f"- {LABELS[blend]} vs {LABELS[part]}: log loss "
+                f"{mean:+.4f} ({lo:+.4f} to {hi:+.4f})"
             )
     lines.append(
         "\nLower Brier and log loss are better. A negative log-loss delta means the "
