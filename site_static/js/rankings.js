@@ -15,8 +15,9 @@
   const config = readJSON("#page-config") || { columns: [] };
   const valueKey = config.valueKey;
   const valueCol = config.columns.find((c) => c.key === valueKey) || { digits: 2, label: "Score" };
-  const isElo = valueKey === "elo";
-  const noun = isElo ? "teams" : "team-seasons";
+  // Rating pages (Elo, GlorELO+) list teams on the Elo scale; the others list team-seasons scored 0-100.
+  const isRating = config.kind === "rating";
+  const noun = isRating ? "teams" : "team-seasons";
   const metricName = (document.querySelector("h1")?.firstChild?.textContent || "").trim();
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const totalCols = config.columns.length + config.columns.filter((c) => c.bar).length;
@@ -25,7 +26,7 @@
   const allValues = rows.map((r) => Number(r[valueKey])).filter(Number.isFinite);
   const dataMin = Math.min(...allValues);
   const dataMax = Math.max(...allValues);
-  const domain = isElo
+  const domain = isRating
     ? [Math.floor(dataMin / 100) * 100, Math.ceil(dataMax / 100) * 100]
     : [Math.min(0, Math.floor(dataMin / 10) * 10), Math.max(100, Math.ceil(dataMax / 10) * 10)];
   const scale = (v) => Math.max(0, Math.min(100, ((v - domain[0]) / (domain[1] - domain[0])) * 100));
@@ -39,7 +40,7 @@
   const searchInput = $("#team-search");
   const distEl = $("#dist");
   const numberFormat = new Intl.NumberFormat("en-US");
-  const rowKey = (r) => `${r.slug}|${isElo ? r.league : r.year}`;
+  const rowKey = (r) => `${r.slug}|${isRating ? r.league : r.year}`;
 
   function formatNumber(v, col) {
     const n = Number(v);
@@ -102,7 +103,7 @@
 
   // On narrow screens the league and year columns hide; they reappear under the team name.
   function teamMeta(r) {
-    return isElo
+    return isRating
       ? `<span class="team-meta">${leagueMark(r.league, true)}</span>`
       : `<span class="team-meta">${leagueMark(r.league, false)}<span>${esc(r.year)}</span></span>`;
   }
@@ -226,7 +227,7 @@
       const median = sortedVals.length % 2 ? sortedVals[Math.floor(mid)] : (sortedVals[mid - 1] + sortedVals[mid]) / 2;
       const mx = x(median);
       svg.appendChild(el("line", { class: "median", x1: mx, x2: mx, y1: top - 4, y2: base }));
-      const label = `median ${median.toFixed(isElo ? 0 : 1)}`;
+      const label = `median ${median.toFixed(isRating ? 0 : 1)}`;
       svg.appendChild(el("text", { class: "median-label", x: mx + (mx > w - 110 ? -5 : 5), y: top - 5, "text-anchor": mx > w - 110 ? "end" : "start" }, label));
     }
 
@@ -265,7 +266,7 @@
     const leaguePart = !leagues.length ? "all" : leagues.length > 4 ? `${leagues.length} leagues’` : leagues.join(", ");
     let s = `${metricName}, ${leaguePart} ${noun}`;
     const years = describeYears(state.years);
-    if (years) s += isElo ? ` last active in ${years}` : `, ${years}`;
+    if (years) s += isRating ? ` last active in ${years}` : `, ${years}`;
     if (state.search.trim()) s += `, names containing “${state.search.trim()}”`;
     return s;
   }

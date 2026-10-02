@@ -16,6 +16,7 @@ from jinja2 import Environment, FileSystemLoader
 
 from prometheus.ranking import get_glory_ranking
 from prometheus.elo import get_elo_history, get_latest_elos
+from prometheus.glorelo import glorelo_ratings
 from prometheus.types import ALL_MAJOR_LEAGUES
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -88,8 +89,32 @@ ELO_METRICS = {
     }
 }
 
+FORECASTS = {
+    "glorelo_plus": {
+        "key": "glorelo_plus",
+        "name": "GlorELO+",
+        "full_name": "GLORY+ and Elo, blended into a forecast",
+        "description": "Who would win a game today. Each team's GLORY+ this season and its current Elo, combined with the weights that best predicted past games.",
+        "how_to_read": [
+            "Rating: on the Elo scale, with the average major-league team this season at 1500. A 100-point gap means about a 64% chance to win; 200 points, about 76%.",
+            "Head to head turns any two ratings into a chance to win one game. It ignores side; blue side wins about 54% of games.",
+            "Tested on every major-league game since 2014, using only earlier games each time: it picks the winner 64% of the time, and its odds are slightly more accurate than Elo's alone.",
+        ],
+        "caveats": "Only LCK, LPL, LEC and LCS teams with 5 or more games this season. Elo links regions only through international events, so gaps between regions are probably understated. Odds are for one game, not a series.",
+        "lede_note": 3,
+        "matchup": True,
+    },
+}
+
+# The header and contents split what happened (season stats) from what's likely
+# to happen next (forecasts).
+SECTIONS = [
+    {"name": "Season stats", "metrics": list(METRICS.values())},
+    {"name": "Forecasts", "metrics": [*FORECASTS.values(), *ELO_METRICS.values()]},
+]
 NAV = [
-    {"key": m["key"], "name": m["name"]} for m in [*METRICS.values(), *ELO_METRICS.values()]
+    {"name": s["name"], "links": [{"key": m["key"], "name": m["name"]} for m in s["metrics"]]}
+    for s in SECTIONS
 ]
 
 env = Environment(
@@ -169,7 +194,7 @@ def render_index(glory_df, entry_counts, total_elo_teams, last_update):
             page_key="index",
             root_path="",
             last_update=last_update,
-            metrics=[*METRICS.values(), *ELO_METRICS.values()],
+            sections=SECTIONS,
             entry_counts=entry_counts,
             all_time=_records(top),
             annual=annual,
@@ -206,6 +231,17 @@ METRIC_COLUMNS = [
      "hint": "Standard deviations above the average team in its league that year", "wideOnly": True, "note": 2},
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
     {"key": "year", "label": "Year", "type": "text", "wideOnly": True},
+]
+
+GLORELO_COLUMNS = [
+    {"key": "rank", "label": "Rank", "type": "rank"},
+    {"key": "teamname", "label": "Team", "type": "team"},
+    {"key": "glorelo", "label": "Rating", "type": "number", "digits": 0, "bar": True, "note": 1},
+    {"key": "glory_plus", "label": "GLORY+", "type": "number", "digits": 1, "phoneHide": True,
+     "hint": "GLORY+ this season so far"},
+    {"key": "elo", "label": "Elo", "type": "number", "digits": 0, "wideOnly": True,
+     "hint": "Elo after the team's latest game"},
+    {"key": "league", "label": "League", "type": "league", "wideOnly": True},
 ]
 
 ELO_COLUMNS = [
@@ -329,7 +365,7 @@ def main():
         render_rankings_page(
             metric,
             _records(df),
-            {"valueKey": "score", "columns": METRIC_COLUMNS, "defaultSort": "score"},
+            {"valueKey": "score", "columns": METRIC_COLUMNS, "defaultSort": "score", "kind": "season"},
             {
                 "years": sorted(int(y) for y in df["year"].unique()),
                 "leagues": sorted(df["league"].unique()),
@@ -350,16 +386,34 @@ def main():
         render_rankings_page(
             cfg,
             rows,
-            {"valueKey": "elo", "columns": ELO_COLUMNS, "defaultSort": "elo"},
+            {"valueKey": "elo", "columns": ELO_COLUMNS, "defaultSort": "elo", "kind": "rating"},
             {"years": sorted(int(y) for y in latest["year"].unique()), "leagues": majors + others},
             last_update,
         )
+
+    # GlorELO+ is a forecast for now: this season's GLORY+ with each team's latest Elo.
+    current_year = int(glory_plus_df["year"].max())
+    glorelo = glorelo_ratings(
+        glory_plus_df[glory_plus_df["year"] == current_year], latest_elos["game_length_elo"]
+    )
+    rows = _records(glorelo)
+    for r in rows:
+        r["latest_date"] = str(r["latest_date"])[:10]
+        r["glorelo"] = round(float(r["glorelo"]), 1)
+        r["elo"] = round(float(r["elo"]), 1)
+    render_rankings_page(
+        FORECASTS["glorelo_plus"],
+        rows,
+        {"valueKey": "glorelo", "columns": GLORELO_COLUMNS, "defaultSort": "glorelo", "kind": "rating"},
+        {"years": [current_year], "leagues": sorted(glorelo["league"].unique())},
+        last_update,
+    )
 
     elo_history = get_elo_history("game_length")
     pages = _team_pages(glory_all, glorb_all, elo_history, latest_elos["game_length_elo"], glory_df)
     render_index(
         glory_df,
-        {"glory": len(glory_df), "glorb": len(glorb_df), "glory_plus": len(glory_plus_df), "game_length_elo": len(latest_elos["game_length_elo"])},
+        {"glory": len(glory_df), "glorb": len(glorb_df), "glory_plus": len(glory_plus_df), "glorelo_plus": len(glorelo), "game_length_elo": len(latest_elos["game_length_elo"])},
         len(latest_elos["game_length_elo"]),
         last_update,
     )

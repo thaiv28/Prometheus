@@ -25,6 +25,7 @@ import datetime
 
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import LogisticRegression
 from sqlalchemy import text
 
 from prometheus.evaluation import (
@@ -54,15 +55,15 @@ METRICS = [
     ("glory", "GLORY", "glory"),
     ("glory_plus", "GLORY+", "glory_plus"),
     ("elo", "Elo (as of cutoff)", "elo"),
-    ("glorelo", "GlorELO", ["glory_plus", "elo"]),
+    ("glorelo", "GlorELO+", ["glory_plus", "elo"]),
     # Lets the GLORY+/Elo balance shift as the season goes on.
     (
         "glorelo_season",
-        "GlorELO (season-weighted)",
+        "GlorELO+ (season-weighted)",
         ["glory_plus", "elo", "glory_plus_x_games", "elo_x_games"],
     ),
     ("elo_live", "Elo (live)", "elo_live"),
-    ("glorelo_live", "GlorELO (live Elo)", ["glory_plus", "elo_live"]),
+    ("glorelo_live", "GlorELO+ (live Elo)", ["glory_plus", "elo_live"]),
 ]
 BASELINE = "win_pct"
 LABELS = {key: label for key, label, _ in METRICS}
@@ -239,6 +240,21 @@ def summarize(frame, losses):
     return "\n".join(lines)
 
 
+def glorelo_weights(frame):
+    """Per-point log-odds weights of the published GlorELO+ (GLORY+ and live Elo).
+
+    Fit on every backtest game. Copy these into `prometheus/glorelo.py`.
+    """
+    x = frame[["glory_plus", "elo_live"]].to_numpy()
+    sd = x.std(axis=0)
+    model = LogisticRegression(C=1e6).fit(x / sd, frame["won"])
+    glory_plus, elo = model.coef_[0] / sd
+    return (
+        f"\nGlorELO+ weights (log-odds per point, all games): "
+        f"GLORY_PLUS_WEIGHT = {glory_plus:.5f}, ELO_WEIGHT = {elo:.5f}"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
@@ -252,8 +268,10 @@ def main():
     games, results, elo_timeline = load_games(), load_results(), load_elo_timeline()
     print("Backtesting:")
     frame = backtest(games, results, elo_timeline, years)
-    report = f"## Metric backtest ({datetime.date.today().isoformat()})\n" + summarize(
-        frame, score(frame)
+    report = (
+        f"## Metric backtest ({datetime.date.today().isoformat()})\n"
+        + summarize(frame, score(frame))
+        + glorelo_weights(frame)
     )
     print(report)
     if args.out:

@@ -24,12 +24,12 @@ Most LoL stat sites dump per-game box scores. Prometheus instead fits **per-seas
 
 - Fully static site. It's rebuilt daily by GitHub Actions from the latest Oracle's Elixir CSVs and deployed to prometheus.thaiv.dev (S3 + CloudFront on the thaiv.dev platform).
 - All interaction is client-side over JSON embedded in each page: filtering by year and league, team search, sorting, and URL-shareable filter state.
-- Pages: home, one rankings page per metric (GLORY, GLORB, Game-Length Elo), and one page per team with history charts.
+- Pages: home, one rankings page per metric, grouped as season stats (GLORY, GLORB, GLORY+) and forecasts (GlorELO+, Game-Length Elo), and one page per team with history charts.
 - Visitors arrive on desktop and on phones (for example, links shared in Discord or Reddit threads), so wide tables must work on small screens.
 
 ## Capabilities and Constraints
 
-- **Metrics:** GLORY (regression-weighted team score, roughly 0–100), GLORB (equal-weight baseline), Era Z and League Z (z-scores), and Game-Length Elo (shorter wins move ratings more). AURA (a player metric) is still research and not on the site.
+- **Metrics:** GLORY (regression-weighted team score, roughly 0–100), GLORB (equal-weight baseline), Era Z and League Z (z-scores), GLORY+ (GLORY adjusted for opponent Elo), Game-Length Elo (shorter wins move ratings more), and GlorELO+ (a forecast rating blending GLORY+ and Elo, with a head-to-head win probability). Season stats describe how well a team played; forecasts predict the next game and are judged by the backtest in `scripts/evaluate_metrics.py`. AURA (a player metric) is still research and not on the site.
 - **Coverage:** the site should cover **all regions** present in the data. The Elo page already does. GLORY and GLORB are currently fit and shown for the four major leagues (LCK, LPL, LEC, LCS) only. *Open decision:* how or whether to extend GLORY and GLORB to all regions.
 - Data spans 2014 to the present.
 - There's no backend, no accounts, and no user-generated content. Anything dynamic is precomputed at build time.

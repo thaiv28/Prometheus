@@ -200,7 +200,7 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 
 ### Running head
 - Wordmark: a ledger-blue P glyph and PROMETHEUS in tracked small caps 600.
-- Sections: Home, GLORY, GLORB, Elo in small caps; the current one is ink 600 with a 2px ledger-blue underline.
+- Sections: Home, then two groups, each led by an italic ink-3 group name in normal caps: *Season stats* (GLORY, GLORB, GLORY+) and *Forecasts* (GlorELO+, Elo). Links are small caps; the current one is ink 600 with a 2px ledger-blue underline. A hairline divides the groups on desktop; under 720px each group takes its own line and the divider drops.
 - Search: a "Search" label and a bare input on a hairline baseline; focus thickens the baseline to 2px ledger blue. Off the rankings pages it submits to the Elo register, which lists every team.
 
 ### Filter line
@@ -212,6 +212,11 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 - Column heads are sort buttons; the sorted head goes ink 600 with a ledger-blue triangle. Superscript note numbers in heads point at the margin notes.
 - A printed bar column sits before the value: a 5px ink-2 rule whose length is the value on a fixed scale for the page.
 - Hover washes the row; hovering or focusing a row traces its value on the distribution figure in ledger blue.
+
+### Head to head (GlorELO+)
+- Set as a sentence at headline size (lede size on phones): "[team] *beats* [team] **57 times in 100**." Each team is a bare select on an ink baseline with a small caret, sized to the chosen name; the verb is italic ink-2 and the result is ink 600 with tabular figures.
+- Captioned like a figure ("Head to head." in bold small caps) with a note mark to the margin.
+- Below it, a 5px printed bar: the first team's share in ink on a paper-deep trough, with a hairline tick at 50%. It does not animate.
 
 ### Distribution figure
 - A histogram of every entry in the current view on the page's fixed scale: ink-2 columns on a ruled axis with tabular tick labels and a dashed median with an italic label.

@@ -2,9 +2,10 @@
 {% block title %}{{ metric.name }} rankings · Prometheus{% endblock %}
 {% block description %}{{ metric.full_name }}: {{ metric.description }}{% endblock %}
 {% block canonical_path %}{{ metric.key }}.html{% endblock %}
-{% set noun = 'teams' if config.valueKey == 'elo' else 'team-seasons' %}
-{% set year_label = 'last active' if config.valueKey == 'elo' else 'years' %}
-{% set value_word = 'rating' if config.valueKey == 'elo' else 'score' %}
+{% set rating = config.kind == 'rating' %}
+{% set noun = 'teams' if rating else 'team-seasons' %}
+{% set year_label = 'last active' if rating else 'years' %}
+{% set value_word = 'rating' if rating else 'score' %}
 {% block content %}
   <div class="spread">
     <div class="spread-main">
@@ -13,6 +14,25 @@
         <p class="lede">{{ metric.description }}<a class="note-ref" href="#note-{{ metric.lede_note }}" aria-label="Note {{ metric.lede_note }}">{{ metric.lede_note }}</a></p>
       </header>
 
+      {% if metric.matchup %}
+      <figure class="matchup" aria-labelledby="matchup-cap">
+        <figcaption id="matchup-cap" class="figure-caption"><span class="matchup-title">Head to head.</span> Chance of winning one game today.<a class="note-ref" href="#note-2" aria-label="Note 2">2</a></figcaption>
+        <p class="matchup-line">
+          <label class="visually-hidden" for="matchup-a">First team</label>
+          <select id="matchup-a" class="matchup-team">
+            {% for r in rows %}<option value="{{ r.teamname }}"{% if loop.index == 1 %} selected{% endif %}>{{ r.teamname }}</option>{% endfor %}
+          </select>
+          <span class="matchup-verb">beats</span>
+          <label class="visually-hidden" for="matchup-b">Second team</label>
+          <select id="matchup-b" class="matchup-team">
+            {% for r in rows %}<option value="{{ r.teamname }}"{% if loop.index == 2 %} selected{% endif %}>{{ r.teamname }}</option>{% endfor %}
+          </select>
+          <output class="matchup-result" id="matchup-result" for="matchup-a matchup-b" aria-live="polite"></output>
+        </p>
+        <div class="matchup-bar" aria-hidden="true"><span class="matchup-bar-a"></span></div>
+      </figure>
+      {% endif %}
+
       <figure class="dist" aria-labelledby="dist-cap">
         <figcaption id="dist-cap" class="figure-caption">How {{ value_word }}s are spread for the {{ noun }} below. <span class="dist-hint">Hover over a row to mark it on the chart.</span></figcaption>
         <div class="dist-plot" id="dist" role="img" aria-label="Distribution of {{ metric.name }} values in the current view"></div>
@@ -20,6 +40,7 @@
 
       <div class="filter-line" role="group" aria-label="Filters">
         <span class="filter-lead">Filter</span>
+        {% if filters.years | length > 1 %}
         <details class="picker" data-filter="years">
           <summary><span class="picker-label">{{ year_label }}</span> <span class="picker-value" data-all="All">All</span></summary>
           <fieldset class="picker-panel">
@@ -31,6 +52,7 @@
             </div>
           </fieldset>
         </details>
+        {% endif %}
         <details class="picker" data-filter="leagues">
           <summary><span class="picker-label">leagues</span> <span class="picker-value" data-all="All">All</span></summary>
           <fieldset class="picker-panel picker-panel--leagues">
@@ -87,4 +109,5 @@
 {% endblock %}
 {% block scripts %}
   <script src="js/rankings.js" defer></script>
+  {% if metric.matchup %}<script src="js/forecast.js" defer></script>{% endif %}
 {% endblock %}
