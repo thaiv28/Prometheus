@@ -102,7 +102,7 @@ Controlling for the team's own Elo keeps the opponent coefficient from absorbing
 ### How accurate are the metrics?
 `scripts/evaluate_metrics.py` backtests every team metric. At the start of each month, each metric is computed from that season's earlier games only, then used to predict the winner of every game played that month. Results are scored by accuracy, Brier score and log loss, and compared with a simple baseline (win % so far this season) using a paired bootstrap. International games between teams from different major regions are scored separately, because they are the only direct test of cross-region strength. Latest results: [docs/metric_backtest.md](docs/metric_backtest.md).
 
-The backtest also scores **GlorELO**, a predictive blend of GLORY+ and Elo: a logistic win curve on both teams' GLORY+ gap and Elo gap, fit on the other seasons. Prometheus separates *descriptive* stats (GLORY, GLORB, GLORY+: how well a team played) from *predictive* ones (GlorELO: who wins the next game), and judges the predictive ones by this backtest.
+The backtest also scores **GlorELO+**, a predictive blend of GLORY+ and Elo: a logistic win curve on both teams' GLORY+ gap and Elo gap, fit on the other seasons. Prometheus separates *descriptive* stats (GLORY, GLORB, GLORY+: how well a team played) from *predictive* ones (Elo, GlorELO+: who wins the next game), and judges the predictive ones by this backtest.
 
 ### Player-based
 
