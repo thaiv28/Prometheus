@@ -55,3 +55,29 @@ def test_paired_bootstrap_interval_contains_mean():
     mean, lo, hi = paired_bootstrap(a, b)
     assert mean == pytest.approx(-0.1)
     assert lo == pytest.approx(-0.1) and hi == pytest.approx(-0.1)
+
+
+def test_blend_curve_uses_every_input():
+    rng = np.random.default_rng(1)
+    x = rng.normal(0, 1, (4000, 2))
+    # Only the second input matters.
+    won = (rng.random(4000) < 1 / (1 + np.exp(-1.5 * x[:, 1]))).astype(int)
+    curve = fit_win_curve(x, won)
+    first_up, second_up = curve([[2.0, 0.0], [0.0, 2.0]])
+    assert first_up == pytest.approx(0.5, abs=0.05)
+    assert second_up > 0.9
+
+
+def test_out_of_year_probabilities_accept_several_columns():
+    rng = np.random.default_rng(2)
+    frame = pd.DataFrame(
+        {
+            "year": np.repeat([2023, 2024], 200),
+            "a": rng.normal(size=400),
+            "b": rng.normal(size=400),
+        }
+    )
+    frame["won"] = (frame["a"] + frame["b"] + rng.normal(size=400) > 0).astype(int)
+    probs = out_of_year_probabilities(frame, ["a", "b"])
+    assert probs.notna().all()
+    assert probs[frame["a"] + frame["b"] > 1].mean() > 0.7
