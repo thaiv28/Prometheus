@@ -106,7 +106,19 @@ CREATE TABLE game_length_elo (
     pre_match_elo   REAL NOT NULL,
     post_match_elo  REAL NULL,
     elo_change      REAL NOT NULL,
+    home_league     TEXT NULL,           -- last domestic league; NULL if only seen at international events
+    league_offset   REAL NOT NULL,       -- home league's offset after this game (included in the ratings)
 
     PRIMARY KEY(gameid, teamid),
     FOREIGN KEY(gameid, teamid) REFERENCES matches(gameid, teamid)
+);
+
+-- Each league's Elo offset after every international game that moved it.
+CREATE TABLE game_length_elo_league_offsets (
+    gameid          TEXT NOT NULL,
+    date            DATE NOT NULL,
+    league          TEXT NOT NULL,
+    league_offset   REAL NOT NULL,
+
+    PRIMARY KEY(gameid, league)
 );

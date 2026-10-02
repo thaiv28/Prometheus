@@ -2,6 +2,14 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-01 — Elo league offsets (international games move the whole region)
+
+- `compute_elo_records`: rating = own rating + home league offset. A cross-league international game also moves each league's offset by `LEAGUE_SHARE` (0.5) of the team's change. New teams start at 1500 + their league's offset. `get_latest_elos` adds offset changes since a team's last game. Schema: `home_league` and `league_offset` columns on `game_length_elo`, plus a new `game_length_elo_league_offsets` table.
+- Tuned with a scratch harness that replays Elo on the backtest's games (not committed). Kept: league share 0.5 (league_k 10 at K=20). Rejected: changing K (25–30 helps domestic by about 0.0005 but hurts international), a between-season pull to the league mean (hurts international by 0.002–0.01), an international K multiplier, and a "most common of the last 20 games" home-league rule (no measurable difference).
+- Backtest: international Elo log loss 0.6540 → 0.6405 as of cutoff, 0.6456 → 0.6297 live (accuracy 60.6% → 65.0%); domestic 0.6414 → 0.6410 and 0.6349 → 0.6345. GlorELO+ weights refreshed with `--write-weights` (0.00983 / 0.00634).
+- Verification: rebuilt the DB; `evaluate_metrics.py --write-weights --out docs/metric_backtest.md`; `build_site.py` ran. New unit and integration tests for offsets, new-team starts and latest-rating refresh pass. NOT yet done: full `pytest -q` after the rebuild, browser check of the site, and the docs updates (current_state, tech, product/README Elo text).
+- Limit: the backtest's "as of cutoff" Elo uses each team's post-game rating without later offset changes; team-page Elo history is also per game.
+
 ## 2026-10-01 — GlorELO+ weights in a tracked file, checked in CI
 
 - The weights moved from constants in `prometheus/glorelo.py` to `prometheus/glorelo_weights.json` (package data in `pyproject.toml`). `glorelo.py` loads them and adds `load_weights`, `save_weights` and `weight_changes`.

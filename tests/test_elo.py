@@ -61,9 +61,11 @@ def test_compute_elo_records_tracks_ratings_per_team():
             "result": [1, 1, 0],
         }
     )
-    df = compute_elo_records(
+    df, offsets = compute_elo_records(
         games, calculate_game_length_elo_change, starting_elo=1500
     )
+    # Without a league column there are no league offsets.
+    assert offsets.empty
 
     assert len(df) == 6
     # zero-sum per game
@@ -83,6 +85,58 @@ def test_compute_elo_records_tracks_ratings_per_team():
     assert g3_c.pre_match_elo == pytest.approx(g2_c.post_match_elo)
     # A beat B, so A's second game starts above B's
     assert g2_a.pre_match_elo > g3_b.pre_match_elo
+
+
+def _league_games():
+    # A (LCK) and B (LCK) play at home; C (LCS) plays at home; then A beats C at
+    # Worlds; then a new LCK team D debuts against B.
+    return pd.DataFrame(
+        {
+            "gameid": ["g1", "g2", "g3", "g4"],
+            "teamid": ["A", "C", "A", "B"],
+            "opponent_teamid": ["B", "E", "C", "D"],
+            "gamelength": [1800] * 4,
+            "result": [1, 1, 1, 1],
+            "league": ["LCK", "LCS", "Worlds", "LCK"],
+            "date": ["2024-06-01", "2024-06-01", "2024-10-01", "2024-12-01"],
+        }
+    )
+
+
+def _row(df, gameid, teamid):
+    return df[(df.gameid == gameid) & (df.teamid == teamid)].iloc[0]
+
+
+def test_international_win_lifts_the_whole_league():
+    df, offsets = compute_elo_records(
+        _league_games(), calculate_game_length_elo_change, league_share=0.5
+    )
+    worlds_a = _row(df, "g3", "A")
+    worlds_c = _row(df, "g3", "C")
+    a_own_change = worlds_a.elo_change / 1.5
+
+    # A's league offset moved by half of A's own change, and C's the other way.
+    assert worlds_a.league_offset == pytest.approx(0.5 * a_own_change)
+    assert worlds_c.league_offset == pytest.approx(-0.5 * a_own_change)
+    assert worlds_a.elo_change == pytest.approx(-worlds_c.elo_change)
+    assert set(offsets["league"]) == {"LCK", "LCS"}
+    assert offsets["date"].tolist() == ["2024-10-01", "2024-10-01"]
+
+    # B stayed home but enters its next game with LCK's new offset.
+    b_after_g1 = _row(df, "g1", "B").post_match_elo
+    assert _row(df, "g4", "B").pre_match_elo == pytest.approx(
+        b_after_g1 + worlds_a.league_offset
+    )
+
+
+def test_new_team_starts_at_its_league_level():
+    df, _ = compute_elo_records(
+        _league_games(), calculate_game_length_elo_change, league_share=0.5
+    )
+    lck_offset = _row(df, "g3", "A").league_offset
+    assert lck_offset > 0
+    assert _row(df, "g4", "D").pre_match_elo == pytest.approx(1500 + lck_offset)
+    assert _row(df, "g4", "D").home_league == "LCK"
 
 
 def test_unknown_method_rejected():
