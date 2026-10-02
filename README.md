@@ -6,6 +6,8 @@ An overview of prometheus' stats (described more in the [metrics](#metrics) sect
 - **Global League Offensive Rankings Yield (GLORY)**: Prometheus' flagship metric. Weights gold/objectives by their importance in the meta, and calculates the best teams at securing those advantages across all regions.
 - **Global League Offensive Rankings Baseline (GLORB)**: Baseline for GLORY. Weights all objective/gold equally.
 - **GLORY+**: GLORY with every game adjusted for the opponent's Elo, so stats piled up against weak opponents count for less.
+- **Game-length Elo**: a rating for every team in every region. Fast wins move it more, and international results move a shared league offset, so a whole region rises or falls with how its teams do abroad.
+- **GlorELO+**: this season's GLORY+ blended with Elo into a forecast of who wins the next game.
 ## CLI
 The prometheus CLI provides users the ability to view past of current ratings for any of prometheus' metrics.
 
@@ -98,7 +100,7 @@ GLORY averages a team's per-game stats without asking who those stats came again
 2. Restate every game against an average opponent: `adjusted = feature - b_opponent * (opponent_elo - mean_opponent_elo)`.
 3. Average the adjusted games per team-season and score them with that year's GLORY model, exactly as GLORY does.
 
-Controlling for the team's own Elo keeps the opponent coefficient from absorbing the fact that strong teams post big stats. Elo connects regions only through international events (Worlds, MSI, EWC, First Stand, ...), so GLORY+ probably understates the gap between regions rather than overstating it.
+Controlling for the team's own Elo keeps the opponent coefficient from absorbing the fact that strong teams post big stats. Elo connects regions only through international events (Worlds, MSI, EWC, First Stand, ...). Those results move a per-league offset shared by every team in the region, which makes cross-region gaps much better measured than plain Elo (international log loss 0.6456 → 0.6297 in the backtest), but leagues that rarely play abroad are still measured loosely.
 ### How accurate are the metrics?
 `scripts/evaluate_metrics.py` backtests every team metric. At the start of each month, each metric is computed from that season's earlier games only, then used to predict the winner of every game played that month. Results are scored by accuracy, Brier score and log loss, and compared with a simple baseline (win % so far this season) using a paired bootstrap. International games between teams from different major regions are scored separately, because they are the only direct test of cross-region strength. Latest results: [docs/metric_backtest.md](docs/metric_backtest.md).
 

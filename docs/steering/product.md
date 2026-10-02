@@ -17,7 +17,7 @@ Prometheus is a public, browsable stat site for League of Legends esports, simil
 | **GLORB** (Baseline) | Shipped; sunset planned | Same features as GLORY with equal weights. A comparison baseline for GLORY with little value on its own; see Future work in `current_state.md`. |
 | **GLORY+** | Shipped | GLORY with each game's stats adjusted for the opponent's pre-game Elo |
 | **Era Z / League Z** | Shipped | Z-scores of a team's score within its year (all major leagues) and within its league |
-| **Game-length Elo** | Shipped (forecast) | Elo for every team in every region, where fast wins move ratings more. International games link the regions. |
+| **Game-length Elo** | Shipped (forecast) | Elo for every team in every region, where fast wins move ratings more. International games move a shared league offset, so a region's teams rise or fall together. |
 | **GlorELO+** | Shipped (forecast) | This season's GLORY+ blended with current Elo on the Elo scale, with a head-to-head win probability |
 | **AURA** (Attributable Utility via Role Analytics) | Research | Player win-probability attribution using 10/15/20/25-minute snapshots (see README) |
 

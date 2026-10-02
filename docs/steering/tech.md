@@ -29,7 +29,8 @@ Oracle's Elixir Google Drive folder
 - `match_stats`: team totals per game (gold, kills, towers, objectives, firsts, vision).
 - `player_stats`: per-player snapshots at 10/15/20/25 minutes, including the lane opponent.
 - `match_glory_stats` (view): per-minute and per-10-minute rates used as GLORY features.
-- `game_length_elo`: per-game pre/post Elo per team, keyed on (gameid, teamid). Without that key every pre-game Elo join made SQLite build a temporary index.
+- `game_length_elo`: per-game pre/post Elo per team, keyed on (gameid, teamid), with the team's `home_league` and that league's `league_offset` after the game. Without the key every pre-game Elo join made SQLite build a temporary index.
+- `game_length_elo_league_offsets`: each league's offset after every international game that moved it (gameid, date, league, league_offset).
 
 ## GLORY algorithm (as implemented)
 
@@ -47,6 +48,10 @@ Each year's major-league games are read once per call and used for both the fit 
 ## GLORY+
 
 `opponent_adjusted=True`: for each year and feature, fit `feature ~ own_pre_elo + opp_pre_elo` over major-league games, then restate each game against the average opponent (`f - b_opp * (opp_elo - mean)`) before averaging. Scoring is otherwise GLORY's.
+
+## Elo
+
+`prometheus/elo.py`, replayed in date order by `004_bootstrap_elo.py`. A team's rating is its own rating plus its home league's offset (home league = the last domestic league it played in). Each game changes the teams' own ratings by K=20 × (actual − expected), where the winner's "actual" falls from 1.0 for very short games to 0.65 for very long ones. When teams from two leagues meet at an international event, each league's offset also moves by `LEAGUE_SHARE` (0.5) of the team's change. A new team starts at 1500 plus its league's offset; a team that changes league keeps its rating. `get_latest_elos` adds each league's offset changes since the team's last game.
 
 ## GlorELO+
 
