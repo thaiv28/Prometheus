@@ -83,7 +83,7 @@ python -m http.server -d output 8000    # preview the built site locally
 
 ## Gotchas
 
-- `get_glory_ranking()` refits one regression **per year** on every call. `build_site.py` calls it 5 times (GLORY/GLORB × qualified/all, plus GLORY+), and a build takes about 15 seconds.
+- `get_glory_ranking()` reads and fits one model **per year** on every call. Reading the games is the slow part, so `build_site.py` loads them once with `load_glory_games()` and passes `games=` to its 5 calls (GLORY/GLORB × qualified/all, plus GLORY+). A build takes about 5 seconds.
 - International events (Worlds, MSI, ...) are ingested as their own leagues (`INTERNATIONAL_LEAGUES` in `types.py`). They are the only games linking regional Elo pools. Oracle's Elixir leaves `split` empty for them, so don't reintroduce a blanket `dropna` over `split` in `002_add_matches.py`.
 - `setup_db.sh` **deletes** `db/prometheus.db` before rebuilding.
 - Several modules end in `if __name__ == "__main__":` scratch blocks. They aren't real entry points.

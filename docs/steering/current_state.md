@@ -28,7 +28,6 @@ Last reviewed: 2026-10-01. This is a code baseline. Read `db/prometheus.db` or t
 - About 1,850 team-games have no opponent row, so they get no Elo and are left out of GLORY+ (for example Gamers2 in 2015).
 - The `before` date filter in `get_matches_frame` is exercised only by the backtest, not by its own test.
 - e2e tests need a built DB, so they only run locally and in the publish workflow after `setup_db.sh`.
-- The full site build takes about 17 seconds because `get_glory_ranking` refits every year's model on each of its five calls.
 
 ## Future work
 
@@ -41,7 +40,6 @@ Last reviewed: 2026-10-01. This is a code baseline. Read `db/prometheus.db` or t
 - **Backtest report.** Add month-cluster bootstrap intervals for accuracy and paired accuracy differences to `evaluate_metrics.py`, so the report shows every interval quoted on the site.
 - **Automate the weight refresh.** Have the backtest write the GlorELO+ weights to a tracked file that `glorelo.py` reads, and flag a large change in CI.
 - **CLI.** Add GLORY+ and GlorELO+, and year ranges (`2021-2023`, the TODO in `main.py`).
-- **Faster builds.** Fit each year's GLORY model once per build and reuse it across GLORY, GLORB and GLORY+.
 - **Tests.** A fixture-DB test for the `before` filter; run e2e tests against a small fixture DB so they don't need the full download.
 - **Cleanup.** Remove the `if __name__ == "__main__":` scratch blocks and move `players.py` off table reflection to raw SQL.
 - **AURA.** The player metric: calibrate the snapshot win-probability model, attribute win-probability changes to players by role, and publish player-seasons.

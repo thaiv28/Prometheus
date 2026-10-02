@@ -107,5 +107,6 @@ CREATE TABLE game_length_elo (
     post_match_elo  REAL NULL,
     elo_change      REAL NOT NULL,
 
+    PRIMARY KEY(gameid, teamid),
     FOREIGN KEY(gameid, teamid) REFERENCES matches(gameid, teamid)
 );

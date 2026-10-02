@@ -29,7 +29,7 @@ Oracle's Elixir Google Drive folder
 - `match_stats`: team totals per game (gold, kills, towers, objectives, firsts, vision).
 - `player_stats`: per-player snapshots at 10/15/20/25 minutes, including the lane opponent.
 - `match_glory_stats` (view): per-minute and per-10-minute rates used as GLORY features.
-- `game_length_elo`: per-game pre/post Elo per team.
+- `game_length_elo`: per-game pre/post Elo per team, keyed on (gameid, teamid). Without that key every pre-game Elo join made SQLite build a temporary index.
 
 ## GLORY algorithm (as implemented)
 
@@ -41,6 +41,8 @@ For each year:
 5. Add `era_score` (z within the year) and `league_score` (z within league and year).
 
 `before=<date>` restricts both the fit and the averages to earlier games (used by the backtest).
+
+Each year's major-league games are read once per call and used for both the fit and the averages (a separate read only happens when the league filter includes non-major leagues). `load_glory_games()` reads every year up front so several calls can share it through `games=`; `build_site.py` does this for its five rankings.
 
 ## GLORY+
 
@@ -66,4 +68,4 @@ For each year:
 
 - Static hosting only. Anything dynamic must be precomputed at build time or done in browser JS.
 - Each CI build re-downloads every CSV from Google Drive. The upstream folder ID is hardcoded in `setup_db.sh`.
-- Build time is dominated by repeated per-year model fits.
+- A site build takes about 5 seconds, mostly SQLite reads (each year's games, latest Elo, Elo history) and writing about 2,000 team pages.

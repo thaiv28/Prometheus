@@ -2,6 +2,13 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-01 — Faster site builds (17s → 5s)
+
+- Profiled the build: model fitting took about 0.03s; the time went to SQLite reads. `game_length_elo` had no key, so each of GLORY+'s 13 pre-game Elo joins built a temporary index (about 0.5s each), and the five ranking calls read every year's games twice per call.
+- `game_length_elo` now has `PRIMARY KEY(gameid, teamid)` (`001_create_tables.sql`). `get_glory_ranking` reads each year's major-league games once and uses them for both the fit and the averages; new `load_glory_games()` and a `games=` argument let `build_site.py` share one read across its five calls. `regression.fit_glory_pipeline()` fits on a frame already in memory.
+- Verification: rebuilt the DB with `setup_db.sh`; `build_site.py` went from 17.2s to 5.2s, and all 2,094 generated HTML files are byte-identical to the build before the change. `uv run pytest -q` passed, including a new test that shared and fresh reads give the same ranking.
+- Limit: the backtest still reads per cutoff; it gets the one-read-per-year saving but no cross-call sharing.
+
 ## 2026-10-01 — Future work: betting-odds benchmark
 
 - Added a "Betting-odds benchmark" item to the Future work section of `current_state.md`: score de-vigged closing odds in the backtest as the ceiling to compare the forecast models against.

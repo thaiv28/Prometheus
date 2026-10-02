@@ -60,6 +60,14 @@ def _fit_glory_model(
     return pipeline, X_test, y_test
 
 
+def fit_glory_pipeline(games, features):
+    """Fit GLORY's StandardScaler + LinearRegression(result) pipeline on per-game rows."""
+    pipeline = Pipeline(
+        [("scaler", StandardScaler()), ("regressor", LinearRegression())]
+    )
+    return pipeline.fit(games[features], games["result"].astype(int))
+
+
 def _evaluate_model(pipeline, X_test, y_test):
     y_pred = pipeline.predict(X_test)
     y_pred_binary = (y_pred > 0.5).astype(int)

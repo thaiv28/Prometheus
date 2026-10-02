@@ -1,7 +1,8 @@
 from unittest.mock import patch
 
+import pandas as pd
 import pytest
-from prometheus.ranking import get_glory_ranking
+from prometheus.ranking import get_glory_ranking, load_glory_games
 
 
 @patch("prometheus.utils.get_engine")
@@ -148,3 +149,24 @@ def test_get_glory_ranking_sort_by_era_score(mock_get_engine, inmemory_engine):
         assert (
             df_sorted.iloc[i]["era_score"] >= df_sorted.iloc[i + 1]["era_score"]
         ), f"Era scores not in descending order: {df_sorted.iloc[i]['era_score']} < {df_sorted.iloc[i + 1]['era_score']}"
+
+
+@patch("prometheus.utils.get_engine")
+def test_shared_games_give_the_same_ranking(mock_get_engine, inmemory_engine):
+    mock_get_engine.return_value = inmemory_engine
+    features = ["gpm", "dragon_per_10"]
+    games = load_glory_games(years=[2022, 2023])
+
+    assert sorted(games) == [2022, 2023]
+    for baseline in (False, True):
+        fresh = get_glory_ranking(
+            year=[2022, 2023], league="LPL", features=features, baseline=baseline
+        )
+        shared = get_glory_ranking(
+            year=[2022, 2023],
+            league="LPL",
+            features=features,
+            baseline=baseline,
+            games=games,
+        )
+        pd.testing.assert_frame_equal(fresh, shared)

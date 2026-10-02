@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
-from prometheus.ranking import get_glory_ranking
+from prometheus.ranking import get_glory_ranking, load_glory_games
 from prometheus.elo import get_elo_history, get_latest_elos
 from prometheus.glorelo import glorelo_ratings
 from prometheus.types import ALL_MAJOR_LEAGUES
@@ -162,10 +162,11 @@ def copy_static():
     shutil.copy2(Path(STATIC_SRC) / "favicon.svg", Path(OUTPUT_DIR) / "favicon.svg")
 
 
-def _rankings(baseline, minimum_matches, z_scores, opponent_adjusted=False):
+def _rankings(games, baseline, minimum_matches, z_scores, opponent_adjusted=False):
     return get_glory_ranking(
-        year=None,
+        year=sorted(games),
         league=ALL_MAJOR_LEAGUES,
+        games=games,
         baseline=baseline,
         z_scores=z_scores,
         minimum_matches=minimum_matches,
@@ -348,12 +349,13 @@ def main():
     copy_static()
     last_update = datetime.datetime.now().strftime("%B %-d, %Y")
 
-    # Each call refits one model per year, so compute each ranking once and reuse it.
-    glory_df = _rankings(baseline=False, minimum_matches=5, z_scores=True)
-    glorb_df = _rankings(baseline=True, minimum_matches=5, z_scores=True)
-    glory_all = _rankings(baseline=False, minimum_matches=1, z_scores=False)
-    glorb_all = _rankings(baseline=True, minimum_matches=1, z_scores=False)
-    glory_plus_df = _rankings(baseline=False, minimum_matches=5, z_scores=True, opponent_adjusted=True)
+    # Read each year's games once and share them across GLORY, GLORB and GLORY+.
+    games = load_glory_games()
+    glory_df = _rankings(games, baseline=False, minimum_matches=5, z_scores=True)
+    glorb_df = _rankings(games, baseline=True, minimum_matches=5, z_scores=True)
+    glory_all = _rankings(games, baseline=False, minimum_matches=1, z_scores=False)
+    glorb_all = _rankings(games, baseline=True, minimum_matches=1, z_scores=False)
+    glory_plus_df = _rankings(games, baseline=False, minimum_matches=5, z_scores=True, opponent_adjusted=True)
 
     render_404(last_update)
 
