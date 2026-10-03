@@ -200,8 +200,8 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 
 ### Running head
 - Wordmark: a ledger-blue P glyph and PROMETHEUS in tracked small caps 600.
-- Sections: Home, then two groups, each led by an italic ink-3 group name in normal caps: *Season stats* (GLORY, Record, Luck) and *Forecasts* (GlorELO+, Form, Elo), then a lone *Sunset stats* link (small caps, after a hairline) to the page listing retired metrics. It is marked current on that page and on a retired metric's page. With eight sections the nav fills the 82rem head, so on desktop the team search always sits on its own line, right-aligned under the sections. Links are small caps; the current one is ink 600 with a 2px ledger-blue underline. A hairline divides the groups on desktop; under 720px each group takes its own line and the divider drops.
-- Team search: a "Team" label and a bare input ("Go to a team") on a hairline baseline; focus thickens the baseline to 2px ledger blue. Typing opens a suggestion slip under the field, set like an open picker (paper, ink border, 2px top rule): up to eight teams, each a name with its league mark and last year in ink-3; the highlighted one gets the paper wash and a ledger-blue name. Enter or a click opens the team page. With no match the slip says so, and Enter (or no JS) searches the Elo register, which lists every team.
+- Sections: Home, then two groups, each led by an italic ink-3 group name in normal caps: *Teams* (GLORY, GlorELO+, Form, Elo) and *Players* (Elo), then a lone *Sunset stats* link (small caps, after a hairline) to the page listing retired metrics. It is marked current on that page and on a retired metric's page; the Players Elo link is marked on player pages. The two Elo links carry "Team Elo" and "Player Elo" as accessible names, and their pages use those titles. The nav and the search share one line down to 1280px; narrower, the search wraps to its own line, right-aligned under the sections. Links are small caps; the current one is ink 600 with a 2px ledger-blue underline. A hairline divides the groups on desktop; under 720px each group takes its own line and the divider drops.
+- Search: a "Find" label and a bare input ("Team or player") on a hairline baseline; focus thickens the baseline to 2px ledger blue. Typing opens a suggestion slip under the field, set like an open picker (paper, ink border, 2px top rule): up to eight teams and players, each a name with its league mark and, in ink-3, the last year (teams) or role and team (players); the highlighted one gets the paper wash and a ledger-blue name. Enter or a click opens the page. With no match the slip says so, and Enter (or no JS) searches the Team Elo register, which lists every team.
 
 ### Filter line
 - Set as a sentence: "Showing years all, leagues all, team any". The label is small caps, the value italic on a dotted underline, with a caret. Opening turns the value and caret ledger blue.
@@ -233,15 +233,23 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 
 ### Franchise entry (team pages)
 - Name in display size; a small-caps fact line (league marks, seasons ranked, GlorELO+ now, Elo); a prose summary with the best season, its year rank, and the Elo peak.
-- Figure 1: printed column chart of GLORY or Record by season (both 0 to 100), switched by a two-option small-caps control with a ledger-blue underline.
-- Season register: year, league, GLORY, year rank ("2nd of 47", or "Unranked" when the season had fewer than 5 games), Record, Luck (signed wins, true minus) and season-end GlorELO+. Under 480px the league, Record and Luck columns drop so the register fits without scrolling.
+- Figure 1: printed column chart of GLORY by season (0 to 100).
+- Season register: year, league, GLORY, year rank ("2nd of 47", or "Unranked" when the season had fewer than 5 games) and season-end GlorELO+. Under 480px the league column drops.
 - Figure 2: hand-drawn SVG Elo line in the league ink, dashed 1500 rule, annotated peak, and a pointer and arrow-key readout.
+
+### Player entry (player pages)
+- Set like the franchise entry: name in display size; a small-caps fact line (role, league mark, "Plays for" or "Last played for" the team, Elo); a prose summary with the peak, the latest rating, games, teams and other names.
+- Figure 1: the same SVG Elo line as team pages.
+- Career register: one row per run of games with a team (team, league, role, from, to, games, Elo at the end), newest first. Under 480px league, role and "to" drop.
+
+### Home contents
+- The margin list is set in two parts, *Teams* and *Players*, each a small-caps 600 head (the second after a hairline), with the italic ink-3 group names (*Season stats*, *Forecasts*, *Ratings*) under them.
 
 ### Margin notes
 - Small-caps head over an ink rule; numbered notes with ledger-blue marks; the dagger note is the caveat, in italic. A targeted note gets the spot wash.
 
 ### Motion
-- Rows re-rank in place: rows that stay in view slide from their old position to their new one over 360ms with cubic-bezier(0.16, 1, 0.3, 1). Season columns scale to the switched metric over 320ms. Both are instant under reduced motion.
+- Rows re-rank in place: rows that stay in view slide from their old position to their new one over 360ms with cubic-bezier(0.16, 1, 0.3, 1). Instant under reduced motion.
 
 ## Do's and Don'ts
 

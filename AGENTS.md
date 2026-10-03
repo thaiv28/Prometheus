@@ -36,7 +36,7 @@ Prometheus is a "sabermetrics for League of Legends esports" project. It ingests
 
 ```bash
 uv sync && uv pip install -e .          # install (Python >= 3.12, managed by uv)
-bash scripts/setup_db.sh                # download raw CSVs (gdown), rebuild db/prometheus.db from scratch
+uv run bash scripts/setup_db.sh         # download raw CSVs (gdown), rebuild db/prometheus.db from scratch
 uv run python scripts/build_site.py     # render static site to output/
 uv run pytest -q                        # run tests (unit + integration + e2e; e2e needs a built DB)
 uv run prometheus rankings glory --league MAJOR --year 2024
@@ -67,8 +67,8 @@ python -m http.server -d output 8000    # preview the built site locally
 | `scripts/build_site.py` | Static site generator |
 | `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtest: how well each forecast, from earlier games only, predicts winners (domestic and cross-region); fits the forecast weights. Results in `docs/metric_backtest.md` |
 | `scripts/evaluate_season_stats.py` | Season-stat report: split-half reliability, games to 0.5, and fit to same-season results. Results in `docs/season_stats_report.md` |
-| `templates/*.html.j2` | Jinja2 templates: `base` (shell), `index`, `rankings` (every metric page, driven by a column config), `team`, `sunset`, `redirect`, `404`, and the `_marks` macros (league mark, signed number, ordinal) |
-| `site_static/{css,js,fonts}` | Hand-written CSS (`tokens.css` holds all colors and the `@font-face` rules, including league inks), vanilla JS (`rankings.js` for filtering, sorting and the distribution figure, `team.js` for the GLORY/Record season switch and the SVG Elo chart, `forecast.js` for the GlorELO+ head-to-head box, `search.js` for the header team search), and the self-hosted Source Serif 4 font (OFL), all copied verbatim into `output/` |
+| `templates/*.html.j2` | Jinja2 templates: `base` (shell), `index`, `rankings` (every metric page, driven by a column config), `team`, `player`, `sunset`, `redirect`, `404`, and the `_marks` macros (league mark, signed number, ordinal) |
+| `site_static/{css,js,fonts}` | Hand-written CSS (`tokens.css` holds all colors and the `@font-face` rules, including league inks), vanilla JS (`rankings.js` for filtering, sorting and the distribution figure, `team.js` for the SVG Elo chart on team and player pages, `forecast.js` for the GlorELO+ head-to-head box, `search.js` for the header team and player search), and the self-hosted Source Serif 4 font (OFL), all copied verbatim into `output/` |
 | `PRODUCT.md`, `.impeccable/surfaces/` | Product record and visual direction contract used by the impeccable design skill. Read them before UI work. |
 | `notebooks/` | Exploratory modeling. Not imported by the package. |
 | `tests/` | `test_*.py` unit tests (mocked), `integration/` (in-memory SQLite), `e2e/` (real DB) |
@@ -80,8 +80,9 @@ python -m http.server -d output 8000    # preview the built site locally
 - **Feature and column names live in `types.py`.** If you add a metric feature, add it there and to the SQL view that produces it (for example `003_create_glory.sql`).
 - **Retiring a metric:** give its `METRICS` entry a `sunset` note (shown on its page) and a short `sunset_why` (shown on `sunset.html`). It leaves the header and home contents; the header's one "Sunset stats" link leads to the list. The page and data stay.
 - **Static assets:** reference CSS and JS through `asset('css/…')` in templates, which adds a content-hash query so browsers pick up changes.
-- **New metrics on the site** are registered in the `METRICS` (season stats) or `FORECASTS` / `ELO_METRICS` (forecasts) dicts in `build_site.py` (including the explainer copy) and given a column config (`METRIC_COLUMNS` / `GLORELO_COLUMNS` / `ELO_COLUMNS`) with `kind` set to `"season"` (team-seasons, 0–100) or `"rating"` (teams, Elo scale). `SECTIONS` groups them in the header and contents. `rankings.html.j2` and `rankings.js` render any metric from that config.
-- **Season stats vs forecasts.** Season stats (GLORY, Record, Luck) may use the whole season; forecasts (GlorELO+, Form, Elo) use only earlier games and must not take a season stat as input. Judge season stats with `evaluate_season_stats.py` and forecasts with `evaluate_metrics.py`.
+- **New metrics on the site** are registered in the `METRICS` (team season stats), `FORECASTS` / `ELO_METRICS` (team forecasts) or `PLAYER_METRICS` (player stats) dicts in `build_site.py` (including the explainer copy) and given a column config (`METRIC_COLUMNS` / `GLORELO_COLUMNS` / `ELO_COLUMNS` / `PLAYER_ELO_COLUMNS`) with `kind` set to `"season"` (0–100) or `"rating"` (Elo scale), and `entity` `"player"` for player registers (default team). `SECTIONS` splits them into **Teams** and **Players** in the header, and into season stats, forecasts and player ratings in the home contents. A metric's `title` ("Team Elo", "Player Elo") is its page name when the short header `name` is shared. `rankings.html.j2` and `rankings.js` render any metric from that config.
+- **Season stats vs forecasts.** Season stats (GLORY; sunset Record and Luck) may use the whole season; forecasts (GlorELO+, Form, Elo) use only earlier games and must not take a season stat as input. Judge season stats with `evaluate_season_stats.py` and forecasts with `evaluate_metrics.py`.
+- **Change a metric only for a significant benchmark gain.** A change to how a published metric is computed (features, weights scheme, hyperparameters, method) ships only when its benchmark beats the current version on the same games or team-seasons by more than noise: for forecasts, the paired-bootstrap 95% interval of the domestic log-loss difference (`evaluate_metrics.py`) must exclude 0 and international log loss must not get significantly worse; for season stats, a paired bootstrap over team-seasons of split-half reliability or r with the other half's win % (`evaluate_season_stats.py`) must exclude 0, with neither getting significantly worse. A gain inside the noise is not a reason to change. Record each tested change and its numbers in the work log either way. Refitting the existing weights on new data (`--write-weights`) is not a metric change.
 - **Forecast weights** live in `prometheus/form_weights.json` and `glorelo_weights.json` (package data), read by `form.py` and `glorelo.py`. After a metric or data change, rerun `evaluate_metrics.py --write-weights` and commit both. CI runs `--check-weights` and warns when a blend weight moves more than 10%.
 - `gamelength` is stored in **seconds**.
 - League names are normalized at ingest (`002_add_matches.py`): NA LCS / LTA N → `LCS`, EU LCS → `LEC`.
@@ -100,6 +101,6 @@ python -m http.server -d output 8000    # preview the built site locally
 ## Before you finish a change
 
 1. `uv run pytest -q` passes (including the steering guard).
-2. If you touched the DB scripts or metrics, rebuild with `setup_db.sh`, then `build_site.py`, and spot-check `output/`. Rerun `evaluate_metrics.py` to check the change helps, with `--write-weights` to refresh the forecast weights, and `evaluate_season_stats.py` for season stats.
+2. If you touched the DB scripts or metrics, rebuild with `uv run bash scripts/setup_db.sh`, then `build_site.py`, and spot-check `output/`. Rerun `evaluate_metrics.py` to check the change helps, with `--write-weights` to refresh the forecast weights, and `evaluate_season_stats.py` for season stats.
 3. If you touched templates, CSS, or JS, build the site and look at it in a browser at desktop and phone widths.
 4. Inspect the diff and make the document updates above match the code. State anything you did not verify.

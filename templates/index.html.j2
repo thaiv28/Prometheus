@@ -4,14 +4,14 @@
 {% block content %}
   <section class="title-page" aria-labelledby="title">
     <h1 id="title">Prometheus</h1>
-    <p class="title-sub">League of Legends esports team rankings that compare teams across years and regions, {{ first_year }} to today.</p>
+    <p class="title-sub">League of Legends esports rankings of teams and players, compared across years and regions, {{ first_year }} to today.</p>
     <p class="title-edition"><span>{{ '{:,}'.format(total_team_seasons) }} team-seasons</span> <span>{{ '{:,}'.format(total_elo_teams) }} teams rated</span> <span>Updated {{ last_update }}</span></p>
   </section>
 
   <div class="spread spread--home">
     <div class="spread-main">
       <div class="prose intro">
-        <p class="lede">Prometheus keeps two kinds of numbers. Season stats describe a finished season with hindsight: GLORY measures how well a team played, Record what it achieved against its schedule, and Luck the gap between the two. Forecasts (GlorELO+, Form and Elo) estimate who wins the next game from earlier games only, and are tested against every game since 2014.</p>
+        <p class="lede">Prometheus rates teams and players. For teams it keeps two kinds of numbers: season stats describe a finished season with hindsight (GLORY measures how well a team played), and forecasts (GlorELO+, Form and Elo) estimate who wins the next game from earlier games only, tested against every game since 2014. Team Elo is built from player ratings, which follow each player through their career.</p>
       </div>
 
       <figure class="register-figure" aria-labelledby="t1-cap">
@@ -80,19 +80,22 @@
     <aside class="margin" aria-labelledby="contents-heading">
       <h2 id="contents-heading" class="margin-head">Rankings</h2>
       {% for section in sections %}
-      {% set forecast = section.name == 'Forecasts' %}
-      <h3 class="contents-section">{{ section.name }}</h3>
+      <h3 class="contents-part">{{ section.name }}</h3>
+      {% for group in section.groups %}
+      {% set unit = 'players' if section.name == 'Players' else ('team-seasons' if group.name == 'Season stats' else 'teams') %}
+      <h4 class="contents-section">{{ group.name }}</h4>
       <ol class="contents">
-        {% for m in section.metrics %}
+        {% for m in group.metrics %}
         <li>
-          <a href="{{ m.key }}.html"><span class="contents-name">{{ m.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">{{ '{:,}'.format(entry_counts[m.key]) }}<span class="visually-hidden"> {{ 'teams' if forecast else 'team-seasons' }}</span></span></a>
+          <a href="{{ m.key }}.html"><span class="contents-name">{{ m.title or m.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">{{ '{:,}'.format(entry_counts[m.key]) }}<span class="visually-hidden"> {{ unit }}</span></span></a>
           <p class="contents-full">{{ m.full_name }}</p>
           <p class="contents-desc">{{ m.description }}</p>
         </li>
         {% endfor %}
       </ol>
       {% endfor %}
-      <p class="margin-note">Counts are team-seasons for season stats and teams for forecasts. Select any team name to see its history. Retired metrics are listed under <a href="sunset.html">Sunset stats</a>.</p>
+      {% endfor %}
+      <p class="margin-note">Counts are team-seasons for season stats, teams for team forecasts, and players active in the last six months for player Elo. Select any name to see its history. Retired metrics are listed under <a href="sunset.html">Sunset stats</a>.</p>
     </aside>
   </div>
 {% endblock %}

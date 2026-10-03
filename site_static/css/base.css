@@ -181,8 +181,11 @@ html { scrollbar-color: var(--hairline) var(--paper); }
 .intro { margin-bottom: 40px; }
 
 /* ---- Contents (dot leaders) ----------------------------------------- */
+/* Teams / Players: the top split, set like the margin head in small caps. */
+.contents-part { font-size: var(--fs-label); font-variant-caps: all-small-caps; letter-spacing: 0.08em; font-weight: 600; color: var(--ink); margin: 34px 0 0; padding-top: 10px; border-top: var(--hair) solid var(--hairline); }
+.contents-part:first-of-type { margin-top: 6px; padding-top: 0; border-top: 0; }
 .contents-section { font-size: var(--fs-small); font-style: italic; color: var(--ink-3); margin: 22px 0 8px; }
-.contents-section:first-of-type { margin-top: 4px; }
+.contents-part + .contents-section { margin-top: 6px; }
 .contents li + li { margin-top: 18px; }
 .contents a { display: flex; align-items: baseline; gap: 6px; text-decoration: none; color: var(--ink); }
 .contents-name { font-size: 1.25rem; font-weight: 600; letter-spacing: 0.02em; }

@@ -34,6 +34,7 @@ from sklearn.linear_model import LogisticRegression
 from sqlalchemy import text
 
 from prometheus import form
+from prometheus.elo import calculate_game_length_elo_change, compute_elo_records, load_elo_games
 from prometheus.evaluation import (
     elo_as_of,
     game_losses,
@@ -67,13 +68,17 @@ METRICS = [
     ("win_pct", "Win % so far", "win_pct"),
     ("elo", "Elo (as of cutoff)", "elo"),
     ("elo_live", "Elo (live)", "elo_live"),
+    ("team_elo_live", "Team Elo, no player ratings (live)", "team_elo_live"),
     ("form", "Form (live)", "form"),
     ("glorelo", "GlorELO+ (live)", GLORELO),
 ]
 BASELINE = "win_pct"
 LABELS = {key: label for key, label, _ in METRICS}
 # Does each blend beat its strongest part on the same games?
-BLEND_CHECKS = [("glorelo", "elo_live"), ("form", "elo_live")]
+BLEND_CHECKS = [("glorelo", "elo_live"), ("form", "elo_live"), ("elo_live", "team_elo_live")]
+# Domestic games where player ratings should matter most: early in a season, and
+# soon after a team changed a starter. Elo (player-built) is compared with team Elo.
+ROSTER_SLICE_GAMES = 10
 
 
 def load_games():
@@ -115,6 +120,35 @@ def load_elo_timeline():
         parse_dates=["date"],
     )
     return timeline, offsets
+
+
+def load_team_elo():
+    """Pre-game Elo with each team as one unit (no player ratings), for comparison."""
+    records, _ = compute_elo_records(load_elo_games(), calculate_game_length_elo_change)
+    return records.set_index(["gameid", "teamid"])["pre_match_elo"]
+
+
+def load_roster_context():
+    """Per team-game: games played that season before it, and games since a starter changed.
+
+    A starter change is any game whose five players differ from the team's previous game.
+    """
+    stmt = """
+    SELECT m.gameid, m.teamid, m.year, m.date, group_concat(p.playerid, ',') AS players
+    FROM matches m JOIN (SELECT * FROM match_players ORDER BY playerid) p
+        ON p.gameid = m.gameid AND p.teamid = m.teamid
+    GROUP BY m.gameid, m.teamid
+    ORDER BY m.date, m.gameid
+    """
+    rows = pd.read_sql(stmt, get_engine())
+    rows["season_game"] = rows.groupby(["teamid", "year"]).cumcount()
+    changed = rows["players"] != rows.groupby("teamid")["players"].shift()
+    changed &= rows.groupby("teamid").cumcount() > 0
+    block = changed.groupby(rows["teamid"]).cumsum()
+    since = rows.groupby([rows["teamid"], block]).cumcount()
+    # Before a team's first change there is no change to count from.
+    rows["since_change"] = since.where(block > 0, np.inf)
+    return rows.set_index(["gameid", "teamid"])[["season_game", "since_change"]]
 
 
 def month_starts(dates):
@@ -161,7 +195,16 @@ def backtest(games, results, elo_timeline, years):
             rows.append(window)
 
     frame = pd.concat(rows, ignore_index=True)
-    for col in ("win_pct", "elo", "elo_live"):
+    team_elo = load_team_elo()
+    context = load_roster_context()
+    for side in ("blue", "red"):
+        key = pd.MultiIndex.from_arrays([frame["gameid"], frame[f"{side}_id"]])
+        frame[f"{side}_team_elo_live"] = team_elo.reindex(key).to_numpy()
+        for col in ("season_game", "since_change"):
+            frame[f"{side}_{col}"] = context[col].reindex(key).to_numpy()
+    for col in ("season_game", "since_change"):
+        frame[col] = np.minimum(frame[f"blue_{col}"], frame[f"red_{col}"])
+    for col in ("win_pct", "elo", "elo_live", "team_elo_live"):
         frame[col] = frame[f"blue_{col}"] - frame[f"red_{col}"]
     frame = frame.dropna(subset=["elo_live"]).reset_index(drop=True)
 
@@ -263,6 +306,24 @@ def summarize(frame, losses):
                 f"- {LABELS[blend]} vs {LABELS[part]}: log loss "
                 f"{mean:+.4f} ({lo:+.4f} to {hi:+.4f})"
             )
+    domestic = frame["test_set"] == "Domestic"
+    lines.append("\n### Player-built Elo vs team Elo, where rosters matter\n")
+    lines.append("| Domestic games | Games | Team Elo log loss | Elo log loss | Difference (95% CI) |")
+    lines.append("|---|---:|---:|---:|---|")
+    n = ROSTER_SLICE_GAMES
+    for label, mask in (
+        ("All", domestic),
+        (f"Either team in its first {n} games of the season", domestic & (frame["season_game"] < n)),
+        (f"Either team within {n} games of a starter change", domestic & (frame["since_change"] < n)),
+    ):
+        mask = mask.to_numpy()
+        team = losses["team_elo_live"]["log_loss"].to_numpy()[mask]
+        player = losses["elo_live"]["log_loss"].to_numpy()[mask]
+        mean, lo, hi = paired_bootstrap(player, team)
+        lines.append(
+            f"| {label} | {int(mask.sum()):,} | {team.mean():.4f} | {player.mean():.4f} "
+            f"| {mean:+.4f} ({lo:+.4f} to {hi:+.4f}) |"
+        )
     lines.append(
         "\nLower Brier and log loss are better. A negative log-loss delta means the "
         "metric beats win % so far; an interval that excludes 0 is a real difference."

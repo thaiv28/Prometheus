@@ -20,7 +20,13 @@
   // The other pages list team-seasons scored 0-100.
   const isRating = config.kind === "rating";
   const showingNow = () => isRating && !state.years.size;
-  const noun = () => (showingNow() ? "teams" : "team-seasons");
+  // Team pages list teams; the player Elo page lists players.
+  const entity = config.entity || "team";
+  const noun = () => (showingNow() ? `${entity}s` : `${entity}-seasons`);
+  const ROLES = { top: "Top", jng: "Jungle", mid: "Mid", bot: "Bot", sup: "Support" };
+  // Same as build_site._slugify, so a team name links to its page.
+  const slugify = (name) => String(name).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
+  const nameOf = (r) => (entity === "player" ? r.playername : r.teamname);
   const metricName = (document.querySelector("h1")?.firstChild?.textContent || "").trim();
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const totalCols = config.columns.length + config.columns.filter((c) => c.bar).length;
@@ -93,7 +99,8 @@
     const term = state.search.trim().toLowerCase();
     const out = pool().filter((r) =>
       (!state.leagues.size || state.leagues.has(String(r.league))) &&
-      (!term || String(r.teamname).toLowerCase().includes(term))
+      (!term || String(nameOf(r)).toLowerCase().includes(term) ||
+        (entity === "player" && String(r.teamname).toLowerCase().includes(term)))
     );
     // Rank is position by the page's value within the current view, independent of the sort column.
     out.sort((a, b) => Number(b[valueKey]) - Number(a[valueKey]));
@@ -130,6 +137,12 @@
         return `<td class="num rank">${r.rank}</td>`;
       case "team":
         return `<td class="team"><a href="teams/${encodeURIComponent(r.slug)}.html">${esc(r.teamname)}</a>${teamMeta(r)}</td>`;
+      case "player":
+        return `<td class="team"><a href="players/${encodeURIComponent(r.slug)}.html">${esc(r.playername)}</a>${teamMeta(r)}</td>`;
+      case "teamref":
+        return `<td class="teamref${cls}"><a href="teams/${encodeURIComponent(slugify(r.teamname))}.html" title="${esc(r.teamname)}">${esc(r.teamname)}</a></td>`;
+      case "role":
+        return `<td class="${cls.trim()}">${esc(ROLES[r[col.key]] || r[col.key])}</td>`;
       case "number": {
         const bar = col.bar
           ? `<td class="bar-col" aria-hidden="true"><span class="bar" style="--v:${scale(Number(r[col.key])).toFixed(1)}"></span></td>`
@@ -295,7 +308,7 @@
     const years = describeYears(state.years);
     if (showingNow() && !state.search.trim()) s += " playing now";
     else if (years) s += isRating ? `, ${years}, rated at season’s end` : `, ${years}`;
-    if (state.search.trim()) s += `, names containing “${state.search.trim()}”`;
+    if (state.search.trim()) s += `, ${entity === "player" ? "names or teams" : "names"} containing “${state.search.trim()}”`;
     return s;
   }
 

@@ -1,4 +1,4 @@
-// Team page: GLORY/Record switch for the season figure, and the Elo history figure drawn as SVG.
+// Team and player pages: the Elo history figure drawn as SVG.
 (function () {
   "use strict";
 
@@ -10,17 +10,6 @@
     return node;
   };
 
-  // ---- Season figure ----------------------------------------------------
-  const chart = document.getElementById("season-chart");
-  const figMetric = document.querySelector(".season-fig-metric");
-  if (chart) {
-    document.addEventListener("change", (e) => {
-      if (e.target.name !== "team-metric") return;
-      chart.dataset.metric = e.target.value;
-      if (figMetric) figMetric.textContent = e.target.closest("label").textContent.trim();
-    });
-  }
-
   // ---- Elo figure -------------------------------------------------------
   const plot = document.getElementById("elo-plot");
   if (!plot) return;
@@ -28,12 +17,13 @@
   try { series = JSON.parse(document.getElementById("elo-series").textContent); } catch (e) { /* drawn empty */ }
   const readout = document.getElementById("elo-readout");
   if (!series.length) {
-    plot.innerHTML = '<p class="chart-error">No Elo history is on record for this team.</p>';
+    plot.innerHTML = '<p class="chart-error">No Elo history is on record.</p>';
     return;
   }
 
   const dateFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-  const points = series.map((d, i) => ({ i, t: Date.parse(d.date + "T00:00:00Z"), elo: d.elo, date: d.date }));
+  // The page embeds [date, elo] pairs.
+  const points = series.map(([date, elo], i) => ({ i, t: Date.parse(date + "T00:00:00Z"), elo, date }));
   const t0 = points[0].t;
   const t1 = Math.max(points[points.length - 1].t, t0 + 86400000);
   const lo = Math.min(1500, ...points.map((p) => p.elo));

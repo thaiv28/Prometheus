@@ -1,0 +1,96 @@
+{% extends 'base.html.j2' %}
+{% from '_marks.html.j2' import league %}
+{% set roles = {'top': 'Top', 'jng': 'Jungle', 'mid': 'Mid', 'bot': 'Bot', 'sup': 'Support'} %}
+{% block title %}{{ playername }} · Player Elo · Prometheus{% endblock %}
+{% block description %}{{ playername }} ({{ roles.get(position, position) }}, {{ teamname }}): player Elo after every game and career by team.{% endblock %}
+{% block canonical_path %}players/{{ slug }}.html{% endblock %}
+{% block content %}
+  <header class="entry-head">
+    <h1>{{ playername }}</h1>
+    <p class="entry-facts">
+      <span>{{ roles.get(position, position) }}</span>
+      <span>{{ league(home_league) }}</span>
+      <span>{{ 'Plays for' if active else 'Last played for' }} <a href="../teams/{{ team_slug }}.html">{{ teamname }}</a></span>
+      <span>Elo {{ current_elo }}</span>
+    </p>
+    <p class="entry-summary">
+      Elo peaked at {{ elo_summary.peak.elo | round | int }} on {{ elo_summary.peak.date | longdate }} and was {{ elo_summary.last.elo | round | int }} after {{ 'the' if active else 'the last' }} game on {{ elo_summary.last.date | longdate }}, over {{ '{:,}'.format(elo_summary.games) }} games for {{ stints | map(attribute='teamname') | unique | list | length }} team{{ 's' if stints | map(attribute='teamname') | unique | list | length != 1 }}.
+      {%- if aliases %} Also played as {{ aliases | join(', ') }}.{% endif %}
+    </p>
+  </header>
+
+  <div class="spread">
+    <div class="spread-main">
+      <section class="elo" aria-labelledby="elo-heading">
+        <div class="block-head">
+          <h2 id="elo-heading">Elo after every game</h2>
+          <a class="more" href="../player_elo.html?search={{ playername | urlencode }}">See in player Elo rankings</a>
+        </div>
+        <figure class="elo-figure" data-league="{{ home_league }}" aria-labelledby="elo-fig-cap">
+          <figcaption id="elo-fig-cap" class="figure-caption">Elo from {{ elo_summary.first.date | longdate }} to {{ elo_summary.last.date | longdate }}. The dashed line marks 1500.</figcaption>
+          <div class="elo-plot" id="elo-plot" tabindex="0" role="img"
+               aria-label="{{ playername }} Elo over {{ elo_summary.games }} games: started {{ elo_summary.first.elo | round | int }}, peak {{ elo_summary.peak.elo | round | int }} on {{ elo_summary.peak.date }}, low {{ elo_summary.low.elo | round | int }} on {{ elo_summary.low.date }}, latest {{ elo_summary.last.elo | round | int }}. Use the left and right arrow keys to read individual games."></div>
+          <p class="elo-readout" id="elo-readout" aria-live="polite"></p>
+          <dl class="elo-stats">
+            <div><dt>Games</dt><dd>{{ '{:,}'.format(elo_summary.games) }}</dd></div>
+            <div><dt>Peak</dt><dd>{{ elo_summary.peak.elo | round | int }} <span class="muted">{{ elo_summary.peak.date | longdate }}</span></dd></div>
+            <div><dt>Low</dt><dd>{{ elo_summary.low.elo | round | int }} <span class="muted">{{ elo_summary.low.date | longdate }}</span></dd></div>
+            <div><dt>Latest</dt><dd>{{ elo_summary.last.elo | round | int }} <span class="muted">{{ elo_summary.last.date | longdate }}</span></dd></div>
+          </dl>
+        </figure>
+      </section>
+
+      <section class="career" aria-labelledby="career-heading">
+        <div class="block-head">
+          <h2 id="career-heading">Career</h2>
+        </div>
+        <figure class="register-figure" aria-labelledby="career-cap">
+          <figcaption id="career-cap" class="table-caption">One row for each run of consecutive games with a team, newest first. Elo is the rating after the run’s last game.</figcaption>
+          <div class="table-scroll">
+            <table class="register">
+              <thead>
+                <tr>
+                  <th scope="col">Team</th>
+                  <th scope="col" class="phone-hide">League</th>
+                  <th scope="col" class="phone-hide">Role</th>
+                  <th scope="col" class="num">From</th>
+                  <th scope="col" class="num phone-hide">To</th>
+                  <th scope="col" class="num">Games</th>
+                  <th scope="col" class="num">Elo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in stints %}
+                <tr>
+                  <td class="team"><a href="../teams/{{ s.team_slug }}.html">{{ s.teamname }}</a></td>
+                  <td class="phone-hide">{{ league(s.league) }}</td>
+                  <td class="phone-hide">{{ roles.get(s.position, s.position) }}</td>
+                  <td class="num year">{{ s.first[:7] }}</td>
+                  <td class="num year phone-hide">{{ s.last[:7] }}</td>
+                  <td class="num muted">{{ s.games }}</td>
+                  <td class="num value">{{ s.elo }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </figure>
+      </section>
+    </div>
+
+    <aside class="margin notes" aria-labelledby="entry-notes-heading">
+      <h2 id="entry-notes-heading" class="margin-head">Key terms</h2>
+      <ol class="notes-list">
+        <li><span class="note-mark" aria-hidden="true">1</span><a href="../player_elo.html">Player Elo</a> moves with every game the player starts: all five starters move by the team’s Elo change, and the rating follows the player to a new team.</li>
+        <li><span class="note-mark" aria-hidden="true">2</span>Teammates move together, so this is a record of how the player’s teams did, not credit within a team.</li>
+        <li><span class="note-mark" aria-hidden="true">3</span><a href="../game_length_elo.html">Team Elo</a> is the average of its five starters. Compare ratings within a region.</li>
+      </ol>
+      <p class="margin-note"><a href="../teams/{{ team_slug }}.html">{{ teamname }}’s team page</a></p>
+    </aside>
+  </div>
+
+  <script type="application/json" id="elo-series">{{ elo_series | compact_series | tojson }}</script>
+{% endblock %}
+{% block scripts %}
+  <script src="../{{ asset('js/team.js') }}" defer></script>
+{% endblock %}

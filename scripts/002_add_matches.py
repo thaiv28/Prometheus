@@ -24,6 +24,25 @@ def preprocess_player_raw_stats(df):
     return df
 
 
+def preprocess_match_players(df, matches):
+    """Each team's starters in every kept game, with a fallback id when OE has none."""
+    df = df[df["position"] != "team"]
+    df = df[["gameid", "teamid", "position", "playerid", "playername"]].copy()
+    df["playername"] = df["playername"].fillna("unknown").astype(str)
+    df["playerid"] = df["playerid"].where(
+        df["playerid"].notna(), "name:" + df["playername"] + "|" + df["teamid"].astype(str)
+    )
+    df = df.drop_duplicates(subset=["gameid", "teamid", "position"])
+    # A handful of games list one player id twice (two roles, or both teams). The
+    # first row keeps the id; the others become one-off players.
+    repeat = df.duplicated(subset=["gameid", "playerid"])
+    df.loc[repeat, "playerid"] = (
+        "dup:" + df.loc[repeat, "gameid"].astype(str) + "|" + df.loc[repeat, "teamid"].astype(str)
+        + "|" + df.loc[repeat, "position"]
+    )
+    return df.merge(matches[["gameid", "teamid"]], on=["gameid", "teamid"])
+
+
 def preprocess_matches(df):
     # include only team stats (not player stats)
     df = df[df["position"] == "team"]
@@ -74,6 +93,9 @@ def main():
 
         matches.to_sql("matches", engine, if_exists="append", index=False)
         match_stats.to_sql("match_stats", engine, if_exists="append", index=False)
+        preprocess_match_players(df, matches).to_sql(
+            "match_players", engine, if_exists="append", index=False
+        )
 
         df_player_sql = preprocess_player_raw_stats(df)
         df_player_sql = df_player_sql.drop_duplicates(subset=["gameid", "playerid"])

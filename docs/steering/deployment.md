@@ -35,6 +35,6 @@ Google Drive rate-limits the shared Oracle's Elixir CSVs. Each build tries Drive
 ## Notes
 
 - Rolling back means syncing an older `releases/<run id>` prefix to `current` and invalidating.
-- Each run adds a full release (about 14 MB) to `releases/`. Add an S3 lifecycle rule in the infrastructure stack if that grows.
+- Each run adds a full release to `releases/`: about 100 MB since player pages (2026-10-02; about 30 MB before). Add an S3 lifecycle rule in the infrastructure stack to expire old releases.
 - GitHub disables scheduled workflows after 60 days without repository activity. If the daily rebuild stops, re-enable it under Actions.
 - The old GitHub Pages site (`thaiv28.github.io/Prometheus`) should be turned off once the AWS site is live.

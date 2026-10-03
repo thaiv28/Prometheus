@@ -6,12 +6,13 @@ An overview of prometheus' stats (described more in the [metrics](#metrics) sect
 
 Season stats:
 - **Global League Offensive Rankings Yield (GLORY)**: Prometheus' flagship metric. How well a team played: gold/objective stats weighted by their importance in that year's meta, with every game adjusted for the opponent's strength over the season.
-- **Record**: what a team achieved: its results over the season, adjusted for schedule, with fast wins counting for more.
-- **Luck**: wins above what a team's play earned.
+- **Record** (sunset; still used inside GLORY): what a team achieved: its results over the season, adjusted for schedule, with fast wins counting for more.
+- **Luck** (sunset): wins above what a team's play earned.
 
 Forecasts:
-- **Game-length Elo**: a rating for every team in every region. Fast wins move it more, and international results move a shared league offset, so a whole region rises or falls with how its teams do abroad.
+- **Game-length Elo**: a rating for every team in every region, built from player ratings (a team's Elo is the average of its five starters, so ratings follow players through roster moves). Fast wins move it more, and international results move a shared league offset, so a whole region rises or falls with how its teams do abroad.
 - **Form** (Predictive GLORY): a team's recent, opponent-adjusted stats, weighted to predict the next game, compared with its own league.
+- **Player Elo**: the player ratings behind team Elo, on their own register and one page per player (Elo after every game, career by team). Teammates move together, so it follows a player's teams through a career rather than splitting credit within a team.
 - **GlorELO+**: Elo plus Form, a forecast of who wins the next game.
 
 Sunset: **GLORB** (equal-weight baseline for GLORY; predicts no better than win % so far), **GLORY+** (folded into GLORY), and the unadjusted GLORY.
@@ -133,7 +134,7 @@ Between teams from the same league: a logistic curve on their Elo gap and Form g
 ### How accurate are the metrics?
 `scripts/evaluate_metrics.py` backtests the forecasts. Each game is predicted from earlier games only: from ratings at the start of the month, or from each team's rating going into the game ("live"). Results are scored by accuracy, Brier score and log loss, and compared with a simple baseline (win % so far this season) using a paired bootstrap. International games between teams from different major regions are scored separately, because they are the only direct test of cross-region strength. Latest results: [docs/metric_backtest.md](docs/metric_backtest.md).
 
-On 16,765 major-league games, GlorELO+ picks the winner 64.6% of the time with log loss 0.6319, against Elo's 64.1% and 0.6345; on 979 cross-region international games it equals Elo (65.0%, 0.6297).
+On 16,765 major-league games, GlorELO+ picks the winner 64.7% of the time with log loss 0.6291, against Elo's 64.3% and 0.6319 (and 0.6343 for team Elo without player ratings); on 979 cross-region international games it equals Elo (65.5%, 0.6295).
 
 Season stats are judged separately by `scripts/evaluate_season_stats.py` ([docs/season_stats_report.md](docs/season_stats_report.md)): each team-season's games are split into two random halves, and a stat is reliable when the halves agree. It also reports how well each stat matches that season's win % and Record.
 

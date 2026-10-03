@@ -1,6 +1,6 @@
-// Header search: suggests teams as you type and goes to the team's page.
-// The index (teams.json) is fetched on first focus. Without JS, or when nothing
-// matches, the form submits to the Elo register, which lists every team.
+// Header search: suggests teams and players as you type and goes to their page.
+// The indexes (teams.json, players.json) are fetched on first focus. Without JS, or
+// when nothing matches, the form submits to the team Elo register.
 (function () {
   "use strict";
 
@@ -15,24 +15,28 @@
   const root = form.dataset.root || "";
   const LIMIT = 8;
 
-  let teams = null;
+  const ROLES = { top: "Top", jng: "Jungle", mid: "Mid", bot: "Bot", sup: "Support" };
+  let teams = null; // teams, then players: { n, s, l, d, kind, key, ... }
   let loading = null;
   let matches = [];
   let active = -1;
 
   function load() {
     if (!loading) {
-      loading = fetch(form.dataset.index)
-        .then((r) => (r.ok ? r.json() : []))
-        .then((data) => { teams = data.map((t) => ({ ...t, key: fold(t.n) })); })
-        .catch(() => { teams = []; });
+      const get = (url) => (url ? fetch(url).then((r) => (r.ok ? r.json() : [])).catch(() => []) : Promise.resolve([]));
+      loading = Promise.all([get(form.dataset.index), get(form.dataset.players)]).then(([t, p]) => {
+        teams = [
+          ...t.map((x) => ({ ...x, kind: "team", key: fold(x.n) })),
+          ...p.map((x) => ({ ...x, kind: "player", key: fold(x.n) })),
+        ];
+      });
     }
     return loading;
   }
 
   // The exact name, then names starting with the query, then a word in the name
-  // starting with it, then anywhere. Ties keep the index order: major-league teams
-  // first, then the most recently active.
+  // starting with it, then anywhere. Ties keep the index order: teams before players,
+  // major leagues first, then the most recently active.
   function find(query) {
     const q = fold(query.trim());
     if (!q || !teams) return [];
@@ -46,18 +50,26 @@
     return out.sort((a, b) => a[0] - b[0] || a[1] - b[1]).slice(0, LIMIT).map((x) => x[2]);
   }
 
+  const href = (t) => `${root}${t.kind === "player" ? "players" : "teams"}/${encodeURIComponent(t.s)}.html`;
+  const mark = (l) => `<span class="league" data-league="${esc(l)}"><span class="league-mark" aria-hidden="true"></span>${esc(l)}</span>`;
+  // Teams: league and last year. Players: role and last team.
+  const meta = (t) =>
+    t.kind === "player"
+      ? `${mark(t.l)} ${esc(ROLES[t.r] || t.r)}, ${esc(t.t)}`
+      : `${mark(t.l)} ${esc(String(t.d).slice(0, 4))}`;
+
   function render() {
     if (!matches.length) {
       list.hidden = !input.value.trim() || !teams;
-      list.innerHTML = list.hidden ? "" : `<li class="index-search-empty">No team named “${esc(input.value.trim())}”. Press Enter to search the Elo register.</li>`;
+      list.innerHTML = list.hidden ? "" : `<li class="index-search-empty">No team or player named “${esc(input.value.trim())}”. Press Enter to search the team Elo register.</li>`;
     } else {
       list.hidden = false;
       list.innerHTML = matches
         .map((t, i) =>
           `<li role="option" id="team-opt-${i}" aria-selected="${i === active}">` +
-          `<a href="${esc(root)}teams/${encodeURIComponent(t.s)}.html" tabindex="-1">` +
+          `<a href="${esc(href(t))}" tabindex="-1">` +
           `<span class="index-search-name">${esc(t.n)}</span>` +
-          `<span class="index-search-meta"><span class="league" data-league="${esc(t.l)}"><span class="league-mark" aria-hidden="true"></span>${esc(t.l)}</span> ${esc(String(t.d).slice(0, 4))}</span>` +
+          `<span class="index-search-meta">${meta(t)}</span>` +
           `</a></li>`)
         .join("");
     }
@@ -103,7 +115,7 @@
     const pick = matches[active >= 0 ? active : 0];
     if (!pick) return;
     e.preventDefault();
-    location.href = `${root}teams/${encodeURIComponent(pick.s)}.html`;
+    location.href = href(pick);
   });
 
   // Keep focus in the input while a suggestion is clicked.

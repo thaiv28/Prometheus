@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="color-scheme" content="light" />
   <title>{% block title %}Prometheus{% endblock %}</title>
-  {% set _desc %}{% block description %}Advanced League of Legends esports team rankings, comparable across eras and regions.{% endblock %}{% endset %}
+  {% set _desc %}{% block description %}Advanced League of Legends esports team and player rankings, comparable across eras and regions.{% endblock %}{% endset %}
   <meta name="description" content="{{ _desc | trim }}" />
   <link rel="canonical" href="{{ site_url }}/{% block canonical_path %}{% endblock %}" />
   <meta property="og:type" content="website" />
@@ -32,7 +32,7 @@
       <span class="nav-group" role="group" aria-labelledby="nav-group-{{ loop.index }}">
         <span class="nav-group-name" id="nav-group-{{ loop.index }}">{{ group.name }}</span>
         {% for item in group.links %}
-        <a href="{{ _root }}{{ item.key }}.html"{% if item.key == page_key %} aria-current="page"{% endif %}>{{ item.name }}</a>
+        <a href="{{ _root }}{{ item.key }}.html"{% if item.title != item.name %} aria-label="{{ item.title }}"{% endif %}{% if item.key == page_key or (item.key == 'player_elo' and page_key == 'player') %} aria-current="{{ 'page' if item.key == page_key else 'true' }}"{% endif %}>{{ item.name }}</a>
         {% endfor %}
       </span>
       {% endfor %}
@@ -40,12 +40,12 @@
         <a href="{{ _root }}sunset.html"{% if page_key == 'sunset' %} aria-current="page"{% elif page_key in sunset_keys %} aria-current="true"{% endif %}>Sunset stats</a>
       </span>
     </nav>
-    {# Goes to a team's page. Without JS it falls back to the Elo register, which lists every team. #}
-    <form class="index-search" role="search" action="{{ _root }}game_length_elo.html" method="get" data-root="{{ _root }}" data-index="{{ _root }}teams.json">
-      <label for="team-search">Team</label>
-      <input id="team-search" name="search" type="search" placeholder="Go to a team" autocomplete="off" spellcheck="false"
+    {# Goes to a team's or player's page. Without JS it falls back to the team Elo register, which lists every team. #}
+    <form class="index-search" role="search" action="{{ _root }}game_length_elo.html" method="get" data-root="{{ _root }}" data-index="{{ _root }}teams.json" data-players="{{ _root }}players.json">
+      <label for="team-search">Find</label>
+      <input id="team-search" name="search" type="search" placeholder="Team or player" autocomplete="off" spellcheck="false"
              role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="team-search-results" />
-      <ul class="index-search-results" id="team-search-results" role="listbox" aria-label="Teams" hidden></ul>
+      <ul class="index-search-results" id="team-search-results" role="listbox" aria-label="Teams and players" hidden></ul>
     </form>
   </header>
   <main id="main" class="page">
