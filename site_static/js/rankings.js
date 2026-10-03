@@ -15,7 +15,7 @@
   const config = readJSON("#page-config") || { columns: [] };
   const valueKey = config.valueKey;
   const valueCol = config.columns.find((c) => c.key === valueKey) || { digits: 2, label: "Score" };
-  // Rating pages (Elo, GlorELO+) are on the Elo scale. They open on "now" rows (current
+  // Rating pages (Elo, FORGE) are on the Elo scale. They open on "now" rows (current
   // ratings); picking seasons switches to team-season rows rated at the end of each year.
   // The other pages list team-seasons scored 0-100.
   const isRating = config.kind === "rating";
@@ -24,8 +24,7 @@
   const entity = config.entity || "team";
   const noun = () => (showingNow() ? `${entity}s` : `${entity}-seasons`);
   const ROLES = { top: "Top", jng: "Jungle", mid: "Mid", bot: "Bot", sup: "Support" };
-  // Same as build_site._slugify, so a team name links to its page.
-  const slugify = (name) => String(name).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "team";
+  const { slugify } = PrometheusNames;
   const nameOf = (r) => (entity === "player" ? r.playername : r.teamname);
   const metricName = (document.querySelector("h1")?.firstChild?.textContent || "").trim();
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");

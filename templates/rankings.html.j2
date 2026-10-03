@@ -1,4 +1,5 @@
 {% extends 'base.html.j2' %}
+{% from '_marks.html.j2' import matchup_options %}
 {% block title %}{{ metric.title or metric.name }} rankings · Prometheus{% endblock %}
 {% block description %}{{ metric.full_name }}: {{ metric.description }}{% endblock %}
 {% block canonical_path %}{{ metric.key }}.html{% endblock %}
@@ -25,12 +26,12 @@
         <p class="matchup-line">
           <label class="visually-hidden" for="matchup-a">First team</label>
           <select id="matchup-a" class="matchup-team">
-            {% for r in rows if r.now %}<option value="{{ r.teamname }}"{% if loop.index == 1 %} selected{% endif %}>{{ r.teamname }}</option>{% endfor %}
+            {{ matchup_options(rows, 0) }}
           </select>
           <span class="matchup-verb">beats</span>
           <label class="visually-hidden" for="matchup-b">Second team</label>
           <select id="matchup-b" class="matchup-team">
-            {% for r in rows if r.now %}<option value="{{ r.teamname }}"{% if loop.index == 2 %} selected{% endif %}>{{ r.teamname }}</option>{% endfor %}
+            {{ matchup_options(rows, 1) }}
           </select>
           <output class="matchup-result" id="matchup-result" for="matchup-a matchup-b" aria-live="polite"></output>
         </p>

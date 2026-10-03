@@ -7,7 +7,7 @@ class Metric(str, Enum):
     record = "record"
     luck = "luck"
     # Forecasts
-    glorelo_plus = "glorelo+"
+    forge = "forge"
     form = "form"
     # Sunset
     glorb = "glorb"

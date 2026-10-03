@@ -11,7 +11,7 @@
 
   const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
-  const fold = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const { fold, rank } = PrometheusNames;
   const root = form.dataset.root || "";
   const LIMIT = 8;
 
@@ -34,21 +34,9 @@
     return loading;
   }
 
-  // The exact name, then names starting with the query, then a word in the name
-  // starting with it, then anywhere. Ties keep the index order: teams before players,
-  // major leagues first, then the most recently active.
-  function find(query) {
-    const q = fold(query.trim());
-    if (!q || !teams) return [];
-    const out = [];
-    for (const t of teams) {
-      const at = t.key.indexOf(q);
-      if (at < 0) continue;
-      const rank = t.key === q ? -1 : at === 0 ? 0 : /[\s.\-]/.test(t.key[at - 1]) ? 1 : 2;
-      out.push([rank, out.length, t]);
-    }
-    return out.sort((a, b) => a[0] - b[0] || a[1] - b[1]).slice(0, LIMIT).map((x) => x[2]);
-  }
+  // Ranked by PrometheusNames.rank; ties keep the index order: teams before
+  // players, major leagues first, then the most recently active.
+  const find = (query) => (teams ? rank(teams, query, LIMIT) : []);
 
   const href = (t) => `${root}${t.kind === "player" ? "players" : "teams"}/${encodeURIComponent(t.s)}.html`;
   const mark = (l) => `<span class="league" data-league="${esc(l)}"><span class="league-mark" aria-hidden="true"></span>${esc(l)}</span>`;

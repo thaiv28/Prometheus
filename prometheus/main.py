@@ -5,7 +5,7 @@ from rich.console import Console
 
 from prometheus.elo import get_latest_elos, get_season_elos
 from prometheus.form import form_states, load_form_games, opponent_adjust
-from prometheus.glorelo import FORM_POINTS, glorelo_ratings, team_forms
+from prometheus.forge import FORM_POINTS, forge_ratings, team_forms
 from prometheus.ranking import get_glory_ranking, load_glory_games
 from prometheus.season import get_luck, get_record, load_season_games
 from prometheus.types import Metric, League, ScoreCols
@@ -16,7 +16,7 @@ console = Console()
 
 
 def _forecast(metric, years, leagues):
-    """GlorELO+ or Form for today's teams, or at the end of each season in `years`."""
+    """FORGE or Form for today's teams, or at the end of each season in `years`."""
     now, seasons = team_forms(form_states(opponent_adjust(load_form_games())))
     forms = now if years is None else seasons[seasons["year"].isin(years)]
     forms = forms[forms["home"].isin([l.value for l in leagues])]
@@ -24,8 +24,8 @@ def _forecast(metric, years, leagues):
         df = forms.rename(columns={"home": "league"}).assign(form=lambda d: FORM_POINTS * d["form"])
         return df[["teamname", "form", "year", "league"]].sort_values("form", ascending=False).reset_index(drop=True)
     elos = get_latest_elos("game_length") if years is None else get_season_elos("game_length")
-    df = glorelo_ratings(forms, elos)
-    return df[["teamname", "glorelo", "form", "elo", "year", "league"]].reset_index(drop=True)
+    df = forge_ratings(forms, elos)
+    return df[["teamname", "forge", "form", "elo", "year", "league"]].reset_index(drop=True)
 
 
 @app.command("rankings")
@@ -38,7 +38,7 @@ def rankings(
         list[str],
         typer.Option(
             help="Year or range (2021-2023); repeat for more. Default all years, "
-            "or now for forecasts (glorelo+, form)"
+            "or now for forecasts (forge, form)"
         ),
     ] = None,
     n: Annotated[int, typer.Option(help="Number of results to show")] = 10,
@@ -56,7 +56,7 @@ def rankings(
     names = [l.value for l in filtered_leagues]
     try:
         match metric:
-            case Metric.glorelo_plus | Metric.form:
+            case Metric.forge | Metric.form:
                 df = _forecast(metric, years, filtered_leagues)
             case Metric.record:
                 df = get_record(load_season_games(years), minimum_matches=5, leagues=names)

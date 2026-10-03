@@ -11,11 +11,10 @@ Season stats:
 
 Forecasts:
 - **Game-length Elo**: a rating for every team in every region, built from player ratings (a team's Elo is the average of its five starters, so ratings follow players through roster moves). Fast wins move it more, and international results move a shared league offset, so a whole region rises or falls with how its teams do abroad.
-- **Form** (Predictive GLORY): a team's recent, opponent-adjusted stats, weighted to predict the next game, compared with its own league.
 - **Player Elo**: the player ratings behind team Elo, on their own register and one page per player (Elo after every game, career by team). Teammates move together, so it follows a player's teams through a career rather than splitting credit within a team.
-- **GlorELO+**: Elo plus Form, a forecast of who wins the next game.
+- **FORGE** (Form + Elo, formerly GlorELO+): the headline forecast of who wins the next game. Elo plus Form, a team's recent, opponent-adjusted stats weighted to predict the next game and compared with its own league.
 
-Sunset: **GLORB** (equal-weight baseline for GLORY; predicts no better than win % so far), **GLORY+** (folded into GLORY), and the unadjusted GLORY.
+Sunset: **Form** (folded into FORGE; alone it predicts no better than Elo), **GLORB** (equal-weight baseline for GLORY; predicts no better than win % so far), **GLORY+** (folded into GLORY), and the unadjusted GLORY.
 ## CLI
 The prometheus CLI provides users the ability to view past of current ratings for any of prometheus' metrics.
 
@@ -44,11 +43,11 @@ $ prometheus rankings glory --league MAJOR --year 2024
 
 Provide lists of arguments to filter results for all of those parameters. Years also take inclusive ranges, so `--year 2021-2023` is the same as `--year 2021 --year 2022 --year 2023`.
 
-The metric can be `glory`, `record`, `luck`, `glorelo+`, `form` or the sunset `glorb`. Forecasts (`glorelo+`, `form`) show current ratings by default; with `--year`, they show ratings at the end of each season:
+The metric can be `glory`, `record`, `luck`, `forge`, `form` or the sunset `glorb`. Forecasts (`forge`, `form`) show current ratings by default; with `--year`, they show ratings at the end of each season:
 
 ```
-$ prometheus rankings glorelo+ --year 2019-2020 --league LCK --n 3
-│         teamname  glorelo   form     elo  year league │
+$ prometheus rankings forge --year 2019-2020 --league LCK --n 3
+│         teamname  forge   form     elo  year league │
 │ 0      Dplus Kia  2195.17 385.24 1809.93  2020    LCK │
 │ 1  SK Telecom T1  2010.18 256.74 1753.43  2019    LCK │
 │ 2          Gen.G  1950.90 245.71 1705.19  2020    LCK │
@@ -126,15 +125,15 @@ A Bradley-Terry model fit over every game of the season in every league, includi
 #### Luck - wins above what play earned
 GLORY's per-game model turns each game's stats into an expected result. A team-season's average of those, calibrated across that season's teams (the per-game model pulls everyone toward 50%), is the win % its play earned. Luck is actual minus earned, in wins. It repeats only a little between halves of a season (reliability 0.34), so most of it is luck.
 
-#### Form - Predictive GLORY
+#### Form - Predictive GLORY (sunset as a page; FORGE's input)
 For every team, a running average of its recent per-game stats, each game adjusted for the opponent's Elo going into it: recent games count most (a game's weight halves every 20 games), a new season starts from half of last season's weight, and small samples are pulled toward the season's average team. Weights fit on past games (logistic) turn the stat gap between two teams into a chance to win the next game. Stats don't compare across regions, so Form is shown relative to the team's own league.
 
-#### GlorELO+ - the headline forecast
+#### FORGE - the headline forecast
 Between teams from the same league: a logistic curve on their Elo gap and Form gap, shown as a rating (Elo plus Form in Elo points). Between leagues: Elo alone, because Form only compares a team with its league; adding it made cross-region forecasts worse in the backtest.
 ### How accurate are the metrics?
 `scripts/evaluate_metrics.py` backtests the forecasts. Each game is predicted from earlier games only: from ratings at the start of the month, or from each team's rating going into the game ("live"). Results are scored by accuracy, Brier score and log loss, and compared with a simple baseline (win % so far this season) using a paired bootstrap. International games between teams from different major regions are scored separately, because they are the only direct test of cross-region strength. Latest results: [docs/metric_backtest.md](docs/metric_backtest.md).
 
-On 16,765 major-league games, GlorELO+ picks the winner 64.7% of the time with log loss 0.6291, against Elo's 64.3% and 0.6319 (and 0.6343 for team Elo without player ratings); on 979 cross-region international games it equals Elo (65.5%, 0.6295).
+On 16,765 major-league games, FORGE picks the winner 64.7% of the time with log loss 0.6291, against Elo's 64.3% and 0.6319 (and 0.6343 for team Elo without player ratings); on 979 cross-region international games it equals Elo (65.5%, 0.6295).
 
 Season stats are judged separately by `scripts/evaluate_season_stats.py` ([docs/season_stats_report.md](docs/season_stats_report.md)): each team-season's games are split into two random halves, and a stat is reliable when the halves agree. It also reports how well each stat matches that season's win % and Record.
 

@@ -1,4 +1,4 @@
-"""Form (Predictive GLORY) and the GlorELO+ forecast built from it.
+"""Form (Predictive GLORY) and the FORGE forecast built from it.
 
 GLORY describes a finished season: its weights explain each game's own result from
 that game's stats. Form instead asks what a team's stats *before* a game say about
@@ -18,13 +18,13 @@ that game. It uses only earlier games, so it never takes a season stat as input.
    (a strong team in a weak league posts big numbers), so Form only says how a
    team has played compared with its own league; Elo carries region strength.
 
-GlorELO+ blends them. Between teams from the same home league, the win chance is a
+FORGE blends them. Between teams from the same home league, the win chance is a
 logistic curve on the Elo gap and the Form gap. Between leagues it is Elo's curve
-alone, which the backtest found more accurate. A team's GlorELO+ rating is its Elo
+alone, which the backtest found more accurate. A team's FORGE rating is its Elo
 plus its Form in Elo points, so a same-league head-to-head is the usual Elo formula
 on the ratings, scaled by the blend's Elo weight.
 
-Weights live in `form_weights.json` (Form) and `glorelo_weights.json` (blend),
+Weights live in `form_weights.json` (Form) and `forge_weights.json` (blend),
 refreshed by `scripts/evaluate_metrics.py --write-weights`.
 """
 

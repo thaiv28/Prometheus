@@ -468,12 +468,12 @@ def get_player_history(method: str) -> pd.DataFrame:
     """Every rostered player's Elo after each game, oldest first.
 
     Returns:
-        DataFrame with playerid, playername, position, teamid, teamname, league (of
+        DataFrame with gameid, playerid, playername, position, teamid, teamname, league (of
         the game), home_league, date, year (calendar), elo (after the game) and
         league_offset (home league's offset after the game).
     """
     stmt = f"""
-    SELECT pe.playerid, mp.playername, mp.position, pe.teamid, m.teamname, m.league,
+    SELECT pe.gameid, pe.playerid, mp.playername, mp.position, pe.teamid, m.teamname, m.league,
            pe.home_league, m.date, pe.post_match_elo AS elo, pe.league_offset
     FROM {_players_table(method)} pe
     JOIN match_players mp

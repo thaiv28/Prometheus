@@ -12,7 +12,7 @@ Prometheus is served at **https://prometheus.thaiv.dev** from AWS, through the `
 
 `.github/workflows/publish.yml` runs on push to `main`, daily at 10:00 UTC, on manual dispatch, and as a build-only check on pull requests:
 
-1. `build`: `uv sync`, `scripts/setup_db.sh` (downloads Oracle's Elixir CSVs and rebuilds the DB), `pytest`, `scripts/evaluate_metrics.py --check-weights` (refits the Form and GlorELO+ weights, about 8 seconds, prints every change, and adds a warning annotation, not a failure, if a GlorELO+ blend weight moved more than 10%), `scripts/build_site.py`, then upload `output/` as an artifact.
+1. `build`: `uv sync`, `scripts/setup_db.sh` (downloads Oracle's Elixir CSVs and rebuilds the DB), `pytest`, `scripts/evaluate_metrics.py --check-weights` (refits the Form and FORGE weights, about 8 seconds, prints every change, and adds a warning annotation, not a failure, if a FORGE blend weight moved more than 10%), `scripts/build_site.py`, then upload `output/` as an artifact.
 2. `deploy` (on `main` only, and only once the repo variables exist): assume `AWS_ROLE_ARN`, sync to `s3://$DEPLOYMENT_BUCKET/releases/<run id>`, sync that release to `/current`, invalidate CloudFront, and health-check the site.
 
 This mirrors the shared `thaiv28/project-platform-workflows` `deploy-static.yml`, which can't be reused directly because it builds with npm.

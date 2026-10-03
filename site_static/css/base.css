@@ -61,13 +61,50 @@ html { scrollbar-color: var(--hairline) var(--paper); }
 .wordmark:hover { color: var(--ink); }
 .wordmark-mark { width: 13px; height: 16px; fill: var(--spot); align-self: center; transform: translateY(-1px); }
 .wordmark-text { font-weight: 600; letter-spacing: 0.14em; font-size: 1.125rem; }
-.sections { display: flex; gap: 4px 18px; flex-wrap: wrap; }
-.sections a { text-decoration: none; color: var(--ink-2); padding: 2px 0; }
-.sections a:hover { color: var(--spot); }
-.nav-group { display: inline-flex; align-items: baseline; gap: 4px 18px; flex-wrap: wrap; }
-.nav-group + .nav-group { padding-left: 18px; border-left: var(--hair) solid var(--hairline); }
-.nav-group-name { font-variant-caps: normal; letter-spacing: 0; font-style: italic; color: var(--ink-3); font-size: 0.9375rem; }
-.sections a[aria-current] { color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--spot); text-decoration-thickness: 2px; text-underline-offset: 0.3em; }
+.sections { display: flex; align-items: baseline; gap: 4px 22px; flex-wrap: wrap; }
+.sections > a, .nav-menu summary { text-decoration: none; color: var(--ink-2); padding: 2px 0; }
+.sections > a:hover, .nav-menu summary:hover, .nav-menu[open] summary { color: var(--spot); }
+.sections > a[aria-current], .nav-menu summary[data-current] { color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--spot); text-decoration-thickness: 2px; text-underline-offset: 0.3em; }
+/* Teams and Players menus: a name with a caret that opens a printed slip, set
+   like an open picker, listing each stat with the question it answers. */
+.nav-menu { position: relative; }
+.nav-menu summary { list-style: none; cursor: pointer; display: inline-flex; align-items: baseline; gap: 7px; }
+.nav-menu summary::-webkit-details-marker { display: none; }
+.nav-menu summary::after {
+  content: "";
+  width: 0; height: 0;
+  border: 4px solid transparent;
+  border-top: 5px solid var(--ink-3);
+  border-bottom-width: 0;
+  align-self: center;
+}
+.nav-menu[open] summary::after { border-top-width: 0; border-bottom: 5px solid var(--spot); border-top-color: transparent; }
+.nav-menu summary:focus-visible { outline: 2px solid var(--spot); outline-offset: 3px; }
+.nav-menu-panel {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 9px);
+  left: -14px;
+  width: 21rem;
+  max-width: calc(100vw - 2 * var(--gutter));
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: var(--paper);
+  border: var(--hair) solid var(--rule);
+  border-top: 2px solid var(--rule);
+  font-variant-caps: normal;
+  letter-spacing: 0;
+}
+.nav-menu-panel a { display: block; padding: 7px 14px 8px; color: var(--ink); text-decoration: none; }
+.nav-menu-panel a:hover { background: var(--paper-wash); }
+.nav-menu-panel a:hover .nav-menu-name { color: var(--spot); }
+.nav-menu-panel a:focus-visible { outline: 2px solid var(--spot); outline-offset: -2px; }
+.nav-menu-name { display: block; font-variant-caps: all-small-caps; letter-spacing: 0.06em; font-weight: 600; font-size: 1.0625rem; line-height: 1.3; }
+.nav-menu-panel a[aria-current] .nav-menu-name { text-decoration: underline; text-decoration-color: var(--spot); text-decoration-thickness: 2px; text-underline-offset: 0.3em; }
+.nav-menu-q { display: block; font-style: italic; color: var(--ink-2); font-size: var(--fs-small); line-height: 1.35; }
+.nav-menu-sunset { margin-top: 6px; padding-top: 6px; border-top: var(--hair) solid var(--hairline); }
+.nav-menu-sunset .nav-menu-name { font-weight: 400; color: var(--ink-2); }
 
 .index-search { margin-left: auto; display: flex; align-items: baseline; gap: 8px; position: relative; }
 .index-search label { color: var(--ink-3); }
@@ -160,6 +197,9 @@ html { scrollbar-color: var(--hairline) var(--paper); }
 .note-ref { font-size: 0.68em; vertical-align: super; line-height: 0; margin-left: 1px; text-decoration: none; color: var(--spot); font-variant-numeric: lining-nums; font-weight: 600; padding: 0 2px; }
 .note-ref:hover { text-decoration: underline; }
 .muted { color: var(--ink-3); }
+/* Home: the forecast leads, with its head to head and top teams. */
+.spotlight { margin: 6px 0 44px; min-width: 0; }
+.spotlight-head { font-size: clamp(1.875rem, 3.6vw, 2.5rem); font-weight: 400; line-height: 1.05; letter-spacing: -0.01em; color: var(--ink); margin: 0 0 22px; }
 .section-note { font-style: italic; color: var(--ink-2); margin: 8px 0 36px; max-width: 40rem; }
 
 .block-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 24px; flex-wrap: wrap; margin: 0 0 14px; }
@@ -234,8 +274,9 @@ html { scrollbar-color: var(--hairline) var(--paper); }
   .margin { position: static; margin-top: 40px; max-width: 40rem; }
   .spread--home .spread-main { display: contents; }
   .spread--home .intro { order: 1; }
-  .spread--home .margin { order: 2; margin: 0 0 44px; }
-  .spread--home .register-figure { order: 3; }
+  .spread--home .spotlight { order: 2; }
+  .spread--home .margin { order: 3; margin: 0 0 44px; }
+  .spread--home .spread-main > .register-figure { order: 4; }
 }
 @media (max-width: 720px) {
   .running-head { gap: 6px 18px; padding-top: 14px; }
@@ -246,10 +287,11 @@ html { scrollbar-color: var(--hairline) var(--paper); }
   .lede { font-size: 1.0625rem; }
   .title-edition, .entry-facts { gap: 4px 18px; }
   .title-edition span + span::before, .entry-facts > span + span::before { content: none; }
-  .sections a { padding: 8px 0; }
-  /* Each group gets its own line, so the divider between groups is not needed. */
-  .sections { flex-direction: column; gap: 0; }
-  .nav-group { gap: 0 16px; }
-  .nav-group + .nav-group { padding-left: 0; border-left: 0; }
+  .sections > a, .nav-menu summary { padding: 8px 0; }
+  /* A menu opens across the full width under the section line. */
+  .sections { position: relative; width: 100%; }
+  .nav-menu { position: static; }
+  .nav-menu-panel { left: 0; right: 0; width: auto; max-width: none; top: 100%; }
+  .nav-menu-panel a { padding: 10px 14px; }
   .index-search input { padding: 8px 0 4px; }
 }
