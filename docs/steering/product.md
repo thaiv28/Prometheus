@@ -15,19 +15,22 @@ Prometheus is a public, browsable stat site for League of Legends esports, simil
 |---|---|---|
 | **GLORY** (Global League Offensive Rankings Yield) | Shipped (season stat) | How well a team played: per-season regression weights on gold/objective rates, applied to team-season averages of stats adjusted for each opponent's full-season Record, scaled to roughly 0–100 |
 | **Era Z / League Z** | Shipped | Z-scores of a team's GLORY within its year (all major leagues) and within its league |
-| **Record** | Shipped (season stat) | What a team achieved: schedule-adjusted, game-length-weighted results over the season, as the chance to beat an average major-league team |
-| **Luck** | Shipped (season stat) | Wins above what a team's play earned (GLORY's per-game model, calibrated per season) |
-| **Game-length Elo** | Shipped (forecast) | Elo for every team in every region, where fast wins move ratings more. International games move a shared league offset, so a region's teams rise or fall together. |
-| **Form** (Predictive GLORY) | Shipped (forecast) | Recent, opponent-adjusted gold/objective stats weighted to predict the next game, relative to the team's league, in Elo points |
-| **GlorELO+** | Shipped (forecast) | Elo + Form within a league, Elo alone between leagues, with a head-to-head win probability |
+| **Record** | Sunset (still used inside GLORY) | What a team achieved: schedule-adjusted, game-length-weighted results over the season, as the chance to beat an average major-league team |
+| **Luck** | Sunset | Wins above what a team's play earned (GLORY's per-game model, calibrated per season) |
+| **Game-length Elo** | Shipped (forecast) | Elo for every team in every region, built from player ratings (team = average of its five starters), where fast wins move ratings more. International games move a shared league offset, so a region's teams rise or fall together. |
+| **Player Elo** | Shipped (player rating) | Every player's game-length Elo: all five starters move by the team's change, and the rating follows the player through transfers. Records how a player's teams did, not credit within a team. |
+| **Form** (Predictive GLORY) | Sunset (still used inside FORGE) | Recent, opponent-adjusted gold/objective stats weighted to predict the next game, relative to the team's league, in Elo points. Alone it predicts no better than Elo within a league and worse between leagues; its page stays up under Sunset stats. |
+| **FORGE** (Form + Elo; was GlorELO+) | Shipped (headline forecast) | Elo + Form within a league, Elo alone between leagues, with a head-to-head win probability. Beats Elo domestically (log loss −0.0028, −0.0040 to −0.0016); equals it internationally. |
 | **GLORY+** | Folded into GLORY | GLORY adjusted by opponents' pre-game Elo; `glory_plus.html` redirects to GLORY |
 | **GLORY (unadjusted)** | Sunset | The original GLORY with no opponent adjustment; page kept on Sunset stats |
 | **GLORB** (Baseline) | Sunset | Same features as GLORY with equal weights. On its own it predicts no better than win % so far. Its page stays up under Sunset stats. |
-| **AURA** (Attributable Utility via Role Analytics) | Research | Player win-probability attribution using 10/15/20/25-minute snapshots (see README) |
+| **AURA** (Attributable Utility via Role Analytics) | Shipped (player season stat) | Each player's share of the team's win chance at 15 minutes, from their gaps to the lane opponent (gold, XP, CS, kills, deaths, assists), plus a quarter of their change to 25 minutes beyond their teammates'. Shown per major-league player-season (20+ games) in win-chance points per game, with Role Z and role rank. Calibrated; follows a player to a new team better than lane gold or win % (`docs/aura_report.md`). |
 
-Season stats (GLORY, Record, Luck) describe a team-season with hindsight and are judged on stability and fit to that season's results (`scripts/evaluate_season_stats.py`). Forecasts (GlorELO+, Form, Elo) predict the next game from earlier games only and are judged by the backtest (`scripts/evaluate_metrics.py`). No forecast takes a season stat as input.
+Season stats (GLORY; sunset: Record, Luck) describe a team-season with hindsight and are judged on stability and fit to that season's results (`scripts/evaluate_season_stats.py`). Forecasts (FORGE, Elo; sunset: Form) predict the next game from earlier games only and are judged by the backtest (`scripts/evaluate_metrics.py`). No forecast takes a season stat as input. A metric changes only when its benchmark improves significantly over the current version (see the rule in `AGENTS.md`).
 
-Scope: season stats and GlorELO+ cover the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present; Elo and Form cover every region. Data comes from Oracle's Elixir and refreshes daily via CI.
+Each published stat answers one question: GLORY, how well did a team play this season? FORGE, who wins if two teams play today? Team Elo, how strong is a team now, judged by its results? Player Elo, how have a player's teams done across a career? AURA, how much did a player's own play swing their team's chances? The header's Teams and Players menus and the home contents show these questions next to the names.
+
+Scope: season stats and FORGE cover the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present; Elo and Form cover every region. Data comes from Oracle's Elixir and refreshes daily via CI.
 
 ## Product principles
 
@@ -39,4 +42,4 @@ Scope: season stats and GlorELO+ cover the 4 major leagues (LCK, LPL, LEC, LCS),
 ## Known open questions
 
 - Whether GLORY should use logistic rather than linear regression (the README says logistic; the code uses `LinearRegression`). Form already uses logistic weights.
-- Player-level metric design (AURA). The `player_stats` schema exists, and `win_prediction.py` trains an XGBoost win-probability model.
+- AURA's open design questions: how to credit junglers and supports beyond their lane, and whether to adjust for champion matchups.

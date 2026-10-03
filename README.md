@@ -6,15 +6,15 @@ An overview of prometheus' stats (described more in the [metrics](#metrics) sect
 
 Season stats:
 - **Global League Offensive Rankings Yield (GLORY)**: Prometheus' flagship metric. How well a team played: gold/objective stats weighted by their importance in that year's meta, with every game adjusted for the opponent's strength over the season.
-- **Record**: what a team achieved: its results over the season, adjusted for schedule, with fast wins counting for more.
-- **Luck**: wins above what a team's play earned.
+- **Record** (sunset; still used inside GLORY): what a team achieved: its results over the season, adjusted for schedule, with fast wins counting for more.
+- **Luck** (sunset): wins above what a team's play earned.
 
 Forecasts:
-- **Game-length Elo**: a rating for every team in every region. Fast wins move it more, and international results move a shared league offset, so a whole region rises or falls with how its teams do abroad.
-- **Form** (Predictive GLORY): a team's recent, opponent-adjusted stats, weighted to predict the next game, compared with its own league.
-- **GlorELO+**: Elo plus Form, a forecast of who wins the next game.
+- **Game-length Elo**: a rating for every team in every region, built from player ratings (a team's Elo is the average of its five starters, so ratings follow players through roster moves). Fast wins move it more, and international results move a shared league offset, so a whole region rises or falls with how its teams do abroad.
+- **Player Elo**: the player ratings behind team Elo, on their own register and one page per player (Elo after every game, career by team). Teammates move together, so it follows a player's teams through a career rather than splitting credit within a team.
+- **FORGE** (Form + Elo, formerly GlorELO+): the headline forecast of who wins the next game. Elo plus Form, a team's recent, opponent-adjusted stats weighted to predict the next game and compared with its own league.
 
-Sunset: **GLORB** (equal-weight baseline for GLORY; predicts no better than win % so far), **GLORY+** (folded into GLORY), and the unadjusted GLORY.
+Sunset: **Form** (folded into FORGE; alone it predicts no better than Elo), **GLORB** (equal-weight baseline for GLORY; predicts no better than win % so far), **GLORY+** (folded into GLORY), and the unadjusted GLORY.
 ## CLI
 The prometheus CLI provides users the ability to view past of current ratings for any of prometheus' metrics.
 
@@ -43,11 +43,11 @@ $ prometheus rankings glory --league MAJOR --year 2024
 
 Provide lists of arguments to filter results for all of those parameters. Years also take inclusive ranges, so `--year 2021-2023` is the same as `--year 2021 --year 2022 --year 2023`.
 
-The metric can be `glory`, `record`, `luck`, `glorelo+`, `form` or the sunset `glorb`. Forecasts (`glorelo+`, `form`) show current ratings by default; with `--year`, they show ratings at the end of each season:
+The metric can be `glory`, `record`, `luck`, `forge`, `form` or the sunset `glorb`. Forecasts (`forge`, `form`) show current ratings by default; with `--year`, they show ratings at the end of each season:
 
 ```
-$ prometheus rankings glorelo+ --year 2019-2020 --league LCK --n 3
-│         teamname  glorelo   form     elo  year league │
+$ prometheus rankings forge --year 2019-2020 --league LCK --n 3
+│         teamname  forge   form     elo  year league │
 │ 0      Dplus Kia  2195.17 385.24 1809.93  2020    LCK │
 │ 1  SK Telecom T1  2010.18 256.74 1753.43  2019    LCK │
 │ 2          Gen.G  1950.90 245.71 1705.19  2020    LCK │
@@ -125,15 +125,15 @@ A Bradley-Terry model fit over every game of the season in every league, includi
 #### Luck - wins above what play earned
 GLORY's per-game model turns each game's stats into an expected result. A team-season's average of those, calibrated across that season's teams (the per-game model pulls everyone toward 50%), is the win % its play earned. Luck is actual minus earned, in wins. It repeats only a little between halves of a season (reliability 0.34), so most of it is luck.
 
-#### Form - Predictive GLORY
+#### Form - Predictive GLORY (sunset as a page; FORGE's input)
 For every team, a running average of its recent per-game stats, each game adjusted for the opponent's Elo going into it: recent games count most (a game's weight halves every 20 games), a new season starts from half of last season's weight, and small samples are pulled toward the season's average team. Weights fit on past games (logistic) turn the stat gap between two teams into a chance to win the next game. Stats don't compare across regions, so Form is shown relative to the team's own league.
 
-#### GlorELO+ - the headline forecast
+#### FORGE - the headline forecast
 Between teams from the same league: a logistic curve on their Elo gap and Form gap, shown as a rating (Elo plus Form in Elo points). Between leagues: Elo alone, because Form only compares a team with its league; adding it made cross-region forecasts worse in the backtest.
 ### How accurate are the metrics?
 `scripts/evaluate_metrics.py` backtests the forecasts. Each game is predicted from earlier games only: from ratings at the start of the month, or from each team's rating going into the game ("live"). Results are scored by accuracy, Brier score and log loss, and compared with a simple baseline (win % so far this season) using a paired bootstrap. International games between teams from different major regions are scored separately, because they are the only direct test of cross-region strength. Latest results: [docs/metric_backtest.md](docs/metric_backtest.md).
 
-On 16,765 major-league games, GlorELO+ picks the winner 64.6% of the time with log loss 0.6319, against Elo's 64.1% and 0.6345; on 979 cross-region international games it equals Elo (65.0%, 0.6297).
+On 16,765 major-league games, FORGE picks the winner 64.7% of the time with log loss 0.6291, against Elo's 64.3% and 0.6319 (and 0.6343 for team Elo without player ratings); on 979 cross-region international games it equals Elo (65.5%, 0.6295).
 
 Season stats are judged separately by `scripts/evaluate_season_stats.py` ([docs/season_stats_report.md](docs/season_stats_report.md)): each team-season's games are split into two random halves, and a stat is reliable when the halves agree. It also reports how well each stat matches that season's win % and Record.
 
@@ -170,6 +170,8 @@ $$
 Using an intermediate delta win-probability model, as opposed to modeling win probability based on stats, allows us to evaluate the extent that a player's actions impacted the game. A top-laner on a great team might have amazing stats, but their
 impact on the game is relatively low. In contrast, a top-laner on a poor team might have worse stats (because they have worse teammates), but their actions more consistently swing the game in their team's favor. The goal is to build a model that 
 rewards the second player.
+
+**What's on the site.** [AURA](https://prometheus.thaiv.dev/aura.html) ranks major-league player-seasons with 20 or more games, in win-chance points per game (+4 means the player's play was worth about 4 percentage points of their team's chance to win each game, against an even lane), with Role Z for comparing roles; each player's page shows AURA by season. Oracle's Elixir lacks minute-by-minute data for most LPL games in 2016–2017 and 2021–2025, so those LPL seasons are missing. How it works: `prometheus/aura.py`. One win-probability model reads the game at 15 minutes from the five lanes: each starter's gold, XP, CS, kills, deaths and assists minus their lane opponent's, with one weight per role and stat (logistic regression, fit per year). The team's log-odds is the sum of its five lane terms, so the model splits exactly into player shares: a player's 15-minute score is their lane's term, and it is exactly minus their lane opponent's. AURA adds a quarter of the player's change from 15 to 25 minutes beyond their teammates' average change, which keeps the part of the later game that is the player's own without restating the team's result. Its chances are calibrated (out of year, within about 1.5 points in every 10% bin). In major-league player-seasons, AURA follows a player to a new team better than the plain lane gold gap or win % (next-season r 0.48 against 0.42 and 0.27); with weights fit only on earlier years, the late part improved that by +0.028 (+0.012 to +0.043) over the 15-minute score alone. Full-game stats (damage share, gold share, vision) were tested and not used: they mostly describe the team, or the role a team gives a player. Later snapshots are more stable but mostly restate how the whole team is doing. Summed over a team's lineups, players' AURA predicts the team's results in the other half of a season about as well as the team's own early-game stats (r 0.65), but less well than GLORY (0.71), because the first 15 minutes don't decide every game. Results: [docs/aura_report.md](docs/aura_report.md), from `scripts/evaluate_aura.py`. Next: champion matchups, and credit for junglers and supports beyond their lane (see `docs/steering/current_state.md`).
 
 ## Implementation
 Determining the weights for WOBA involves creating a table where each match has two rows: one for Blue side and one for Red side. The features in a row are the stats described above.

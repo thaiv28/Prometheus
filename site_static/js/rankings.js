@@ -15,12 +15,17 @@
   const config = readJSON("#page-config") || { columns: [] };
   const valueKey = config.valueKey;
   const valueCol = config.columns.find((c) => c.key === valueKey) || { digits: 2, label: "Score" };
-  // Rating pages (Elo, GlorELO+) are on the Elo scale. They open on "now" rows (current
+  // Rating pages (Elo, FORGE) are on the Elo scale. They open on "now" rows (current
   // ratings); picking seasons switches to team-season rows rated at the end of each year.
   // The other pages list team-seasons scored 0-100.
   const isRating = config.kind === "rating";
   const showingNow = () => isRating && !state.years.size;
-  const noun = () => (showingNow() ? "teams" : "team-seasons");
+  // Team pages list teams; the player Elo page lists players.
+  const entity = config.entity || "team";
+  const noun = () => (showingNow() ? `${entity}s` : `${entity}-seasons`);
+  const ROLES = { top: "Top", jng: "Jungle", mid: "Mid", bot: "Bot", sup: "Support" };
+  const { slugify } = PrometheusNames;
+  const nameOf = (r) => (entity === "player" ? r.playername : r.teamname);
   const metricName = (document.querySelector("h1")?.firstChild?.textContent || "").trim();
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const totalCols = config.columns.length + config.columns.filter((c) => c.bar).length;
@@ -37,7 +42,8 @@
     : [Math.min(0, Math.floor(dataMin / 10) * 10), Math.max(100, Math.ceil(dataMax / 10) * 10)];
   const scale = (v) => Math.max(0, Math.min(100, ((v - domain[0]) / (domain[1] - domain[0])) * 100));
 
-  const state = { years: new Set(), leagues: new Set(), search: "", sort: { key: "rank", dir: "asc" } };
+  // Roles exist only on pages that offer a role picker (AURA).
+  const state = { years: new Set(), leagues: new Set(), roles: new Set(), search: "", sort: { key: "rank", dir: "asc" } };
 
   const tbody = $("#rows");
   const countEl = $(".count");
@@ -46,7 +52,7 @@
   const searchInput = $("#filter-search");
   const distEl = $("#dist");
   const numberFormat = new Intl.NumberFormat("en-US");
-  const rowKey = (r) => `${r.slug}|${r.now ? "now" : r.year}|${r.league}`;
+  const rowKey = (r) => `${r.slug}|${r.now ? "now" : r.year}|${r.league}|${r.position || ""}`;
 
   function formatNumber(v, col) {
     const n = Number(v);
@@ -61,6 +67,7 @@
     const q = new URLSearchParams(location.search);
     (q.get("years") || "").split(",").filter(Boolean).forEach((y) => state.years.add(y));
     (q.get("leagues") || "").split(",").filter(Boolean).forEach((l) => state.leagues.add(l));
+    (q.get("roles") || "").split(",").filter((r) => r in ROLES).forEach((r) => state.roles.add(r));
     state.search = q.get("search") || "";
     const sort = (q.get("sort") || "").split(":");
     if (config.columns.some((c) => c.key === sort[0])) {
@@ -72,6 +79,7 @@
     const q = new URLSearchParams();
     if (state.years.size) q.set("years", [...state.years].join(","));
     if (state.leagues.size) q.set("leagues", [...state.leagues].join(","));
+    if (state.roles.size) q.set("roles", [...state.roles].join(","));
     if (state.search) q.set("search", state.search);
     if (state.sort.key !== "rank" || state.sort.dir !== "asc") q.set("sort", state.sort.key + ":" + state.sort.dir);
     const qs = q.toString();
@@ -93,7 +101,9 @@
     const term = state.search.trim().toLowerCase();
     const out = pool().filter((r) =>
       (!state.leagues.size || state.leagues.has(String(r.league))) &&
-      (!term || String(r.teamname).toLowerCase().includes(term))
+      (!state.roles.size || state.roles.has(String(r.position))) &&
+      (!term || String(nameOf(r)).toLowerCase().includes(term) ||
+        (entity === "player" && String(r.teamname).toLowerCase().includes(term)))
     );
     // Rank is position by the page's value within the current view, independent of the sort column.
     out.sort((a, b) => Number(b[valueKey]) - Number(a[valueKey]));
@@ -130,6 +140,15 @@
         return `<td class="num rank">${r.rank}</td>`;
       case "team":
         return `<td class="team"><a href="teams/${encodeURIComponent(r.slug)}.html">${esc(r.teamname)}</a>${teamMeta(r)}</td>`;
+      case "player":
+        return `<td class="team"><a href="players/${encodeURIComponent(r.slug)}.html">${esc(r.playername)}</a>${teamMeta(r)}</td>`;
+      case "teamref": {
+        // With `mark`, the team carries its league's mark and the page drops its League column.
+        const mark = col.mark ? leagueMark(r.league, false) + " " : "";
+        return `<td class="teamref${col.mark ? " teamref--mark" : ""}${cls}">${mark}<a href="teams/${encodeURIComponent(slugify(r.teamname))}.html" title="${esc(r.teamname)}">${esc(r.teamname)}</a></td>`;
+      }
+      case "role":
+        return `<td class="${cls.trim()}">${esc(ROLES[r[col.key]] || r[col.key])}</td>`;
       case "number": {
         const bar = col.bar
           ? `<td class="bar-col" aria-hidden="true"><span class="bar" style="--v:${scale(Number(r[col.key])).toFixed(1)}"></span></td>`
@@ -291,11 +310,14 @@
   function describeView() {
     const leagues = [...state.leagues].sort();
     const leaguePart = !leagues.length ? "all" : leagues.length > 4 ? `${leagues.length} leagues’` : leagues.join(", ");
-    let s = `${metricName}, ${leaguePart} ${noun()}`;
+    const roleOrder = Object.keys(ROLES);
+    const roles = [...state.roles].sort((a, b) => roleOrder.indexOf(a) - roleOrder.indexOf(b)).map((r) => ROLES[r].toLowerCase());
+    const rolePart = roles.length ? ` (${roles.join(", ")})` : "";
+    let s = `${metricName}, ${leaguePart} ${noun()}${rolePart}`;
     const years = describeYears(state.years);
     if (showingNow() && !state.search.trim()) s += " playing now";
     else if (years) s += isRating ? `, ${years}, rated at season’s end` : `, ${years}`;
-    if (state.search.trim()) s += `, names containing “${state.search.trim()}”`;
+    if (state.search.trim()) s += `, ${entity === "player" ? "names or teams" : "names"} containing “${state.search.trim()}”`;
     return s;
   }
 
@@ -304,14 +326,18 @@
       const set = state[picker.dataset.filter];
       $$("input[type=checkbox]", picker).forEach((cb) => { cb.checked = set.has(cb.value); });
       const valueEl = $(".picker-value", picker);
-      const values = [...set].sort((a, b) => (picker.dataset.filter === "years" ? b - a : a.localeCompare(b)));
+      const kind = picker.dataset.filter;
+      const roleOrder = Object.keys(ROLES);
+      const values = [...set]
+        .sort((a, b) => (kind === "years" ? b - a : kind === "roles" ? roleOrder.indexOf(a) - roleOrder.indexOf(b) : a.localeCompare(b)))
+        .map((v) => (kind === "roles" ? ROLES[v] : v));
       valueEl.textContent = values.length ? (values.length > 3 ? `${values.length} selected` : values.join(", ")) : valueEl.dataset.all;
     });
     $$("th[data-key]").forEach((th) => {
       const active = th.dataset.key === state.sort.key;
       th.setAttribute("aria-sort", active ? (state.sort.dir === "asc" ? "ascending" : "descending") : "none");
     });
-    clearBtn.hidden = !(state.years.size || state.leagues.size || state.search);
+    clearBtn.hidden = !(state.years.size || state.leagues.size || state.roles.size || state.search);
     descEl.textContent = describeView();
     // Count against everything the year filter could show, so seasons don't read as a subset of "now".
     const total = isRating ? pool().length : rows.length;
@@ -336,6 +362,7 @@
   function clearFilters() {
     state.years.clear();
     state.leagues.clear();
+    state.roles.clear();
     state.search = "";
     if (searchInput) searchInput.value = "";
     update();

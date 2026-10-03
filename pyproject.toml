@@ -23,7 +23,7 @@ dependencies = [
 packages = ["prometheus"]
 
 [tool.setuptools.package-data]
-prometheus = ["glorelo_weights.json", "form_weights.json"]
+prometheus = ["forge_weights.json", "form_weights.json"]
 
 [project.scripts]
 prometheus = "prometheus.main:app"

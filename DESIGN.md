@@ -181,7 +181,7 @@ Paper and ink, plus one spot and four league inks. The strategy is Restrained.
 
 ## Layout
 
-A page is 82rem max with a fluid gutter (16 to 48px). The running head and colophon align to the content edges. Content is a two-column spread: the main column and a 17rem margin, 32 to 56px apart; the margin is sticky on desktop. Under 1000px the margin follows the main column (on the home page, the Contents moves between the intro and the tables). Under 720px the running head stacks (wordmark, sections, full-width index search), registers scroll horizontally edge to edge, wide-only columns hide and their league and year fold under the team name, and fact lines drop their middle-dot separators. Under 480px phone-hide columns drop.
+A page is 82rem max with a fluid gutter (16 to 48px). The running head and colophon align to the content edges. Content is a two-column spread: the main column and a 17rem margin, 32 to 56px apart; the margin is sticky on desktop and, when its notes run taller than the window (AURA), scrolls on its own within the window's height (thin scrollbar, no scroll chaining to the page). Under 1000px the margin follows the main column (on the home page, the Contents moves between the intro and the tables). Under 720px the running head stacks (wordmark, sections, full-width index search), registers scroll horizontally edge to edge, wide-only columns hide and their league and year fold under the team name, and fact lines drop their middle-dot separators. Under 480px phone-hide columns drop.
 
 Rhythm: 4px base, captions 8px above their table, 44px between registers, 36px between a page title and its body.
 
@@ -200,24 +200,26 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 
 ### Running head
 - Wordmark: a ledger-blue P glyph and PROMETHEUS in tracked small caps 600.
-- Sections: Home, then two groups, each led by an italic ink-3 group name in normal caps: *Season stats* (GLORY, Record, Luck) and *Forecasts* (GlorELO+, Form, Elo), then a lone *Sunset stats* link (small caps, after a hairline) to the page listing retired metrics. It is marked current on that page and on a retired metric's page. With eight sections the nav fills the 82rem head, so on desktop the team search always sits on its own line, right-aligned under the sections. Links are small caps; the current one is ink 600 with a 2px ledger-blue underline. A hairline divides the groups on desktop; under 720px each group takes its own line and the divider drops.
-- Team search: a "Team" label and a bare input ("Go to a team") on a hairline baseline; focus thickens the baseline to 2px ledger blue. Typing opens a suggestion slip under the field, set like an open picker (paper, ink border, 2px top rule): up to eight teams, each a name with its league mark and last year in ink-3; the highlighted one gets the paper wash and a ledger-blue name. Enter or a click opens the team page. With no match the slip says so, and Enter (or no JS) searches the Elo register, which lists every team.
+- Sections: Home, then two menus, *Teams* and *Players*, each a small-caps name with a small ink-3 caret (a `<details>`, so it opens without JS; `nav.js` closes the other menu, and closes on a click elsewhere or Escape). Open, the name and caret turn ledger blue and a slip drops under it, set like an open picker (paper, ink border, 2px top rule, 21rem): one line per stat, its name in small caps 600 over the question it answers in italic ink-2 caption size; hover washes the line and turns the name ledger blue. Teams lists GLORY, FORGE and Elo, then, after a hairline, *Sunset stats* in ink-2 regular. Players lists Elo and AURA. A menu's name is marked current (ink 600, 2px ledger-blue underline) on its stat pages, and Teams also on team pages, Sunset stats and retired metrics' pages, Players on player pages; inside the slip the current page's name is underlined the same way. The nav and the search share one line down to 1280px; narrower, the search wraps to its own line. Under 720px the slip spans the full width under the section line and its lines grow to 10px padding.
+- Search: a "Find" label and a bare input ("Team or player") on a hairline baseline; focus thickens the baseline to 2px ledger blue. Typing opens a suggestion slip under the field, set like an open picker (paper, ink border, 2px top rule): up to eight teams and players, each a name with its league mark and, in ink-3, the last year (teams) or role and team (players); the highlighted one gets the paper wash and a ledger-blue name. Enter or a click opens the page. With no match the slip says so, and Enter (or no JS) searches the Team Elo register, which lists every team.
 
 ### Filter line
 - Set as a sentence: "Showing years all, leagues all, team any". The label is small caps, the value italic on a dotted underline, with a caret. Opening turns the value and caret ledger blue.
 - The team search is the last clause: a small-caps "team" label and a bare italic input on the same dotted underline, its placeholder *Any* set as a value; focus turns the rule 2px ledger blue. It filters the register by name and is stored in the URL (`?search=`).
+- A page that sets `filters.roles` (AURA) adds a *roles* clause before the name search: the same picker, its options the five roles by name (Top, Jungle, Mid, Bot, Support), stored in the URL (`?roles=`); the caption names the chosen roles in brackets ("AURA, all player-seasons (support), 2025").
 - Panel: paper, ink border, 2px top rule, small-caps legend, a grid of square checkboxes; leagues carry their mark. "Major four only" and "Clear filters" are italic underlined text buttons.
-- Forecast pages (Elo, GlorELO+) label the year picker "season" and show *Now* as its empty value, the way the others show *All*: the register opens on current ratings for active teams. Its panel (legend "Season's end") leads with a "Current ratings" text button that returns to Now. Choosing seasons switches the register to team-seasons rated at the end of each year, and the caption says so ("Elo, all team-seasons, 2019, rated at season's end").
+- Forecast pages (Elo, FORGE) label the year picker "season" and show *Now* as its empty value, the way the others show *All*: the register opens on current ratings for active teams. Its panel (legend "Season's end") leads with a "Current ratings" text button that returns to Now. Choosing seasons switches the register to team-seasons rated at the end of each year, and the caption says so ("Elo, all team-seasons, 2019, rated at season's end").
 
 ### Register (signature)
 - Booktabs table with a printed caption that describes the current view in words ("GLORY, LCK team-seasons, 2021–2024, ranked by score.") and a count.
 - Column heads are sort buttons; the sorted head goes ink 600 with a ledger-blue triangle. Superscript note numbers in heads point at the margin notes.
 - A printed bar column sits before the value: a 5px ink-2 rule whose length is the value on a fixed scale for the page.
 - Hover washes the row; hovering or focusing a row traces its value on the distribution figure in ledger blue.
+- A team column with `mark` (the AURA register) leads each team name with its league mark instead of a League column, so the register fits beside the margin at 1280px; its ellipsis limit is 10rem instead of 11rem. A signed value (Luck, AURA) gets a symmetric scale around 0, and an acronym unit ("AURA scores") keeps its capitals in the figure caption.
 
-### Head to head (GlorELO+)
+### Head to head (FORGE)
 - When the two teams play in different leagues, an italic caption-size note under the bar says the odds come from Elo alone.
-- Set as a sentence at headline size (lede size on phones): "[team] *beats* [team] **57 times in 100**." Each team is a bare select on an ink baseline with a small caret, sized to the chosen name; the verb is italic ink-2 and the result is ink 600 with tabular figures.
+- Set as a sentence at headline size (lede size on phones): "[team] *beats* [team] **57 times in 100**." Each team is a bare select on an ink baseline with a small caret, sized to the chosen name; its list is grouped by league (LCK, LPL, LEC, LCS, then any other, as `<optgroup>`s), alphabetical within each, with the top two rated teams preselected (`matchup_options` in `_marks.html.j2`, shared by the FORGE page and home); the verb is italic ink-2 and the result is ink 600 with tabular figures.
 - Captioned like a figure ("Head to head." in bold small caps) with a note mark to the margin.
 - Below it, a 5px printed bar: the first team's share in ink on a paper-deep trough, with a hairline tick at 50%. It does not animate.
 
@@ -232,16 +234,29 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 - A retired metric's page carries an italic caption-size note under the lede, set between two hairlines like an erratum slip and led by "Sunset." in bold small caps. It says why the metric was retired and what to use instead.
 
 ### Franchise entry (team pages)
-- Name in display size; a small-caps fact line (league marks, seasons ranked, GlorELO+ now, Elo); a prose summary with the best season, its year rank, and the Elo peak.
-- Figure 1: printed column chart of GLORY or Record by season (both 0 to 100), switched by a two-option small-caps control with a ledger-blue underline.
-- Season register: year, league, GLORY, year rank ("2nd of 47", or "Unranked" when the season had fewer than 5 games), Record, Luck (signed wins, true minus) and season-end GlorELO+. Under 480px the league, Record and Luck columns drop so the register fits without scrolling.
+- Name in display size; a small-caps fact line (league marks, seasons ranked, FORGE now, Elo); a prose summary with the best season, its year rank, and the Elo peak.
+- Figure 1: printed column chart of GLORY by season (0 to 100).
+- Season register: year, league, GLORY, year rank ("2nd of 47", or "Unranked" when the season had fewer than 5 games) and season-end FORGE. Under 480px the league column drops.
+- Rosters: "Roster" (or "Last roster" for a team not active in six months), a three-column register of the last lineup (role in ink-3, player, Elo); then starters by season: year and one column per role, the main starter in body type and others under it at caption size with games started in ink-3, "+N more" past three. Under 480px the season table becomes a list: the year in 600, then a line per role with the role in ink-3 in a 4.75rem column; seasons are divided by hairlines.
 - Figure 2: hand-drawn SVG Elo line in the league ink, dashed 1500 rule, annotated peak, and a pointer and arrow-key readout.
+
+### Player entry (player pages)
+- Set like the franchise entry: name in display size; a small-caps fact line (role, league mark, "Plays for" or "Last played for" the team, Elo); a prose summary with the peak, the latest rating, games, teams and other names, and the best AURA season ("Best AURA season 2021, +10.6 a game, 2nd of 52 major-league mid laners that year.") when there is one.
+- Figure 1: the same SVG Elo line as team pages.
+- AURA by season (players with major-league snapshot games), between the Elo figure and the career register: a block head with "See in AURA rankings", a caption, and a register of year, team, league, role, games, AURA (signed, 600) and role rank ("1st of 31", ink-3, or *Unranked* under 20 games), newest first, one row per season and role. Under 480px league and role drop. A margin note (4) explains AURA.
+- Career register: one row per run of games with a team (team, league, role, from, to, games, Elo at the end), newest first. Under 480px league, role and "to" drop.
+
+### Home
+- Title page, then a lede naming the three things the site answers (FORGE, Elo, GLORY), each linked.
+- The forecast leads: a *FORGE* head at 1.875–2.5rem with its question in italic under it, the head-to-head box (same component as the FORGE page; the top two teams preselected), and Table I, the top 10 major-league teams playing now (rating, Form, Elo).
+- Then Table II, Team Elo's top 10 teams playing now in every region, and Table III, Player Elo's top 10 players. Bars use the same scale as each metric's own page.
+- Contents in the margin: two parts, *Teams* and *Players*, each a small-caps 600 head (the second after a hairline), listing every stat: name and count on a dot leader, its question in italic, then its description. Under 1000px the order is lede, FORGE, contents, then the Elo tables.
 
 ### Margin notes
 - Small-caps head over an ink rule; numbered notes with ledger-blue marks; the dagger note is the caveat, in italic. A targeted note gets the spot wash.
 
 ### Motion
-- Rows re-rank in place: rows that stay in view slide from their old position to their new one over 360ms with cubic-bezier(0.16, 1, 0.3, 1). Season columns scale to the switched metric over 320ms. Both are instant under reduced motion.
+- Rows re-rank in place: rows that stay in view slide from their old position to their new one over 360ms with cubic-bezier(0.16, 1, 0.3, 1). Instant under reduced motion.
 
 ## Do's and Don'ts
 

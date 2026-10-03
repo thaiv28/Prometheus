@@ -7,7 +7,7 @@ class Metric(str, Enum):
     record = "record"
     luck = "luck"
     # Forecasts
-    glorelo_plus = "glorelo+"
+    forge = "forge"
     form = "form"
     # Sunset
     glorb = "glorb"
@@ -155,19 +155,24 @@ PLAYER_RAW_FEATURES = [
     "opp_deathsat25",
 ]
 
-# Base per-snapshot numeric features used for win probability modeling (player perspective)
-# These correspond to logical feature names after expansion (not raw column names).
-AURA_NUMERIC_BASE_FEATURES = [
-    "gold",
-    "xp",
-    "cs",
+# Full-game player stats (end of game; NULL where Oracle's Elixir lacks them).
+# "earned gpm" is renamed earned_gpm at ingest.
+PLAYER_GAME_FEATURES = [
     "kills",
     "deaths",
     "assists",
-    "opp_gold",
-    "opp_xp",
-    "opp_cs",
-    "opp_kills",
-    "opp_deaths",
-    "opp_assists",
+    "teamkills",
+    "teamdeaths",
+    "damageshare",
+    "earnedgoldshare",
+    "damagetotowers",
+    "dpm",
+    "damagetakenperminute",
+    "damagemitigatedperminute",
+    "vspm",
+    "wpm",
+    "wcpm",
+    "controlwardsbought",
+    "cspm",
+    "earned_gpm",
 ]

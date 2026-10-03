@@ -11,6 +11,9 @@ season stat is:
   many games a team needs before the stat is at least half signal.
 - Faithful to the season: it agrees with what the team achieved that season
   (win %, and Record, which also accounts for schedule).
+- Predictive out of sample: computed on one half, it correlates with win % in the
+  other half (the average of both directions). Unlike the same-season fit, a stat
+  can't score well here just by restating results.
 
 Only LCK, LPL, LEC and LCS team-seasons are scored. Correlations are taken after
 centring each season on its own mean, so era differences don't count as agreement.
@@ -22,7 +25,6 @@ Usage:
 
 import argparse
 import datetime
-import hashlib
 
 import numpy as np
 import pandas as pd
@@ -30,6 +32,7 @@ import pandas as pd
 from prometheus.evaluation import (
     correlation_interval,
     games_for_reliability,
+    half_of,
     spearman_brown,
 )
 from prometheus.matches import team_season_averages
@@ -64,11 +67,6 @@ STATS = [
     ("record", "Record"),
     ("luck", "Luck"),
 ]
-
-
-def half_of(gameids):
-    """0 or 1 for each game, from a hash of its id (stable across runs)."""
-    return gameids.map(lambda g: int(hashlib.md5(str(g).encode()).hexdigest()[:8], 16) % 2)
 
 
 def _by_half(frame, value):
@@ -169,6 +167,16 @@ def reliability(table):
     }
 
 
+def other_half(table, win_pct):
+    """Correlation of a stat on one half with win % on the other half (both directions)."""
+    t = pd.concat([table[["h0", "h1", "n0", "n1"]], win_pct[["h0", "h1"]].add_prefix("win_")], axis=1, join="inner")
+    t = t.dropna(subset=["h0", "h1", "win_h0", "win_h1"])
+    t = t[(t["n0"] >= MIN_HALF_GAMES) & (t["n1"] >= MIN_HALF_GAMES)]
+    years = t.index.get_level_values("year")
+    corr = lambda a, b: _centre(t[a], years).corr(_centre(t[b], years))
+    return (corr("h0", "win_h1") + corr("h1", "win_h0")) / 2
+
+
 def fit_with(table, target):
     """Correlation of a stat's full-season value with a target, over shared team-seasons."""
     joined = pd.concat([table["full"].rename("stat"), target.rename("target")], axis=1, join="inner").dropna()
@@ -182,8 +190,9 @@ def report(tables):
     win_pct = tables["win_pct"].loc[qualified, "full"]
     record = tables["record"]["full"].reindex(qualified)
     lines = [
-        "| Stat | Split-half r (95% CI) | Full-season reliability | Games to 0.5 | r with win % | r with Record |",
-        "|---|---|---:|---:|---:|---:|",
+        "| Stat | Split-half r (95% CI) | Full-season reliability | Games to 0.5 | r with other half's win % "
+        "| r with win % | r with Record |",
+        "|---|---|---:|---:|---:|---:|---:|",
     ]
     for key, label in STATS:
         table = tables[key]
@@ -194,7 +203,7 @@ def report(tables):
         games_50 = "never" if not np.isfinite(rel["games_50"]) else f"{rel['games_50']:.0f}"
         lines.append(
             f"| {label} | {rel['r_half']:.2f} ({rel['r_half_lo']:.2f} to {rel['r_half_hi']:.2f}) "
-            f"| {rel['full']:.2f} | {games_50} | {with_win} | {with_record} |"
+            f"| {rel['full']:.2f} | {games_50} | {other_half(table, tables['win_pct']):.2f} | {with_win} | {with_record} |"
         )
     n = reliability(tables["win_pct"])["n"]
     lines += [
@@ -204,7 +213,8 @@ def report(tables):
         f"team-seasons with {MIN_GAMES}+ games. Record's halves count games in every league, including international events.",
         "",
         "Reliability near 1 means the stat measures something a team keeps doing; near 0 means it is mostly noise. "
-        "Luck is meant to sit near 0. Correlations are within-season (each season centred on its own mean).",
+        "Luck is meant to sit near 0. \"Other half's win %\" uses the split-half sample; Record's halves use its own "
+        "games, so its value is not strictly comparable. Correlations are within-season (each season centred on its own mean).",
     ]
     return "\n".join(lines)
 

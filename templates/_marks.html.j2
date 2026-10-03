@@ -10,3 +10,17 @@
 {% macro ordinal(n) -%}
 {{ n }}{% if n % 100 in [11, 12, 13] %}th{% elif n % 10 == 1 %}st{% elif n % 10 == 2 %}nd{% elif n % 10 == 3 %}rd{% else %}th{% endif %}
 {%- endmacro %}
+
+{#- Head-to-head team options: grouped by league (major leagues first, in their
+    usual order), alphabetical within each; `pick` 0 or 1 preselects the top or
+    second-rated team. `rows` are FORGE rows; only "now" rows are listed. -#}
+{% macro matchup_options(rows, pick) -%}
+{%- set now = rows | selectattr('now') | list -%}
+{%- set chosen = (now | sort(attribute='forge', reverse=True) | list)[pick].teamname -%}
+{%- set present = now | map(attribute='league') | unique | list -%}
+{%- for lg in major_leagues + (present | reject('in', major_leagues) | sort | list) if lg in present %}
+<optgroup label="{{ lg }}">
+  {%- for r in now | selectattr('league', 'equalto', lg) | sort(attribute='teamname') %}<option value="{{ r.teamname }}"{% if r.teamname == chosen %} selected{% endif %}>{{ r.teamname }}</option>{% endfor -%}
+</optgroup>
+{%- endfor %}
+{%- endmacro %}

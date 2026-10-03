@@ -1,0 +1,141 @@
+{% extends 'base.html.j2' %}
+{% from '_marks.html.j2' import league, ordinal, signed %}
+{% set roles = {'top': 'Top', 'jng': 'Jungle', 'mid': 'Mid', 'bot': 'Bot', 'sup': 'Support'} %}
+{% set role_plural = {'top': 'top laners', 'jng': 'junglers', 'mid': 'mid laners', 'bot': 'bot laners', 'sup': 'supports'} %}
+{% set ranked = (aura_seasons or []) | selectattr('role_rank') | list %}
+{% set best = (ranked | sort(attribute='aura', reverse=True) | list | first) if ranked else none %}
+{% block title %}{{ playername }} · Player Elo · Prometheus{% endblock %}
+{% block description %}{{ playername }} ({{ roles.get(position, position) }}, {{ teamname }}): player Elo after every game{{ ', AURA by season' if aura_seasons }} and career by team.{% endblock %}
+{% block canonical_path %}players/{{ slug }}.html{% endblock %}
+{% block content %}
+  <header class="entry-head">
+    <h1>{{ playername }}</h1>
+    <p class="entry-facts">
+      <span>{{ roles.get(position, position) }}</span>
+      <span>{{ league(home_league) }}</span>
+      <span>{{ 'Plays for' if active else 'Last played for' }} <a href="../teams/{{ team_slug }}.html">{{ teamname }}</a></span>
+      <span>Elo {{ current_elo }}</span>
+    </p>
+    <p class="entry-summary">
+      Elo peaked at {{ elo_summary.peak.elo | round | int }} on {{ elo_summary.peak.date | longdate }} and was {{ elo_summary.last.elo | round | int }} after {{ 'the' if active else 'the last' }} game on {{ elo_summary.last.date | longdate }}, over {{ '{:,}'.format(elo_summary.games) }} games for {{ stints | map(attribute='teamname') | unique | list | length }} team{{ 's' if stints | map(attribute='teamname') | unique | list | length != 1 }}.
+      {%- if aliases %} Also played as {{ aliases | join(', ') }}.{% endif %}
+      {%- if best %} Best AURA season {{ best.year }}, {{ signed(best.aura, 1) }} a game, {{ ordinal(best.role_rank) }} of {{ best.role_count }} major-league {{ role_plural.get(best.position, best.position) }} that year.{% endif %}
+    </p>
+  </header>
+
+  <div class="spread">
+    <div class="spread-main">
+      <section class="elo" aria-labelledby="elo-heading">
+        <div class="block-head">
+          <h2 id="elo-heading">Elo after every game</h2>
+          <a class="more" href="../player_elo.html?search={{ playername | urlencode }}">See in player Elo rankings</a>
+        </div>
+        <figure class="elo-figure" data-league="{{ home_league }}" aria-labelledby="elo-fig-cap">
+          <figcaption id="elo-fig-cap" class="figure-caption">Elo from {{ elo_summary.first.date | longdate }} to {{ elo_summary.last.date | longdate }}. The dashed line marks 1500.</figcaption>
+          <div class="elo-plot" id="elo-plot" tabindex="0" role="img"
+               aria-label="{{ playername }} Elo over {{ elo_summary.games }} games: started {{ elo_summary.first.elo | round | int }}, peak {{ elo_summary.peak.elo | round | int }} on {{ elo_summary.peak.date }}, low {{ elo_summary.low.elo | round | int }} on {{ elo_summary.low.date }}, latest {{ elo_summary.last.elo | round | int }}. Use the left and right arrow keys to read individual games."></div>
+          <p class="elo-readout" id="elo-readout" aria-live="polite"></p>
+          <dl class="elo-stats">
+            <div><dt>Games</dt><dd>{{ '{:,}'.format(elo_summary.games) }}</dd></div>
+            <div><dt>Peak</dt><dd>{{ elo_summary.peak.elo | round | int }} <span class="muted">{{ elo_summary.peak.date | longdate }}</span></dd></div>
+            <div><dt>Low</dt><dd>{{ elo_summary.low.elo | round | int }} <span class="muted">{{ elo_summary.low.date | longdate }}</span></dd></div>
+            <div><dt>Latest</dt><dd>{{ elo_summary.last.elo | round | int }} <span class="muted">{{ elo_summary.last.date | longdate }}</span></dd></div>
+          </dl>
+        </figure>
+      </section>
+
+      {% if aura_seasons %}
+      <section class="seasons" aria-labelledby="aura-heading">
+        <div class="block-head">
+          <h2 id="aura-heading">AURA by season</h2>
+          <a class="more" href="../aura.html?search={{ playername | urlencode }}">See in AURA rankings</a>
+        </div>
+        <figure class="register-figure" aria-labelledby="aura-cap">
+          <figcaption id="aura-cap" class="table-caption">Major-league games only, one row per season and role. AURA is win-chance points per game against an even lane. Role rank compares the player with major-league players in the same role who played 20 or more games that year.</figcaption>
+          <div class="table-scroll">
+            <table class="register">
+              <thead>
+                <tr>
+                  <th scope="col" class="num">Year</th>
+                  <th scope="col">Team</th>
+                  <th scope="col" class="phone-hide">League</th>
+                  <th scope="col" class="phone-hide">Role</th>
+                  <th scope="col" class="num">Games</th>
+                  <th scope="col" class="num">AURA</th>
+                  <th scope="col" class="num">Role rank</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in aura_seasons %}
+                <tr>
+                  <td class="num year">{{ s.year }}</td>
+                  <td class="team"><a href="../teams/{{ s.team_slug }}.html">{{ s.teamname }}</a></td>
+                  <td class="phone-hide">{{ league(s.league) }}</td>
+                  <td class="phone-hide">{{ roles.get(s.position, s.position) }}</td>
+                  <td class="num muted">{{ s.games }}</td>
+                  <td class="num value">{{ signed(s.aura, 1) }}</td>
+                  <td class="num muted">{% if s.role_rank %}{{ ordinal(s.role_rank) }} <span class="of">of {{ s.role_count }}</span>{% else %}<span title="Fewer than 20 games">Unranked</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </figure>
+      </section>
+      {% endif %}
+
+      <section class="career" aria-labelledby="career-heading">
+        <div class="block-head">
+          <h2 id="career-heading">Career</h2>
+        </div>
+        <figure class="register-figure" aria-labelledby="career-cap">
+          <figcaption id="career-cap" class="table-caption">One row for each run of consecutive games with a team, newest first. Elo is the rating after the run’s last game.</figcaption>
+          <div class="table-scroll">
+            <table class="register">
+              <thead>
+                <tr>
+                  <th scope="col">Team</th>
+                  <th scope="col" class="phone-hide">League</th>
+                  <th scope="col" class="phone-hide">Role</th>
+                  <th scope="col" class="num">From</th>
+                  <th scope="col" class="num phone-hide">To</th>
+                  <th scope="col" class="num">Games</th>
+                  <th scope="col" class="num">Elo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in stints %}
+                <tr>
+                  <td class="team"><a href="../teams/{{ s.team_slug }}.html">{{ s.teamname }}</a></td>
+                  <td class="phone-hide">{{ league(s.league) }}</td>
+                  <td class="phone-hide">{{ roles.get(s.position, s.position) }}</td>
+                  <td class="num year">{{ s.first[:7] }}</td>
+                  <td class="num year phone-hide">{{ s.last[:7] }}</td>
+                  <td class="num muted">{{ s.games }}</td>
+                  <td class="num value">{{ s.elo }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </figure>
+      </section>
+    </div>
+
+    <aside class="margin notes" aria-labelledby="entry-notes-heading">
+      <h2 id="entry-notes-heading" class="margin-head">Key terms</h2>
+      <ol class="notes-list">
+        <li><span class="note-mark" aria-hidden="true">1</span><a href="../player_elo.html">Player Elo</a> moves with every game the player starts: all five starters move by the team’s Elo change, and the rating follows the player to a new team.</li>
+        <li><span class="note-mark" aria-hidden="true">2</span>Teammates move together, so this is a record of how the player’s teams did, not credit within a team.</li>
+        <li><span class="note-mark" aria-hidden="true">3</span><a href="../game_length_elo.html">Team Elo</a> is the average of its five starters. Compare ratings within a region.</li>
+        {% if aura_seasons %}<li><span class="note-mark" aria-hidden="true">4</span><a href="../aura.html">AURA</a> is the player’s own share: how far ahead of the lane opponent they were at 15 minutes, plus how much more than their teammates they gained by 25. Seasons with fewer than 20 games are Unranked.</li>{% endif %}
+      </ol>
+      <p class="margin-note"><a href="../teams/{{ team_slug }}.html">{{ teamname }}’s team page</a></p>
+    </aside>
+  </div>
+
+  <script type="application/json" id="elo-series">{{ elo_series | compact_series | tojson }}</script>
+{% endblock %}
+{% block scripts %}
+  <script src="../{{ asset('js/team.js') }}" defer></script>
+{% endblock %}

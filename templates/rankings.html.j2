@@ -1,9 +1,11 @@
 {% extends 'base.html.j2' %}
-{% block title %}{{ metric.name }} rankings · Prometheus{% endblock %}
+{% from '_marks.html.j2' import matchup_options %}
+{% block title %}{{ metric.title or metric.name }} rankings · Prometheus{% endblock %}
 {% block description %}{{ metric.full_name }}: {{ metric.description }}{% endblock %}
 {% block canonical_path %}{{ metric.key }}.html{% endblock %}
 {% set rating = config.kind == 'rating' %}
-{% set noun = 'teams' if rating else 'team-seasons' %}
+{% set entity = config.entity or 'team' %}
+{% set noun = (entity ~ 's') if rating else (entity ~ '-seasons') %}
 {% set year_label = 'season' if rating else 'years' %}
 {% set value_word = metric.value_word or ('rating' if rating else 'score') %}
 {% set value_plural = metric.value_plural or (value_word ~ 's') %}
@@ -11,7 +13,7 @@
   <div class="spread">
     <div class="spread-main">
       <header class="section-head">
-        <h1>{{ metric.name }} <span class="full-name">{{ metric.full_name }}</span></h1>
+        <h1>{{ metric.title or metric.name }} <span class="full-name">{{ metric.full_name }}</span></h1>
         <p class="lede">{{ metric.description }}<a class="note-ref" href="#note-{{ metric.lede_note }}" aria-label="Note {{ metric.lede_note }}">{{ metric.lede_note }}</a></p>
       </header>
       {% if metric.sunset %}
@@ -24,12 +26,12 @@
         <p class="matchup-line">
           <label class="visually-hidden" for="matchup-a">First team</label>
           <select id="matchup-a" class="matchup-team">
-            {% for r in rows if r.now %}<option value="{{ r.teamname }}"{% if loop.index == 1 %} selected{% endif %}>{{ r.teamname }}</option>{% endfor %}
+            {{ matchup_options(rows, 0) }}
           </select>
           <span class="matchup-verb">beats</span>
           <label class="visually-hidden" for="matchup-b">Second team</label>
           <select id="matchup-b" class="matchup-team">
-            {% for r in rows if r.now %}<option value="{{ r.teamname }}"{% if loop.index == 2 %} selected{% endif %}>{{ r.teamname }}</option>{% endfor %}
+            {{ matchup_options(rows, 1) }}
           </select>
           <output class="matchup-result" id="matchup-result" for="matchup-a matchup-b" aria-live="polite"></output>
         </p>
@@ -39,8 +41,8 @@
       {% endif %}
 
       <figure class="dist" aria-labelledby="dist-cap">
-        <figcaption id="dist-cap" class="figure-caption">Spread of {{ value_plural | lower }} for the {{ noun }} below. <span class="dist-hint">Hover over a row to mark it on the chart.</span></figcaption>
-        <div class="dist-plot" id="dist" role="img" aria-label="Distribution of {{ metric.name }} values in the current view"></div>
+        <figcaption id="dist-cap" class="figure-caption">Spread of {{ value_plural if value_plural[:4].isupper() else value_plural | lower }} for the {{ noun }} below. <span class="dist-hint">Hover over a row to mark it on the chart.</span></figcaption>
+        <div class="dist-plot" id="dist" role="img" aria-label="Distribution of {{ metric.title or metric.name }} values in the current view"></div>
       </figure>
 
       <div class="filter-line" role="group" aria-label="Filters">
@@ -75,15 +77,29 @@
             </div>
           </fieldset>
         </details>
+        {% if filters.roles %}
+        {% set role_names = {'top': 'Top', 'jng': 'Jungle', 'mid': 'Mid', 'bot': 'Bot', 'sup': 'Support'} %}
+        <details class="picker" data-filter="roles">
+          <summary><span class="picker-label">roles</span> <span class="picker-value" data-all="All">All</span></summary>
+          <fieldset class="picker-panel">
+            <legend class="picker-legend">Roles</legend>
+            <div class="picker-options">
+              {% for r in filters.roles %}
+              <label><input type="checkbox" value="{{ r }}" /> {{ role_names.get(r, r) }}</label>
+              {% endfor %}
+            </div>
+          </fieldset>
+        </details>
+        {% endif %}
         <label class="filter-search" for="filter-search">
-          <span class="picker-label">team</span>
+          <span class="picker-label">{{ 'name' if entity == 'player' else 'team' }}</span>
           <input id="filter-search" type="search" placeholder="Any" autocomplete="off" spellcheck="false" />
         </label>
         <button type="button" class="clear-filters" hidden>Clear filters</button>
       </div>
 
       <figure class="register-figure register-figure--main" aria-labelledby="table-cap">
-        <figcaption id="table-cap" class="table-caption"><span id="table-desc">{{ metric.name }}, all {{ noun }}{{ ' playing now' if rating }}</span>, ranked by {{ value_word }}.<a class="note-ref" href="#note-dagger" aria-label="Caveat">†</a> <span class="count" aria-live="polite"></span></figcaption>
+        <figcaption id="table-cap" class="table-caption"><span id="table-desc">{{ metric.title or metric.name }}, all {{ noun }}{{ ' playing now' if rating }}</span>, ranked by {{ value_word }}.<a class="note-ref" href="#note-dagger" aria-label="Caveat">†</a> <span class="count" aria-live="polite"></span></figcaption>
         <div class="table-scroll">
           <table class="register register--sortable">
             <thead>
@@ -106,7 +122,7 @@
     </div>
 
     <aside class="margin notes" id="about" aria-labelledby="about-heading">
-      <h2 id="about-heading" class="margin-head">How to read {{ metric.name }}</h2>
+      <h2 id="about-heading" class="margin-head">How to read {{ metric.title or metric.name }}</h2>
       <ol class="notes-list">
         {% for line in metric.how_to_read %}
         <li id="note-{{ loop.index }}"><span class="note-mark" aria-hidden="true">{{ loop.index }}</span>{{ line }}</li>

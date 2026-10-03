@@ -5,6 +5,8 @@ teams is turned into a win probability with a logistic curve, and those
 probabilities are scored against the real results.
 """
 
+import hashlib
+
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -143,3 +145,25 @@ def correlation_interval(r, n, z=1.96):
         return np.nan, np.nan
     centre, half = np.arctanh(np.clip(r, -0.999999, 0.999999)), z / np.sqrt(n - 3)
     return np.tanh(centre - half), np.tanh(centre + half)
+
+
+def half_of(gameids):
+    """0 or 1 for each game, from a hash of its id (stable across runs)."""
+    return gameids.map(lambda g: int(hashlib.md5(str(g).encode()).hexdigest()[:8], 16) % 2)
+
+
+def paired_correlation_bootstrap(pairs_a, pairs_b, n_resamples=2000, seed=0):
+    """Difference of two correlations on the same rows, and its 95% bootstrap interval.
+
+    `pairs_a` and `pairs_b` are (x, y) arrays of equal length over the same units
+    (players, team-seasons); rows are resampled together.
+    """
+    xa, ya = (np.asarray(v, dtype=float) for v in pairs_a)
+    xb, yb = (np.asarray(v, dtype=float) for v in pairs_b)
+    corr = lambda x, y: np.corrcoef(x, y)[0, 1]
+    rng = np.random.default_rng(seed)
+    diffs = []
+    for _ in range(n_resamples):
+        i = rng.integers(0, len(xa), len(xa))
+        diffs.append(corr(xa[i], ya[i]) - corr(xb[i], yb[i]))
+    return corr(xa, ya) - corr(xb, yb), np.percentile(diffs, 2.5), np.percentile(diffs, 97.5)

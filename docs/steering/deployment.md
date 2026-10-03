@@ -12,7 +12,7 @@ Prometheus is served at **https://prometheus.thaiv.dev** from AWS, through the `
 
 `.github/workflows/publish.yml` runs on push to `main`, daily at 10:00 UTC, on manual dispatch, and as a build-only check on pull requests:
 
-1. `build`: `uv sync`, `scripts/setup_db.sh` (downloads Oracle's Elixir CSVs and rebuilds the DB), `pytest`, `scripts/evaluate_metrics.py --check-weights` (refits the Form and GlorELO+ weights, about 8 seconds, prints every change, and adds a warning annotation, not a failure, if a GlorELO+ blend weight moved more than 10%), `scripts/build_site.py`, then upload `output/` as an artifact.
+1. `build`: `uv sync`, `scripts/setup_db.sh` (downloads Oracle's Elixir CSVs and rebuilds the DB), `pytest`, `scripts/evaluate_metrics.py --check-weights` (refits the Form and FORGE weights, about 8 seconds, prints every change, and adds a warning annotation, not a failure, if a FORGE blend weight moved more than 10%), `scripts/build_site.py`, then upload `output/` as an artifact.
 2. `deploy` (on `main` only, and only once the repo variables exist): assume `AWS_ROLE_ARN`, sync to `s3://$DEPLOYMENT_BUCKET/releases/<run id>`, sync that release to `/current`, invalidate CloudFront, and health-check the site.
 
 This mirrors the shared `thaiv28/project-platform-workflows` `deploy-static.yml`, which can't be reused directly because it builds with npm.
@@ -35,6 +35,6 @@ Google Drive rate-limits the shared Oracle's Elixir CSVs. Each build tries Drive
 ## Notes
 
 - Rolling back means syncing an older `releases/<run id>` prefix to `current` and invalidating.
-- Each run adds a full release (about 14 MB) to `releases/`. Add an S3 lifecycle rule in the infrastructure stack if that grows.
+- Each run adds a full release to `releases/`: about 100 MB since player pages (2026-10-02; about 30 MB before). Add an S3 lifecycle rule in the infrastructure stack to expire old releases.
 - GitHub disables scheduled workflows after 60 days without repository activity. If the daily rebuild stops, re-enable it under Actions.
 - The old GitHub Pages site (`thaiv28.github.io/Prometheus`) should be turned off once the AWS site is live.

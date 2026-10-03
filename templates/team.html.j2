@@ -1,7 +1,7 @@
 {% extends 'base.html.j2' %}
-{% from '_marks.html.j2' import league, ordinal, signed %}
+{% from '_marks.html.j2' import league, ordinal %}
 {% block title %}{{ teamname }} · Prometheus{% endblock %}
-{% block description %}{{ teamname }}: GLORY, Record, Luck and GlorELO+ by season, and Elo history.{% endblock %}
+{% block description %}{{ teamname }}: GLORY and FORGE by season, and Elo history.{% endblock %}
 {% block canonical_path %}teams/{{ slug }}.html{% endblock %}
 {% block content %}
   <header class="entry-head">
@@ -9,7 +9,7 @@
     <p class="entry-facts">
       {% for l in leagues %}<span>{{ league(l) }}</span>{% endfor %}
       {% if series %}<span>{{ series | length }} season{{ 's' if series | length != 1 }} ranked, {{ series[0].year }}{% if series | length > 1 %}–{{ series[-1].year }}{% endif %}</span>{% endif %}
-      {% if current_glorelo is not none %}<span>GlorELO+ {{ current_glorelo }}</span>{% endif %}
+      {% if current_forge is not none %}<span>FORGE {{ current_forge }}</span>{% endif %}
       {% if current_elo is not none %}<span>Elo {{ current_elo }}</span>{% endif %}
     </p>
     <p class="entry-summary">
@@ -26,23 +26,18 @@
     <div class="spread-main">
       {% if series %}
       {% set ns = namespace(top=100) %}
-      {% for s in series %}{% for v in [s.glory, s.record] %}{% if v is not none and v > ns.top %}{% set ns.top = v %}{% endif %}{% endfor %}{% endfor %}
+      {% for s in series %}{% if s.glory is not none and s.glory > ns.top %}{% set ns.top = s.glory %}{% endif %}{% endfor %}
       <section class="seasons" aria-labelledby="seasons-heading">
         <div class="block-head">
           <h2 id="seasons-heading">Season by season</h2>
-          <div class="metric-switch" role="radiogroup" aria-label="Metric shown in the figure">
-            <label><input type="radio" name="team-metric" value="glory" checked /> <span>GLORY</span></label>
-            <label><input type="radio" name="team-metric" value="record" /> <span>Record</span></label>
-          </div>
         </div>
         <figure class="season-figure" aria-labelledby="season-fig-cap">
-          <figcaption id="season-fig-cap" class="figure-caption"><span class="season-fig-metric">GLORY</span> by season (scale 0 to {{ ns.top | round | int }}).</figcaption>
-          <ol class="season-chart" id="season-chart" data-metric="glory" style="--n: {{ series | length }}">
+          <figcaption id="season-fig-cap" class="figure-caption">GLORY by season (scale 0 to {{ ns.top | round | int }}).</figcaption>
+          <ol class="season-chart" id="season-chart" style="--n: {{ series | length }}">
             {% for s in series %}
             <li class="season-col" data-league="{{ s.league }}"
-                style="--glory: {{ ((s.glory if s.glory is not none and s.glory > 0 else 0) / ns.top * 100) | round(2) }}; --record: {{ ((s.record if s.record is not none and s.record > 0 else 0) / ns.top * 100) | round(2) }}">
-              <span class="season-val season-val--glory">{{ ('%.1f' | format(s.glory)) | replace('-', '−') if s.glory is not none else '—' }}</span>
-              <span class="season-val season-val--record">{{ '%.1f' | format(s.record) if s.record is not none else '—' }}</span>
+                style="--v: {{ ((s.glory if s.glory is not none and s.glory > 0 else 0) / ns.top * 100) | round(2) }}">
+              <span class="season-val">{{ ('%.1f' | format(s.glory)) | replace('-', '−') if s.glory is not none else '—' }}</span>
               <span class="season-bar" aria-hidden="true"></span>
               <span class="season-year">{{ s.year }}<span class="league-mark" aria-hidden="true"></span></span>
             </li>
@@ -51,7 +46,7 @@
         </figure>
 
         <figure class="register-figure" aria-labelledby="season-table-cap">
-          <figcaption id="season-table-cap" class="table-caption">Year rank compares the team with major-league teams that played 5 or more games that year. GlorELO+ is the forecast rating (Elo plus Form) at the end of each season.</figcaption>
+          <figcaption id="season-table-cap" class="table-caption">Year rank compares the team with major-league teams that played 5 or more games that year. FORGE is the forecast rating (Elo plus Form) at the end of each season.</figcaption>
           <div class="table-scroll">
             <table class="register">
               <thead>
@@ -60,9 +55,7 @@
                   <th scope="col" class="phone-hide">League</th>
                   <th scope="col" class="num">GLORY</th>
                   <th scope="col" class="num">Year rank</th>
-                  <th scope="col" class="num phone-hide" title="Chance to beat the average major-league team that year">Record</th>
-                  <th scope="col" class="num phone-hide" title="Wins above what the team's play earned">Luck</th>
-                  <th scope="col" class="num">GlorELO+</th>
+                  <th scope="col" class="num">FORGE</th>
                 </tr>
               </thead>
               <tbody>
@@ -72,9 +65,7 @@
                   <td class="phone-hide">{{ league(s.league) }}</td>
                   <td class="num value">{{ ('%.2f' | format(s.glory)) | replace('-', '−') if s.glory is not none else '—' }}</td>
                   <td class="num muted">{% if s.year_rank %}{{ ordinal(s.year_rank) }} <span class="of">of {{ s.field }}</span>{% else %}<span title="Fewer than 5 games">Unranked</span>{% endif %}</td>
-                  <td class="num phone-hide">{{ '%.1f' | format(s.record) if s.record is not none else '—' }}</td>
-                  <td class="num phone-hide">{{ signed(s.luck_wins, 1) }}</td>
-                  <td class="num">{{ s.glorelo if s.glorelo is not none else '—' }}</td>
+                  <td class="num">{{ s.forge if s.forge is not none else '—' }}</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -83,7 +74,68 @@
         </figure>
       </section>
       {% else %}
-      <p class="section-note">GLORY, Record, Luck and GlorELO+ only cover LCK, LPL, LEC and LCS teams, so this team only has an Elo rating.</p>
+      <p class="section-note">GLORY and FORGE only cover LCK, LPL, LEC and LCS teams, so this team only has an Elo rating.</p>
+      {% endif %}
+
+      {% if roster %}
+      {% set roles = {'top': 'Top', 'jng': 'Jungle', 'mid': 'Mid', 'bot': 'Bot', 'sup': 'Support'} %}
+      {% macro player_name(p) %}{% if p.slug %}<a href="../players/{{ p.slug }}.html">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}{% endmacro %}
+      <section class="rosters" aria-labelledby="roster-heading">
+        <div class="block-head">
+          <h2 id="roster-heading">{{ 'Roster' if roster.last.active else 'Last roster' }}</h2>
+        </div>
+        <figure class="register-figure" aria-labelledby="roster-cap">
+          <figcaption id="roster-cap" class="table-caption">The five who started {{ 'the latest' if roster.last.active else 'its last' }} game, on {{ roster.last.date | longdate }}. Elo is each player’s rating today.</figcaption>
+          <table class="register register--roster">
+            <thead>
+              <tr>
+                <th scope="col">Role</th>
+                <th scope="col">Player</th>
+                <th scope="col" class="num">Elo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in roster.last.players %}
+              <tr>
+                <td class="muted">{{ roles.get(p.role, p.role) }}</td>
+                <td class="team">{{ player_name(p) }}</td>
+                <td class="num value">{{ p.elo if p.elo is not none else '—' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </figure>
+
+        <figure class="register-figure" aria-labelledby="rosters-cap">
+          <figcaption id="rosters-cap" class="table-caption">Starters by season and role. The main starter comes first; others follow with the games they started.</figcaption>
+          <div class="table-scroll">
+            <table class="register register--lineups">
+              <thead>
+                <tr>
+                  <th scope="col" class="num">Year</th>
+                  {% for r in ['top', 'jng', 'mid', 'bot', 'sup'] %}<th scope="col">{{ roles[r] }}</th>{% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in roster.seasons %}
+                <tr>
+                  <td class="num year">{{ s.year }}</td>
+                  {% for cell in s.roles %}
+                  <td class="lineup" data-role="{{ roles[cell.role] }}"><span class="lineup-names">
+                    {%- for p in cell.players -%}
+                    {%- if loop.first %}<span class="lineup-main">{{ player_name(p) }}</span>
+                    {%- else %}<span class="lineup-sub">{{ player_name(p) }} <span class="lineup-games">{{ p.games }}</span></span>{% endif -%}
+                    {%- else %}<span class="muted">—</span>{%- endfor -%}
+                    {%- if cell.more %}<span class="lineup-sub muted">+{{ cell.more }} more</span>{% endif -%}
+                  </span></td>
+                  {% endfor %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </figure>
+      </section>
       {% endif %}
 
       {% if elo_series %}
@@ -93,7 +145,7 @@
           <a class="more" href="../game_length_elo.html?search={{ teamname | urlencode }}">See in Elo rankings</a>
         </div>
         <figure class="elo-figure" data-league="{{ current_league or (leagues[0] if leagues else '') }}" aria-labelledby="elo-fig-cap">
-          <figcaption id="elo-fig-cap" class="figure-caption">Elo from {{ elo_summary.first.date | longdate }} to {{ elo_summary.last.date | longdate }}. The dashed line is the 1500 starting rating.</figcaption>
+          <figcaption id="elo-fig-cap" class="figure-caption">Elo from {{ elo_summary.first.date | longdate }} to {{ elo_summary.last.date | longdate }}. The dashed line marks 1500, where the first teams started.</figcaption>
           <div class="elo-plot" id="elo-plot" tabindex="0" role="img"
                aria-label="{{ teamname }} Elo over {{ elo_summary.games }} games: started {{ elo_summary.first.elo | round | int }}, peak {{ elo_summary.peak.elo | round | int }} on {{ elo_summary.peak.date }}, low {{ elo_summary.low.elo | round | int }} on {{ elo_summary.low.date }}, latest {{ elo_summary.last.elo | round | int }}. Use the left and right arrow keys to read individual games."></div>
           <p class="elo-readout" id="elo-readout" aria-live="polite"></p>
@@ -111,16 +163,16 @@
     <aside class="margin notes" aria-labelledby="entry-notes-heading">
       <h2 id="entry-notes-heading" class="margin-head">Key terms</h2>
       <ol class="notes-list">
-        <li><span class="note-mark" aria-hidden="true">1</span><a href="../glory.html">GLORY</a> scores how well a team played: the stats that won games that year, adjusted for opponents, roughly 0 to 100. <a href="../record.html">Record</a> scores what it achieved: its chance to beat an average major-league team, from its results and schedule. <a href="../luck.html">Luck</a> is wins above what its play earned.</li>
-        <li><span class="note-mark" aria-hidden="true">2</span>Seasons with fewer than 5 games get a score but no rank (Unranked), Record or Luck.</li>
-        <li><span class="note-mark" aria-hidden="true">3</span><a href="../glorelo_plus.html">GlorELO+</a> is the forecast: Elo plus recent <a href="../form.html">Form</a>, at the end of each season.</li>
-        <li><span class="note-mark" aria-hidden="true">4</span><a href="../game_length_elo.html">Elo</a> starts at 1500 and moves most after short, decisive games. Compare ratings within a region.</li>
+        <li><span class="note-mark" aria-hidden="true">1</span><a href="../glory.html">GLORY</a> scores how well a team played: the stats that won games that year, adjusted for opponents, roughly 0 to 100.</li>
+        <li><span class="note-mark" aria-hidden="true">2</span>Seasons with fewer than 5 games get a score but no rank (Unranked).</li>
+        <li><span class="note-mark" aria-hidden="true">3</span><a href="../forge.html">FORGE</a> is the forecast: Elo plus recent Form, at the end of each season.</li>
+        <li><span class="note-mark" aria-hidden="true">4</span><a href="../game_length_elo.html">Elo</a> is the average of the five starters' player ratings and moves most after short, decisive games. Compare ratings within a region.</li>
       </ol>
       {% if series %}<p class="margin-note"><a href="../glory.html?search={{ teamname | urlencode }}">Show {{ teamname }} in GLORY rankings</a></p>{% endif %}
     </aside>
   </div>
 
-  <script type="application/json" id="elo-series">{{ elo_series | tojson }}</script>
+  <script type="application/json" id="elo-series">{{ elo_series | compact_series | tojson }}</script>
 {% endblock %}
 {% block scripts %}
   <script src="../{{ asset('js/team.js') }}" defer></script>

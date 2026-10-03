@@ -2,7 +2,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 from pathlib import Path
 
-from prometheus.types import MATCH_RAW_FEATURES, PLAYER_RAW_FEATURES, MATCHES_FEATURES
+from prometheus.types import MATCH_RAW_FEATURES, MATCHES_FEATURES, PLAYER_GAME_FEATURES, PLAYER_RAW_FEATURES
 
 
 def preprocess_player_raw_stats(df):
@@ -17,11 +17,40 @@ def preprocess_player_raw_stats(df):
         "position",
         "champion",
     ]
-    columns = required_columns + PLAYER_RAW_FEATURES
-    df = df[columns]
-    df = df.dropna(how="any")
+    df = df.rename(columns={"earned gpm": "earned_gpm"})
+    columns = required_columns + PLAYER_RAW_FEATURES + PLAYER_GAME_FEATURES
+    df = df[columns].copy()
+    # Same fallback id as match_players, so short of a snapshot no starter is lost.
+    df["playername"] = df["playername"].fillna("unknown").astype(str)
+    df["playerid"] = df["playerid"].where(
+        df["playerid"].notna(), "name:" + df["playername"] + "|" + df["teamid"].astype(str)
+    )
+    # Games without snapshots ("partial" data) are dropped. The 20- and 25-minute
+    # snapshots are missing when the game ended first; keep those games, or the
+    # table loses most stomps.
+    early = [c for c in PLAYER_RAW_FEATURES if not c.endswith(("at20", "at25"))]
+    df = df.dropna(subset=required_columns + early)
 
     return df
+
+
+def preprocess_match_players(df, matches):
+    """Each team's starters in every kept game, with a fallback id when OE has none."""
+    df = df[df["position"] != "team"]
+    df = df[["gameid", "teamid", "position", "playerid", "playername"]].copy()
+    df["playername"] = df["playername"].fillna("unknown").astype(str)
+    df["playerid"] = df["playerid"].where(
+        df["playerid"].notna(), "name:" + df["playername"] + "|" + df["teamid"].astype(str)
+    )
+    df = df.drop_duplicates(subset=["gameid", "teamid", "position"])
+    # A handful of games list one player id twice (two roles, or both teams). The
+    # first row keeps the id; the others become one-off players.
+    repeat = df.duplicated(subset=["gameid", "playerid"])
+    df.loc[repeat, "playerid"] = (
+        "dup:" + df.loc[repeat, "gameid"].astype(str) + "|" + df.loc[repeat, "teamid"].astype(str)
+        + "|" + df.loc[repeat, "position"]
+    )
+    return df.merge(matches[["gameid", "teamid"]], on=["gameid", "teamid"])
 
 
 def preprocess_matches(df):
@@ -74,6 +103,9 @@ def main():
 
         matches.to_sql("matches", engine, if_exists="append", index=False)
         match_stats.to_sql("match_stats", engine, if_exists="append", index=False)
+        preprocess_match_players(df, matches).to_sql(
+            "match_players", engine, if_exists="append", index=False
+        )
 
         df_player_sql = preprocess_player_raw_stats(df)
         df_player_sql = df_player_sql.drop_duplicates(subset=["gameid", "playerid"])

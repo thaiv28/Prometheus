@@ -1,5 +1,5 @@
-// GlorELO+ page: the head-to-head box. Between teams from the same league the chance
-// that A beats B on a neutral side is 1 / (1 + e^(-w * (A - B))) on GlorELO+ ratings.
+// FORGE page: the head-to-head box. Between teams from the same league the chance
+// that A beats B on a neutral side is 1 / (1 + e^(-w * (A - B))) on FORGE ratings.
 // Between leagues Form doesn't compare, so it comes from the Elo gap alone, on its
 // own curve. Both weights are embedded in the page config by build_site.py.
 (function () {
@@ -27,7 +27,7 @@
     const sameLeague = x.league === y.league;
     if (note) note.hidden = sameLeague;
     const gap = sameLeague
-      ? weights.elo * (Number(x.glorelo) - Number(y.glorelo))
+      ? weights.elo * (Number(x.forge) - Number(y.forge))
       : weights.crossRegionElo * (Number(x.elo) - Number(y.elo));
     return 1 / (1 + Math.exp(-gap));
   }

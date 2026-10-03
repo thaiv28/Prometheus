@@ -34,6 +34,20 @@ CREATE TABLE match_stats(
     FOREIGN KEY(gameid, teamid) REFERENCES matches(gameid, teamid)
 );
 
+-- Each team's five starters in every game. Unlike player_stats, a row needs no
+-- snapshot stats, so every game is covered (player Elo is built from this).
+CREATE TABLE match_players (
+    gameid             TEXT NOT NULL,
+    teamid             TEXT NOT NULL,
+    position           TEXT NOT NULL,
+    playerid           TEXT NOT NULL,       -- OE player id; "name:<playername>|<teamid>" when OE has none,
+                                            -- "dup:<gameid>|<teamid>|<position>" when OE repeats an id in a game
+    playername         TEXT NOT NULL,
+
+    PRIMARY KEY(gameid, teamid, position),
+    FOREIGN KEY(gameid, teamid) REFERENCES matches(gameid, teamid)
+);
+
 CREATE TABLE player_stats (
     gameid             TEXT NOT NULL,
     playerid           TEXT NOT NULL,       -- unique player identifier taken from OE
@@ -69,31 +83,51 @@ CREATE TABLE player_stats (
     opp_assistsat15 INT NOT NULL,
     opp_deathsat15 INT NOT NULL,
 
-    goldat20 INT NOT NULL,
-    xpat20 INT NOT NULL,
-    csat20 INT NOT NULL,
-    opp_goldat20 INT NOT NULL,
-    opp_xpat20 INT NOT NULL,
-    opp_csat20 INT NOT NULL,
-    killsat20 INT NOT NULL,
-    assistsat20 INT NOT NULL,
-    deathsat20 INT NOT NULL,
-    opp_killsat20 INT NOT NULL,
-    opp_assistsat20 INT NOT NULL,
-    opp_deathsat20 INT NOT NULL,
+    -- NULL when the game ended before that minute
+    goldat20 INT NULL,
+    xpat20 INT NULL,
+    csat20 INT NULL,
+    opp_goldat20 INT NULL,
+    opp_xpat20 INT NULL,
+    opp_csat20 INT NULL,
+    killsat20 INT NULL,
+    assistsat20 INT NULL,
+    deathsat20 INT NULL,
+    opp_killsat20 INT NULL,
+    opp_assistsat20 INT NULL,
+    opp_deathsat20 INT NULL,
 
-    goldat25 INT NOT NULL,
-    xpat25 INT NOT NULL,
-    csat25 INT NOT NULL,
-    opp_goldat25 INT NOT NULL,
-    opp_xpat25 INT NOT NULL,
-    opp_csat25 INT NOT NULL,
-    killsat25 INT NOT NULL,
-    assistsat25 INT NOT NULL,
-    deathsat25 INT NOT NULL,
-    opp_killsat25 INT NOT NULL,
-    opp_assistsat25 INT NOT NULL,
-    opp_deathsat25 INT NOT NULL,
+    goldat25 INT NULL,
+    xpat25 INT NULL,
+    csat25 INT NULL,
+    opp_goldat25 INT NULL,
+    opp_xpat25 INT NULL,
+    opp_csat25 INT NULL,
+    killsat25 INT NULL,
+    assistsat25 INT NULL,
+    deathsat25 INT NULL,
+    opp_killsat25 INT NULL,
+    opp_assistsat25 INT NULL,
+    opp_deathsat25 INT NULL,
+
+    -- full-game stats (PLAYER_GAME_FEATURES)
+    kills INT NULL,
+    deaths INT NULL,
+    assists INT NULL,
+    teamkills INT NULL,
+    teamdeaths INT NULL,
+    damageshare REAL NULL,
+    earnedgoldshare REAL NULL,
+    damagetotowers INT NULL,
+    dpm REAL NULL,
+    damagetakenperminute REAL NULL,
+    damagemitigatedperminute REAL NULL,
+    vspm REAL NULL,
+    wpm REAL NULL,
+    wcpm REAL NULL,
+    controlwardsbought INT NULL,
+    cspm REAL NULL,
+    earned_gpm REAL NULL,
 
     PRIMARY KEY(gameid, playerid),
     FOREIGN KEY(gameid, teamid) REFERENCES matches(gameid, teamid)
@@ -110,6 +144,21 @@ CREATE TABLE game_length_elo (
     league_offset   REAL NOT NULL,       -- home league's offset after this game (included in the ratings)
 
     PRIMARY KEY(gameid, teamid),
+    FOREIGN KEY(gameid, teamid) REFERENCES matches(gameid, teamid)
+);
+
+-- Each starter's Elo before and after every game (player-built Elo). The team's
+-- rating in game_length_elo is the average of its five starters here.
+CREATE TABLE game_length_player_elo (
+    gameid          TEXT NOT NULL,
+    teamid          TEXT NOT NULL,
+    playerid        TEXT NOT NULL,
+    pre_match_elo   REAL NOT NULL,       -- includes the home league's offset
+    post_match_elo  REAL NOT NULL,
+    home_league     TEXT NULL,
+    league_offset   REAL NOT NULL,       -- home league's offset after this game
+
+    PRIMARY KEY(gameid, playerid),
     FOREIGN KEY(gameid, teamid) REFERENCES matches(gameid, teamid)
 );
 

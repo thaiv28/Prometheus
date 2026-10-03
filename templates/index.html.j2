@@ -1,44 +1,95 @@
 {% extends 'base.html.j2' %}
-{% from '_marks.html.j2' import league, signed, ordinal %}
+{% from '_marks.html.j2' import league, signed, ordinal, matchup_options %}
 {% block title %}Prometheus · LoL esports rankings across eras and regions{% endblock %}
 {% block content %}
   <section class="title-page" aria-labelledby="title">
     <h1 id="title">Prometheus</h1>
-    <p class="title-sub">League of Legends esports team rankings that compare teams across years and regions, {{ first_year }} to today.</p>
-    <p class="title-edition"><span>{{ '{:,}'.format(total_team_seasons) }} team-seasons</span> <span>{{ '{:,}'.format(total_elo_teams) }} teams rated</span> <span>Updated {{ last_update }}</span></p>
+    <p class="title-sub">League of Legends esports rankings of teams and players, compared across years and regions, 2014 to today.</p>
+    <p class="title-edition"><span>{{ '{:,}'.format(entry_counts.game_length_elo) }} teams rated</span> <span>{{ '{:,}'.format(entry_counts.glory) }} team-seasons</span> <span>Updated {{ last_update }}</span></p>
   </section>
 
   <div class="spread spread--home">
     <div class="spread-main">
       <div class="prose intro">
-        <p class="lede">Prometheus keeps two kinds of numbers. Season stats describe a finished season with hindsight: GLORY measures how well a team played, Record what it achieved against its schedule, and Luck the gap between the two. Forecasts (GlorELO+, Form and Elo) estimate who wins the next game from earlier games only, and are tested against every game since 2014.</p>
+        <p class="lede">Prometheus rates teams and players. <a href="forge.html">FORGE</a> says who wins if two teams play today, from Elo and how well each has played lately, tested against every major-league game since 2014. <a href="game_length_elo.html">Elo</a> rates every team in every region by its results, built from ratings that follow each player through their career. <a href="glory.html">GLORY</a> looks back on a season and measures how well a team played.</p>
       </div>
 
-      <figure class="register-figure" aria-labelledby="t1-cap">
-        <figcaption id="t1-cap" class="table-caption">Top 15 GLORY team-seasons, {{ first_year }}–{{ last_year }}. <a href="glory.html">See all GLORY rankings</a></figcaption>
+      <section class="spotlight" aria-labelledby="spotlight-heading">
+        <h2 id="spotlight-heading" class="spotlight-head">FORGE <span class="full-name">{{ forge.question }}</span></h2>
+        <figure class="matchup" aria-labelledby="matchup-cap">
+          <figcaption id="matchup-cap" class="figure-caption"><span class="matchup-title">Head to head.</span> Chance of winning one game today. Pick any two major-league teams.</figcaption>
+          <p class="matchup-line">
+            <label class="visually-hidden" for="matchup-a">First team</label>
+            <select id="matchup-a" class="matchup-team">
+              {{ matchup_options(forge_rows, 0) }}
+            </select>
+            <span class="matchup-verb">beats</span>
+            <label class="visually-hidden" for="matchup-b">Second team</label>
+            <select id="matchup-b" class="matchup-team">
+              {{ matchup_options(forge_rows, 1) }}
+            </select>
+            <output class="matchup-result" id="matchup-result" for="matchup-a matchup-b" aria-live="polite"></output>
+          </p>
+          <div class="matchup-bar" aria-hidden="true"><span class="matchup-bar-a"></span></div>
+          <p class="matchup-note" id="matchup-note" hidden>These teams play in different leagues, so the odds come from Elo alone.</p>
+        </figure>
+
+        <figure class="register-figure" aria-labelledby="t1-cap">
+          <figcaption id="t1-cap" class="table-caption">FORGE, the top {{ forge_top | length }} major-league teams playing now. <a href="forge.html">See every team, and past seasons</a></figcaption>
+          <div class="table-scroll">
+            <table class="register">
+              <thead>
+                <tr>
+                  <th scope="col" class="num rank">Rk</th>
+                  <th scope="col">Team</th>
+                  <th scope="col" class="wide-only">League</th>
+                  <th scope="col" class="bar-col" aria-hidden="true"></th>
+                  <th scope="col" class="num">Rating</th>
+                  <th scope="col" class="num phone-hide" title="Elo points above or below its league's average, from recent play">Form</th>
+                  <th scope="col" class="num wide-only">Elo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in forge_top %}
+                <tr>
+                  <td class="num rank">{{ loop.index }}</td>
+                  <td class="team"><a href="teams/{{ r.slug }}.html">{{ r.teamname }}</a><span class="team-meta team-meta--league">{{ league(r.league) }}</span></td>
+                  <td class="wide-only">{{ league(r.league) }}</td>
+                  <td class="bar-col" aria-hidden="true"><span class="bar" style="--v: {{ r.bar }}"></span></td>
+                  <td class="num value">{{ r.forge | round | int }}</td>
+                  <td class="num phone-hide">{{ signed(r.form, 0) }}</td>
+                  <td class="num wide-only">{{ r.elo | round | int }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </figure>
+      </section>
+
+      <figure class="register-figure" aria-labelledby="t2-cap">
+        <figcaption id="t2-cap" class="table-caption">Team Elo, the top {{ team_elo_top | length }} teams playing now, every region. <a href="game_length_elo.html">See every team</a></figcaption>
         <div class="table-scroll">
           <table class="register">
             <thead>
               <tr>
                 <th scope="col" class="num rank">Rk</th>
                 <th scope="col">Team</th>
-                <th scope="col" class="num wide-only">Year</th>
                 <th scope="col" class="wide-only">League</th>
                 <th scope="col" class="bar-col" aria-hidden="true"></th>
-                <th scope="col" class="num">GLORY</th>
-                <th scope="col" class="num phone-hide">Era Z</th>
+                <th scope="col" class="num">Elo</th>
+                <th scope="col" class="num phone-hide">Last game</th>
               </tr>
             </thead>
             <tbody>
-              {% for r in all_time %}
+              {% for r in team_elo_top %}
               <tr>
                 <td class="num rank">{{ loop.index }}</td>
-                <td class="team"><a href="teams/{{ r.slug }}.html">{{ r.teamname }}</a><span class="team-meta">{{ league(r.league, show_code=False) }}{{ r.year }}</span></td>
-                <td class="num wide-only">{{ r.year }}</td>
+                <td class="team"><a href="teams/{{ r.slug }}.html">{{ r.teamname }}</a><span class="team-meta team-meta--league">{{ league(r.league) }}</span></td>
                 <td class="wide-only">{{ league(r.league) }}</td>
-                <td class="bar-col" aria-hidden="true"><span class="bar" style="--v: {{ r.score }}"></span></td>
-                <td class="num value">{{ '%.2f' | format(r.score) }}</td>
-                <td class="num phone-hide">{{ signed(r.era_score) }}</td>
+                <td class="bar-col" aria-hidden="true"><span class="bar" style="--v: {{ r.bar }}"></span></td>
+                <td class="num value">{{ r.elo | round | int }}</td>
+                <td class="num phone-hide muted">{{ r.latest_date | longdate }}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -46,29 +97,31 @@
         </div>
       </figure>
 
-      <figure class="register-figure" aria-labelledby="t2-cap">
-        <figcaption id="t2-cap" class="table-caption">Best GLORY team-season each year. Teams is how many ranked team-seasons that year had.</figcaption>
+      <figure class="register-figure" aria-labelledby="t3-cap">
+        <figcaption id="t3-cap" class="table-caption">Player Elo, the top {{ player_elo_top | length }} players playing now, every region. <a href="player_elo.html">See every player</a></figcaption>
         <div class="table-scroll">
           <table class="register">
             <thead>
               <tr>
-                <th scope="col" class="num">Year</th>
-                <th scope="col">Team</th>
+                <th scope="col" class="num rank">Rk</th>
+                <th scope="col">Player</th>
+                <th scope="col" class="phone-hide">Role</th>
+                <th scope="col" class="wide-only">Team</th>
                 <th scope="col" class="wide-only">League</th>
                 <th scope="col" class="bar-col" aria-hidden="true"></th>
-                <th scope="col" class="num">GLORY</th>
-                <th scope="col" class="num phone-hide">Teams</th>
+                <th scope="col" class="num">Elo</th>
               </tr>
             </thead>
             <tbody>
-              {% for r in annual %}
+              {% for r in player_elo_top %}
               <tr>
-                <td class="num year">{{ r.year }}</td>
-                <td class="team"><a href="teams/{{ r.slug }}.html">{{ r.teamname }}</a><span class="team-meta team-meta--league">{{ league(r.league) }}</span></td>
+                <td class="num rank">{{ loop.index }}</td>
+                <td class="team">{% if r.slug %}<a href="players/{{ r.slug }}.html">{{ r.playername }}</a>{% else %}{{ r.playername }}{% endif %}<span class="team-meta">{{ league(r.league, show_code=False) }}{{ r.teamname }}</span></td>
+                <td class="phone-hide muted">{{ r.position }}</td>
+                <td class="teamref wide-only"><a href="teams/{{ r.teamname | slugify }}.html" title="{{ r.teamname }}">{{ r.teamname }}</a></td>
                 <td class="wide-only">{{ league(r.league) }}</td>
-                <td class="bar-col" aria-hidden="true"><span class="bar" style="--v: {{ r.score }}"></span></td>
-                <td class="num value">{{ '%.2f' | format(r.score) }}</td>
-                <td class="num phone-hide muted">{{ r.field }}</td>
+                <td class="bar-col" aria-hidden="true"><span class="bar" style="--v: {{ r.bar }}"></span></td>
+                <td class="num value">{{ r.elo | round | int }}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -80,19 +133,24 @@
     <aside class="margin" aria-labelledby="contents-heading">
       <h2 id="contents-heading" class="margin-head">Rankings</h2>
       {% for section in sections %}
-      {% set forecast = section.name == 'Forecasts' %}
-      <h3 class="contents-section">{{ section.name }}</h3>
+      <h3 class="contents-part">{{ section.name }}</h3>
       <ol class="contents">
         {% for m in section.metrics %}
+        {% set unit = 'player-seasons' if m.key == 'aura' else ('players' if section.name == 'Players' else ('team-seasons' if m.key == 'glory' else 'teams')) %}
         <li>
-          <a href="{{ m.key }}.html"><span class="contents-name">{{ m.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">{{ '{:,}'.format(entry_counts[m.key]) }}<span class="visually-hidden"> {{ 'teams' if forecast else 'team-seasons' }}</span></span></a>
-          <p class="contents-full">{{ m.full_name }}</p>
+          <a href="{{ m.key }}.html"><span class="contents-name">{{ m.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">{{ '{:,}'.format(entry_counts[m.key]) }}<span class="visually-hidden"> {{ unit }}</span></span></a>
+          <p class="contents-full">{{ m.question }}</p>
           <p class="contents-desc">{{ m.description }}</p>
         </li>
         {% endfor %}
       </ol>
       {% endfor %}
-      <p class="margin-note">Counts are team-seasons for season stats and teams for forecasts. Select any team name to see its history. Retired metrics are listed under <a href="sunset.html">Sunset stats</a>.</p>
+      <p class="margin-note">Counts are team-seasons for GLORY, teams for FORGE (major-league teams playing now) and team Elo (every team ever rated), players active in the last six months for player Elo, and major-league player-seasons with 20 or more games for AURA. Select any name to see its history. Retired metrics are listed under <a href="sunset.html">Sunset stats</a>.</p>
     </aside>
   </div>
+{% endblock %}
+{% block scripts %}
+  <script type="application/json" id="rows-data">{{ forge_rows | tojson }}</script>
+  <script type="application/json" id="page-config">{{ forge_config | tojson }}</script>
+  <script src="{{ asset('js/forecast.js') }}" defer></script>
 {% endblock %}

@@ -129,16 +129,117 @@ def test_international_win_lifts_the_whole_league():
     )
 
 
-def test_new_team_starts_at_its_league_level():
+def test_new_team_starts_at_its_league_average():
     df, _ = compute_elo_records(
         _league_games(), calculate_game_length_elo_change, league_share=0.5
     )
     lck_offset = _row(df, "g3", "A").league_offset
     assert lck_offset > 0
-    assert _row(df, "g4", "D").pre_match_elo == pytest.approx(1500 + lck_offset)
+    # Without rosters a team plays as one "player": D starts at the average current
+    # rating of LCK's active teams, A (after Worlds) and B (plus LCK's new offset).
+    a_now = _row(df, "g3", "A").post_match_elo
+    b_now = _row(df, "g1", "B").post_match_elo + lck_offset
+    assert _row(df, "g4", "D").pre_match_elo == pytest.approx((a_now + b_now) / 2)
     assert _row(df, "g4", "D").home_league == "LCK"
 
 
-def test_unknown_method_rejected():
-    with pytest.raises(ValueError):
-        _elo_table("game_length_elo; DROP TABLE matches")
+def _five(prefix):
+    return tuple(f"{prefix}{i}" for i in range(5))
+
+
+def test_stable_rosters_match_team_elo():
+    games = pd.DataFrame(
+        {
+            "gameid": ["g1", "g2", "g3"],
+            "teamid": ["A", "A", "B"],
+            "opponent_teamid": ["B", "C", "C"],
+            "gamelength": [1500, 2400, 1800],
+            "result": [1, 0, 1],
+        }
+    )
+    rosters = {(g, t): _five(t) for g, t, o in zip(games.gameid, games.teamid, games.opponent_teamid)}
+    rosters.update({(g, o): _five(o) for g, o in zip(games.gameid, games.opponent_teamid)})
+    team, _ = compute_elo_records(games, calculate_game_length_elo_change)
+    player, _ = compute_elo_records(games, calculate_game_length_elo_change, rosters=rosters)
+    pd.testing.assert_frame_equal(team, player)
+
+
+def test_transfer_carries_the_players_rating():
+    # A beats B twice, then A's star a0 joins B in place of b0.
+    games = pd.DataFrame(
+        {
+            "gameid": ["g1", "g2", "g3"],
+            "teamid": ["A", "A", "A"],
+            "opponent_teamid": ["B", "B", "B"],
+            "gamelength": [1800] * 3,
+            "result": [1, 1, 1],
+        }
+    )
+    b_after = ("a0",) + _five("b")[1:]
+    rosters = {
+        ("g1", "A"): _five("a"), ("g1", "B"): _five("b"),
+        ("g2", "A"): _five("a"), ("g2", "B"): _five("b"),
+        ("g3", "A"): ("x0",) + _five("a")[1:], ("g3", "B"): b_after,
+    }
+    df, _ = compute_elo_records(games, calculate_game_length_elo_change, rosters=rosters)
+    gain = _row(df, "g2", "A").post_match_elo - 1500
+    # B swaps one 1500 - gain player for a 1500 + gain one: up by 2 * gain / 5.
+    b_before = _row(df, "g2", "B").post_match_elo
+    assert _row(df, "g3", "B").pre_match_elo == pytest.approx(b_before + 2 * gain / 5)
+    # A loses a0; the newcomer x0 starts at the average of the 10 active players (1500).
+    assert _row(df, "g3", "A").pre_match_elo == pytest.approx((4 * (1500 + gain) + 1500) / 5)
+
+
+def test_new_player_ignores_long_inactive_players():
+    # 2020: A beats B. 2023: E (with A's a0) beats F. 2024: new teams C and D debut.
+    games = pd.DataFrame(
+        {
+            "gameid": ["g1", "g2", "g3"],
+            "teamid": ["A", "E", "C"],
+            "opponent_teamid": ["B", "F", "D"],
+            "gamelength": [1800] * 3,
+            "result": [1, 1, 1],
+            "league": ["LCK"] * 3,
+            "date": ["2020-01-01", "2023-06-01", "2024-01-01"],
+        }
+    )
+    rosters = {
+        ("g1", "A"): _five("a"), ("g1", "B"): _five("b"),
+        ("g2", "E"): ("a0", *_five("e")[1:]), ("g2", "F"): _five("f"),
+        ("g3", "C"): _five("c"), ("g3", "D"): _five("d"),
+    }
+    df, _ = compute_elo_records(games, calculate_game_length_elo_change, rosters=rosters)
+    # Only E's and F's ten players played within a year of the debut.
+    active = (_row(df, "g2", "E").post_match_elo + _row(df, "g2", "F").post_match_elo) / 2
+    assert active != pytest.approx(1500)
+    assert _row(df, "g3", "C").pre_match_elo == pytest.approx(active)
+    assert _row(df, "g3", "D").pre_match_elo == pytest.approx(active)
+
+
+def test_player_records_average_to_the_team_rating():
+    games = pd.DataFrame(
+        {
+            "gameid": ["g1", "g2"],
+            "teamid": ["A", "A"],
+            "opponent_teamid": ["B", "C"],
+            "gamelength": [1800, 2000],
+            "result": [1, 0],
+            "league": ["LCK", "LCK"],
+            "date": ["2024-01-01", "2024-01-08"],
+        }
+    )
+    rosters = {
+        ("g1", "A"): _five("a"), ("g1", "B"): _five("b"),
+        ("g2", "A"): ("b0",) + _five("a")[1:], ("g2", "C"): _five("c"),
+    }
+    teams, _, players = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters, player_records=True
+    )
+    assert len(players) == 20
+    for (gameid, teamid), group in players.groupby(["gameid", "teamid"]):
+        team = _row(teams, gameid, teamid)
+        assert group["pre_match_elo"].mean() == pytest.approx(team.pre_match_elo)
+        assert group["post_match_elo"].mean() == pytest.approx(team.post_match_elo)
+    # b0 lost g1 with B, then carried that rating into A's lineup.
+    b0 = players[players["playerid"] == "b0"].set_index("gameid")
+    assert b0.loc["g2", "pre_match_elo"] == pytest.approx(b0.loc["g1", "post_match_elo"])

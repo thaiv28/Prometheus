@@ -20,7 +20,7 @@ season" using a paired bootstrap.
 
 Usage:
     uv run python scripts/evaluate_metrics.py [--years 2022 2023] [--out report.md]
-    uv run python scripts/evaluate_metrics.py --write-weights   # refresh Form and GlorELO+ weights
+    uv run python scripts/evaluate_metrics.py --write-weights   # refresh Form and FORGE weights
     uv run python scripts/evaluate_metrics.py --check-weights   # CI: warn if they moved
 """
 
@@ -34,13 +34,14 @@ from sklearn.linear_model import LogisticRegression
 from sqlalchemy import text
 
 from prometheus import form
+from prometheus.elo import calculate_game_length_elo_change, compute_elo_records, load_elo_games
 from prometheus.evaluation import (
     elo_as_of,
     game_losses,
     out_of_year_probabilities,
     paired_bootstrap,
 )
-from prometheus.glorelo import (
+from prometheus.forge import (
     WEIGHT_TOLERANCE,
     load_weights,
     save_weights,
@@ -59,21 +60,25 @@ _IN_EVENTS = ", ".join(repr(l) for l in MAJORS + INTERNATIONAL_LEAGUES)
 
 # (key, label, inputs). `inputs` are the blue-minus-red gap columns the win curve
 # is fit on: None for the blue-side baseline, several columns for a blend, and
-# GLORELO for the published forecast (see `glorelo_probabilities`).
+# FORGE for the published forecast (see `forge_probabilities`).
 # "win_pct" is the baseline every other forecast is compared with.
-GLORELO = "glorelo"
+FORGE = "forge"
 METRICS = [
     ("blue_side", "Blue side wins", None),
     ("win_pct", "Win % so far", "win_pct"),
     ("elo", "Elo (as of cutoff)", "elo"),
     ("elo_live", "Elo (live)", "elo_live"),
+    ("team_elo_live", "Team Elo, no player ratings (live)", "team_elo_live"),
     ("form", "Form (live)", "form"),
-    ("glorelo", "GlorELO+ (live)", GLORELO),
+    ("forge", "FORGE (live)", FORGE),
 ]
 BASELINE = "win_pct"
 LABELS = {key: label for key, label, _ in METRICS}
 # Does each blend beat its strongest part on the same games?
-BLEND_CHECKS = [("glorelo", "elo_live"), ("form", "elo_live")]
+BLEND_CHECKS = [("forge", "elo_live"), ("form", "elo_live"), ("elo_live", "team_elo_live")]
+# Domestic games where player ratings should matter most: early in a season, and
+# soon after a team changed a starter. Elo (player-built) is compared with team Elo.
+ROSTER_SLICE_GAMES = 10
 
 
 def load_games():
@@ -115,6 +120,35 @@ def load_elo_timeline():
         parse_dates=["date"],
     )
     return timeline, offsets
+
+
+def load_team_elo():
+    """Pre-game Elo with each team as one unit (no player ratings), for comparison."""
+    records, _ = compute_elo_records(load_elo_games(), calculate_game_length_elo_change)
+    return records.set_index(["gameid", "teamid"])["pre_match_elo"]
+
+
+def load_roster_context():
+    """Per team-game: games played that season before it, and games since a starter changed.
+
+    A starter change is any game whose five players differ from the team's previous game.
+    """
+    stmt = """
+    SELECT m.gameid, m.teamid, m.year, m.date, group_concat(p.playerid, ',') AS players
+    FROM matches m JOIN (SELECT * FROM match_players ORDER BY playerid) p
+        ON p.gameid = m.gameid AND p.teamid = m.teamid
+    GROUP BY m.gameid, m.teamid
+    ORDER BY m.date, m.gameid
+    """
+    rows = pd.read_sql(stmt, get_engine())
+    rows["season_game"] = rows.groupby(["teamid", "year"]).cumcount()
+    changed = rows["players"] != rows.groupby("teamid")["players"].shift()
+    changed &= rows.groupby("teamid").cumcount() > 0
+    block = changed.groupby(rows["teamid"]).cumsum()
+    since = rows.groupby([rows["teamid"], block]).cumcount()
+    # Before a team's first change there is no change to count from.
+    rows["since_change"] = since.where(block > 0, np.inf)
+    return rows.set_index(["gameid", "teamid"])[["season_game", "since_change"]]
 
 
 def month_starts(dates):
@@ -161,7 +195,16 @@ def backtest(games, results, elo_timeline, years):
             rows.append(window)
 
     frame = pd.concat(rows, ignore_index=True)
-    for col in ("win_pct", "elo", "elo_live"):
+    team_elo = load_team_elo()
+    context = load_roster_context()
+    for side in ("blue", "red"):
+        key = pd.MultiIndex.from_arrays([frame["gameid"], frame[f"{side}_id"]])
+        frame[f"{side}_team_elo_live"] = team_elo.reindex(key).to_numpy()
+        for col in ("season_game", "since_change"):
+            frame[f"{side}_{col}"] = context[col].reindex(key).to_numpy()
+    for col in ("season_game", "since_change"):
+        frame[col] = np.minimum(frame[f"blue_{col}"], frame[f"red_{col}"])
+    for col in ("win_pct", "elo", "elo_live", "team_elo_live"):
         frame[col] = frame[f"blue_{col}"] - frame[f"red_{col}"]
     frame = frame.dropna(subset=["elo_live"]).reset_index(drop=True)
 
@@ -208,8 +251,8 @@ def add_form(frame, states):
     return frame.assign(form=blue - red)
 
 
-def glorelo_probabilities(frame):
-    """The published GlorELO+: Elo + Form within a league, Elo alone across leagues.
+def forge_probabilities(frame):
+    """The published FORGE: Elo + Form within a league, Elo alone across leagues.
 
     Same-league games use a curve on the Elo and Form gaps fit on same-league games;
     cross-league games use a curve on the Elo gap fit on every game.
@@ -225,7 +268,7 @@ def score(frame):
     """Per-game losses for every metric, using out-of-year win curves."""
     losses = {}
     for key, _, inputs in METRICS:
-        p = glorelo_probabilities(frame) if inputs == GLORELO else out_of_year_probabilities(frame, inputs)
+        p = forge_probabilities(frame) if inputs == FORGE else out_of_year_probabilities(frame, inputs)
         losses[key] = game_losses(p, frame["won"])
     return losses
 
@@ -263,6 +306,24 @@ def summarize(frame, losses):
                 f"- {LABELS[blend]} vs {LABELS[part]}: log loss "
                 f"{mean:+.4f} ({lo:+.4f} to {hi:+.4f})"
             )
+    domestic = frame["test_set"] == "Domestic"
+    lines.append("\n### Player-built Elo vs team Elo, where rosters matter\n")
+    lines.append("| Domestic games | Games | Team Elo log loss | Elo log loss | Difference (95% CI) |")
+    lines.append("|---|---:|---:|---:|---|")
+    n = ROSTER_SLICE_GAMES
+    for label, mask in (
+        ("All", domestic),
+        (f"Either team in its first {n} games of the season", domestic & (frame["season_game"] < n)),
+        (f"Either team within {n} games of a starter change", domestic & (frame["since_change"] < n)),
+    ):
+        mask = mask.to_numpy()
+        team = losses["team_elo_live"]["log_loss"].to_numpy()[mask]
+        player = losses["elo_live"]["log_loss"].to_numpy()[mask]
+        mean, lo, hi = paired_bootstrap(player, team)
+        lines.append(
+            f"| {label} | {int(mask.sum()):,} | {team.mean():.4f} | {player.mean():.4f} "
+            f"| {mean:+.4f} ({lo:+.4f} to {hi:+.4f}) |"
+        )
     lines.append(
         "\nLower Brier and log loss are better. A negative log-loss delta means the "
         "metric beats win % so far; an interval that excludes 0 is a real difference."
@@ -279,11 +340,11 @@ def _slopes(x, won):
 
 
 def published_weights(frame, states):
-    """Form and GlorELO+ weights for the site, fit on every backtest game.
+    """Form and FORGE weights for the site, fit on every backtest game.
 
     Returns:
-        (form_weights, glorelo_weights). Form: log-odds per unit of each stat's gap,
-        fit on domestic games. GlorELO+: elo_weight and form_weight (same-league
+        (form_weights, forge_weights). Form: log-odds per unit of each stat's gap,
+        fit on domestic games. FORGE: elo_weight and form_weight (same-league
         games) and cross_region_elo_weight (every game).
     """
     gaps = _state_gaps(frame, states)
@@ -302,23 +363,23 @@ def published_weights(frame, states):
     return form_weights, {"elo_weight": elo_w, "form_weight": form_w, "cross_region_elo_weight": cross_w}
 
 
-def format_weights(glorelo):
+def format_weights(forge):
     return (
-        "\nGlorELO+ weights (log-odds per point): "
-        + ", ".join(f"{k} = {v:.5f}" for k, v in glorelo.items())
+        "\nFORGE weights (log-odds per point): "
+        + ", ".join(f"{k} = {v:.5f}" for k, v in forge.items())
         + f". Form: half-life {form.HALF_LIFE} games, carry {form.CARRY}, prior {form.PRIOR_GAMES} games."
     )
 
 
-def _tracked_and_refit(form_weights, glorelo):
+def _tracked_and_refit(form_weights, forge):
     tracked = {**load_weights(), **{f"form_{k}": v for k, v in form.load_weights()["weights"].items()}}
-    refit = {**glorelo, **{f"form_{k}": v for k, v in form_weights.items()}}
+    refit = {**forge, **{f"form_{k}": v for k, v in form_weights.items()}}
     return tracked, refit
 
 
-def check_weights(form_weights, glorelo):
+def check_weights(form_weights, forge):
     """Compare refit weights with the tracked ones; warn (GitHub annotation) on a big move."""
-    tracked, weights = _tracked_and_refit(form_weights, glorelo)
+    tracked, weights = _tracked_and_refit(form_weights, forge)
     changes = weight_changes(tracked, weights)
     for key, change in changes.items():
         print(f"{key}: tracked {tracked[key]:.5f}, refit {weights[key]:.5f} ({change:+.1%})")
@@ -347,12 +408,12 @@ def main():
     weights_mode.add_argument(
         "--write-weights",
         action="store_true",
-        help="Save the refit Form and GlorELO+ weights (prometheus/form_weights.json, glorelo_weights.json)",
+        help="Save the refit Form and FORGE weights (prometheus/form_weights.json, forge_weights.json)",
     )
     weights_mode.add_argument(
         "--check-weights",
         action="store_true",
-        help="Only refit the Form and GlorELO+ weights and warn if they moved (skips the report)",
+        help="Only refit the Form and FORGE weights and warn if they moved (skips the report)",
     )
     args = parser.parse_args()
     if args.years and (args.write_weights or args.check_weights):
@@ -381,7 +442,7 @@ def main():
     if args.write_weights:
         save_weights(weights)
         form.save_weights(form_weights)
-        print("Saved weights to prometheus/glorelo_weights.json and prometheus/form_weights.json")
+        print("Saved weights to prometheus/forge_weights.json and prometheus/form_weights.json")
 
 
 if __name__ == "__main__":

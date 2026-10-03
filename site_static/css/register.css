@@ -236,13 +236,32 @@
   stroke: var(--paper); stroke-width: 4px; stroke-linejoin: round; paint-order: stroke;
 }
 
+/* Team rosters: the last lineup, then starters by season with substitutes under the main name. */
+.rosters { margin-bottom: 36px; }
+.register--roster { width: auto; min-width: 18rem; }
+.register--lineups td.lineup { white-space: normal; vertical-align: top; min-width: 5.5rem; }
+.lineup-main, .lineup-sub { display: block; }
+.lineup-sub { font-size: var(--fs-caption); color: var(--ink-2); margin-top: 2px; }
+.lineup-games { color: var(--ink-3); font-variant-numeric: lining-nums tabular-nums; }
+.register--lineups td.year { vertical-align: top; }
+/* Phones: each season becomes a short list, the year over role-and-name lines. */
+@media (max-width: 480px) {
+  .register--lineups thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .register--lineups tr { display: block; padding: 8px 0 10px; border-bottom: var(--hair) solid var(--hairline); }
+  .register--lineups tr:last-child { border-bottom: 2px solid var(--rule); }
+  .register.register--lineups tbody tr:nth-child(n) td { display: block; height: auto; padding: 0; border: 0; }
+  .register--lineups td.year { text-align: left; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+  .register.register--lineups tbody tr:nth-child(n) td.lineup { display: grid; grid-template-columns: 4.75rem 1fr; gap: 0 8px; min-width: 0; padding: 1px 0; }
+  .register--lineups td.lineup::before { content: attr(data-role); color: var(--ink-3); font-size: var(--fs-caption); padding-top: 2px; }
+  .lineup-sub { display: inline; margin: 0 0 0 8px; }
+}
+
+/* Player register: the team column gives way to the player's name and rating. */
+.register td.teamref { max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A team cell led by its league mark (AURA) gives the mark its room. */
+.register td.teamref--mark { max-width: 10rem; }
+
 /* ---- Season chart (team pages) -------------------------------------- */
-.block-head .metric-switch { display: inline-flex; gap: 18px; }
-.metric-switch label { cursor: pointer; font-variant-caps: all-small-caps; letter-spacing: 0.07em; color: var(--ink-3); padding: 2px 0; position: relative; }
-.metric-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.metric-switch label:has(input:checked) { color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--spot); text-decoration-thickness: 2px; text-underline-offset: 0.3em; }
-.metric-switch label:has(input:focus-visible) { outline: 2px solid var(--spot); outline-offset: 3px; }
-.metric-switch label:hover { color: var(--ink); }
 
 .season-figure { margin: 0 0 36px; }
 .season-chart {
@@ -255,8 +274,7 @@
   padding-top: 8px;
   font-variant-numeric: lining-nums tabular-nums;
 }
-.season-col { position: relative; --v: var(--glory); }
-.season-chart[data-metric="record"] .season-col { --v: var(--record); }
+.season-col { position: relative; }
 .season-bar {
   position: absolute;
   left: 22%; right: 22%;
@@ -265,7 +283,6 @@
   background: var(--ink-2);
   transform: scaleY(calc(var(--v) / 100));
   transform-origin: bottom;
-  transition: transform 320ms var(--ease-out);
 }
 .season-col:hover .season-bar { background: var(--spot); }
 .season-col::after { content: ""; position: absolute; left: -3px; right: -3px; bottom: 30px; border-bottom: var(--hair) solid var(--rule); }
@@ -277,11 +294,7 @@
   transform: translateY(calc(var(--plot-h) * var(--v) / -100));
   font-size: 0.8125rem;
   color: var(--ink-2);
-  transition: transform 320ms var(--ease-out);
 }
-.season-val--record { display: none; }
-.season-chart[data-metric="record"] .season-val--glory { display: none; }
-.season-chart[data-metric="record"] .season-val--record { display: block; }
 .season-year { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; text-align: center; font-size: 0.875rem; color: var(--ink); display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .season-year .league-mark { margin: 0; width: 0.45em; height: 0.45em; }
 
@@ -333,7 +346,6 @@
   .picker-options label { padding: 9px 4px; }
   .picker-shortcut { padding: 6px 0; }
   .register th button { padding: 6px 0; }
-  .metric-switch label { padding: 8px 0; }
 }
 @media (max-width: 480px) {
   .register .phone-hide { display: none; }
@@ -341,7 +353,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .register tbody tr.is-moving, .season-bar, .season-val { transition: none; }
+  .register tbody tr.is-moving { transition: none; }
 }
 
 @media print {
@@ -350,7 +362,7 @@
   body { background: #fff; }
 }
 
-/* ---- Head to head (GlorELO+) ---------------------------------------- */
+/* ---- Head to head (FORGE) ---------------------------------------- */
 .matchup { margin: 0 0 30px; max-width: 46rem; }
 .matchup .figure-caption { margin: 0 0 6px; }
 .matchup-title { font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--ink); font-weight: 600; }
