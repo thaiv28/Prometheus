@@ -6,6 +6,7 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -145,6 +146,50 @@ def test_player_page_renders_stints_and_links():
     assert 'id="elo-series">[["2018-05-01", 1500]' in html
 
 
+def _aura_seasons():
+    return pd.DataFrame(
+        {
+            "playerid": ["p1", "p1", "p1", "p2"],
+            "playername": ["Mid", "Mid", "Mid", "Nobody"],
+            "year": [2024, 2025, 2025, 2025],
+            "position": ["mid", "mid", "top", "mid"],
+            "teamname": ["Old Team", "New Team", "New Team", "X"],
+            "league": ["LCK", "LCK", "LCK", "LEC"],
+            "games": [40, 60, 3, 50],
+            "aura": [4.123, 6.6, -0.8, 1.0],
+            "qualified": [True, True, False, True],
+            "role_z": [1.234, 2.0, np.nan, 0.1],
+            "role_rank": [3.0, 1.0, np.nan, 5.0],
+            "role_count": [30.0, 31.0, np.nan, 31.0],
+        }
+    )
+
+
+def test_aura_rows_only_list_qualified_seasons_of_listed_players():
+    rows, by_player = build_site.aura_rows_and_seasons(_aura_seasons(), pd.Series({"p1": "mid"}))
+    assert [(r["slug"], r["year"], r["aura"]) for r in rows] == [("mid", 2024, 4.12), ("mid", 2025, 6.6)]
+    assert list(by_player) == ["mid"]  # p2 has no page
+    seasons = by_player["mid"]
+    assert [(s["year"], s["position"]) for s in seasons] == [(2025, "mid"), (2025, "top"), (2024, "mid")]
+    assert seasons[1]["role_rank"] is None and seasons[0]["role_rank"] == 1
+
+
+def test_player_page_renders_aura_by_season():
+    history, latest, seasons = _player_frames()
+    _, pages, _ = build_site.player_pages_and_rows(history, latest, seasons)
+    _, by_player = build_site.aura_rows_and_seasons(_aura_seasons(), pd.Series({"p1": "vet"}))
+    html = build_site.env.get_template("player.html.j2").render(
+        page_key="player", root_path="../", last_update="today", **pages["vet"], aura_seasons=by_player["vet"]
+    )
+    assert '<h2 id="aura-heading">AURA by season</h2>' in html
+    assert "Best AURA season 2025, +6.6 a game, 1st of 31 major-league mid laners that year." in html
+    assert "Unranked" in html and "−0.8" in html
+    plain = build_site.env.get_template("player.html.j2").render(
+        page_key="player", root_path="../", last_update="today", **pages["vet"]
+    )
+    assert "AURA by season" not in plain and "Best AURA" not in plain
+
+
 def test_team_page_renders_rosters_with_player_links():
     roster = build_site.team_rosters(_roster_history(), {"mid9": "mid9-page"}, {"mid9": 1712.4})["T1"]
     series = [{"date": "2026-02-01", "elo": 1600.0}]
@@ -180,7 +225,7 @@ def test_player_index_puts_major_leagues_first(tmp_path, monkeypatch):
 
 def test_header_menus_list_live_stats_with_their_questions():
     menus = {g["name"]: [l["key"] for l in g["links"]] for g in build_site.NAV}
-    assert menus == {"Teams": ["glory", "forge", "game_length_elo"], "Players": ["player_elo"]}
+    assert menus == {"Teams": ["glory", "forge", "game_length_elo"], "Players": ["player_elo", "aura"]}
     assert all(l["question"].endswith("?") for g in build_site.NAV for l in g["links"])
     sunset = {m["key"] for m in build_site.SUNSET}
     assert "form" in sunset and not sunset & {k for keys in menus.values() for k in keys}

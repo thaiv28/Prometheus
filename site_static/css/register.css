@@ -258,6 +258,8 @@
 
 /* Player register: the team column gives way to the player's name and rating. */
 .register td.teamref { max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A team cell led by its league mark (AURA) gives the mark its room. */
+.register td.teamref--mark { max-width: 10rem; }
 
 /* ---- Season chart (team pages) -------------------------------------- */
 

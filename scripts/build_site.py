@@ -2,6 +2,7 @@
 build_site.py: Generates static HTML site for Prometheus rankings.
 - Computes season stats (GLORY, and the sunset Record, Luck, GLORB and unadjusted
   GLORY) and forecasts (FORGE, Elo, and the sunset Form) from db/prometheus.db
+- Computes player stats (Player Elo, and AURA per player-season)
 - Renders index.html, one rankings page per metric, and one page per team
 - Outputs to output/ folder
 """
@@ -18,6 +19,7 @@ import numpy as np
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
+from prometheus import aura
 from prometheus.elo import (
     get_elo_history,
     get_latest_elos,
@@ -217,7 +219,25 @@ PLAYER_METRICS = {
         "lede_note": 2,
         "value_word": "Elo",
         "value_plural": "ratings",
-    }
+    },
+    "aura": {
+        "key": "aura",
+        "name": "AURA",
+        "full_name": "Attributable Utility via Role Analytics",
+        "question": "How much did a player's own play swing their team's chances?",
+        "entity": "player",
+        "description": "How much each player moved their team's chance of winning, from their own lane: how far ahead of their lane opponent they were at 15 minutes, plus how much more than their teammates they gained after that.",
+        "how_to_read": [
+            "AURA is in win-chance points per game. +4 means the player's play was worth about 4 percentage points of their team's chance to win each game, compared with an even lane. The two players in a lane always get opposite scores, so 0 is even with the lane opponent.",
+            "Role Z: how far a player-season is above the average one in the same role that year, in standard deviations. Lanes swing games by different amounts (bot laners' scores spread about twice as wide as supports'), so compare across roles with Role Z.",
+            "Each year a win-probability model reads every game at 15 minutes from the five lanes: gold, XP, CS, kills, deaths and assists against the lane opponent. A player's share is their lane's part of that chance, plus a quarter of how much more their own part grew than their teammates' between 15 and 25 minutes.",
+            "A season needs about 22 games before AURA is more signal than noise, so the register lists player-seasons with 20 or more games. Tested on players who changed teams, it follows the player better than lane gold or win %.",
+        ],
+        "caveats": "Only LCK, LPL, LEC and LCS games. Oracle's Elixir has no minute-by-minute data for most LPL games in 2016–2017 and 2021–2025, so LPL players are missing in those years. AURA credits a player's lane: it doesn't see objectives or fights after 25 minutes, and a jungler or support is measured against the opposing jungler or support.",
+        "lede_note": 1,
+        "value_word": "AURA",
+        "value_plural": "AURA scores",
+    },
 }
 
 # The header has one menu per entity, Teams and Players, each listing its stats by
@@ -491,6 +511,50 @@ PLAYER_ELO_COLUMNS = [
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
     {"key": "year", "label": "Season", "type": "text", "wideOnly": True, "note": 4},
 ]
+
+
+AURA_COLUMNS = [
+    {"key": "rank", "label": "Rank", "type": "rank"},
+    {"key": "playername", "label": "Player", "type": "player"},
+    {"key": "aura", "label": "AURA", "type": "number", "digits": 1, "signed": True, "bar": True, "note": 1,
+     "hint": "Win-chance points per game, against an even lane"},
+    {"key": "role_z", "label": "Role Z", "type": "number", "digits": 2, "signed": True, "phoneHide": True, "note": 2,
+     "hint": "Standard deviations above the average player-season in the same role that year"},
+    {"key": "position", "label": "Role", "type": "role", "phoneHide": True},
+    # The team carries its league mark instead of a League column, so the register fits beside the margin.
+    {"key": "teamname", "label": "Team", "type": "teamref", "mark": True, "wideOnly": True},
+    {"key": "games", "label": "Games", "type": "number", "digits": 0, "wideOnly": True, "note": 4},
+    {"key": "year", "label": "Year", "type": "text", "wideOnly": True},
+]
+
+
+def aura_rows_and_seasons(seasons, slugs):
+    """AURA register rows (qualified player-seasons of listed players) and each listed player's seasons.
+
+    `seasons` is `aura.season_aura` output; `slugs` maps playerid to page slug.
+    Returns (rows, {slug: [season, ...] newest first}).
+    """
+    listed = seasons[seasons["playerid"].isin(slugs.index)].assign(slug=lambda d: d["playerid"].map(slugs))
+    listed = listed.assign(aura=listed["aura"].round(2), role_z=listed["role_z"].round(2))
+    qualified = listed[listed["qualified"]]
+    cols = ["slug", "playername", "position", "teamname", "league", "year", "games", "aura", "role_z"]
+    rows = qualified[cols].to_dict(orient="records")
+    by_player = {}
+    for r in listed.sort_values(["year", "games"], ascending=[False, False]).itertuples():
+        by_player.setdefault(r.slug, []).append(
+            {
+                "year": int(r.year),
+                "teamname": r.teamname,
+                "team_slug": _slugify(r.teamname),
+                "league": r.league,
+                "position": r.position,
+                "games": int(r.games),
+                "aura": float(r.aura),
+                "role_rank": int(r.role_rank) if r.qualified else None,
+                "role_count": int(r.role_count) if r.qualified else None,
+            }
+        )
+    return rows, by_player
 
 
 def _team_pages(glory_df, forge_seasons, forge_now, elo_history, latest_elos, glory_qualified, rosters=None):
@@ -929,6 +993,23 @@ def main():
         last_update,
     )
 
+    # AURA per player-season (major leagues), on its own page and on player pages.
+    aura_seasons = aura.season_aura(aura.get_aura(), majors)
+    aura_rows, aura_by_player = aura_rows_and_seasons(aura_seasons, listed_players.set_index("playerid")["slug"])
+    for slug, page in player_pages.items():
+        page["aura_seasons"] = aura_by_player.get(slug, [])
+    reach = float(np.ceil(max(abs(r["aura"]) for r in aura_rows) / 5) * 5)
+    render_rankings_page(
+        PLAYER_METRICS["aura"],
+        aura_rows,
+        {"valueKey": "aura", "columns": AURA_COLUMNS, "defaultSort": "aura", "kind": "season", "entity": "player",
+         "domain": [-reach, reach]},
+        {"years": sorted({int(r["year"]) for r in aura_rows}),
+         "leagues": [l for l in majors if any(r["league"] == l for r in aura_rows)],
+         "roles": ROLE_ORDER},
+        last_update,
+    )
+
     # ---- Index and team pages -----------------------------------------------
     elo_history = get_elo_history("game_length")
     rosters = team_rosters(
@@ -942,7 +1023,8 @@ def main():
         team_elo_rows,
         player_rows,
         {"glory": len(glory_df), "forge": len(forge),
-         "game_length_elo": len(latest_elos), "player_elo": sum(r["now"] and r["active"] for r in player_rows)},
+         "game_length_elo": len(latest_elos), "player_elo": sum(r["now"] and r["active"] for r in player_rows),
+         "aura": len(aura_rows)},
         forge_config,
         last_update,
     )

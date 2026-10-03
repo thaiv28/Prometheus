@@ -41,7 +41,7 @@
       {% endif %}
 
       <figure class="dist" aria-labelledby="dist-cap">
-        <figcaption id="dist-cap" class="figure-caption">Spread of {{ value_plural | lower }} for the {{ noun }} below. <span class="dist-hint">Hover over a row to mark it on the chart.</span></figcaption>
+        <figcaption id="dist-cap" class="figure-caption">Spread of {{ value_plural if value_plural[:4].isupper() else value_plural | lower }} for the {{ noun }} below. <span class="dist-hint">Hover over a row to mark it on the chart.</span></figcaption>
         <div class="dist-plot" id="dist" role="img" aria-label="Distribution of {{ metric.title or metric.name }} values in the current view"></div>
       </figure>
 
@@ -77,6 +77,20 @@
             </div>
           </fieldset>
         </details>
+        {% if filters.roles %}
+        {% set role_names = {'top': 'Top', 'jng': 'Jungle', 'mid': 'Mid', 'bot': 'Bot', 'sup': 'Support'} %}
+        <details class="picker" data-filter="roles">
+          <summary><span class="picker-label">roles</span> <span class="picker-value" data-all="All">All</span></summary>
+          <fieldset class="picker-panel">
+            <legend class="picker-legend">Roles</legend>
+            <div class="picker-options">
+              {% for r in filters.roles %}
+              <label><input type="checkbox" value="{{ r }}" /> {{ role_names.get(r, r) }}</label>
+              {% endfor %}
+            </div>
+          </fieldset>
+        </details>
+        {% endif %}
         <label class="filter-search" for="filter-search">
           <span class="picker-label">{{ 'name' if entity == 'player' else 'team' }}</span>
           <input id="filter-search" type="search" placeholder="Any" autocomplete="off" spellcheck="false" />

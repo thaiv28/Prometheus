@@ -24,11 +24,11 @@ Prometheus is a public, browsable stat site for League of Legends esports, simil
 | **GLORY+** | Folded into GLORY | GLORY adjusted by opponents' pre-game Elo; `glory_plus.html` redirects to GLORY |
 | **GLORY (unadjusted)** | Sunset | The original GLORY with no opponent adjustment; page kept on Sunset stats |
 | **GLORB** (Baseline) | Sunset | Same features as GLORY with equal weights. On its own it predicts no better than win % so far. Its page stays up under Sunset stats. |
-| **AURA** (Attributable Utility via Role Analytics) | Research | Player win-probability attribution using 10/15/20/25-minute snapshots (see README) |
+| **AURA** (Attributable Utility via Role Analytics) | Shipped (player season stat) | Each player's share of the team's win chance at 15 minutes, from their gaps to the lane opponent (gold, XP, CS, kills, deaths, assists), plus a quarter of their change to 25 minutes beyond their teammates'. Shown per major-league player-season (20+ games) in win-chance points per game, with Role Z and role rank. Calibrated; follows a player to a new team better than lane gold or win % (`docs/aura_report.md`). |
 
 Season stats (GLORY; sunset: Record, Luck) describe a team-season with hindsight and are judged on stability and fit to that season's results (`scripts/evaluate_season_stats.py`). Forecasts (FORGE, Elo; sunset: Form) predict the next game from earlier games only and are judged by the backtest (`scripts/evaluate_metrics.py`). No forecast takes a season stat as input. A metric changes only when its benchmark improves significantly over the current version (see the rule in `AGENTS.md`).
 
-Each published stat answers one question: GLORY, how well did a team play this season? FORGE, who wins if two teams play today? Team Elo, how strong is a team now, judged by its results? Player Elo, how have a player's teams done across a career? The header's Teams and Players menus and the home contents show these questions next to the names.
+Each published stat answers one question: GLORY, how well did a team play this season? FORGE, who wins if two teams play today? Team Elo, how strong is a team now, judged by its results? Player Elo, how have a player's teams done across a career? AURA, how much did a player's own play swing their team's chances? The header's Teams and Players menus and the home contents show these questions next to the names.
 
 Scope: season stats and FORGE cover the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present; Elo and Form cover every region. Data comes from Oracle's Elixir and refreshes daily via CI.
 
@@ -42,4 +42,4 @@ Scope: season stats and FORGE cover the 4 major leagues (LCK, LPL, LEC, LCS), 20
 ## Known open questions
 
 - Whether GLORY should use logistic rather than linear regression (the README says logistic; the code uses `LinearRegression`). Form already uses logistic weights.
-- Player-level metric design (AURA). The `player_stats` schema exists, and `win_prediction.py` trains an XGBoost win-probability model.
+- AURA's open design questions: how to credit junglers and supports beyond their lane, and whether to adjust for champion matchups.

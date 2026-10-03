@@ -43,6 +43,7 @@ uv run prometheus rankings glory --league MAJOR --year 2024
 uv run python scripts/evaluate_metrics.py --out docs/metric_backtest.md   # backtest forecasts (~8s)
 uv run python scripts/evaluate_metrics.py --write-weights   # also refresh Form and FORGE weights
 uv run python scripts/evaluate_season_stats.py --out docs/season_stats_report.md   # season-stat stability (~5s)
+uv run python scripts/evaluate_aura.py --out docs/aura_report.md   # AURA calibration and player tests (~40s)
 python -m http.server -d output 8000    # preview the built site locally
 ```
 
@@ -61,7 +62,7 @@ python -m http.server -d output 8000    # preview the built site locally
 | `prometheus/form.py` | Form (Predictive GLORY): opponent-adjusted, recency-weighted per-team stat states before every game, league-relative scores; weights in `form_weights.json` |
 | `prometheus/forge.py` | FORGE: Elo + Form within a league, Elo alone between leagues; ratings and head-to-head win probability; weights in `forge_weights.json` |
 | `prometheus/elo.py` | Game-length-weighted Elo: bootstrap and query helpers (WIP) |
-| `prometheus/win_prediction.py`, `players.py`, `aura.py` | Player metric (AURA) groundwork, still experimental |
+| `prometheus/aura.py`, `scripts/evaluate_aura.py` | AURA, the player season stat: each player's share of a 15-minute win-probability model by lane plus a quarter of their team-centred gain to 25 minutes; `season_aura` gives the site's player-seasons; report in `docs/aura_report.md` |
 | `prometheus/main.py` | Typer CLI entry point (`prometheus` script) |
 | `scripts/NNN_*.sql\|py` | DB build steps. `setup_db.sh` runs them **in numeric order**. |
 | `scripts/build_site.py` | Static site generator |
@@ -75,7 +76,7 @@ python -m http.server -d output 8000    # preview the built site locally
 
 ## Conventions
 
-- **Data access is raw SQL through `pd.read_sql(stmt, utils.get_engine())`.** The project recently moved away from the SQLAlchemy ORM (`d3b361a`). Don't reintroduce ORM queries. `players.py` is a leftover that still uses table reflection.
+- **Data access is raw SQL through `pd.read_sql(stmt, utils.get_engine())`.** The project recently moved away from the SQLAlchemy ORM (`d3b361a`). Don't reintroduce ORM queries.
 - **Schema changes go in a new numbered script** (`scripts/005_*.sql`), or in `001_create_tables.sql` if the change belongs to the base schema. The DB is always rebuilt from scratch, so there are no migrations.
 - **Feature and column names live in `types.py`.** If you add a metric feature, add it there and to the SQL view that produces it (for example `003_create_glory.sql`).
 - **Retiring a metric:** give its `METRICS` or `FORECASTS` entry a `sunset` note (shown on its page) and a short `sunset_why` (shown on `sunset.html`). It leaves the header menus and home contents; the "Sunset stats" link at the end of the Teams menu leads to the list. The page and data stay.
@@ -83,6 +84,7 @@ python -m http.server -d output 8000    # preview the built site locally
 - **New metrics on the site** are registered in the `METRICS` (team season stats), `FORECASTS` / `ELO_METRICS` (team forecasts) or `PLAYER_METRICS` (player stats) dicts in `build_site.py` (including the explainer copy) and given a column config (`METRIC_COLUMNS` / `FORGE_COLUMNS` / `ELO_COLUMNS` / `PLAYER_ELO_COLUMNS`) with `kind` set to `"season"` (0–100) or `"rating"` (Elo scale), and `entity` `"player"` for player registers (default team). Each needs a `question` (the one question it answers, shown under its name in the header menu and home contents). `SECTIONS` lists them under **Teams** or **Players**, the two header menus and the two parts of the home contents. A metric's `title` ("Team Elo", "Player Elo") is its page name when the short header `name` is shared. `rankings.html.j2` and `rankings.js` render any metric from that config.
 - **Season stats vs forecasts.** Season stats (GLORY; sunset Record and Luck) may use the whole season; forecasts (FORGE, Elo; sunset Form) use only earlier games and must not take a season stat as input. Judge season stats with `evaluate_season_stats.py` and forecasts with `evaluate_metrics.py`.
 - **Change a metric only for a significant benchmark gain.** A change to how a published metric is computed (features, weights scheme, hyperparameters, method) ships only when its benchmark beats the current version on the same games or team-seasons by more than noise: for forecasts, the paired-bootstrap 95% interval of the domestic log-loss difference (`evaluate_metrics.py`) must exclude 0 and international log loss must not get significantly worse; for season stats, a paired bootstrap over team-seasons of split-half reliability or r with the other half's win % (`evaluate_season_stats.py`) must exclude 0, with neither getting significantly worse. A gain inside the noise is not a reason to change. Record each tested change and its numbers in the work log either way. Refitting the existing weights on new data (`--write-weights`) is not a metric change.
+- **AURA follows the same rule on player benchmarks** (`evaluate_aura.py`). A change to how AURA is computed (snapshot, features, weights, credit scheme, matchup adjustment) is compared with the current AURA on the same player-seasons and team-seasons, with weights fit on earlier years only and any tuning constant fixed in advance. It ships only when all of these hold: (1) a gain: the paired-bootstrap 95% interval excludes 0 for next-season r of players who changed team, or for split-half reliability, but a split-half gain counts only if the correlation of a player's score with their teammates' in the same game rises by no more than 0.05 (a score that moves with the team becomes stable by restating it); (2) it beats its team-only control (the added part replaced, for every player, by their team's average of it in that game) on the gain it claims, by a paired bootstrap, so the gain is the player's and not the team's; (3) neither split-half nor new-team r gets significantly worse, and the roster test (r with the other half's win %, paired over team-seasons) doesn't either; (4) calibration stays close (ECE under 0.01) for a model that uses only in-game snapshots. A model with end-of-game stats as features is not judged on calibration, because those stats build up for the winner. The substitution test is reported but doesn't decide on its own: teams choose their substitutes, so it is confounded and noisy. Once AURA feeds a forecast (Player Elo, FORGE), that change falls under the forecast rule above, with the backtest's roster-change slice reported.
 - **Forecast weights** live in `prometheus/form_weights.json` and `forge_weights.json` (package data), read by `form.py` and `forge.py`. After a metric or data change, rerun `evaluate_metrics.py --write-weights` and commit both. CI runs `--check-weights` and warns when a blend weight moves more than 10%.
 - `gamelength` is stored in **seconds**.
 - League names are normalized at ingest (`002_add_matches.py`): NA LCS / LTA N → `LCS`, EU LCS → `LEC`.
@@ -92,7 +94,7 @@ python -m http.server -d output 8000    # preview the built site locally
 
 ## Gotchas
 
-- `get_glory_ranking()` reads and fits one model **per year** on every call. Reading the games is the slow part, so `build_site.py` loads them once with `load_glory_games()` and passes `games=` to its calls (GLORY qualified/all, unadjusted GLORY, GLORB, Luck), and fits Record once and passes it as `record=`. A build takes about 10 seconds, about 3 of them the Form pass over every team-game.
+- `get_glory_ranking()` reads and fits one model **per year** on every call. Reading the games is the slow part, so `build_site.py` loads them once with `load_glory_games()` and passes `games=` to its calls (GLORY qualified/all, unadjusted GLORY, GLORB, Luck), and fits Record once and passes it as `record=`. A build takes about 45 seconds: about 3 for the Form pass over every team-game, about 15 for AURA (every player-game and four snapshot fits per year), and most of the rest writing about 7,000 pages.
 - International events (Worlds, MSI, ...) are ingested as their own leagues (`INTERNATIONAL_LEAGUES` in `types.py`). They are the only games linking regional Elo pools. Oracle's Elixir leaves `split` empty for them, so don't reintroduce a blanket `dropna` over `split` in `002_add_matches.py`.
 - `setup_db.sh` **deletes** `db/prometheus.db` before rebuilding.
 - Several modules end in `if __name__ == "__main__":` scratch blocks. They aren't real entry points.

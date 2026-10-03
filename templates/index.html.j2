@@ -136,7 +136,7 @@
       <h3 class="contents-part">{{ section.name }}</h3>
       <ol class="contents">
         {% for m in section.metrics %}
-        {% set unit = 'players' if section.name == 'Players' else ('team-seasons' if m.key == 'glory' else 'teams') %}
+        {% set unit = 'player-seasons' if m.key == 'aura' else ('players' if section.name == 'Players' else ('team-seasons' if m.key == 'glory' else 'teams')) %}
         <li>
           <a href="{{ m.key }}.html"><span class="contents-name">{{ m.name }}</span><span class="leader" aria-hidden="true"></span><span class="contents-count">{{ '{:,}'.format(entry_counts[m.key]) }}<span class="visually-hidden"> {{ unit }}</span></span></a>
           <p class="contents-full">{{ m.question }}</p>
@@ -145,7 +145,7 @@
         {% endfor %}
       </ol>
       {% endfor %}
-      <p class="margin-note">Counts are team-seasons for GLORY, teams for FORGE (major-league teams playing now) and team Elo (every team ever rated), and players active in the last six months for player Elo. Select any name to see its history. Retired metrics are listed under <a href="sunset.html">Sunset stats</a>.</p>
+      <p class="margin-note">Counts are team-seasons for GLORY, teams for FORGE (major-league teams playing now) and team Elo (every team ever rated), players active in the last six months for player Elo, and major-league player-seasons with 20 or more games for AURA. Select any name to see its history. Retired metrics are listed under <a href="sunset.html">Sunset stats</a>.</p>
     </aside>
   </div>
 {% endblock %}

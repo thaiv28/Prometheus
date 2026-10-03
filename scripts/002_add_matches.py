@@ -2,7 +2,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 from pathlib import Path
 
-from prometheus.types import MATCH_RAW_FEATURES, PLAYER_RAW_FEATURES, MATCHES_FEATURES
+from prometheus.types import MATCH_RAW_FEATURES, MATCHES_FEATURES, PLAYER_GAME_FEATURES, PLAYER_RAW_FEATURES
 
 
 def preprocess_player_raw_stats(df):
@@ -17,9 +17,19 @@ def preprocess_player_raw_stats(df):
         "position",
         "champion",
     ]
-    columns = required_columns + PLAYER_RAW_FEATURES
-    df = df[columns]
-    df = df.dropna(how="any")
+    df = df.rename(columns={"earned gpm": "earned_gpm"})
+    columns = required_columns + PLAYER_RAW_FEATURES + PLAYER_GAME_FEATURES
+    df = df[columns].copy()
+    # Same fallback id as match_players, so short of a snapshot no starter is lost.
+    df["playername"] = df["playername"].fillna("unknown").astype(str)
+    df["playerid"] = df["playerid"].where(
+        df["playerid"].notna(), "name:" + df["playername"] + "|" + df["teamid"].astype(str)
+    )
+    # Games without snapshots ("partial" data) are dropped. The 20- and 25-minute
+    # snapshots are missing when the game ended first; keep those games, or the
+    # table loses most stomps.
+    early = [c for c in PLAYER_RAW_FEATURES if not c.endswith(("at20", "at25"))]
+    df = df.dropna(subset=required_columns + early)
 
     return df
 

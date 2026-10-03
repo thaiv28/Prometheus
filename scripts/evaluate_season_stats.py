@@ -25,7 +25,6 @@ Usage:
 
 import argparse
 import datetime
-import hashlib
 
 import numpy as np
 import pandas as pd
@@ -33,6 +32,7 @@ import pandas as pd
 from prometheus.evaluation import (
     correlation_interval,
     games_for_reliability,
+    half_of,
     spearman_brown,
 )
 from prometheus.matches import team_season_averages
@@ -67,11 +67,6 @@ STATS = [
     ("record", "Record"),
     ("luck", "Luck"),
 ]
-
-
-def half_of(gameids):
-    """0 or 1 for each game, from a hash of its id (stable across runs)."""
-    return gameids.map(lambda g: int(hashlib.md5(str(g).encode()).hexdigest()[:8], 16) % 2)
 
 
 def _by_half(frame, value):
