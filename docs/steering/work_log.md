@@ -2,6 +2,12 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-02 — Sticky margin scrolls when taller than the window
+
+- User report: on `aura.html` the "How to read AURA" notes couldn't be read to the end without scrolling past the whole register, because the sticky margin was taller than the window. `.margin` in `base.css` now has `max-height: calc(100vh - 48px)`, `overflow-y: auto`, `overscroll-behavior: contain` and a thin scrollbar; under 1000px (static margin) those are reset. DESIGN.md updated.
+- Verification: `build_site.py`; Playwright at 1440×800 and 1280×720 on `aura.html`: wheel over the margin scrolls it to its end (scrollTop 277 and 357 = full overflow) while the page stays at 0; GLORY and Chovy's page margins fit and don't scroll; 390px margin is static and uncapped. `uv run pytest -q` passed 90.
+- Limit: with the page at the very top, the margin starts below the header, so its last ~70px sit below the window until the page scrolls enough for the margin to stick.
+
 ## 2026-10-02 — AURA on the site: season stat, AURA page, player-page register
 
 - **Season AURA** (`aura.season_aura`, `POINTS` = 25, `SEASON_GAMES` = 20). One row per major-league (player, year, role): games, mean AURA in win-chance points per game (25 × log-odds, the logistic slope at an even game), team and league played most, and for 20+ games Role Z, role rank and count. Minimum from the split-half numbers: half-season r 0.587 at 31 games a half, so about 22 games to reach 0.5 reliability (51 for 0.7); 2,503 qualified player-seasons. Role spreads differ (SD at 15+ games: sup 2.3, jng 3.3, top 3.7, mid 4.4, bot 4.9), hence Role Z. Display unit and placement chosen by the user (win-chance points with Role Z; player pages, not home).

@@ -181,7 +181,7 @@ Paper and ink, plus one spot and four league inks. The strategy is Restrained.
 
 ## Layout
 
-A page is 82rem max with a fluid gutter (16 to 48px). The running head and colophon align to the content edges. Content is a two-column spread: the main column and a 17rem margin, 32 to 56px apart; the margin is sticky on desktop. Under 1000px the margin follows the main column (on the home page, the Contents moves between the intro and the tables). Under 720px the running head stacks (wordmark, sections, full-width index search), registers scroll horizontally edge to edge, wide-only columns hide and their league and year fold under the team name, and fact lines drop their middle-dot separators. Under 480px phone-hide columns drop.
+A page is 82rem max with a fluid gutter (16 to 48px). The running head and colophon align to the content edges. Content is a two-column spread: the main column and a 17rem margin, 32 to 56px apart; the margin is sticky on desktop and, when its notes run taller than the window (AURA), scrolls on its own within the window's height (thin scrollbar, no scroll chaining to the page). Under 1000px the margin follows the main column (on the home page, the Contents moves between the intro and the tables). Under 720px the running head stacks (wordmark, sections, full-width index search), registers scroll horizontally edge to edge, wide-only columns hide and their league and year fold under the team name, and fact lines drop their middle-dot separators. Under 480px phone-hide columns drop.
 
 Rhythm: 4px base, captions 8px above their table, 44px between registers, 36px between a page title and its body.
 

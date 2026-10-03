@@ -161,6 +161,12 @@ html { scrollbar-color: var(--hairline) var(--paper); }
 .margin {
   position: sticky;
   top: 24px;
+  /* A margin taller than the window scrolls on its own, so its last notes are
+     reachable without scrolling past the whole register. */
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   font-size: var(--fs-small);
   line-height: 1.45;
   color: var(--ink-2);
@@ -271,7 +277,7 @@ html { scrollbar-color: var(--hairline) var(--paper); }
 /* ---- Responsive ----------------------------------------------------- */
 @media (max-width: 1000px) {
   .spread { grid-template-columns: minmax(0, 1fr); }
-  .margin { position: static; margin-top: 40px; max-width: 40rem; }
+  .margin { position: static; max-height: none; overflow: visible; margin-top: 40px; max-width: 40rem; }
   .spread--home .spread-main { display: contents; }
   .spread--home .intro { order: 1; }
   .spread--home .spotlight { order: 2; }
