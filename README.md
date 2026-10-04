@@ -130,6 +130,13 @@ For every team, a running average of its recent per-game stats, each game adjust
 
 #### FORGE - the headline forecast
 Between teams from the same league: a logistic curve on their Elo gap and Form gap, shown as a rating (Elo plus Form in Elo points). Between leagues: Elo alone, because Form only compares a team with its league; adding it made cross-region forecasts worse in the backtest.
+### Predictions
+[prometheus.thaiv.dev/predictions.html](https://prometheus.thaiv.dev/predictions.html) calls every scheduled pro match between two teams Prometheus rates. The schedule comes from Leaguepedia's Cargo API (`prometheus/schedule.py`); names are matched to Oracle's Elixir teams, and each match gets FORGE odds within a major league, Elo odds across leagues and within other leagues, turned into a series chance for best-of-3 and best-of-5. Calls are saved in a log, refreshed daily until the match starts and then frozen, and scored against the results (series and games picked, log loss). In the terminal:
+
+```
+$ prometheus predict --days 2 --major
+```
+
 ### How accurate are the metrics?
 `scripts/evaluate_metrics.py` backtests the forecasts. Each game is predicted from earlier games only: from ratings at the start of the month, or from each team's rating going into the game ("live"). Results are scored by accuracy, Brier score and log loss, and compared with a simple baseline (win % so far this season) using a paired bootstrap. International games between teams from different major regions are scored separately, because they are the only direct test of cross-region strength. Latest results: [docs/metric_backtest.md](docs/metric_backtest.md).
 

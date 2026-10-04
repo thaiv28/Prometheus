@@ -1,6 +1,7 @@
 """Unit tests for the site builder's pure parts: slugs, player listing, rosters,
 templates and the search index. No database: frames are built by hand."""
 
+import datetime
 import importlib.util
 import json
 import sys
@@ -9,6 +10,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+
+from prometheus.schedule import series_probability
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -238,3 +241,63 @@ def test_header_marks_the_menu_that_leads_to_the_page():
     assert '<summary data-current>Teams</summary>' in html
     assert '<summary>Players</summary>' in html
     assert 'href="sunset.html"' in html
+
+
+def _log():
+    """A prediction log: one LCK match tomorrow, one Worlds match next week, one
+    reconstructed EM result, and one unmatched match."""
+    def entry(mid, start, league, p, **extra):
+        return {"match_id": mid, "start": start, "team1": f"{mid}-a", "team2": f"{mid}-b (Team)",
+                "ours1": "T1", "ours2": None if extra.pop("unmatched", False) else "Gen.G",
+                "best_of": 3, "league": league, "home1": "LCK", "home2": "LCK", "event": "Cup", "matched": True,
+                "p_game": p, "p_series": schedule_series(p), "method": "forge", **extra}
+    return {
+        "soon": entry("soon", "2026-10-04T08:00Z", "LCK", 0.6),
+        "later": entry("later", "2026-10-12T08:00Z", "Worlds", 0.4),
+        "past": entry("past", "2026-09-20T08:00Z", "EM", 0.7, winner=2, score1=1, score2=2, reconstructed=True),
+        "nope": {"match_id": "nope", "start": "2026-10-04T09:00Z", "matched": False, "league": "EM"},
+    }
+
+
+def schedule_series(p):
+    return series_probability(p, 3)
+
+
+def test_predictions_view_splits_upcoming_past_and_home():
+    now = datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.timezone.utc)
+    view = build_site.predictions_view(_log(), {"t1"}, now)
+    assert [r["id"] for d in view["upcoming"] for r in d["rows"]] == ["soon", "later"]
+    assert [r["id"] for d in view["past"] for r in d["rows"]] == ["past"]
+    # Home: major and international matches within four days only.
+    assert [r["id"] for d in view["home"] for r in d["rows"]] == ["soon"]
+    soon = view["upcoming"][0]["rows"][0]
+    assert soon["pct1"] + soon["pct2"] == 100 and soon["fav"] == 1
+    assert soon["slug1"] == "t1" and soon["slug2"] is None  # Gen.G has no page here
+    assert view["upcoming"][0]["label"] == "Sunday 4 October"
+    past = view["past"][0]["rows"][0]
+    assert past["call"] == "missed" and past["score"] == "1–2" and past["reconstructed"]
+    assert view["scorecard"][1]["series"] == 1 and view["scorecard"][0]["series"] == 0
+    assert view["leagues"][:2] == ["LCK", "Worlds"]
+
+
+def test_fixture_row_names_fall_back_to_leaguepedia_without_disambiguation():
+    entry = {**_log()["soon"], "ours2": None}
+    row = build_site.fixture_row(entry, set())
+    assert row["name2"] == "soon-b" and row["slug1"] is None
+
+
+def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
+    monkeypatch.setattr(build_site, "OUTPUT_DIR", str(tmp_path))
+    view = build_site.predictions_view(_log(), {"t1"}, datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.timezone.utc))
+    build_site.render_predictions(view, {"matches": 4, "matched": 3, "unmatched": []}, "October 3, 2026")
+    html = (tmp_path / "predictions.html").read_text()
+    assert 'aria-current="page">Predictions' in html
+    assert 'data-start="2026-10-04T08:00Z"' in html and "Sunday 4 October" in html
+    assert "Missed" in html and 'href="#note-3"' in html
+    assert "3 of 4 scheduled matches" in html
+    assert 'data-select="LCK,LPL,LEC,LCS,Worlds' in html
+    # The home page's compact table: no method column, no results.
+    home = build_site.env.from_string(
+        "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days, compact=True) }}"
+    ).render(days=view["home"])
+    assert "fx-by" not in home and "Result" not in home and 'colspan="9"' in home

@@ -7,7 +7,7 @@ related_targets: ["templates/base.html.j2","templates/index.html.j2","templates/
 
 # Surface brief: Prometheus site (all pages)
 
-Scope: the whole static site: home, the rankings pages, listed in the header's Teams menu (GLORY, FORGE with its head-to-head box, Team Elo) and Players menu (Player Elo, AURA with a role filter), a Sunset stats page for retired metrics (Form, Record, Luck, GLORB, unadjusted GLORY, GLORY+), one page per player, one page per team, and 404. Visitor mode: **Operate** (rankings, team pages) with a **Read** home and explainers. Fans look up, filter, sort and share team rankings; the home page orients them and leads with the FORGE forecast.
+Scope: the whole static site: home, the rankings pages, listed in the header's Teams menu (GLORY, FORGE with its head-to-head box, Team Elo) and Players menu (Player Elo, AURA with a role filter), a Predictions page (header link: upcoming matches with series odds, the record so far, past calls with results, in the fixture register) and a *Coming up* table on home, a Sunset stats page for retired metrics (Form, Record, Luck, GLORB, unadjusted GLORY, GLORY+), one page per player, one page per team, and 404. Visitor mode: **Operate** (rankings, team pages) with a **Read** home and explainers. Fans look up, filter, sort and share team rankings; the home page orients them and leads with the FORGE forecast.
 
 Audience/job: LoL esports fans settling cross-era and cross-region arguments, on desktops and on phones from Discord/Reddit links. Task: find a team-season, see its rank and why, share the filtered view by URL. Secondary: portfolio readers judging the methodology.
 

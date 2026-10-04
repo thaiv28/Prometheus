@@ -24,3 +24,59 @@
 </optgroup>
 {%- endfor %}
 {%- endmacro %}
+
+{#- The fixture register: matches grouped by day, each team's series chance either
+    side of a duel bar. `days` from `predictions_view`; `results` adds the score
+    and the call; `root` prefixes team links; `compact` (home) drops the method
+    column. Rows carry data-start (UTC) so predictions.js can set local times and
+    regroup the days, and data-league / data-teams for its filters. -#}
+{% macro fixtures(days, results=False, root='', compact=False, id='') -%}
+{%- set by = not compact and not results -%}
+<table class="register register--fixtures{% if results %} register--results{% endif %}"{% if id %} id="{{ id }}"{% endif %}>
+  <thead>
+    <tr>
+      <th scope="col" class="fx-time">{{ 'Time' }}<span class="fx-tz"> (UTC)</span></th>
+      <th scope="col" class="wide-only">League</th>
+      <th scope="col" class="fx-team fx-team--1"><span class="visually-hidden">First team</span></th>
+      <th scope="colgroup" colspan="3" class="fx-series-head" title="Each team's chance of winning the series, in 100">Series chance{% if not compact %}<sup class="th-note" aria-hidden="true">1</sup>{% endif %}</th>
+      <th scope="col" class="fx-team fx-team--2"><span class="visually-hidden">Second team</span></th>
+      {% if not results %}<th scope="col" class="phone-hide">Bo</th>{% endif %}
+      {% if not results %}<th scope="col" class="num phone-hide" title="Chance of winning one game, first team–second team">One game{% if not compact %}<sup class="th-note" aria-hidden="true">1</sup>{% endif %}</th>{% endif %}
+      {% if by %}<th scope="col" class="wide-only">By{% if not compact %}<sup class="th-note" aria-hidden="true">2</sup>{% endif %}</th>{% endif %}
+      {% if results %}<th scope="col" class="num">Result</th><th scope="col">Call</th>{% endif %}
+    </tr>
+  </thead>
+  {% for day in days %}
+  <tbody class="fx-day" data-day="{{ day.day }}">
+    <tr class="fx-day-row"><th scope="rowgroup" colspan="{{ 10 if by else 9 }}">{{ day.label }}</th></tr>
+    {% for r in day.rows %}
+    <tr class="fx" data-start="{{ r.start }}" data-league="{{ r.league }}" data-teams="{{ r.name1 }}|{{ r.name2 }}"{% if r.winner %} data-winner="{{ r.winner }}"{% endif %}>
+      <td class="fx-time"><time datetime="{{ r.start | replace('Z', ':00Z') }}">{{ r.time }}</time><span class="fx-meta">{{ league(r.league, show_code=False) }}</span></td>
+      <td class="wide-only" title="{{ r.event }}">{{ league(r.league) }}</td>
+      {% for side in [1, 2] %}
+      {% set name = r['name' ~ side] %}{% set slug = r['slug' ~ side] %}
+      {% set cls = 'fx-fav' if r.fav == side else ('fx-dog' if r.fav else '') %}
+      {% if side == 2 %}
+      <td class="fx-bar-col" aria-hidden="true" title="Called by {{ r.method }}{{ ' alone, across leagues' if r.cross }}"><span class="fx-bar" style="--p: {{ r.pct1 }}"></span></td>
+      {% endif %}
+      {% if side == 1 %}
+      <td class="fx-team fx-team--1 {{ cls }}{% if r.winner == 1 %} fx-won{% endif %}">{% if slug %}<a href="{{ root }}teams/{{ slug }}.html">{{ name }}</a>{% else %}{{ name }}{% endif %}</td>
+      <td class="num fx-pct {{ cls }}">{{ r.pct1 }}</td>
+      {% else %}
+      <td class="fx-pct {{ cls }}">{{ r.pct2 }}</td>
+      <td class="fx-team fx-team--2 {{ cls }}{% if r.winner == 2 %} fx-won{% endif %}">{% if slug %}<a href="{{ root }}teams/{{ slug }}.html">{{ name }}</a>{% else %}{{ name }}{% endif %}</td>
+      {% endif %}
+      {% endfor %}
+      {% if not results %}<td class="fx-bo">Bo{{ r.best_of }}</td>{% endif %}
+      {% if not results %}<td class="num phone-hide fx-game">{% if r.best_of > 1 %}{{ r.game1 }}–{{ r.game2 }}{% else %}<span class="muted">same</span>{% endif %}</td>{% endif %}
+      {% if by %}<td class="wide-only fx-by">{{ r.method }}{% if r.cross %}<span class="fx-cross" title="Teams from different leagues: Elo alone"> across</span>{% endif %}</td>{% endif %}
+      {% if results %}
+      <td class="num fx-score" title="Best of {{ r.best_of }}">{{ r.score or '—' }}</td>
+      <td class="fx-call fx-call--{{ r.call or 'pending' }}">{% if r.call == 'right' %}Right{% elif r.call == 'missed' %}Missed{% elif r.call == 'even' %}Even{% else %}<i>To come</i>{% endif %}{% if r.reconstructed %}<a class="note-ref" href="#note-3" aria-label="Rebuilt after the match: note 3">3</a>{% endif %}</td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+  {% endfor %}
+</table>
+{%- endmacro %}

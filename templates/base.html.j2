@@ -28,6 +28,7 @@
     <a class="wordmark" href="{{ _root }}index.html"><svg class="wordmark-mark" viewBox="0 0 20 24" aria-hidden="true"><path d="M3 2h8.2C15.6 2 18 4.4 18 8s-2.4 6-6.8 6H8v8H3zM8 6v4h3c1.4 0 2.2-.8 2.2-2S12.4 6 11 6z"/></svg><span class="wordmark-text">Prometheus</span></a>
     <nav class="sections" aria-label="Sections">
       <a href="{{ _root }}index.html"{% if page_key == 'index' %} aria-current="page"{% endif %}>Home</a>
+      <a href="{{ _root }}predictions.html"{% if page_key == 'predictions' %} aria-current="page"{% endif %}>Predictions</a>
       {#- One menu per entity. It is marked current on any of its stat pages, and on
           team, player, sunset and retired-metric pages for the menu that leads there. -#}
       {% for group in nav %}

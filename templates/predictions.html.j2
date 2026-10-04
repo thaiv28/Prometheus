@@ -1,0 +1,113 @@
+{% extends 'base.html.j2' %}
+{% from '_marks.html.j2' import fixtures, league %}
+{% block title %}Predictions · Prometheus{% endblock %}
+{% block description %}{{ metric.description }}{% endblock %}
+{% block canonical_path %}predictions.html{% endblock %}
+{% block content %}
+  <div class="spread">
+    <div class="spread-main">
+      <header class="section-head">
+        <h1>{{ metric.name }} <span class="full-name">{{ metric.full_name }}</span></h1>
+        <p class="lede">{{ metric.description }} A call is saved before its match starts and never changed afterwards.<a class="note-ref" href="#note-3" aria-label="Note 3">3</a></p>
+      </header>
+
+      <div class="filter-line" role="group" aria-label="Filters" hidden>
+        <span class="filter-lead">Filter</span>
+        <details class="picker" data-filter="leagues">
+          <summary><span class="picker-label">leagues</span> <span class="picker-value" data-all="All">All</span></summary>
+          <fieldset class="picker-panel picker-panel--leagues">
+            <legend class="picker-legend">Leagues</legend>
+            <button type="button" class="picker-shortcut" data-select="{{ view.major_set | join(',') }}">Major leagues and international events</button>
+            <div class="picker-options">
+              {% for l in view.leagues %}
+              <label data-league="{{ l }}"><input type="checkbox" value="{{ l }}" /> <span class="league-mark" aria-hidden="true"></span>{{ l }}</label>
+              {% endfor %}
+            </div>
+          </fieldset>
+        </details>
+        <label class="filter-search" for="filter-search">
+          <span class="picker-label">team</span>
+          <input id="filter-search" type="search" placeholder="Any" autocomplete="off" spellcheck="false" />
+        </label>
+        <button type="button" class="clear-filters" hidden>Clear filters</button>
+      </div>
+
+      <section class="fixtures-block" aria-labelledby="upcoming-heading">
+        <div class="block-head">
+          <h2 id="upcoming-heading">Coming up</h2>
+        </div>
+        <figure class="register-figure" aria-labelledby="upcoming-cap">
+          <figcaption id="upcoming-cap" class="table-caption">Table I. The next {{ view.upcoming_count }} matches between teams we rate, soonest first, with each team’s chance of taking the series.<a class="note-ref" href="#note-dagger" aria-label="Caveat">†</a> <span class="count" data-count-for="upcoming" aria-live="polite"></span></figcaption>
+          {% if view.upcoming %}
+          <div class="table-scroll">{{ fixtures(view.upcoming, id='upcoming') }}</div>
+          {% endif %}
+          <p class="empty fx-empty" data-empty-for="upcoming"{% if view.upcoming %} hidden{% endif %}>{% if view.upcoming %}No upcoming match fits these filters.{% else %}No matches between teams we rate are scheduled in the next week.{% endif %}</p>
+        </figure>
+      </section>
+
+      <section class="fixtures-block" aria-labelledby="record-heading">
+        <div class="block-head">
+          <h2 id="record-heading">How the calls have done</h2>
+        </div>
+        {% set saved = view.scorecard[0] %}
+        <p class="section-prose">{% if saved.series %}Of the {{ saved.series }} series called before they were played{% if view.saved_since %} since {{ view.saved_since | longdate }}{% endif %}, the favourite won {{ saved.right | round | int }} ({{ saved.series_pct | round | int }} in 100).{% else %}No series called before it was played has finished yet; the first saved calls are in Table I.{% endif %} {% if view.scorecard[1].series %}Calls rebuilt for the {{ view.scorecard[1].series }} series played before the log began picked {{ view.scorecard[1].series_pct | round | int }} in 100.{% endif %}</p>
+        <figure class="register-figure" aria-labelledby="record-cap">
+          <figcaption id="record-cap" class="table-caption">Table II. The record so far, by series and by game.<a class="note-ref" href="#note-4" aria-label="Note 4">4</a></figcaption>
+          <div class="table-scroll">
+            <table class="register register--record">
+              <thead>
+                <tr>
+                  <th scope="col">Calls</th>
+                  <th scope="col" class="num">Series</th>
+                  <th scope="col" class="num">Favourite won</th>
+                  <th scope="col" class="num phone-hide">Games</th>
+                  <th scope="col" class="num phone-hide">Picked</th>
+                  <th scope="col" class="num">Log loss</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in view.scorecard %}
+                <tr{% if loop.last %} class="record-total"{% endif %}>
+                  <th scope="row">{{ row.label }}{% if row.label == 'Reconstructed' %}<a class="note-ref" href="#note-3" aria-label="Note 3">3</a>{% endif %}</th>
+                  <td class="num">{{ row.series }}</td>
+                  <td class="num value">{% if row.series %}{{ row.series_pct | round(1) }}<span class="of"> %</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+                  <td class="num phone-hide">{{ row.games | round | int }}</td>
+                  <td class="num phone-hide">{% if row.games %}{{ row.games_pct | round(1) }}<span class="of"> %</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+                  <td class="num">{% if row.games %}{{ '%.3f' | format(row.log_loss) }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </figure>
+      </section>
+
+      <section class="fixtures-block" aria-labelledby="past-heading">
+        <div class="block-head">
+          <h2 id="past-heading">Results</h2>
+          <a class="more" href="predictions.json">Every call as data</a>
+        </div>
+        <figure class="register-figure register-figure--main" aria-labelledby="past-cap">
+          <figcaption id="past-cap" class="table-caption">Table III. Every call and its result{% if view.since %} since {{ view.since | longdate }}{% endif %}, newest first. <span class="count" data-count-for="past" aria-live="polite"></span></figcaption>
+          {% if view.past %}
+          <div class="table-scroll">{{ fixtures(view.past, results=True, id='past') }}</div>
+          {% endif %}
+          <p class="empty fx-empty" data-empty-for="past"{% if view.past %} hidden{% endif %}>{% if view.past %}No result fits these filters.{% else %}No results yet.{% endif %}</p>
+        </figure>
+      </section>
+    </div>
+
+    <aside class="margin notes" id="about" aria-labelledby="about-heading">
+      <h2 id="about-heading" class="margin-head">How to read the predictions</h2>
+      <ol class="notes-list">
+        {% for line in metric.how_to_read %}
+        <li id="note-{{ loop.index }}"><span class="note-mark" aria-hidden="true">{{ loop.index }}</span>{{ line }}</li>
+        {% endfor %}
+        <li id="note-dagger" class="caveat"><span class="note-mark" aria-hidden="true">†</span><span class="visually-hidden">Caveat: </span>{{ metric.caveats }}{% if coverage %} In this update, {{ coverage.matched }} of {{ coverage.matches }} scheduled matches could be rated.{% endif %}</li>
+      </ol>
+    </aside>
+  </div>
+{% endblock %}
+{% block scripts %}
+  <script src="{{ asset('js/predictions.js') }}" defer></script>
+{% endblock %}

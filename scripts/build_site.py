@@ -3,6 +3,8 @@ build_site.py: Generates static HTML site for Prometheus rankings.
 - Computes season stats (GLORY, and the sunset Record, Luck, GLORB and unadjusted
   GLORY) and forecasts (FORGE, Elo, and the sunset Form) from db/prometheus.db
 - Computes player stats (Player Elo, and AURA per player-season)
+- Fetches upcoming and recent matches from Leaguepedia, predicts them, and keeps
+  a prediction log (prometheus.schedule); renders predictions.html
 - Renders index.html, one rankings page per metric, and one page per team
 - Outputs to output/ folder
 """
@@ -19,7 +21,7 @@ import numpy as np
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
-from prometheus import aura
+from prometheus import aura, schedule
 from prometheus.elo import (
     get_elo_history,
     get_latest_elos,
@@ -266,6 +268,27 @@ NAV = [
     }
     for s in SECTIONS
 ]
+PREDICTIONS = {
+    "key": "predictions",
+    "name": "Predictions",
+    "full_name": "Every match we can rate, called before it is played",
+    "question": "Who wins the matches coming up?",
+    "description": "Every scheduled pro match between two teams Prometheus rates, with each team's chance of taking the series, and every past call next to its result.",
+    "how_to_read": [
+        "The figures either side of the bar are each team's chance of winning the series, in 100. One game gives the chance of winning a single game; a series chance follows from it, treating the games as independent, so a favourite is a bigger favourite over five games than over one.",
+        "Two teams from the same major league (LCK, LPL, LEC, LCS) are called by FORGE. Teams from different leagues are called by Elo alone, on a curve fit to international games, as in FORGE's head to head. Two teams from any other league are called by their Elo.",
+        "A match's call is refreshed at every daily update until it starts, then frozen. Matches that had already been played when the log began carry a call rebuilt from the ratings as they stood the day before, marked with this note. They use only earlier games, but the forecast weights were fit on data that includes them, so trust the calls saved before the match more.",
+        "Log loss scores the one-game chance against every game played: a coin flip scores 0.693, and lower is better. It punishes a confident miss more than a timid one.",
+    ],
+    "caveats": "The schedule comes from Leaguepedia. Matches with a team Oracle's Elixir doesn't cover can't be rated and aren't shown. Calls ignore side selection, roster changes since a team's last game, and new patches. Times are in your time zone.",
+}
+# The home page lists this many upcoming major-league and international matches,
+# within this many days.
+HOME_FIXTURES = 10
+HOME_FIXTURE_DAYS = 4
+# The prediction log; CI restores it from and saves it to the data backup bucket.
+PREDICTIONS_LOG = os.environ.get("PREDICTIONS_LOG", os.path.join(ROOT_DIR, "data", "predictions.json"))
+
 # Players get a page if they ever played in a major league or at an international
 # event, or played anywhere within this window of the newest game.
 PLAYER_PAGE_WINDOW = pd.Timedelta(days=730)
@@ -277,6 +300,7 @@ env = Environment(
 )
 env.globals.update(
     nav=NAV,
+    predictions_nav=PREDICTIONS,
     sunset_keys=[m["key"] for m in SUNSET],
     site_url=SITE_URL,
     major_leagues=[l.value for l in ALL_MAJOR_LEAGUES],
@@ -386,7 +410,7 @@ def _rating_bar(values):
     return lambda v: round(float((v - lo) / (hi - lo) * 100), 1)
 
 
-def render_index(forge_rows, team_elo_rows, player_rows, entry_counts, forge_config, last_update):
+def render_index(forge_rows, team_elo_rows, player_rows, entry_counts, forge_config, last_update, fixtures=None):
     """Home: FORGE's head to head and top teams, then the top of team and player Elo.
 
     Each `*_rows` argument holds the register's "now" rows (every current team or
@@ -412,6 +436,7 @@ def render_index(forge_rows, team_elo_rows, player_rows, entry_counts, forge_con
             forge_top=top(forge_now, "forge"),
             forge_rows=sorted(forge_now, key=lambda r: -r["forge"]),
             forge_config=forge_config,
+            fixtures=fixtures or [],
             team_elo=ELO_METRICS["game_length_elo"],
             team_elo_top=top([r for r in team_elo_rows if r["now"]], "elo"),
             player_elo=PLAYER_METRICS["player_elo"],
@@ -633,6 +658,128 @@ def _team_pages(glory_df, forge_seasons, forge_now, elo_history, latest_elos, gl
             "roster": (rosters or {}).get(team),
         }
     return pages
+
+
+def _pct_pair(p):
+    """A chance as two whole numbers that add to 100, never 0 or 100."""
+    a = min(99, max(1, round(p * 100)))
+    return a, 100 - a
+
+
+def fixture_row(entry, team_slugs):
+    """One match as the fixture register shows it.
+
+    `team_slugs` holds the slugs of teams that have a page, so names link only
+    when there is somewhere to go.
+    """
+    start = datetime.datetime.strptime(entry["start"], "%Y-%m-%dT%H:%MZ")
+    pct1, pct2 = _pct_pair(entry["p_series"])
+    game1, game2 = _pct_pair(entry["p_game"])
+    row = {
+        "id": entry["match_id"],
+        "start": entry["start"],
+        "day": start.strftime("%Y-%m-%d"),
+        "time": start.strftime("%H:%M"),
+        "league": entry["league"],
+        "event": entry.get("event") or "",
+        "best_of": entry["best_of"],
+        "pct1": pct1,
+        "pct2": pct2,
+        "game1": game1,
+        "game2": game2,
+        "fav": 1 if entry["p_series"] > 0.5 else 2 if entry["p_series"] < 0.5 else 0,
+        "method": "FORGE" if entry["method"] == "forge" else "Elo",
+        "cross": entry["method"] == "elo-cross",
+        "reconstructed": bool(entry.get("reconstructed")),
+        "winner": entry.get("winner"),
+    }
+    for side in (1, 2):
+        name = schedule.display_name(entry, side)
+        slug = _slugify(entry[f"ours{side}"]) if entry.get(f"ours{side}") else None
+        row[f"name{side}"] = name
+        row[f"slug{side}"] = slug if slug in team_slugs else None
+    if row["winner"] in (1, 2):
+        s1, s2 = entry.get("score1"), entry.get("score2")
+        row["score"] = f"{s1}–{s2}" if s1 is not None and s2 is not None else ("W–L" if row["winner"] == 1 else "L–W")
+        row["call"] = "even" if row["fav"] == 0 else ("right" if row["fav"] == row["winner"] else "missed")
+    return row
+
+
+def _by_day(rows):
+    """[(day ISO, label, rows)] in the order the rows come."""
+    days = []
+    for r in rows:
+        if not days or days[-1][0] != r["day"]:
+            d = datetime.date.fromisoformat(r["day"])
+            days.append((r["day"], f"{d.strftime('%A')} {d.day} {d.strftime('%B')}", []))
+        days[-1][2].append(r)
+    return [{"day": d, "label": label, "rows": rs} for d, label, rs in days]
+
+
+def predictions_view(log, team_slugs, now):
+    """Upcoming and past fixture rows, the scorecard, and the home page's fixtures.
+
+    Only matches between two teams we rate are shown. Upcoming: not started,
+    soonest first. Past: started, newest first (a started match without a result
+    yet shows as awaiting one).
+    """
+    now_s = now.strftime("%Y-%m-%dT%H:%MZ")
+    entries = [e for e in log.values() if e.get("matched")]
+    upcoming = sorted((e for e in entries if e["start"] > now_s), key=lambda e: (e["start"], e["match_id"]))
+    past = sorted((e for e in entries if e["start"] <= now_s), key=lambda e: (e["start"], e["match_id"]), reverse=True)
+    up_rows = [fixture_row(e, team_slugs) for e in upcoming]
+    horizon = (now + datetime.timedelta(days=HOME_FIXTURE_DAYS)).strftime("%Y-%m-%dT%H:%MZ")
+    home = [fixture_row(e, team_slugs) for e in upcoming if schedule.is_major(e) and e["start"] <= horizon][:HOME_FIXTURES]
+    leagues = {e["league"] for e in entries}
+    majors = env.globals["major_leagues"]
+    return {
+        "upcoming": _by_day(up_rows),
+        "past": _by_day([fixture_row(e, team_slugs) for e in past]),
+        "upcoming_count": len(up_rows),
+        "past_count": len(past),
+        "scorecard": schedule.scorecard(entries),
+        "home": _by_day(home),
+        "home_count": len(home),
+        "leagues": [l for l in majors if l in leagues]
+        + [l for l in INTERNATIONAL_LEAGUES if l in leagues]
+        + sorted(leagues - set(majors) - set(INTERNATIONAL_LEAGUES)),
+        "major_set": [l for l in [*majors, *INTERNATIONAL_LEAGUES] if l in leagues or l in majors],
+        "since": min((e["start"][:10] for e in entries), default=None),
+        "saved_since": min((e["start"][:10] for e in entries if not e.get("reconstructed")), default=None),
+    }
+
+
+def render_predictions(view, coverage, last_update):
+    _write(
+        os.path.join(OUTPUT_DIR, "predictions.html"),
+        env.get_template("predictions.html.j2").render(
+            page_key="predictions",
+            root_path="",
+            metric=PREDICTIONS,
+            view=view,
+            coverage=coverage,
+            last_update=last_update,
+        ),
+    )
+
+
+def update_predictions(states):
+    """Fetch the schedule and update the prediction log; on any failure keep the
+    log as it was, so the site still builds (with yesterday's calls).
+
+    Set PREDICTIONS_FETCH=0 to skip the fetch. Returns (log, coverage) where
+    coverage counts this fetch's matched and unmatched matches (None if skipped).
+    """
+    if os.environ.get("PREDICTIONS_FETCH", "1") == "0":
+        return schedule.load_log(PREDICTIONS_LOG), None
+    try:
+        log, coverage = schedule.build_predictions(states, PREDICTIONS_LOG)
+        print(f"Predictions: {coverage['matched']} of {coverage['matches']} scheduled matches rated; "
+              f"{len(coverage['unmatched'])} team names not matched")
+        return log, coverage
+    except Exception as e:  # network, rate limit, schema change: never block the build
+        print(f"Predictions: schedule not updated ({e}); using the saved log.")
+        return schedule.load_log(PREDICTIONS_LOG), None
 
 
 def render_sunset(last_update):
@@ -951,6 +1098,7 @@ def main():
     # Form for every team in every league, as of now and at the end of each season.
     states = form_states(opponent_adjust(load_form_games()))
     forms_now, forms_seasons = team_forms(states)
+    prediction_log, coverage = update_predictions(states)
     form_now = forms_now.rename(columns={"home": "league"}).assign(form=lambda d: FORM_POINTS * d["form"])
     form_seasons = forms_seasons.rename(columns={"home": "league"}).assign(form=lambda d: FORM_POINTS * d["form"])
     form_leagues = set(form_now["league"]) | set(form_seasons["league"])
@@ -1018,6 +1166,10 @@ def main():
         player_latest.set_index("playerid")["elo"].to_dict(),
     )
     pages = _team_pages(glory_all, forge_seasons, forge, elo_history, latest_elos, glory_df, rosters)
+    predictions = predictions_view(prediction_log, set(pages), datetime.datetime.now(datetime.timezone.utc))
+    render_predictions(predictions, coverage, last_update)
+    with open(os.path.join(OUTPUT_DIR, "predictions.json"), "w") as f:
+        json.dump({"matches": [e for e in prediction_log.values() if e.get("matched")]}, f, ensure_ascii=False, separators=(",", ":"))
     render_index(
         forge_rows,
         team_elo_rows,
@@ -1027,6 +1179,7 @@ def main():
          "aura": len(aura_rows)},
         forge_config,
         last_update,
+        fixtures=predictions["home"],
     )
     render_team_pages(pages, last_update)
     write_team_index(pages)

@@ -12,7 +12,7 @@ Prometheus is served at **https://prometheus.thaiv.dev** from AWS, through the `
 
 `.github/workflows/publish.yml` runs on push to `main`, daily at 10:00 UTC, on manual dispatch, and as a build-only check on pull requests:
 
-1. `build`: `uv sync`, `scripts/setup_db.sh` (downloads Oracle's Elixir CSVs and rebuilds the DB), `pytest`, `scripts/evaluate_metrics.py --check-weights` (refits the Form and FORGE weights, about 8 seconds, prints every change, and adds a warning annotation, not a failure, if a FORGE blend weight moved more than 10%), `scripts/build_site.py`, then upload `output/` as an artifact.
+1. `build`: `uv sync`, `scripts/setup_db.sh` (downloads Oracle's Elixir CSVs and rebuilds the DB), `pytest`, `scripts/evaluate_metrics.py --check-weights` (refits the Form and FORGE weights, about 8 seconds, prints every change, and adds a warning annotation, not a failure, if a FORGE blend weight moved more than 10%), restore the prediction log from the backup bucket (main only), `scripts/build_site.py` (which fetches the match schedule from Leaguepedia and updates the log), save the log back, then upload `output/` as an artifact.
 2. `deploy` (on `main` only, and only once the repo variables exist): assume `AWS_ROLE_ARN`, sync to `s3://$DEPLOYMENT_BUCKET/releases/<run id>`, sync that release to `/current`, invalidate CloudFront, and health-check the site.
 
 This mirrors the shared `thaiv28/project-platform-workflows` `deploy-static.yml`, which can't be reused directly because it builds with npm.
@@ -27,10 +27,15 @@ Required repository settings:
 | Variable | `CLOUDFRONT_DISTRIBUTION_ID` | `ThaivPrometheusProject` output `CloudFrontDistributionId` |
 | Secret | `AWS_ROLE_ARN` | `ThaivProjectPlatform` output `DeploymentRoleArn` |
 | Variable | `DATA_BACKUP_BUCKET` | `ThaivProjectPlatform` `PlatformArtifacts` bucket |
+| Secret (optional) | `LEAGUEPEDIA_USER`, `LEAGUEPEDIA_PASSWORD` | A Leaguepedia bot password (Special:BotPasswords on lol.fandom.com, read access only). Logged-in clients get a much higher rate limit; without them the build reads the schedule anonymously and, if refused, keeps yesterday's calls. |
 
 ## Data backup
 
 Google Drive rate-limits the shared Oracle's Elixir CSVs. Each build tries Drive first, falling back to the Actions cache and then, on `main`, to gzipped copies in `s3://$DATA_BACKUP_BUCKET/prometheus/oracles-elixir/`. A successful Drive download is synced back there, so the backup always holds the newest good data. PR builds can't assume the AWS role, so they rely on the cache that `main` builds save. With no data from any source, the build fails rather than publishing an empty site.
+
+## Prediction log
+
+`s3://$DATA_BACKUP_BUCKET/prometheus/predictions/predictions.json` holds every call saved before its match and the results (the deploy role has read-write on the whole bucket). Main builds restore it before `build_site.py` and copy it back after, so calls accumulate across days; PR builds can't reach it and start a fresh log (with a 30-day reconstructed backfill) that is thrown away. If the file is lost, the next build starts a new log and the "saved before the match" record restarts from that day. The site is rebuilt once a day (10:00 UTC), so a match's saved call uses the data through the previous day.
 
 ## Notes
 

@@ -1,5 +1,5 @@
 {% extends 'base.html.j2' %}
-{% from '_marks.html.j2' import league, signed, ordinal, matchup_options %}
+{% from '_marks.html.j2' import league, signed, ordinal, matchup_options, fixtures as fixtures_table %}
 {% block title %}Prometheus · LoL esports rankings across eras and regions{% endblock %}
 {% block content %}
   <section class="title-page" aria-labelledby="title">
@@ -32,6 +32,13 @@
           </p>
           <div class="matchup-bar" aria-hidden="true"><span class="matchup-bar-a"></span></div>
           <p class="matchup-note" id="matchup-note" hidden>These teams play in different leagues, so the odds come from Elo alone.</p>
+        </figure>
+
+        <figure class="register-figure fixtures-home" aria-labelledby="fx-cap">
+          <figcaption id="fx-cap" class="table-caption">{% if fixtures %}Coming up, the next {{ fixtures | sum(attribute='rows', start=[]) | length }} major-league and international matches, with each team’s chance of taking the series.{% else %}Coming up: no major-league or international matches in the next four days.{% endif %} <a href="predictions.html">See every prediction, and how past ones did</a></figcaption>
+          {% if fixtures %}
+          <div class="table-scroll">{{ fixtures_table(fixtures, compact=True) }}</div>
+          {% endif %}
         </figure>
 
         <figure class="register-figure" aria-labelledby="t1-cap">
@@ -153,4 +160,5 @@
   <script type="application/json" id="rows-data">{{ forge_rows | tojson }}</script>
   <script type="application/json" id="page-config">{{ forge_config | tojson }}</script>
   <script src="{{ asset('js/forecast.js') }}" defer></script>
+  {% if fixtures %}<script src="{{ asset('js/predictions.js') }}" defer></script>{% endif %}
 {% endblock %}
