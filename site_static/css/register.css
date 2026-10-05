@@ -395,3 +395,108 @@
 .matchup-bar-a { position: absolute; inset: 0 auto 0 0; width: calc(var(--p, 50) * 1%); background: var(--ink); }
 .matchup-note { margin-top: 8px; font-size: var(--fs-caption); font-style: italic; color: var(--ink-2); max-width: 32rem; }
 .matchup-bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: var(--hair) solid var(--ink-3); }
+
+/* ---- Fixture register (Predictions, home) ---------------------------- */
+/* Matches grouped by day under small-caps day rows; each team's series chance
+   sits either side of a duel bar: the first team's share in ink on a trough,
+   with a hairline tick at 50. The favourite is set in ink 600. */
+.fixtures-block { margin-bottom: 44px; }
+.fixtures-block .register-figure { margin-bottom: 0; }
+.fixtures-block .table-scroll, .fixtures-home .table-scroll { overflow-x: auto; }
+.section-prose { max-width: 40rem; margin: 0 0 18px; }
+.register--fixtures td, .register--fixtures th { padding-left: 7px; padding-right: 7px; }
+.register--fixtures thead th:first-child, .register--fixtures td:first-child { padding-left: 0; }
+.register--fixtures .fx-day-row th {
+  padding: 14px 0 4px;
+  border-top: 0;
+  border-bottom: var(--hair) solid var(--hairline);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: var(--fs-label);
+}
+.register--fixtures tbody:first-of-type .fx-day-row th { padding-top: 8px; }
+.register--fixtures tbody tr.fx-day-row:hover th { background: var(--paper); }
+/* Days, not every fifth row, divide this register; only the last row closes it. */
+.register.register--fixtures tbody tr:nth-child(n) td { border-bottom: 0; }
+.register.register--fixtures tbody:last-of-type tr:last-child td,
+.register.register--fixtures tr.fx-last td { border-bottom: 2px solid var(--rule); }
+.register.register--fixtures:has(tr.fx-last) tbody:last-of-type tr:last-child:not(.fx-last) td { border-bottom: 0; }
+.fx-time { color: var(--ink-2); width: 3.5rem; }
+.fx-meta { display: none; }
+.fx-started .fx-time time { font-style: italic; color: var(--ink-3); }
+.fx-team { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.register--fixtures .fx-team--1 { text-align: right; }
+.fx-team a { text-decoration-color: var(--hairline-soft); }
+.fx-series-head { text-align: center; }
+.fx-pct { width: 2.25rem; color: var(--ink-3); }
+.register--fixtures td.fx-pct:not(.num) { text-align: left; }
+.fx-fav { font-weight: 600; }
+.fx-pct.fx-fav { color: var(--ink); }
+.register--fixtures .fx-bar-col { width: 5.5rem; min-width: 5.5rem; padding-left: 2px; padding-right: 2px; }
+.fx-bar { position: relative; display: block; height: 5px; background: var(--paper-deep); transform: translateY(-1px); }
+.fx-bar::before { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--p, 50) * 1%); background: var(--ink); }
+.fx-bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: var(--hair) solid var(--ink-3); }
+.register--fixtures tbody tr.fx:hover .fx-bar::before { background: var(--spot); }
+.fx-bo, .fx-by { font-variant-caps: all-small-caps; letter-spacing: 0.05em; color: var(--ink-3); }
+.fx-game { color: var(--ink-2); }
+.fx-cross { font-style: italic; font-variant-caps: normal; letter-spacing: 0; }
+/* Results: the winner's name carries the weight; the figures still mark the favourite. */
+.register--results .fx-team.fx-fav { font-weight: 400; }
+.register--results .fx-team.fx-won { font-weight: 600; }
+.fx-score { font-weight: 600; color: var(--ink); }
+.fx-call { color: var(--ink); }
+.fx-call--missed, .fx-call--pending { color: var(--ink-3); font-style: italic; }
+.fx-empty { border-top: 2px solid var(--rule); border-bottom: 2px solid var(--rule); }
+.fixtures-home { margin: 0 0 30px; }
+
+/* The record so far: a short register, totals under a hairline. */
+.register--record { width: auto; min-width: min(100%, 34rem); }
+.register--record tbody th { text-align: left; font-variant-caps: normal; letter-spacing: 0; font-size: var(--fs-table); color: var(--ink); border: 0; padding: 4px 10px 4px 0; white-space: nowrap; background: transparent; }
+.register--record thead th:first-child { padding-left: 0; }
+.register--record .record-total th, .register--record .record-total td { border-top: var(--hair) solid var(--rule); font-weight: 600; }
+
+@media (max-width: 720px) {
+  .register--fixtures td, .register--fixtures th { padding-left: 4px; padding-right: 4px; }
+  .fx-meta { display: inline; margin-left: 6px; }
+  .fx-meta .league-mark { margin-right: 0; }
+  .fx-team { max-width: 8.5rem; }
+  .register--fixtures .fx-bar-col { width: 3.5rem; min-width: 3.5rem; }
+  .fx-time { width: auto; }
+}
+/* Phones: each match becomes two lines, time and league over the two teams with
+   their chances either side of the bar; best-of (or score and call) to the right
+   of the time. Matches are divided by hairlines, days by their small-caps rows. */
+@media (max-width: 600px) {
+  .table-scroll:has(> .register--fixtures) { overflow: visible; margin: 0; padding: 0; }
+  .register--record { min-width: 0; width: 100%; }
+  .register--record thead th { white-space: normal; }
+  .register--fixtures, .register--fixtures tbody { display: block; }
+  .register--fixtures thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .register--fixtures .fx-day-row, .register--fixtures .fx-day-row th { display: block; }
+  .register--fixtures .fx-day-row th { padding: 14px 0 4px; }
+  .register--fixtures tr.fx {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 1.75rem 3rem 1.75rem minmax(0, 1fr);
+    grid-template-areas: "time time time meta meta" "t1 p1 bar p2 t2";
+    align-items: baseline;
+    column-gap: 8px;
+    padding: 7px 0 8px;
+    border-bottom: var(--hair) solid var(--hairline-soft);
+  }
+  .register.register--fixtures tbody:nth-child(n) tr.fx:nth-child(n) td { display: block; height: auto; padding: 0; border: 0; }
+  .register.register--fixtures tbody:nth-child(n) tr.fx:nth-child(n) td:is(.wide-only, .phone-hide) { display: none; }
+  .register.register--fixtures tbody tr.fx-day-row + tr.fx { border-top: 0; }
+  .register.register--fixtures tbody:last-of-type tr.fx:last-child, .register.register--fixtures tr.fx.fx-last { border-bottom: 2px solid var(--rule); }
+  .register--fixtures td.fx-time { grid-area: time; font-size: var(--fs-caption); }
+  .register--fixtures td.fx-team--1 { grid-area: t1; max-width: none; white-space: nowrap; }
+  .register--fixtures td.fx-pct.num { grid-area: p1; }
+  .register--fixtures td.fx-bar-col { grid-area: bar; width: auto; min-width: 0; align-self: center; }
+  .register--fixtures td.fx-pct:not(.num) { grid-area: p2; }
+  .register--fixtures td.fx-team--2 { grid-area: t2; max-width: none; white-space: nowrap; }
+  .register--fixtures td.fx-bo { grid-area: meta; text-align: right; font-size: var(--fs-caption); }
+  .register--results td.fx-score, .register--results td.fx-call { grid-row: 1; font-size: var(--fs-caption); }
+  .register--results td.fx-score { grid-column: 4; text-align: right; }
+  .register--results td.fx-call { grid-column: 5; text-align: right; }
+  .register--fixtures tbody tr.fx:hover td { background: transparent; }
+  .fx-meta { display: inline; margin-left: 6px; }
+}

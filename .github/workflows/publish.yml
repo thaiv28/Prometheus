@@ -23,6 +23,7 @@ jobs:
     env:
       CAN_USE_AWS: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
       DATA_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/oracles-elixir/
+      PREDICTIONS_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/predictions/predictions.json
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -66,8 +67,21 @@ jobs:
       # Refit the FORGE weights on today's data; warns (does not fail) on a big move.
       - name: Check FORGE weights
         run: uv run python scripts/evaluate_metrics.py --check-weights
+      # The prediction log (every call saved before its match, and the results) lives
+      # in the backup bucket; a build without it (PRs, first run) starts a new one
+      # with a 30-day reconstructed backfill.
+      - name: Restore the prediction log
+        if: env.CAN_USE_AWS == 'true'
+        run: aws s3 cp "$PREDICTIONS_BACKUP" data/predictions.json --only-show-errors || echo "No saved prediction log yet."
       - name: Build static site
+        env:
+          # Optional bot password (Special:BotPasswords) for a higher Leaguepedia rate limit.
+          LEAGUEPEDIA_USER: ${{ secrets.LEAGUEPEDIA_USER }}
+          LEAGUEPEDIA_PASSWORD: ${{ secrets.LEAGUEPEDIA_PASSWORD }}
         run: uv run python scripts/build_site.py
+      - name: Save the prediction log
+        if: env.CAN_USE_AWS == 'true' && hashFiles('data/predictions.json') != ''
+        run: aws s3 cp data/predictions.json "$PREDICTIONS_BACKUP" --only-show-errors
       - uses: actions/upload-artifact@v4
         with:
           name: site

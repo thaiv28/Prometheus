@@ -40,6 +40,8 @@ uv run bash scripts/setup_db.sh         # download raw CSVs (gdown), rebuild db/
 uv run python scripts/build_site.py     # render static site to output/
 uv run pytest -q                        # run tests (unit + integration + e2e; e2e needs a built DB)
 uv run prometheus rankings glory --league MAJOR --year 2024
+uv run prometheus predict --days 2 --major   # odds for upcoming matches (Leaguepedia schedule)
+PREDICTIONS_FETCH=0 uv run python scripts/build_site.py   # build without fetching the schedule (uses the saved log)
 uv run python scripts/evaluate_metrics.py --out docs/metric_backtest.md   # backtest forecasts (~8s)
 uv run python scripts/evaluate_metrics.py --write-weights   # also refresh Form and FORGE weights
 uv run python scripts/evaluate_season_stats.py --out docs/season_stats_report.md   # season-stat stability (~5s)
@@ -62,14 +64,15 @@ python -m http.server -d output 8000    # preview the built site locally
 | `prometheus/form.py` | Form (Predictive GLORY): opponent-adjusted, recency-weighted per-team stat states before every game, league-relative scores; weights in `form_weights.json` |
 | `prometheus/forge.py` | FORGE: Elo + Form within a league, Elo alone between leagues; ratings and head-to-head win probability; weights in `forge_weights.json` |
 | `prometheus/elo.py` | Game-length-weighted Elo: bootstrap and query helpers (WIP) |
+| `prometheus/schedule.py`, `team_aliases.json` | Predictions: the match schedule from Leaguepedia's Cargo API, team-name matching, game and series odds (FORGE / Elo), the prediction log (`data/predictions.json`, kept in S3 by CI) and its scorecard |
 | `prometheus/aura.py`, `scripts/evaluate_aura.py` | AURA, the player season stat: each player's share of a 15-minute win-probability model by lane plus a quarter of their team-centred gain to 25 minutes; `season_aura` gives the site's player-seasons; report in `docs/aura_report.md` |
 | `prometheus/main.py` | Typer CLI entry point (`prometheus` script) |
 | `scripts/NNN_*.sql\|py` | DB build steps. `setup_db.sh` runs them **in numeric order**. |
 | `scripts/build_site.py` | Static site generator |
 | `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtest: how well each forecast, from earlier games only, predicts winners (domestic and cross-region); fits the forecast weights. Results in `docs/metric_backtest.md` |
 | `scripts/evaluate_season_stats.py` | Season-stat report: split-half reliability, games to 0.5, and fit to same-season results. Results in `docs/season_stats_report.md` |
-| `templates/*.html.j2` | Jinja2 templates: `base` (shell, with the Teams and Players menus), `index`, `rankings` (every metric page, driven by a column config), `team`, `player`, `sunset`, `redirect`, `404`, and the `_marks` macros (league mark, signed number, ordinal) |
-| `site_static/{css,js,fonts}` | Hand-written CSS (`tokens.css` holds all colors and the `@font-face` rules, including league inks), vanilla JS (`names.js` for name folding, slugs and search ranking shared by the others and unit-tested under Node, `rankings.js` for filtering, sorting and the distribution figure, `team.js` for the SVG Elo chart on team and player pages, `forecast.js` for the FORGE head-to-head box, `search.js` for the header team and player search, `nav.js` for the header's Teams and Players menus), and the self-hosted Source Serif 4 font (OFL), all copied verbatim into `output/` |
+| `templates/*.html.j2` | Jinja2 templates: `base` (shell, with the Teams and Players menus), `index`, `rankings` (every metric page, driven by a column config), `predictions`, `team`, `player`, `sunset`, `redirect`, `404`, and the `_marks` macros (league mark, signed number, ordinal, the fixture register) |
+| `site_static/{css,js,fonts}` | Hand-written CSS (`tokens.css` holds all colors and the `@font-face` rules, including league inks), vanilla JS (`names.js` for name folding, slugs and search ranking shared by the others and unit-tested under Node, `rankings.js` for filtering, sorting and the distribution figure, `team.js` for the SVG Elo chart on team and player pages, `forecast.js` for the FORGE head-to-head box, `search.js` for the header team and player search, `nav.js` for the header's Teams and Players menus, `predictions.js` for local times and filters on the fixture registers), and the self-hosted Source Serif 4 font (OFL), all copied verbatim into `output/` |
 | `PRODUCT.md`, `.impeccable/surfaces/` | Product record and visual direction contract used by the impeccable design skill. Read them before UI work. |
 | `notebooks/` | Exploratory modeling. Not imported by the package. |
 | `tests/` | `test_*.py` unit tests (mocked; `test_build_site.py` for the site builder), `integration/` (in-memory SQLite), `e2e/` (real DB), `js/` (Node tests for `names.js`, run by `test_js.py`) |
@@ -99,6 +102,7 @@ python -m http.server -d output 8000    # preview the built site locally
 - `setup_db.sh` **deletes** `db/prometheus.db` before rebuilding.
 - Several modules end in `if __name__ == "__main__":` scratch blocks. They aren't real entry points.
 - `scripts/004_bootstrap_elo.py` clears and refills `game_length_elo`, so it's safe to rerun.
+- Leaguepedia rate-limits anonymous API calls after a few in a row and stays shut for minutes. Don't loop on it while developing: cache a fetched schedule (`fetch_schedule(...).to_pickle(...)`) and pass it as `schedule=` to `build_predictions`, or build with `PREDICTIONS_FETCH=0`.
 
 ## Before you finish a change
 

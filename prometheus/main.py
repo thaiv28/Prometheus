@@ -1,7 +1,9 @@
+import datetime
 from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from prometheus.elo import get_latest_elos, get_season_elos
 from prometheus.form import form_states, load_form_games, opponent_adjust
@@ -81,6 +83,49 @@ def rankings(
         raise typer.Exit(code=1)
 
     print_rankings_table(df, metric.value, league, years, n, console)
+
+
+@app.command("predict")
+def predict(
+    days: Annotated[int, typer.Option(help="Days ahead to show, from today (UTC)")] = 1,
+    league: Annotated[list[str], typer.Option(help="Only these leagues (e.g. LCK, Worlds); repeat for more")] = None,
+    major: Annotated[bool, typer.Option(help="Only major leagues and international events")] = False,
+):
+    """Predict upcoming pro matches: each team's chance to win the series and one game.
+
+    Reads the schedule from Leaguepedia and rates both teams with today's FORGE
+    (same major league) or Elo; doesn't touch the prediction log.
+    """
+    from prometheus import schedule
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    try:
+        fixtures = schedule.fetch_schedule(now.date(), (now + datetime.timedelta(days=days)).date() + datetime.timedelta(days=1))
+    except Exception as e:  # network or rate limit
+        typer.echo(f"Couldn't read the schedule from Leaguepedia: {e}")
+        raise typer.Exit(code=1)
+    ratings = schedule.current_ratings(form_states(opponent_adjust(load_form_games())))
+    preds = schedule.predict(fixtures[fixtures["start"] > now], ratings, schedule.TeamMatcher(ratings.reset_index()))
+    shown = [p for p in preds if p["matched"]
+             and (not league or p["league"] in league)
+             and (not major or schedule.is_major(p))]
+
+    table = Table(title=f"Predictions, next {days} day{'s' if days != 1 else ''}")
+    for col, justify in (("Start (UTC)", "left"), ("League", "left"), ("Team 1", "right"), ("Series", "center"),
+                         ("Team 2", "left"), ("Bo", "right"), ("One game", "right"), ("By", "left")):
+        table.add_column(col, justify=justify)
+    for p in shown:
+        s1 = round(100 * p["p_series"])
+        g1 = round(100 * p["p_game"])
+        table.add_row(
+            p["start"].replace("T", " ").rstrip("Z"), p["league"],
+            schedule.display_name(p, 1), f"{s1}–{100 - s1}", schedule.display_name(p, 2),
+            str(p["best_of"]), f"{g1}–{100 - g1}", "FORGE" if p["method"] == "forge" else "Elo",
+        )
+    console.print(table)
+    skipped = len(preds) - sum(p["matched"] for p in preds)
+    if skipped:
+        console.print(f"{skipped} scheduled matches have a team we don't rate.")
 
 
 @app.command("weights")
