@@ -290,11 +290,15 @@ def test_fixture_row_and_register_carry_the_market_price():
     entry = {**_log()["soon"], "market": {"p": 0.634, "spread": 0.02, "at": "2026-10-03T02:30Z", "ticker": "K"}}
     row = build_site.fixture_row(entry, set())
     assert (row["mkt1"], row["mkt2"], row["mkt_at"]) == (63, 37, "3 Oct 02:30 UTC")
+    entry["market"]["ticker"] = "KXLOLGAME-26OCT041600T1GEN"
+    row = build_site.fixture_row(entry, set())
+    assert row["mkt_url"] == "https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct041600t1gen"
     html = build_site.env.from_string(
         "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days) }}{{ fixtures(days, results=True) }}"
     ).render(days=[{"day": row["day"], "label": "Sunday 4 October", "rows": [row]}])
     assert html.count('class="fx-mkt" style="--m: 63"') == 2  # the caret on both registers
-    assert "63–37" in html and ">Kalshi<" in html and 'colspan="11"' in html
+    assert ">63–37</a>" in html and 'href="https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct041600t1gen"' in html
+    assert ">Kalshi<" in html and 'colspan="11"' in html
     plain = build_site.fixture_row(_log()["soon"], set())
     assert "mkt1" not in plain
 

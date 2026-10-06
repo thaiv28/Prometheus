@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
-from prometheus import aura, schedule
+from prometheus import aura, markets, schedule
 from prometheus.elo import (
     get_elo_history,
     get_latest_elos,
@@ -279,7 +279,7 @@ PREDICTIONS = {
         "Two teams from the same major league (LCK, LPL, LEC, LCS) are called by FORGE. Teams from different leagues are called by Elo alone, on a curve fit to international games, as in FORGE's head to head. Two teams from any other league are called by their Elo.",
         "A match's call is refreshed at every daily update until it starts, then frozen. Matches that had already been played when the log began carry a call rebuilt from the ratings as they stood the day before, marked with this note. They use only earlier games, but the forecast weights were fit on data that includes them, so trust the calls saved before the match more.",
         "Log loss scores the one-game chance against every game played: a coin flip scores 0.693, and lower is better. It punishes a confident miss more than a timid one.",
-        "Kalshi is a prediction market. Its figures are the market's chance of each team taking the series: the middle of the best bid and offer, read at each daily update and kept from the last one before the match (so up to a day old), and left out when the quote is too thin. The caret over the bar marks it. On about 2,000 past series the market's last price before the start beat our calls; a day out, FORGE was level with it in the major leagues.",
+        "Kalshi is a prediction market. Its figures are the market's chance of each team taking the series: the middle of the best bid and offer, read at each daily update and kept from the last one before the match (so up to a day old), and left out when the quote is too thin. The caret over the bar marks it, and the figures link to the match on Kalshi. On about 2,000 past series the market's last price before the start beat our calls; a day out, FORGE was level with it in the major leagues.",
     ],
     "caveats": "The schedule comes from Leaguepedia. Matches with a team Oracle's Elixir doesn't cover can't be rated and aren't shown. Calls ignore side selection, roster changes since a team's last game, and new patches. Times are in your time zone.",
 }
@@ -699,6 +699,7 @@ def fixture_row(entry, team_slugs):
         row["mkt1"], row["mkt2"] = _pct_pair(market["p"])
         at = datetime.datetime.strptime(market["at"], "%Y-%m-%dT%H:%MZ")
         row["mkt_at"] = f"{at.day} {at.strftime('%b')} {at.strftime('%H:%M')} UTC"
+        row["mkt_url"] = markets.event_url(market["ticker"]) if market.get("ticker") else None
     for side in (1, 2):
         name = schedule.display_name(entry, side)
         slug = _slugify(entry[f"ours{side}"]) if entry.get(f"ours{side}") else None

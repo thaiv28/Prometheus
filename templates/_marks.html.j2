@@ -71,7 +71,7 @@
       {% endfor %}
       {% if not results %}<td class="fx-bo">Bo{{ r.best_of }}</td>{% endif %}
       {% if not results %}<td class="num phone-hide fx-game">{% if r.best_of > 1 %}{{ r.game1 }}–{{ r.game2 }}{% else %}<span class="muted">same</span>{% endif %}</td>{% endif %}
-      {% if not results %}<td class="num phone-hide fx-market"{% if r.mkt1 %} title="As of {{ r.mkt_at }}"{% endif %}>{% if r.mkt1 %}{{ r.mkt1 }}–{{ r.mkt2 }}{% else %}<span class="muted" title="No Kalshi market, or too thin a quote">—</span>{% endif %}</td>{% endif %}
+      {% if not results %}<td class="num phone-hide fx-market"{% if r.mkt1 %} title="As of {{ r.mkt_at }}; opens the match on Kalshi"{% endif %}>{% if r.mkt1 and r.mkt_url %}<a href="{{ r.mkt_url }}" aria-label="Kalshi’s market for {{ r.name1 }} against {{ r.name2 }}: {{ r.mkt1 }}–{{ r.mkt2 }}">{{ r.mkt1 }}–{{ r.mkt2 }}</a>{% elif r.mkt1 %}{{ r.mkt1 }}–{{ r.mkt2 }}{% else %}<span class="muted" title="No Kalshi market, or too thin a quote">—</span>{% endif %}</td>{% endif %}
       {% if by %}<td class="wide-only fx-by">{{ r.method }}{% if r.cross %}<span class="fx-cross" title="Teams from different leagues: Elo alone"> across</span>{% endif %}</td>{% endif %}
       {% if results %}
       <td class="num fx-score" title="Best of {{ r.best_of }}">{{ r.score or '—' }}</td>

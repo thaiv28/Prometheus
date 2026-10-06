@@ -25,7 +25,8 @@ from zoneinfo import ZoneInfo
 API = "https://api.elections.kalshi.com/trade-api/v2"
 USER_AGENT = "Prometheus/1.0 (https://prometheus.thaiv.dev; https://github.com/thaiv28/Prometheus)"
 SERIES, MAP = "KXLOLGAME", "KXLOLMAP"
-MARKET_URL = "https://kalshi.com/markets/kxlolgame"
+# A match's page on Kalshi's site: this prefix plus the event ticker in lower case.
+EVENT_URL = "https://kalshi.com/markets/kxlolgame/league-of-legends-game/"
 # Quotes with a wider bid-ask spread are too thin to call a price.
 MAX_SPREAD = 0.10
 # Kalshi's start time and Leaguepedia's can disagree (a moved match, a day-only
@@ -60,6 +61,11 @@ MARKET_ALIASES = {
     "Lyon Gaming Academy": "LYON Academy",
     "Rising Bees": "Vitality Rising Bees",
 }
+
+
+def event_url(ticker):
+    """Kalshi's page for a series market's event (where its odds are traded)."""
+    return EVENT_URL + ticker.lower()
 
 
 # ---------------------------------------------------------------- fetching
