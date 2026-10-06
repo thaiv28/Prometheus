@@ -52,6 +52,22 @@ python -m http.server -d output 8000    # preview the built site locally
 
 `data/`, `db/`, and `output/` are gitignored build artifacts. Never commit them.
 
+### Worktrees
+
+Agents work in a separate worktree (see the global `AGENTS.md`). A new one has none of the gitignored state, so set it up from the main checkout (`MAIN`):
+
+```bash
+git worktree add ../Prometheus-<branch> -b <branch> <base> && cd ../Prometheus-<branch>
+uv sync && uv pip install -e .
+mkdir -p data && ln -s "$MAIN/data/raw" data/raw    # raw CSVs: read-only, safe to share
+cp "$MAIN/.env" .                                    # Leaguepedia bot login
+cp "$MAIN/data/predictions.json" "$MAIN/data/market_prices.json" data/   # prediction log and Kalshi prices, for site builds
+cp -R "$MAIN/data/markets" data/                     # Kalshi cache, only for evaluate_markets.py (rewrites frames.pkl)
+uv run bash scripts/setup_db.sh                      # own db/ (~1 min); never symlink db/, setup_db.sh deletes it
+```
+
+Use a port other than 8000 for `http.server` if another worktree is serving.
+
 ## Layout
 
 | Path | Purpose |
@@ -71,7 +87,7 @@ python -m http.server -d output 8000    # preview the built site locally
 | `prometheus/main.py` | Typer CLI entry point (`prometheus` script) |
 | `scripts/NNN_*.sql\|py` | DB build steps. `setup_db.sh` runs them **in numeric order**. |
 | `scripts/build_site.py` | Static site generator |
-| `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtest: how well each forecast, from earlier games only, predicts winners (domestic, cross-region, and cross-league in every league); fits the forecast weights. Results in `docs/metric_backtest.md` |
+| `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtest: how well each forecast, from earlier games only, predicts winners (domestic, cross-region, cross-league in every league, and within other leagues); fits the forecast weights. Results in `docs/metric_backtest.md` |
 | `prometheus/markets.py`, `prometheus/alerts.py` | Kalshi's prediction market: parsing, quotes, name aliases and the prices stored on upcoming logged matches; the daily alert (FORGE beating Kalshi's ask by 5+ points, 6–36 hours out), recorded in the log and posted as a `kalshi-alert` GitHub issue by CI |
 | `scripts/update_prices.py`, `scripts/post_kalshi_alert.sh` | The hourly job (`.github/workflows/prices.yml`): refresh Kalshi's prices in the prediction log without a rebuild, write `kalshi.json` / `predictions.json` for the live site, and post the day's alert issue (the shell script, shared with the publish workflow) |
 | `scripts/extend_log.py` | One-off: extend the prediction log back (`--since`) with calls rebuilt from the ratings the day before each match, as a new log's 30-day rebuild does |
@@ -97,7 +113,7 @@ python -m http.server -d output 8000    # preview the built site locally
 - **Change a metric only for a significant benchmark gain.** A change to how a published metric is computed (features, weights scheme, hyperparameters, method) ships only when its benchmark beats the current version on the same games or team-seasons by more than noise: for forecasts, the paired-bootstrap 95% interval of the domestic log-loss difference (`evaluate_metrics.py`) must exclude 0 and international log loss must not get significantly worse; for season stats, a paired bootstrap over team-seasons of split-half reliability or r with the other half's win % (`evaluate_season_stats.py`) must exclude 0, with neither getting significantly worse. A gain inside the noise is not a reason to change. Record each tested change and its numbers in the work log either way. Refitting the existing weights on new data (`--write-weights`) is not a metric change.
 - **Accuracy fixes follow a lighter rule.** A change that corrects which data a forecast uses, without changing how the metric is computed (a team's home league, which roster stands for a team, a mislabelled league or event), is an accuracy fix, not a metric change. It ships when it is significantly better on the games it affects, by a paired bootstrap on the benchmark that covers them (`evaluate_metrics.py`'s cross-league section, or our calls in `evaluate_markets.py`), and neither domestic nor international log loss gets significantly worse.
 - **AURA follows the same rule on player benchmarks** (`evaluate_aura.py`). A change to how AURA is computed (snapshot, features, weights, credit scheme, matchup adjustment) is compared with the current AURA on the same player-seasons and team-seasons, with weights fit on earlier years only and any tuning constant fixed in advance. It ships only when all of these hold: (1) a gain: the paired-bootstrap 95% interval excludes 0 for next-season r of players who changed team, or for split-half reliability, but a split-half gain counts only if the correlation of a player's score with their teammates' in the same game rises by no more than 0.05 (a score that moves with the team becomes stable by restating it); (2) it beats its team-only control (the added part replaced, for every player, by their team's average of it in that game) on the gain it claims, by a paired bootstrap, so the gain is the player's and not the team's; (3) neither split-half nor new-team r gets significantly worse, and the roster test (r with the other half's win %, paired over team-seasons) doesn't either; (4) calibration stays close (ECE under 0.01) for a model that uses only in-game snapshots. A model with end-of-game stats as features is not judged on calibration, because those stats build up for the winner. The substitution test is reported but doesn't decide on its own: teams choose their substitutes, so it is confounded and noisy. Once AURA feeds a forecast (Player Elo, FORGE), that change falls under the forecast rule above, with the backtest's roster-change slice reported.
-- **Forecast weights** live in `prometheus/form_weights.json` and `forge_weights.json` (package data), read by `form.py` and `forge.py`. After a metric or data change, rerun `evaluate_metrics.py --write-weights` and commit both. CI runs `--check-weights` and warns when a blend weight moves more than 10%.
+- **Forecast weights** live in `prometheus/form_weights.json`, `forge_weights.json` and `league_curves.json` (Elo's win-curve slope per non-major league) (package data), read by `form.py` and `forge.py`. After a metric or data change, rerun `evaluate_metrics.py --write-weights` and commit both. CI runs `--check-weights` and warns when a blend weight moves more than 10%.
 - `gamelength` is stored in **seconds**.
 - League names are normalized at ingest (`002_add_matches.py`): NA LCS / LTA N → `LCS`, EU LCS → `LEC`.
 - Formatting: `black`. Linting: `pylint`. Both are listed as (non-dev) dependencies.

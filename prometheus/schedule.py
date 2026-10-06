@@ -32,8 +32,14 @@ from pathlib import Path
 import pandas as pd
 
 from prometheus import markets
-from prometheus.elo import expected_score, get_latest_elos
-from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, FORM_POINTS, team_forms
+from prometheus.elo import get_latest_elos
+from prometheus.forge import (
+    CROSS_REGION_ELO_WEIGHT,
+    ELO_WEIGHT,
+    FORM_POINTS,
+    other_league_weight,
+    team_forms,
+)
 from prometheus.types import ALL_MAJOR_LEAGUES, INTERNATIONAL_LEAGUES
 
 API_URL = "https://lol.fandom.com/api.php"
@@ -281,7 +287,8 @@ def game_probability(a, b):
         return 1 / (1 + math.exp(-CROSS_REGION_ELO_WEIGHT * (a["elo"] - b["elo"]))), "elo-cross"
     if a["league"] in MAJORS:
         return 1 / (1 + math.exp(-ELO_WEIGHT * (a["forge"] - b["forge"]))), "forge"
-    return expected_score(a["elo"], b["elo"]), "elo"
+    weight = other_league_weight(a["league"])
+    return 1 / (1 + math.exp(-weight * (a["elo"] - b["elo"]))), "elo"
 
 
 def event_league(row, home1, home2):

@@ -4,6 +4,9 @@ import pytest
 
 from prometheus.evaluation import (
     cross_league_games,
+    other_league_games,
+    out_of_year_league_probabilities,
+    shrunk_league_slopes,
     elo_as_of,
     fit_win_curve,
     game_losses,
@@ -125,8 +128,8 @@ def test_spearman_brown_and_games_for_reliability():
     assert games_for_reliability(0.0, 10) == np.inf
 
 
-def test_cross_league_games_uses_most_played_league_as_home():
-    games = pd.DataFrame(
+def _league_mix():
+    return pd.DataFrame(
         [
             # A plays LCK most; one KeSPA Cup game doesn't make it a cup team.
             ("g1", 2026, "LCK", "A", "B"),
@@ -145,8 +148,58 @@ def test_cross_league_games_uses_most_played_league_as_home():
         ],
         columns=["gameid", "year", "league", "teamid", "opponent_teamid"],
     )
+
+
+def test_cross_league_games_uses_most_played_league_as_home():
+    games = _league_mix()
     out = cross_league_games(games, ["Worlds"], ["LCK", "LEC"]).set_index("gameid")
     assert sorted(out.index) == ["g3", "g6", "g8"]
     assert out.loc["g3", ["home", "opponent_home", "kind"]].tolist() == ["LCK", "LCKC", "major v other"]
     assert out.loc["g6", "kind"] == "major v major"
     assert out.loc["g8", ["home", "opponent_home", "kind"]].tolist() == ["LFL", "PRM", "other v other"]
+
+
+def test_other_league_games_keep_only_games_inside_one_minor_league():
+    out = other_league_games(_league_mix(), ["Worlds"], ["LCK", "LEC"])
+    # LCK CL, LFL and PRM games; not the majors, the KeSPA Cup, Worlds or EMEA Masters.
+    assert sorted(out["gameid"]) == ["g10", "g11", "g12", "g4", "g5", "g9"]
+
+
+def _league_games(rng, league, slope, n):
+    gap = rng.normal(0, 150, n)
+    won = (rng.random(n) < 1 / (1 + np.exp(-slope * gap))).astype(int)
+    return pd.DataFrame({"league": league, "elo_live": gap, "won": won})
+
+
+def test_league_slopes_shrink_small_leagues_toward_the_pool():
+    rng = np.random.default_rng(0)
+    games = pd.concat(
+        [
+            _league_games(rng, "flat", 0.006, 20000),
+            _league_games(rng, "steep", 0.014, 20000),
+            _league_games(rng, "tiny", 0.030, 40),
+            # The gap sorts every result: its slope is unbounded, so it gets none of its own.
+            pd.DataFrame({"league": "sweep", "elo_live": [100.0, 200.0, -50.0], "won": [1, 1, 0]}),
+        ]
+    )
+    pooled, slopes = shrunk_league_slopes(games["elo_live"], games["won"], games["league"])
+    # Big leagues keep their own slope; the tiny one ends near the pooled slope.
+    assert slopes["flat"] == pytest.approx(0.006, rel=0.15)
+    assert slopes["steep"] == pytest.approx(0.014, rel=0.15)
+    assert abs(slopes["tiny"] - pooled) < abs(0.030 - pooled) / 2
+    assert slopes.get("sweep", pooled) == pytest.approx(pooled, rel=0.05)
+
+
+def test_league_probabilities_use_other_years_only():
+    rng = np.random.default_rng(1)
+    games = pd.concat(
+        [_league_games(rng, "A", 0.01, 3000).assign(year=y) for y in (2020, 2021, 2022)]
+        + [_league_games(rng, "new", 0.01, 500).assign(year=2023)],
+        ignore_index=True,
+    )
+    p = out_of_year_league_probabilities(games)
+    assert np.isfinite(p).all() and ((p > 0) & (p < 1)).all()
+    # A league first seen in the scored year falls back to the pooled curve of the others.
+    new = games["league"] == "new"
+    pooled, _ = shrunk_league_slopes(games.loc[~new, "elo_live"], games.loc[~new, "won"], games.loc[~new, "league"])
+    assert p[new.to_numpy()] == pytest.approx(1 / (1 + np.exp(-pooled * games.loc[new, "elo_live"].to_numpy())))

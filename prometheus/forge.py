@@ -4,6 +4,10 @@ Between two teams from the same home league, the chance to win one game is a
 logistic curve on their Elo gap and their Form gap (see `prometheus/form.py`).
 Between leagues, Form doesn't compare (each team's Form is measured against its
 own league), so the chance comes from Elo alone, on a curve fit to past games.
+Within a non-major league (no Form there) it is Elo alone on that league's fitted
+curve (`league_curves.json`, slopes shrunk toward the pooled one), or on the pooled
+curve `OTHER_LEAGUE_ELO_WEIGHT` for a league without one; both are steeper than the
+textbook 400-point curve.
 
 A team's FORGE rating is its Elo plus its Form in Elo points
 (`FORM_WEIGHT / ELO_WEIGHT` per unit of Form), so the same-league win chance is
@@ -25,6 +29,7 @@ import pandas as pd
 from prometheus.form import league_relative, load_weights as load_form_weights, scores
 
 WEIGHTS_PATH = Path(__file__).with_name("forge_weights.json")
+LEAGUE_CURVES_PATH = Path(__file__).with_name("league_curves.json")
 # A refit that moves any weight by more than this share is flagged in CI.
 WEIGHT_TOLERANCE = 0.10
 
@@ -40,6 +45,17 @@ def save_weights(weights, path=WEIGHTS_PATH):
     Path(path).write_text(json.dumps(rounded, indent=2) + "\n")
 
 
+def load_league_curves(path=LEAGUE_CURVES_PATH):
+    """Win-curve slope per non-major league (log-odds per Elo point)."""
+    return json.loads(Path(path).read_text())
+
+
+def save_league_curves(slopes, path=LEAGUE_CURVES_PATH):
+    """Write refit per-league slopes, rounded and sorted by league."""
+    rounded = {league: round(float(slopes[league]), 6) for league in sorted(slopes)}
+    Path(path).write_text(json.dumps(rounded, indent=2) + "\n")
+
+
 def weight_changes(old, new):
     """Relative change of each weight, for example 0.12 for a 12% move."""
     return {key: abs(new[key] - old[key]) / abs(old[key]) for key in old}
@@ -49,8 +65,15 @@ _WEIGHTS = load_weights()
 ELO_WEIGHT = _WEIGHTS["elo_weight"]
 FORM_WEIGHT = _WEIGHTS["form_weight"]
 CROSS_REGION_ELO_WEIGHT = _WEIGHTS["cross_region_elo_weight"]
+OTHER_LEAGUE_ELO_WEIGHT = _WEIGHTS["other_league_elo_weight"]
+LEAGUE_CURVES = load_league_curves()
 # Elo points per unit of Form (log-odds against the league average).
 FORM_POINTS = FORM_WEIGHT / ELO_WEIGHT
+
+
+def other_league_weight(league):
+    """Win-curve slope for a game inside non-major `league` (pooled if it has none)."""
+    return LEAGUE_CURVES.get(league, OTHER_LEAGUE_ELO_WEIGHT)
 
 
 def win_probability(rating, opponent_rating, same_league=True, elo=None, opponent_elo=None):
