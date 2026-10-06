@@ -11,7 +11,7 @@
   <div class="spread spread--home">
     <div class="spread-main">
       <div class="prose intro">
-        <p class="lede">Prometheus rates teams and players. <a href="forge.html">FORGE</a> says who wins if two teams play today, from Elo and how well each has played lately, tested against every major-league game since 2014. <a href="game_length_elo.html">Elo</a> rates every team in every region by its results, built from ratings that follow each player through their career. <a href="glory.html">GLORY</a> looks back on a season and measures how well a team played.</p>
+        <p class="lede"><a href="forge.html">FORGE</a> says who wins if two teams play today. <a href="game_length_elo.html">Elo</a> rates every team in every region by its results. <a href="glory.html">GLORY</a> measures how well a team played a season.</p>
       </div>
 
       <section class="spotlight" aria-labelledby="spotlight-heading">
@@ -35,7 +35,7 @@
         </figure>
 
         <figure class="register-figure fixtures-home" aria-labelledby="fx-cap">
-          <figcaption id="fx-cap" class="table-caption">{% if fixtures %}Coming up, the next {{ fixtures | sum(attribute='rows', start=[]) | length }} major-league and international matches, with each team’s chance of taking the series.{% else %}Coming up: no major-league or international matches in the next four days.{% endif %} <a href="predictions.html">See every prediction, and how past ones did</a></figcaption>
+          <figcaption id="fx-cap" class="table-caption">{% if fixtures %}{% set n = fixtures | sum(attribute='rows', start=[]) | length %}Coming up: {% if n == 1 %}the next major-league or international match{% else %}the next {{ n }} major-league and international matches{% endif %}.{% else %}No major-league or international matches in the next four days.{% endif %} <a href="predictions.html">Every prediction and the record</a></figcaption>
           {% if fixtures %}
           <div class="table-scroll">{{ fixtures_table(fixtures, compact=True) }}</div>
           {% endif %}

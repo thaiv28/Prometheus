@@ -75,67 +75,67 @@ The market's price at each lead time against our call (from the day before), on 
 
 ## Betting $1 a match, 12 hours before the start
 
-Each bet buys $1 of a team's contract 12 hours before the scheduled start at the price a market order would pay (the team's ask, or one minus the opponent's bid, whichever is cheaper), then pays Kalshi's fee per order: ceil(rate × contracts × P × (1 − P)), to the cent (taker orders 7%, resting maker orders 1.75%, which would fill at a better price than assumed here). *Back our pick* bets every match on the team we favour; *value* bets only where our chance beats the price by more than the edge shown. ROI is profit per dollar staked, with a 95% bootstrap interval over bets. Contracts are treated as divisible, and the matches are those with an exact start time. The strategies were fixed before looking at the results.
+Each bet buys $1 of a team's contract 12 hours before the scheduled start at the price a market order would pay (the team's ask, or one minus the opponent's bid, whichever is cheaper), then pays Kalshi's fee per order: ceil(rate × contracts × P × (1 − P)), to the cent (taker orders 7%, resting maker orders 1.75%, which would fill at a better price than assumed here). *Back our pick* bets every match on the team we favour; *value* bets only where our chance beats the price by more than the edge shown. ROI is profit per dollar staked, with a 95% bootstrap interval over bets. CLV (closing line value) is the market's closing chance for the team backed minus the price paid, in points, with its interval and the share of bets that beat the close; it doesn't depend on results or fees. Contracts are treated as divisible, and the matches are those with an exact start time. The strategies were fixed before looking at the results.
 
 **All** (1582 series with a price)
 
-| Strategy | Fee | Bets | Won | Profit | ROI (95%) |
-|---|---|---:|---:|---:|---:|
-| Back our pick | Taker 7% | 1582 | 1090 | -45.23 | -2.9% (-6.8% to +1.0%) |
-| Back our pick | Maker 1.75% | 1582 | 1090 | -20.06 | -1.3% (-5.2% to +2.6%) |
-| Back our pick | None | 1582 | 1090 | -3.18 | -0.2% (-4.2% to +3.7%) |
-| Value, edge > 0.00 | Taker 7% | 1482 | 583 | -173.99 | -11.7% (-18.9% to -4.3%) |
-| Value, edge > 0.00 | Maker 1.75% | 1482 | 583 | -128.24 | -8.7% (-15.8% to -1.2%) |
-| Value, edge > 0.00 | None | 1482 | 583 | -104.54 | -7.1% (-14.2% to +0.4%) |
-| Value, edge > 0.03 | Taker 7% | 1138 | 412 | -127.66 | -11.2% (-20.7% to -2.0%) |
-| Value, edge > 0.03 | Maker 1.75% | 1138 | 412 | -90.50 | -8.0% (-17.4% to +1.3%) |
-| Value, edge > 0.03 | None | 1138 | 412 | -71.59 | -6.3% (-15.7% to +2.9%) |
-| Value, edge > 0.05 | Taker 7% | 928 | 328 | -81.95 | -8.8% (-19.2% to +1.4%) |
-| Value, edge > 0.05 | Maker 1.75% | 928 | 328 | -50.56 | -5.4% (-15.8% to +4.8%) |
-| Value, edge > 0.05 | None | 928 | 328 | -34.78 | -3.7% (-14.1% to +6.5%) |
-| Value, edge > 0.10 | Taker 7% | 530 | 163 | -37.62 | -7.1% (-22.0% to +8.0%) |
-| Value, edge > 0.10 | Maker 1.75% | 530 | 163 | -18.37 | -3.5% (-18.3% to +11.6%) |
-| Value, edge > 0.10 | None | 530 | 163 | -8.83 | -1.7% (-16.5% to +13.3%) |
+| Strategy | Fee | Bets | Won | Profit | ROI (95%) | CLV, points (95%) | Beat close |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Back our pick | Taker 7% | 1582 | 1090 | -45.23 | -2.9% (-6.8% to +1.0%) | +0.07 (-0.36 to +0.49) | 46% |
+| Back our pick | Maker 1.75% | 1582 | 1090 | -20.06 | -1.3% (-5.2% to +2.6%) | +0.07 (-0.36 to +0.49) | 46% |
+| Back our pick | None | 1582 | 1090 | -3.18 | -0.2% (-4.2% to +3.7%) | +0.07 (-0.36 to +0.49) | 46% |
+| Value, edge > 0.00 | Taker 7% | 1482 | 583 | -173.99 | -11.7% (-18.9% to -4.3%) | -0.52 (-0.92 to -0.10) | 43% |
+| Value, edge > 0.00 | Maker 1.75% | 1482 | 583 | -128.24 | -8.7% (-15.8% to -1.2%) | -0.52 (-0.92 to -0.10) | 43% |
+| Value, edge > 0.00 | None | 1482 | 583 | -104.54 | -7.1% (-14.2% to +0.4%) | -0.52 (-0.92 to -0.10) | 43% |
+| Value, edge > 0.03 | Taker 7% | 1138 | 412 | -127.66 | -11.2% (-20.7% to -2.0%) | -0.51 (-1.04 to +0.00) | 43% |
+| Value, edge > 0.03 | Maker 1.75% | 1138 | 412 | -90.50 | -8.0% (-17.4% to +1.3%) | -0.51 (-1.04 to +0.00) | 43% |
+| Value, edge > 0.03 | None | 1138 | 412 | -71.59 | -6.3% (-15.7% to +2.9%) | -0.51 (-1.04 to +0.00) | 43% |
+| Value, edge > 0.05 | Taker 7% | 928 | 328 | -81.95 | -8.8% (-19.2% to +1.4%) | -0.45 (-1.03 to +0.19) | 44% |
+| Value, edge > 0.05 | Maker 1.75% | 928 | 328 | -50.56 | -5.4% (-15.8% to +4.8%) | -0.45 (-1.03 to +0.19) | 44% |
+| Value, edge > 0.05 | None | 928 | 328 | -34.78 | -3.7% (-14.1% to +6.5%) | -0.45 (-1.03 to +0.19) | 44% |
+| Value, edge > 0.10 | Taker 7% | 530 | 163 | -37.62 | -7.1% (-22.0% to +8.0%) | -0.66 (-1.42 to +0.09) | 42% |
+| Value, edge > 0.10 | Maker 1.75% | 530 | 163 | -18.37 | -3.5% (-18.3% to +11.6%) | -0.66 (-1.42 to +0.09) | 42% |
+| Value, edge > 0.10 | None | 530 | 163 | -8.83 | -1.7% (-16.5% to +13.3%) | -0.66 (-1.42 to +0.09) | 42% |
 
 **Other leagues** (1036 series with a price)
 
-| Strategy | Fee | Bets | Won | Profit | ROI (95%) |
-|---|---|---:|---:|---:|---:|
-| Back our pick | Taker 7% | 1036 | 711 | -20.08 | -1.9% (-7.3% to +3.6%) |
-| Back our pick | Maker 1.75% | 1036 | 711 | -3.24 | -0.3% (-5.7% to +5.2%) |
-| Back our pick | None | 1036 | 711 | +8.06 | +0.8% (-4.6% to +6.2%) |
-| Value, edge > 0.00 | Taker 7% | 968 | 296 | -194.43 | -20.1% (-30.1% to -10.3%) |
-| Value, edge > 0.00 | Maker 1.75% | 968 | 296 | -161.12 | -16.6% (-26.6% to -6.9%) |
-| Value, edge > 0.00 | None | 968 | 296 | -144.45 | -14.9% (-24.9% to -5.2%) |
-| Value, edge > 0.03 | Taker 7% | 809 | 235 | -143.23 | -17.7% (-28.6% to -6.7%) |
-| Value, edge > 0.03 | Maker 1.75% | 809 | 235 | -114.42 | -14.1% (-25.0% to -3.2%) |
-| Value, edge > 0.03 | None | 809 | 235 | -100.06 | -12.4% (-23.2% to -1.4%) |
-| Value, edge > 0.05 | Taker 7% | 702 | 203 | -106.09 | -15.1% (-27.7% to -3.1%) |
-| Value, edge > 0.05 | Maker 1.75% | 702 | 203 | -80.64 | -11.5% (-24.1% to +0.5%) |
-| Value, edge > 0.05 | None | 702 | 203 | -68.03 | -9.7% (-22.3% to +2.3%) |
-| Value, edge > 0.10 | Taker 7% | 450 | 120 | -48.84 | -10.9% (-26.9% to +6.5%) |
-| Value, edge > 0.10 | Maker 1.75% | 450 | 120 | -31.91 | -7.1% (-23.2% to +10.3%) |
-| Value, edge > 0.10 | None | 450 | 120 | -23.51 | -5.2% (-21.3% to +12.1%) |
+| Strategy | Fee | Bets | Won | Profit | ROI (95%) | CLV, points (95%) | Beat close |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Back our pick | Taker 7% | 1036 | 711 | -20.08 | -1.9% (-7.3% to +3.6%) | +0.41 (-0.20 to +0.97) | 49% |
+| Back our pick | Maker 1.75% | 1036 | 711 | -3.24 | -0.3% (-5.7% to +5.2%) | +0.41 (-0.20 to +0.97) | 49% |
+| Back our pick | None | 1036 | 711 | +8.06 | +0.8% (-4.6% to +6.2%) | +0.41 (-0.20 to +0.97) | 49% |
+| Value, edge > 0.00 | Taker 7% | 968 | 296 | -194.43 | -20.1% (-30.1% to -10.3%) | -1.04 (-1.62 to -0.42) | 39% |
+| Value, edge > 0.00 | Maker 1.75% | 968 | 296 | -161.12 | -16.6% (-26.6% to -6.9%) | -1.04 (-1.62 to -0.42) | 39% |
+| Value, edge > 0.00 | None | 968 | 296 | -144.45 | -14.9% (-24.9% to -5.2%) | -1.04 (-1.62 to -0.42) | 39% |
+| Value, edge > 0.03 | Taker 7% | 809 | 235 | -143.23 | -17.7% (-28.6% to -6.7%) | -0.97 (-1.63 to -0.32) | 38% |
+| Value, edge > 0.03 | Maker 1.75% | 809 | 235 | -114.42 | -14.1% (-25.0% to -3.2%) | -0.97 (-1.63 to -0.32) | 38% |
+| Value, edge > 0.03 | None | 809 | 235 | -100.06 | -12.4% (-23.2% to -1.4%) | -0.97 (-1.63 to -0.32) | 38% |
+| Value, edge > 0.05 | Taker 7% | 702 | 203 | -106.09 | -15.1% (-27.7% to -3.1%) | -0.91 (-1.60 to -0.18) | 39% |
+| Value, edge > 0.05 | Maker 1.75% | 702 | 203 | -80.64 | -11.5% (-24.1% to +0.5%) | -0.91 (-1.60 to -0.18) | 39% |
+| Value, edge > 0.05 | None | 702 | 203 | -68.03 | -9.7% (-22.3% to +2.3%) | -0.91 (-1.60 to -0.18) | 39% |
+| Value, edge > 0.10 | Taker 7% | 450 | 120 | -48.84 | -10.9% (-26.9% to +6.5%) | -0.91 (-1.80 to -0.05) | 39% |
+| Value, edge > 0.10 | Maker 1.75% | 450 | 120 | -31.91 | -7.1% (-23.2% to +10.3%) | -0.91 (-1.80 to -0.05) | 39% |
+| Value, edge > 0.10 | None | 450 | 120 | -23.51 | -5.2% (-21.3% to +12.1%) | -0.91 (-1.80 to -0.05) | 39% |
 
 **FORGE (same major league)** (523 series with a price)
 
-| Strategy | Fee | Bets | Won | Profit | ROI (95%) |
-|---|---|---:|---:|---:|---:|
-| Back our pick | Taker 7% | 523 | 365 | -18.48 | -3.5% (-9.4% to +2.6%) |
-| Back our pick | Maker 1.75% | 523 | 365 | -10.38 | -2.0% (-7.9% to +4.2%) |
-| Back our pick | None | 523 | 365 | -5.03 | -1.0% (-6.9% to +5.2%) |
-| Value, edge > 0.00 | Taker 7% | 492 | 279 | +22.10 | +4.5% (-6.4% to +15.5%) |
-| Value, edge > 0.00 | Maker 1.75% | 492 | 279 | +33.89 | +6.9% (-4.0% to +17.9%) |
-| Value, edge > 0.00 | None | 492 | 279 | +40.59 | +8.3% (-2.6% to +19.3%) |
-| Value, edge > 0.03 | Taker 7% | 314 | 174 | +16.15 | +5.1% (-9.8% to +19.5%) |
-| Value, edge > 0.03 | Maker 1.75% | 314 | 174 | +23.92 | +7.6% (-7.4% to +22.1%) |
-| Value, edge > 0.03 | None | 314 | 174 | +28.21 | +9.0% (-6.1% to +23.5%) |
-| Value, edge > 0.05 | Taker 7% | 215 | 123 | +27.65 | +12.9% (-5.0% to +31.2%) |
-| Value, edge > 0.05 | Maker 1.75% | 215 | 123 | +33.16 | +15.4% (-2.5% to +33.8%) |
-| Value, edge > 0.05 | None | 215 | 123 | +36.14 | +16.8% (-1.1% to +35.2%) |
-| Value, edge > 0.10 | Taker 7% | 76 | 43 | +15.43 | +20.3% (-10.7% to +56.2%) |
-| Value, edge > 0.10 | Maker 1.75% | 76 | 43 | +17.60 | +23.2% (-7.8% to +59.3%) |
-| Value, edge > 0.10 | None | 76 | 43 | +18.68 | +24.6% (-6.4% to +60.7%) |
+| Strategy | Fee | Bets | Won | Profit | ROI (95%) | CLV, points (95%) | Beat close |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Back our pick | Taker 7% | 523 | 365 | -18.48 | -3.5% (-9.4% to +2.6%) | -0.57 (-1.10 to -0.03) | 41% |
+| Back our pick | Maker 1.75% | 523 | 365 | -10.38 | -2.0% (-7.9% to +4.2%) | -0.57 (-1.10 to -0.03) | 41% |
+| Back our pick | None | 523 | 365 | -5.03 | -1.0% (-6.9% to +5.2%) | -0.57 (-1.10 to -0.03) | 41% |
+| Value, edge > 0.00 | Taker 7% | 492 | 279 | +22.10 | +4.5% (-6.4% to +15.5%) | +0.44 (-0.13 to +1.03) | 52% |
+| Value, edge > 0.00 | Maker 1.75% | 492 | 279 | +33.89 | +6.9% (-4.0% to +17.9%) | +0.44 (-0.13 to +1.03) | 52% |
+| Value, edge > 0.00 | None | 492 | 279 | +40.59 | +8.3% (-2.6% to +19.3%) | +0.44 (-0.13 to +1.03) | 52% |
+| Value, edge > 0.03 | Taker 7% | 314 | 174 | +16.15 | +5.1% (-9.8% to +19.5%) | +0.61 (-0.26 to +1.45) | 55% |
+| Value, edge > 0.03 | Maker 1.75% | 314 | 174 | +23.92 | +7.6% (-7.4% to +22.1%) | +0.61 (-0.26 to +1.45) | 55% |
+| Value, edge > 0.03 | None | 314 | 174 | +28.21 | +9.0% (-6.1% to +23.5%) | +0.61 (-0.26 to +1.45) | 55% |
+| Value, edge > 0.05 | Taker 7% | 215 | 123 | +27.65 | +12.9% (-5.0% to +31.2%) | +0.95 (-0.13 to +2.03) | 61% |
+| Value, edge > 0.05 | Maker 1.75% | 215 | 123 | +33.16 | +15.4% (-2.5% to +33.8%) | +0.95 (-0.13 to +2.03) | 61% |
+| Value, edge > 0.05 | None | 215 | 123 | +36.14 | +16.8% (-1.1% to +35.2%) | +0.95 (-0.13 to +2.03) | 61% |
+| Value, edge > 0.10 | Taker 7% | 76 | 43 | +15.43 | +20.3% (-10.7% to +56.2%) | +0.99 (-0.64 to +2.66) | 64% |
+| Value, edge > 0.10 | Maker 1.75% | 76 | 43 | +17.60 | +23.2% (-7.8% to +59.3%) | +0.99 (-0.64 to +2.66) | 64% |
+| Value, edge > 0.10 | None | 76 | 43 | +18.68 | +24.6% (-6.4% to +60.7%) | +0.99 (-0.64 to +2.66) | 64% |
 
 ## Does our call add to the market?
 

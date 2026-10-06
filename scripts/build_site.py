@@ -22,6 +22,7 @@ import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
 from prometheus import alerts, aura, markets, schedule
+from prometheus.evaluation import paired_bootstrap
 from prometheus.elo import (
     get_elo_history,
     get_latest_elos,
@@ -271,17 +272,17 @@ NAV = [
 PREDICTIONS = {
     "key": "predictions",
     "name": "Predictions",
-    "full_name": "Every match we can rate, called before it is played",
+    "full_name": "Every match we rate, called before it's played",
     "question": "Who wins the matches coming up?",
-    "description": "Every scheduled pro match between two teams Prometheus rates, with each team's chance of taking the series, and every past call next to its result.",
+    "description": "Each team's chance of winning every scheduled pro match between teams we rate, and how past calls did.",
     "how_to_read": [
-        "The figures either side of the bar are each team's chance of winning the series, in 100. One game gives the chance of winning a single game; a series chance follows from it, treating the games as independent, so a favourite is a bigger favourite over five games than over one.",
-        "Two teams from the same major league (LCK, LPL, LEC, LCS) are called by FORGE. Teams from different leagues are called by Elo alone, on a curve fit to international games, as in FORGE's head to head. Two teams from any other league are called by their Elo.",
-        "A match's call is refreshed at every daily update until it starts, then frozen. Matches that had already been played when the log began carry a call rebuilt from the ratings as they stood the day before, marked with this note. They use only earlier games, but the forecast weights were fit on data that includes them, so trust the calls saved before the match more.",
-        "Log loss scores the one-game chance against every game played: a coin flip scores 0.693, and lower is better. It punishes a confident miss more than a timid one.",
-        "Kalshi is a prediction market. Its figures are the market's chance of each team taking the series: the middle of the best bid and offer, read about every hour and kept from the last reading before the match, and left out when the quote is too thin. The caret over the bar marks it, and the figures link to the match on Kalshi. On about 2,000 past series the market's last price before the start beat our calls; a day out, FORGE was level with it in the major leagues.",
+        "Figures beside the bar: each team's chance of taking the series, in 100. It follows from the one-game chance, so a favourite is a bigger favourite over five games than one.",
+        "Same major league (LCK, LPL, LEC, LCS): FORGE. Any other pairing: Elo, across leagues on a curve fit to international games.",
+        "Calls refresh daily and freeze at the start. Matches played before the log began carry a call rebuilt from the day before; the weights saw those games, so trust saved calls more.",
+        "Log loss: lower is better; a coin flip scores 0.693. Table II scores the one-game chance per game, Table III the series chance per series.",
+        "Kalshi is a prediction market. Its figure is the market's series chance (mid of bid and offer), read hourly and frozen at the start; the caret on the bar marks it. Over 2,180 past series it beat us; 12 hours out, FORGE tied it in the major leagues. Alerts flag FORGE calls 5 points above Kalshi's price; closing line value is the last price minus the alerted one, above 0 when the market moved our way.",
     ],
-    "caveats": "The schedule comes from Leaguepedia. Matches with a team Oracle's Elixir doesn't cover can't be rated and aren't shown. Calls ignore side selection, roster changes since a team's last game, and new patches. Times are in your time zone.",
+    "caveats": "Schedule from Leaguepedia; teams Oracle's Elixir doesn't cover aren't shown. Calls ignore side selection, roster changes and new patches. Times are local.",
 }
 # The home page lists this many upcoming major-league and international matches,
 # within this many days.
@@ -748,6 +749,9 @@ def predictions_view(log, team_slugs, now):
         "upcoming_count": len(up_rows),
         "past_count": len(past),
         "scorecard": schedule.scorecard(entries),
+        "vs_market": schedule.market_scorecard(entries),
+        "alerts": alert_record(entries),
+        "market_min": schedule.MARKET_MIN_SERIES,
         "home": _by_day(home),
         "home_count": len(home),
         "leagues": [l for l in majors if l in leagues]
@@ -756,6 +760,29 @@ def predictions_view(log, team_slugs, now):
         "major_set": [l for l in [*majors, *INTERNATIONAL_LEAGUES] if l in leagues or l in majors],
         "since": min((e["start"][:10] for e in entries), default=None),
         "saved_since": min((e["start"][:10] for e in entries if not e.get("reconstructed")), default=None),
+    }
+
+
+def alert_record(entries):
+    """The paper record of the Kalshi alerts for the Predictions page: settled,
+    won, mean CLV and share beating the close, and ROI after the 7% taker fee,
+    with a 95% bootstrap interval once there are enough bets."""
+    bets = alerts.settled_alerts({e["match_id"]: e for e in entries})
+    clv, beat = alerts.clv_summary(bets)
+    profits = [b["profit"] for b in bets]
+    roi = interval = None
+    if profits:
+        roi = sum(profits) / len(profits)
+        if len(profits) >= schedule.MARKET_MIN_SERIES:
+            _, lo, hi = paired_bootstrap(profits, [0.0] * len(profits))
+            interval = (float(lo), float(hi))
+    return {
+        "settled": len(bets),
+        "won": sum(b["won"] for b in bets),
+        "clv": clv,
+        "beat": beat,
+        "roi": roi,
+        "interval": interval,
     }
 
 

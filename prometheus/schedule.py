@@ -531,3 +531,67 @@ def scorecard(entries):
             }
         )
     return rows
+
+
+# Fewest settled series before the market comparison gives an interval.
+MARKET_MIN_SERIES = 30
+
+
+def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
+    """Our series calls against Kalshi's, on settled matches priced before the start.
+
+    `market.p` is the last price read before the start (prices stop updating
+    once a match begins). Returns rows for "FORGE", "Elo" (same-league and
+    cross-league Elo calls) and "All": series, how often each favourite won (a
+    50-50 call counts as half), each side's mean log loss per series, and
+    `diff` (ours minus Kalshi's, with a 95% paired-bootstrap interval; below 0
+    means we beat the market) once a row has `min_n` series, else None.
+    """
+    from prometheus.evaluation import paired_bootstrap
+
+    def clip(p):
+        return min(max(p, 1e-6), 1 - 1e-6)
+
+    def right(p, won1):
+        return 0.5 if p == 0.5 else float((p > 0.5) == won1)
+
+    done = [
+        e
+        for e in entries
+        if e.get("matched")
+        and e.get("winner") in (1, 2)
+        and (e.get("market") or {}).get("p") is not None
+        and e["market"]["at"] < e["start"]
+    ]
+    groups = [
+        ("FORGE", lambda e: e.get("method") == "forge"),
+        ("Elo", lambda e: e.get("method") != "forge"),
+        ("All", lambda e: True),
+    ]
+    rows = []
+    for label, keep in groups:
+        ours, theirs, ours_right, theirs_right = [], [], 0.0, 0.0
+        for e in filter(keep, done):
+            won1 = e["winner"] == 1
+            p, q = clip(e["p_series"]), clip(e["market"]["p"])
+            ours.append(-math.log(p if won1 else 1 - p))
+            theirs.append(-math.log(q if won1 else 1 - q))
+            ours_right += right(e["p_series"], won1)
+            theirs_right += right(e["market"]["p"], won1)
+        n = len(ours)
+        rows.append(
+            {
+                "label": label,
+                "series": n,
+                "ours_pct": 100 * ours_right / n if n else None,
+                "market_pct": 100 * theirs_right / n if n else None,
+                "ours_loss": sum(ours) / n if n else None,
+                "market_loss": sum(theirs) / n if n else None,
+                "diff": (
+                    tuple(float(x) for x in paired_bootstrap(ours, theirs))
+                    if n >= min_n
+                    else None
+                ),
+            }
+        )
+    return rows
