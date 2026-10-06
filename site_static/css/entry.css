@@ -79,9 +79,17 @@
 .register--log .log-side { font-style: italic; color: var(--ink-3); }
 .register--log .log-champ { color: var(--ink-2); }
 
-.register--log td.log-roster { width: 100%; }
+/* The five take the width the other columns leave (max-width: 0 stops them stretching
+   the table) and wrap between names, never inside one; a lineup that doesn't fit runs
+   to a second line. On phones the register scrolls, so they keep a wider floor. */
+.register.register--log td.log-roster { width: 100%; max-width: 0; min-width: 13rem; white-space: normal; line-height: 1.3; }
+/* Whatever the names, the log never runs into the margin: past the column, it scrolls. */
+.log-figure .table-scroll { overflow-x: auto; scrollbar-width: thin; }
 .log-five { font-size: var(--fs-caption); color: var(--ink-2); }
-.log-five > * + *::before { content: "·"; margin: 0 0.4em; color: var(--hairline); }
+.log-p { display: inline-block; white-space: nowrap; }
+/* Only a freak name (longer than the column's floor) is cut short. */
+.log-p > :first-child { display: inline-block; max-width: 12em; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.log-sep { margin: 0 0.15em 0 0.4em; color: var(--hairline); }
 .log-five a { color: var(--ink-2); }
 .log-five a:hover { color: var(--spot); }
 
@@ -95,6 +103,15 @@
   .entry-contents--inline li + li { margin-top: 0; }
   .entry-contents--inline a::after { content: none; }
   .entry-contents--inline .toc-figure { order: 0; }
+}
+/* Beside the margin on a laptop the main column is narrow: give the five the room
+   that Length (still in each game's tooltip) and long opponent names would take. */
+@media (min-width: 1001px) and (max-width: 1280px) {
+  .register--log .log-len { display: none; }
+  .register.register--log td.team { max-width: 10rem; }
+}
+@media (max-width: 720px) {
+  .register.register--log td.log-roster { min-width: 18rem; }
 }
 @media (max-width: 480px) {
   .register--log .log-len { display: none; }

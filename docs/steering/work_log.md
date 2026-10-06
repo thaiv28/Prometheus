@@ -2,6 +2,11 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-06 — Game log: long lineups no longer spill into the margin
+
+- The starting-five cell never wrapped, so long names (RPG Kingdom's "Leviathan (Ryota Horie)", Black Lion's tagged names) pushed the log table to 1,093px in an 888px column, over the margin notes. Now the five take only the width the other columns leave (`max-width: 0`, 13rem floor; 18rem on phones), wrap between names and never inside one (each name and its middot are one unbreakable unit; the middot sits outside the link, so the underline stops at the name), and a name over 12em ends in an ellipsis with a title. The figure scrolls sideways past the column as a backstop. From 1001px to 1280px Length hides (still in each game row's tooltip) and opponents cap at 10rem.
+- Checks: headless Chrome at 1440, 1366, 1280, 1180, 1024, 800 and 390px on KT Rolster, Black Lion and RPG Kingdom: the table never exceeds its box at 1180px and up and never makes the page scroll sideways; no name cut; KT's rows stay one line from 1180px up and on phones, Black Lion's and RPG's at most two lines from 1280px up. Screenshots at 1280 and 1440. Impeccable detector clean. `uv run pytest -q`.
+
 ## 2026-10-06 — Kalshi's closing line in the results
 
 - Results registers (the Predictions page's last 3 days and the month pages) gain a *Close* column: Kalshi's last price before the start (`market.p`, the same figure as the caret), as the pair linked to the match on Kalshi; an ink-3 dash when there was no market or no tight quote. In results the league folds into the time cell under 840px of room so Close can stay; Close drops under 660px and on phones. The month pages' margin note mentions it.
