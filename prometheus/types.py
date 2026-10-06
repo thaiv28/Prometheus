@@ -59,6 +59,8 @@ INTERNATIONAL_LEAGUES = [
     "Riot",
     "ASI",
     "IWCI",
+    "DCGI",  # Demacia Cup Global Invitational (LPL, LCK, LCS, VCS, ... teams)
+    "WSCI",  # World Star Challengers Invitational (academy teams from several regions)
 ]
 
 GLORY_FEATURES = [
