@@ -12,6 +12,7 @@
 .figure-caption { margin: 8px 0 0; }
 .dist .figure-caption { margin: 0 0 4px; }
 .count { color: var(--ink-3); font-variant-numeric: lining-nums; white-space: nowrap; }
+.kalshi-asof { color: var(--ink-3); }
 .dist-hint { color: var(--ink-3); font-style: italic; }
 
 .register-figure { margin: 0 0 44px; }
@@ -404,7 +405,7 @@
 .fixtures-block .register-figure { margin-bottom: 0; }
 .fixtures-block .table-scroll, .fixtures-home .table-scroll { overflow-x: auto; }
 .section-prose { max-width: 40rem; margin: 0 0 18px; }
-.register--fixtures td, .register--fixtures th { padding-left: 7px; padding-right: 7px; }
+.register--fixtures td, .register--fixtures th { padding-left: 6px; padding-right: 6px; }
 .register--fixtures thead th:first-child, .register--fixtures td:first-child { padding-left: 0; }
 .register--fixtures .fx-day-row th {
   padding: 14px 0 4px;
@@ -424,7 +425,7 @@
 .fx-time { color: var(--ink-2); width: 3.5rem; }
 .fx-meta { display: none; }
 .fx-started .fx-time time { font-style: italic; color: var(--ink-3); }
-.fx-team { max-width: 10rem; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.fx-team { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
 .register--fixtures .fx-team--1 { text-align: right; }
 .fx-team a { text-decoration-color: var(--hairline-soft); }
 .fx-series-head { text-align: center; }
@@ -438,7 +439,13 @@
 .fx-bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: var(--hair) solid var(--ink-3); }
 .register--fixtures tbody tr.fx:hover .fx-bar::before { background: var(--spot); }
 .fx-bo, .fx-by { font-variant-caps: all-small-caps; letter-spacing: 0.05em; color: var(--ink-3); }
-.fx-game { color: var(--ink-2); }
+.fx-game, .fx-market { color: var(--ink-2); }
+/* The market's chance for the first team: a small printed caret over the duel bar. */
+.fx-mkt {
+  position: absolute; left: calc(var(--m, 50) * 1%); top: -7px;
+  width: 7px; height: 5px; margin-left: -3.5px;
+  background: var(--ink-2); clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
 .fx-cross { font-style: italic; font-variant-caps: normal; letter-spacing: 0; }
 /* Results: the winner's name carries the weight; the figures still mark the favourite. */
 .register--results .fx-team.fx-fav { font-weight: 400; }
@@ -447,6 +454,22 @@
 .fx-call { color: var(--ink); }
 .fx-call--missed, .fx-call--pending { color: var(--ink-3); font-style: italic; }
 .fx-empty { border-top: 2px solid var(--rule); border-bottom: 2px solid var(--rule); }
+/* The register sizes itself to its column, not the window: with less room it drops
+   the method and one-game columns, then folds the league into the time cell. */
+.table-scroll:has(> .register--fixtures) { container-type: inline-size; }
+@container (max-width: 840px) {
+  .register--fixtures .fx-opt { display: none; }
+  .register--fixtures .fx-team { max-width: 8rem; }
+}
+@container (max-width: 700px) {
+  .register--fixtures .fx-lg { display: none; }
+  .register--fixtures .fx-meta { display: inline; margin-left: 6px; }
+  .register--fixtures .fx-meta .league-mark { margin-right: 0; }
+  .register--fixtures .fx-team { max-width: 7rem; }
+}
+@container (max-width: 640px) {
+  .register--fixtures .fx-team { max-width: 6.25rem; }
+}
 .fixtures-home { margin: 0 0 30px; }
 
 /* The record so far: a short register, totals under a hairline. */
@@ -454,6 +477,17 @@
 .register--record tbody th { text-align: left; font-variant-caps: normal; letter-spacing: 0; font-size: var(--fs-table); color: var(--ink); border: 0; padding: 4px 10px 4px 0; white-space: nowrap; background: transparent; }
 .register--record thead th:first-child { padding-left: 0; }
 .register--record .record-total th, .register--record .record-total td { border-top: var(--hair) solid var(--rule); font-weight: 600; }
+.fixtures-block .register-figure + .register-figure { margin-top: 28px; }
+.register--market thead tr:first-child th[colspan] { text-align: center; border-bottom: var(--hair) solid var(--rule); padding-bottom: 3px; }
+.register--market .ci { color: var(--ink-3); font-size: 0.875em; }
+.record-note { margin-top: 14px; }
+.register--edges tbody th { vertical-align: top; }
+.register--edges .edges-source { color: var(--ink-2); font-style: italic; }
+.register--edges .edges-method { display: none; }
+.register.register--edges tbody tr:nth-child(5n):not(:last-child) td { border-bottom: 0; }
+.register--edges tr.edges-backtest:first-of-type > *, .register--edges tr:not(.edges-backtest) + tr.edges-backtest > td,
+.register--edges tr:not(.edges-backtest) + tr.edges-backtest > th.edges-source { border-top: var(--hair) dotted var(--hairline); }
+.register--edges tbody + tbody tr:first-child > * { border-top: var(--hair) solid var(--hairline); }
 
 @media (max-width: 720px) {
   .register--fixtures td, .register--fixtures th { padding-left: 4px; padding-right: 4px; }
@@ -470,7 +504,16 @@
   .table-scroll:has(> .register--fixtures) { overflow: visible; margin: 0; padding: 0; }
   .register--record { min-width: 0; width: 100%; }
   .register--record thead th { white-space: normal; }
+  .register--record tbody th { white-space: normal; }
+  .register--market .ci { display: block; }
+  .register--market tbody :is(th, td) { vertical-align: top; }
+  .register--edges .edges-calls { display: none; }
+  .register--edges .edges-method { display: inline; font-style: normal; color: var(--ink); }
+  .register--edges :is(th, td) { padding-left: 3px; padding-right: 3px; }
+  .register--edges .edges-source { white-space: normal; padding-left: 0; }
   .register--fixtures, .register--fixtures tbody { display: block; }
+  /* The card layout sets display on rows and days; keep the filters' hidden. */
+  .register--fixtures tbody[hidden], .register.register--fixtures tr.fx[hidden] { display: none; }
   .register--fixtures thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .register--fixtures .fx-day-row, .register--fixtures .fx-day-row th { display: block; }
   .register--fixtures .fx-day-row th { padding: 14px 0 4px; }
@@ -500,3 +543,6 @@
   .register--fixtures tbody tr.fx:hover td { background: transparent; }
   .fx-meta { display: inline; margin-left: 6px; }
 }
+/* The month links under the recent results, and the month pages' own links. */
+.month-index { margin: 14px 0 0; font-size: var(--fs-caption); color: var(--ink-2); }
+.month-index-lead { font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--ink-3); margin-right: 6px; }

@@ -46,6 +46,7 @@ uv run python scripts/evaluate_metrics.py --out docs/metric_backtest.md   # back
 uv run python scripts/evaluate_metrics.py --write-weights   # also refresh Form and FORGE weights
 uv run python scripts/evaluate_season_stats.py --out docs/season_stats_report.md   # season-stat stability (~5s)
 uv run python scripts/evaluate_aura.py --out docs/aura_report.md   # AURA calibration and player tests (~40s)
+uv run python scripts/evaluate_markets.py --out docs/market_report.md   # our calls vs Kalshi's prices (~10 min; first run ~1 h fetching; --reuse rewrites the report in seconds)
 python -m http.server -d output 8000    # preview the built site locally
 ```
 
@@ -71,6 +72,12 @@ python -m http.server -d output 8000    # preview the built site locally
 | `scripts/NNN_*.sql\|py` | DB build steps. `setup_db.sh` runs them **in numeric order**. |
 | `scripts/build_site.py` | Static site generator |
 | `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtest: how well each forecast, from earlier games only, predicts winners (domestic, cross-region, and cross-league in every league); fits the forecast weights. Results in `docs/metric_backtest.md` |
+| `prometheus/markets.py`, `prometheus/alerts.py` | Kalshi's prediction market: parsing, quotes, name aliases and the prices stored on upcoming logged matches; the daily alert (FORGE beating Kalshi's ask by 5+ points, 6–36 hours out), recorded in the log and posted as a `kalshi-alert` GitHub issue by CI |
+| `scripts/update_prices.py`, `scripts/post_kalshi_alert.sh` | The hourly job (`.github/workflows/prices.yml`): refresh Kalshi's prices in the prediction log without a rebuild, write `kalshi.json` / `predictions.json` for the live site, and post the day's alert issue (the shell script, shared with the publish workflow) |
+| `scripts/extend_log.py` | One-off: extend the prediction log back (`--since`) with calls rebuilt from the ratings the day before each match, as a new log's 30-day rebuild does |
+| `scripts/backfill_market_prices.py` | One-off: give logged matches that started before prices were read Kalshi's last pre-start price from its price history (`markets.backfill_prices`, marked `backfilled`) |
+| `scripts/elo_variants.py`, `scripts/elo_variants_*.py` | Elo margin-of-victory experiments: replay player-built Elo with any margin function and score it like the forecast backtest (tune on ≤2021, report 2022 on). Results in `docs/elo_variants_*.md` (gold, kills, objectives, combined; none beat game length) |
+| `scripts/evaluate_markets.py` | Market benchmark: our match calls against Kalshi's pre-match prices on the same series and map-1 games, and whether our call adds to the market. Results in `docs/market_report.md` |
 | `scripts/evaluate_season_stats.py` | Season-stat report: split-half reliability, games to 0.5, and fit to same-season results. Results in `docs/season_stats_report.md` |
 | `templates/*.html.j2` | Jinja2 templates: `base` (shell, with the Teams and Players menus), `index`, `rankings` (every metric page, driven by a column config), `predictions`, `team`, `player`, `sunset`, `redirect`, `404`, the `_marks` macros (league mark, signed number, ordinal, the fixture register), and the `_entry` macros (team and player pages' "On this page" list and game log) |
 | `site_static/{css,js,fonts}` | Hand-written CSS (`tokens.css` holds all colors and the `@font-face` rules, including league inks), vanilla JS (`names.js` for name folding, slugs and search ranking shared by the others and unit-tested under Node, `rankings.js` for filtering, sorting and the distribution figure, `team.js` for the SVG Elo chart on team and player pages, `entry.js` for their game log and current-section marking (with `entry.css`), `forecast.js` for the FORGE head-to-head box, `search.js` for the header team and player search, `nav.js` for the header's Teams and Players menus, `predictions.js` for local times and filters on the fixture registers), and the self-hosted Source Serif 4 font (OFL), all copied verbatim into `output/` |
@@ -100,11 +107,11 @@ python -m http.server -d output 8000    # preview the built site locally
 ## Gotchas
 
 - `get_glory_ranking()` reads and fits one model **per year** on every call. Reading the games is the slow part, so `build_site.py` loads them once with `load_glory_games()` and passes `games=` to its calls (GLORY qualified/all, unadjusted GLORY, GLORB, Luck), and fits Record once and passes it as `record=`. A build takes about 65 seconds: about 3 for the Form pass over every team-game, about 15 for AURA (every player-game and four snapshot fits per year), about 20 for the game logs, and most of the rest writing about 7,000 pages and their game-log files.
-- International events (Worlds, MSI, ...) are ingested as their own leagues (`INTERNATIONAL_LEAGUES` in `types.py`). They are the only games linking regional Elo pools. Oracle's Elixir leaves `split` empty for them, so don't reintroduce a blanket `dropna` over `split` in `002_add_matches.py`.
+- International events (Worlds, MSI, ...) are ingested as their own leagues (`INTERNATIONAL_LEAGUES` in `types.py`). They are the only games linking regional Elo pools. A new cross-region event (an invitational, a new international cup) must be added there, or it becomes its teams' home league: their FORGE calls turn into Elo calls and leave the FORGE page and the Kalshi alerts (this happened with `DCGI` and `WSCI` until 2026-10-06). Oracle's Elixir leaves `split` empty for them, so don't reintroduce a blanket `dropna` over `split` in `002_add_matches.py`.
 - `setup_db.sh` **deletes** `db/prometheus.db` before rebuilding.
 - Several modules end in `if __name__ == "__main__":` scratch blocks. They aren't real entry points.
 - `scripts/004_bootstrap_elo.py` clears and refills `game_length_elo`, so it's safe to rerun.
-- Leaguepedia rate-limits anonymous API calls after a few in a row and stays shut for minutes. Don't loop on it while developing: cache a fetched schedule (`fetch_schedule(...).to_pickle(...)`) and pass it as `schedule=` to `build_predictions`, or build with `PREDICTIONS_FETCH=0`.
+- Leaguepedia rate-limits anonymous API calls after a few in a row and stays shut for minutes. Put a bot password in a gitignored `.env` (`LEAGUEPEDIA_USER=Name@bot`, `LEAGUEPEDIA_PASSWORD=...`) and local builds log in for a higher limit. Don't loop on it while developing: cache a fetched schedule (`fetch_schedule(...).to_pickle(...)`) and pass it as `schedule=` to `build_predictions`, or build with `PREDICTIONS_FETCH=0`.
 
 ## Before you finish a change
 

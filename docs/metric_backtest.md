@@ -41,17 +41,17 @@
 | Either team within 10 games of a starter change | 10,300 | 0.6312 | 0.6295 | -0.0017 (-0.0046 to +0.0012) |
 
 Lower Brier and log loss are better. A negative log-loss delta means the metric beats win % so far; an interval that excludes 0 is a real difference.
-### Cross-league, every league: 9,432 games, 2014–2026
+### Cross-league, every league: 9,430 games, 2014–2026
 
 Elo (live) on games between teams from two home leagues at any event; the home is the league a team played most that season.
 
 | Teams | Games | Accuracy | Brier | Log loss |
 |---|---:|---:|---:|---:|
-| All | 9,432 | 65.5% | 0.2153 | 0.6194 |
+| All | 9,430 | 65.5% | 0.2153 | 0.6193 |
 | Major v major | 1,039 | 63.4% | 0.2227 | 0.6370 |
 | Major v other | 1,771 | 67.9% | 0.2051 | 0.5947 |
-| Other v other | 6,622 | 65.1% | 0.2168 | 0.6233 |
-| At an international event | 2,111 | 65.2% | 0.2148 | 0.6171 |
-| At any other event (EMEA Masters, cups, promotion) | 7,321 | 65.5% | 0.2154 | 0.6201 |
+| Other v other | 6,620 | 65.2% | 0.2168 | 0.6231 |
+| At an international event | 2,182 | 65.4% | 0.2142 | 0.6156 |
+| At any other event (EMEA Masters, cups, promotion) | 7,248 | 65.5% | 0.2156 | 0.6204 |
 
 FORGE weights (log-odds per point): elo_weight = 0.00483, form_weight = 0.50500, cross_region_elo_weight = 0.00874. Form: half-life 20 games, carry 0.5, prior 5 games.

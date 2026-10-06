@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  issues: write # the daily Kalshi alert issue
 
 concurrency:
   group: deploy-prometheus-${{ github.ref }}
@@ -89,6 +90,17 @@ jobs:
       - name: Save the prediction log
         if: env.CAN_USE_AWS == 'true' && hashFiles('data/predictions.json') != ''
         run: aws s3 cp data/predictions.json "$PREDICTIONS_BACKUP" --only-show-errors
+      # The build writes data/kalshi_alert.json when FORGE beats Kalshi's ask by 5+
+      # points on a match 6-36 hours out (prometheus/alerts.py); post it as the day's
+      # issue (scripts/post_kalshi_alert.sh). The hourly prices workflow does the same
+      # between builds. Never blocks the deploy.
+      - name: Post the Kalshi alert
+        if: env.CAN_USE_AWS == 'true' && hashFiles('data/kalshi_alert.json') != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash scripts/post_kalshi_alert.sh
       - uses: actions/upload-artifact@v4
         with:
           name: site

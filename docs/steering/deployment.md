@@ -27,7 +27,9 @@ Required repository settings:
 | Variable | `CLOUDFRONT_DISTRIBUTION_ID` | `ThaivPrometheusProject` output `CloudFrontDistributionId` |
 | Secret | `AWS_ROLE_ARN` | `ThaivProjectPlatform` output `DeploymentRoleArn` |
 | Variable | `DATA_BACKUP_BUCKET` | `ThaivProjectPlatform` `PlatformArtifacts` bucket |
-| Secret (optional) | `LEAGUEPEDIA_USER`, `LEAGUEPEDIA_PASSWORD` | A Leaguepedia bot password (Special:BotPasswords on lol.fandom.com, read access only). Logged-in clients get a much higher rate limit; without them the build reads the schedule anonymously and, if refused, keeps yesterday's calls. |
+| Secret (optional) | `LEAGUEPEDIA_USER`, `LEAGUEPEDIA_PASSWORD` | A Leaguepedia bot password (Special:BotPasswords on lol.fandom.com, read access only). Logged-in clients get a much higher rate limit; without them the build reads the schedule anonymously and, if refused, keeps yesterday's calls. Set 2026-10-06; local builds read the same two values from a gitignored `.env`. |
+| Env (optional) | `KALSHI_PRICES` | Set to `0` to skip reading Kalshi's prices at build time (the Predictions page then keeps the prices already in the log). Unset in CI: each build makes one unauthenticated call to Kalshi's public API. |
+| Env (optional) | `KALSHI_ALERTS` | Set to `0` to skip the alerts. Otherwise a build or hourly run that priced matches writes `data/kalshi_alert.json` when FORGE beats Kalshi's ask by 5+ points on a match 6–36 hours out, and `scripts/post_kalshi_alert.sh` (the *Post the Kalshi alert* step in both workflows; main only, `issues: write`, the workflow's own token, `continue-on-error`) creates the day's `kalshi-alert` issue mentioning the owner (closing earlier ones), or edits it in place and comments only for new matches. GitHub's notification email is the alert. |
 
 ## Data backup
 
@@ -47,3 +49,10 @@ Google Drive rate-limits the shared Oracle's Elixir CSVs. Each build tries Drive
 - Each run adds a full release to `releases/`: about 290 MB since game logs (2026-10-06; 100 MB from 2026-10-02, about 30 MB before). Add an S3 lifecycle rule in the infrastructure stack to expire old releases.
 - GitHub disables scheduled workflows after 60 days without repository activity. If the daily rebuild stops, re-enable it under Actions.
 - The old GitHub Pages site (`thaiv28.github.io/Prometheus`) should be turned off once the AWS site is live.
+
+## Hourly Kalshi prices (`.github/workflows/prices.yml`)
+
+- Runs at :17 every hour (GitHub may start scheduled runs late) and on manual dispatch; main only; about a minute.
+- Skips the hour while a publish run is queued or running: both read and write the prediction log, and publish holds it for several minutes between restore and save. The hourly job finishes well before a publish that starts after it restores the log.
+- Steps: restore `data/predictions.json` from the backup bucket, `scripts/update_prices.py`, save the log back, copy `kalshi.json` and `predictions.json` into the site bucket's `current/` (`max-age=300`) and invalidate those two paths, then post the alert.
+- Uses the same role as the publish workflow (`AWS_ROLE_ARN`: backup bucket read-write, site bucket write, CloudFront invalidation) and the `DATA_BACKUP_BUCKET`, `DEPLOYMENT_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID` variables.

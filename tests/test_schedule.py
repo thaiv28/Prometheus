@@ -7,7 +7,7 @@ import math
 import pandas as pd
 import pytest
 
-from prometheus import schedule
+from prometheus import markets, schedule
 from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT
 
 UTC = datetime.timezone.utc
@@ -182,3 +182,90 @@ def test_is_major():
     assert not schedule.is_major({"league": "EM", "home1": "EM", "home2": "EM"})
     # An LCS promotion series between two challenger teams isn't a major-league match.
     assert not schedule.is_major({"league": "LCS", "home1": "NACL", "home2": "NACL"})
+
+
+def test_credentials_prefer_environment_then_env_file(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("# local\nLEAGUEPEDIA_USER='Me@bot'\nexport LEAGUEPEDIA_PASSWORD=\"secret\"\nOTHER=x\n")
+    assert schedule.credentials(env, {}) == ("Me@bot", "secret")
+    assert schedule.credentials(env, {"LEAGUEPEDIA_USER": "Ci@bot", "LEAGUEPEDIA_PASSWORD": "ci"}) == ("Ci@bot", "ci")
+    assert schedule.credentials(tmp_path / "missing", {}) == (None, None)
+
+
+def test_update_log_keeps_the_market_price_until_a_newer_one():
+    log = {}
+    sched = _schedule([{"match_id": "m1", "start": "2026-10-04 08:00:00", "team1": "A", "team2": "B"}])
+    first = datetime.datetime(2026, 10, 3, 10, tzinfo=UTC)
+    schedule.update_log(log, sched, [_pred("m1", "2026-10-04T08:00Z")], first, "2026-10-02")
+    log["m1"]["market"] = {"p": 0.55, "at": "2026-10-03T10:00Z"}
+    log["m1"]["market_12h"] = {"p": 0.54, "at": "2026-10-03T10:00Z"}
+    second = datetime.datetime(2026, 10, 4, 6, tzinfo=UTC)
+    schedule.update_log(log, sched, [_pred("m1", "2026-10-04T08:00Z", 0.7)], second, "2026-10-03")
+    assert log["m1"]["p_game"] == 0.7 and log["m1"]["market"]["p"] == 0.55
+    assert log["m1"]["market_12h"]["p"] == 0.54
+
+
+def test_attach_market_prices_never_fails_the_build(monkeypatch):
+    def boom():
+        raise OSError("down")
+
+    assert schedule.attach_market_prices({}, _ratings(), datetime.datetime.now(UTC), fetch=boom) is None
+    monkeypatch.setenv("KALSHI_PRICES", "0")
+    assert schedule.attach_market_prices({}, _ratings(), datetime.datetime.now(UTC), fetch=lambda: pytest.fail("skipped")) is None
+
+
+def test_market_scorecard_splits_forge_and_elo_and_needs_enough_series():
+    market = {"p": 0.5, "at": "2026-10-04T07:00Z"}
+    early = {"market_12h": {"p": 0.5}}
+    entries = [
+        {**_pred("a", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market), **early},
+        {**_pred("b", "2026-10-04T08:00Z", 0.4), "winner": 1, "market": dict(market), "method": "elo", **early},
+        {**_pred("f", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market)},  # no 12-hour price
+        {**_pred("c", "2026-10-04T08:00Z", 0.8), "winner": 1},  # no price
+        {**_pred("d", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": {"p": 0.5, "at": "2026-10-04T09:00Z"}},  # priced after the start
+        {**_pred("e", "2026-10-04T08:00Z", 0.8), "market": dict(market)},  # not played
+        # Two calls rebuilt after the match: the FORGE backtest.
+        {**_pred("r1", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market), "reconstructed": True, **early},
+        {**_pred("r2", "2026-10-04T08:00Z", 0.4), "winner": 1, "market": dict(market), "reconstructed": True, **early},
+    ]
+    rows = {(r["label"], r["source"]): r for r in schedule.market_scorecard(entries, min_n=2)}
+    assert list(rows) == schedule.BET_GROUPS
+    forge, elo, backtest = rows[("FORGE", "saved")], rows[("Elo", "saved")], rows[("FORGE", "backtest")]
+    assert (forge["series"], elo["series"], backtest["series"], rows[("Elo", "backtest")]["series"]) == (1, 1, 2, 0)
+    assert forge["ours_loss"] == pytest.approx(-math.log(0.8))
+    assert forge["market_loss"] == pytest.approx(math.log(2))
+    assert (forge["ours_pct"], forge["market_pct"], elo["ours_pct"]) == (100, 50, 0)
+    assert forge["diff"] is None and backtest["diff"] is not None
+    assert backtest["diff"][0] == pytest.approx((-math.log(0.8) - math.log(0.4)) / 2 - math.log(2))
+    assert schedule.market_scorecard([])[0]["ours_loss"] is None
+
+
+def test_edge_record_bets_the_side_with_the_edge_and_scores_return_and_clv():
+    def bet(mid, ours, ask1, ask2, close, winner, method="forge"):
+        return {**_pred(mid, "2026-10-04T08:00Z", ours), "method": method, "winner": winner,
+                "market": {"p": close, "at": "2026-10-04T07:00Z"},
+                "market_12h": {"p": 0.5, "ask1": ask1, "ask2": ask2, "at": "2026-10-03T20:00Z", "ours": ours}}
+
+    entries = [
+        bet("a", 0.70, 0.60, 0.42, 0.66, 1),  # team1: +10 edge, CLV +6, won
+        bet("b", 0.30, 0.40, 0.62, 0.40, 1),  # team2: 70 vs 62, +8 edge, CLV 60 - 62 = -2, lost
+        bet("c", 0.52, 0.51, 0.51, 0.50, 2, method="elo"),  # +1 edge, lost
+        {**_pred("d", "2026-10-04T08:00Z", 0.9), "winner": 1},  # no 12-hour price
+        {**bet("r", 0.70, 0.60, 0.42, 0.66, 1), "reconstructed": True},  # the backtest
+    ]
+    out = schedule.edge_record(entries, min_n=2)
+    assert {(r["label"], r["source"]) for r in out} == set(schedule.BET_GROUPS)
+    rows = {(r["label"], r["edge"]): r for r in out if r["source"] == "saved"}
+    backtest = {(r["label"], r["edge"]): r for r in out if r["source"] == "backtest"}
+    assert backtest[("FORGE", 0.05)]["bets"] == 1 and backtest[("Elo", 0.0)]["bets"] == 0
+    five = rows[("FORGE", 0.05)]
+    assert (five["bets"], five["won"]) == (2, 1)
+    profits = [1 / 0.60 - 1 - markets.fee(0.60, 1), -1 - markets.fee(0.62, 1)]
+    assert five["roi"] == pytest.approx(sum(profits) / 2)
+    assert five["clv"] == pytest.approx(0.02) and five["beat"] == 0.5
+    assert five["roi_ci"] is not None and rows[("FORGE", 0.10)]["bets"] == 0
+    assert rows[("Elo", 0.0)]["bets"] == 1 and rows[("Elo", 0.03)]["bets"] == 0
+    assert rows[("Elo", 0.0)]["roi_ci"] is None  # under min_n
+    # Every match, backing our pick: here the same sides as the value bets.
+    assert (rows[("FORGE", None)]["bets"], rows[("FORGE", None)]["won"]) == (2, 1)
+    assert rows[("Elo", None)]["bets"] == 1

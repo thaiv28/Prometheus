@@ -1,5 +1,5 @@
 {% extends 'base.html.j2' %}
-{% from '_marks.html.j2' import fixtures, league %}
+{% from '_marks.html.j2' import fixtures, league, filter_line %}
 {% block title %}Predictions · Prometheus{% endblock %}
 {% block description %}{{ metric.description }}{% endblock %}
 {% block canonical_path %}predictions.html{% endblock %}
@@ -8,36 +8,17 @@
     <div class="spread-main">
       <header class="section-head">
         <h1>{{ metric.name }} <span class="full-name">{{ metric.full_name }}</span></h1>
-        <p class="lede">{{ metric.description }} A call is saved before its match starts and never changed afterwards.<a class="note-ref" href="#note-3" aria-label="Note 3">3</a></p>
+        <p class="lede">{{ metric.description }} Calls freeze at the start.<a class="note-ref" href="#note-3" aria-label="Note 3">3</a></p>
       </header>
 
-      <div class="filter-line" role="group" aria-label="Filters" hidden>
-        <span class="filter-lead">Filter</span>
-        <details class="picker" data-filter="leagues">
-          <summary><span class="picker-label">leagues</span> <span class="picker-value" data-all="All">All</span></summary>
-          <fieldset class="picker-panel picker-panel--leagues">
-            <legend class="picker-legend">Leagues</legend>
-            <button type="button" class="picker-shortcut" data-select="{{ view.major_set | join(',') }}">Major leagues and international events</button>
-            <div class="picker-options">
-              {% for l in view.leagues %}
-              <label data-league="{{ l }}"><input type="checkbox" value="{{ l }}" /> <span class="league-mark" aria-hidden="true"></span>{{ l }}</label>
-              {% endfor %}
-            </div>
-          </fieldset>
-        </details>
-        <label class="filter-search" for="filter-search">
-          <span class="picker-label">team</span>
-          <input id="filter-search" type="search" placeholder="Any" autocomplete="off" spellcheck="false" />
-        </label>
-        <button type="button" class="clear-filters" hidden>Clear filters</button>
-      </div>
+      {{ filter_line(view) }}
 
       <section class="fixtures-block" aria-labelledby="upcoming-heading">
         <div class="block-head">
           <h2 id="upcoming-heading">Coming up</h2>
         </div>
         <figure class="register-figure" aria-labelledby="upcoming-cap">
-          <figcaption id="upcoming-cap" class="table-caption">Table I. The next {{ view.upcoming_count }} matches between teams we rate, soonest first, with each team’s chance of taking the series.<a class="note-ref" href="#note-dagger" aria-label="Caveat">†</a> <span class="count" data-count-for="upcoming" aria-live="polite"></span></figcaption>
+          <figcaption id="upcoming-cap" class="table-caption">Table I. {% if view.upcoming_count == 1 %}The next match.{% else %}The next {{ view.upcoming_count }} matches, soonest first.{% endif %}<a class="note-ref" href="#note-dagger" aria-label="Caveat">†</a> <span class="count" data-count-for="upcoming" aria-live="polite"></span></figcaption>
           {% if view.upcoming %}
           <div class="table-scroll">{{ fixtures(view.upcoming, id='upcoming') }}</div>
           {% endif %}
@@ -50,9 +31,9 @@
           <h2 id="record-heading">How the calls have done</h2>
         </div>
         {% set saved = view.scorecard[0] %}
-        <p class="section-prose">{% if saved.series %}Of the {{ saved.series }} series called before they were played{% if view.saved_since %} since {{ view.saved_since | longdate }}{% endif %}, the favourite won {{ saved.right | round | int }} ({{ saved.series_pct | round | int }} in 100).{% else %}No series called before it was played has finished yet; the first saved calls are in Table I.{% endif %} {% if view.scorecard[1].series %}Calls rebuilt for the {{ view.scorecard[1].series }} series played before the log began picked {{ view.scorecard[1].series_pct | round | int }} in 100.{% endif %}</p>
+        <p class="section-prose">{% if saved.series %}Called before the match{% if view.saved_since %} since {{ view.saved_since | longdate }}{% endif %}: the favourite won {{ saved.right | round | int }} of {{ saved.series }}.{% else %}No saved call has finished yet.{% endif %}{% if view.scorecard[1].series %} Rebuilt calls: {{ view.scorecard[1].series_pct | round | int }}% of {{ view.scorecard[1].series }}.{% endif %}</p>
         <figure class="register-figure" aria-labelledby="record-cap">
-          <figcaption id="record-cap" class="table-caption">Table II. The record so far, by series and by game.<a class="note-ref" href="#note-4" aria-label="Note 4">4</a></figcaption>
+          <figcaption id="record-cap" class="table-caption">Table II. Record by series and by game.<a class="note-ref" href="#note-4" aria-label="Note 4">4</a></figcaption>
           <div class="table-scroll">
             <table class="register register--record">
               <thead>
@@ -80,6 +61,104 @@
             </table>
           </div>
         </figure>
+
+        {% set span = view.backtest_span %}
+        <figure class="register-figure" aria-labelledby="market-cap">
+          <figcaption id="market-cap" class="table-caption">Table III. Against Kalshi’s last price before the start, on matches also priced 12 hours out. Difference: our log loss minus Kalshi’s; below 0 beats the market. Saved: calls made before the match.{% if span %} Backtest: calls rebuilt from the day before, {{ span[0] | longdate }} – {{ span[1] | longdate }}; the forecast weights saw these games.{% endif %}<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
+          <div class="table-scroll">
+            <table class="register register--record register--market register--edges">
+              <thead>
+                <tr>
+                  <th scope="col" rowspan="2" class="edges-calls">Calls</th>
+                  <th scope="col" rowspan="2">Source</th>
+                  <th scope="col" class="num" rowspan="2">Series</th>
+                  <th scope="colgroup" colspan="2" class="num phone-hide">Favourite won</th>
+                  <th scope="colgroup" colspan="2" class="num">Log loss</th>
+                  <th scope="col" class="num" rowspan="2">Difference <span class="ci">(95%)</span></th>
+                </tr>
+                <tr>
+                  <th scope="col" class="num phone-hide">Ours</th>
+                  <th scope="col" class="num phone-hide">Kalshi</th>
+                  <th scope="col" class="num">Ours</th>
+                  <th scope="col" class="num">Kalshi</th>
+                </tr>
+              </thead>
+              {% for group in view.vs_market %}
+              <tbody>
+                {% for src in group.sources %}
+                {% for row in src.rows %}
+                <tr{% if src.name == 'backtest' %} class="edges-backtest"{% endif %}>
+                  {% if loop.first and src.name == 'saved' %}<th scope="rowgroup" rowspan="{{ group.sources | sum(attribute='rows', start=[]) | length }}" class="edges-calls">{{ group.label }}</th>{% endif %}
+                  <th scope="row" class="edges-source"><span class="edges-method">{{ group.label }}, </span>{{ 'Backtest' if src.name == 'backtest' else 'Saved' }}</th>
+                  <td class="num">{{ row.series }}</td>
+                  {% if row.series %}
+                  <td class="num phone-hide">{{ row.ours_pct | round | int }}<span class="of"> %</span></td>
+                  <td class="num phone-hide">{{ row.market_pct | round | int }}<span class="of"> %</span></td>
+                  <td class="num value">{{ '%.3f' | format(row.ours_loss) }}</td>
+                  <td class="num">{{ '%.3f' | format(row.market_loss) }}</td>
+                  <td class="num">{% if row.diff %}{{ '%+.3f' | format(row.diff[0]) }} <span class="ci">({{ '%+.3f' | format(row.diff[1]) }} to {{ '%+.3f' | format(row.diff[2]) }})</span>{% else %}<span class="muted">too few</span>{% endif %}</td>
+                  {% else %}
+                  <td class="num phone-hide"><span class="muted">—</span></td>
+                  <td class="num phone-hide"><span class="muted">—</span></td>
+                  <td class="num"><span class="muted">—</span></td>
+                  <td class="num"><span class="muted">—</span></td>
+                  <td class="num"><span class="muted">—</span></td>
+                  {% endif %}
+                </tr>
+                {% endfor %}
+                {% endfor %}
+              </tbody>
+              {% endfor %}
+            </table>
+          </div>
+        </figure>
+        <figure class="register-figure" aria-labelledby="edges-cap">
+          <figcaption id="edges-cap" class="table-caption">Table IV. $1 on our side 12 hours before the start: our pick in every match (Any, the matches in Table III), or where our chance beat Kalshi’s price by more than the edge. Return is after the 7% fee; CLV is the closing price minus the price paid. Saved and Backtest as in Table III.<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
+          <div class="table-scroll">
+            <table class="register register--record register--market register--edges">
+              <thead>
+                <tr>
+                  <th scope="col" class="edges-calls">Calls</th>
+                  <th scope="col">Source</th>
+                  <th scope="col" class="num">Edge</th>
+                  <th scope="col" class="num">Bets</th>
+                  <th scope="col" class="num phone-hide">Won</th>
+                  <th scope="col" class="num">Return <span class="ci">(95%)</span></th>
+                  <th scope="col" class="num">CLV <span class="ci">(95%)</span></th>
+                  <th scope="col" class="num phone-hide">Beat close</th>
+                </tr>
+              </thead>
+              {% for group in view.edges %}
+              <tbody>
+                {% set n = group.sources | sum(attribute='rows', start=[]) | length %}
+                {% for src in group.sources %}
+                {% set outer = loop %}
+                {% for row in src.rows %}
+                <tr{% if src.name == 'backtest' %} class="edges-backtest"{% endif %}>
+                  {% if outer.first and loop.first %}<th scope="rowgroup" rowspan="{{ n }}" class="edges-calls">{{ group.label }}</th>{% endif %}
+                  {% if loop.first %}<th scope="rowgroup" rowspan="{{ src.rows | length }}" class="edges-source"><span class="edges-method">{{ group.label }}, </span>{{ 'Backtest' if src.name == 'backtest' else 'Saved' }}</th>{% endif %}
+                  <td class="num">{% if row.edge is none %}<abbr title="Every match, backing our pick">Any</abbr>{% else %}&gt; {{ (100 * row.edge) | round | int }}{% endif %}</td>
+                  <td class="num">{{ row.bets }}</td>
+                  <td class="num phone-hide">{{ row.won }}</td>
+                  {% if row.bets %}
+                  <td class="num value">{{ '%+.1f' | format(100 * row.roi) }}<span class="of"> %</span>{% if row.roi_ci %} <span class="ci">({{ '%+.1f' | format(100 * row.roi_ci[0]) }} to {{ '%+.1f' | format(100 * row.roi_ci[1]) }})</span>{% endif %}</td>
+                  <td class="num">{% if row.clv is not none %}{{ '%+.1f' | format(100 * row.clv) }}{% if row.clv_ci %} <span class="ci">({{ '%+.1f' | format(100 * row.clv_ci[0]) }} to {{ '%+.1f' | format(100 * row.clv_ci[1]) }})</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+                  <td class="num phone-hide">{% if row.beat is not none %}{{ (100 * row.beat) | round | int }}<span class="of"> %</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+                  {% else %}
+                  <td class="num"><span class="muted">—</span></td>
+                  <td class="num"><span class="muted">—</span></td>
+                  <td class="num phone-hide"><span class="muted">—</span></td>
+                  {% endif %}
+                </tr>
+                {% endfor %}
+                {% endfor %}
+              </tbody>
+              {% endfor %}
+            </table>
+          </div>
+        </figure>
+        {% set al = view.alerts %}
+        <p class="section-prose record-note">Intervals from {{ view.market_min }} series or bets. <strong>Alerts:</strong> {% if al.settled %}{{ al.settled }} settled, {{ al.won }} won{% if al.clv is not none %}; closing line value {{ '%+.1f' | format(100 * al.clv) }} points, {{ (100 * al.beat) | round | int }}% beat the close{% endif %}; {{ '%+.1f' | format(100 * al.roi) }}% after fees{% if al.interval %} ({{ '%+.1f' | format(100 * al.interval[0]) }}% to {{ '%+.1f' | format(100 * al.interval[1]) }}%){% else %}, too few for an interval{% endif %}.{% else %}none settled yet.{% endif %}</p>
       </section>
 
       <section class="fixtures-block" aria-labelledby="past-heading">
@@ -88,12 +167,15 @@
           <a class="more" href="predictions.json">Every call as data</a>
         </div>
         <figure class="register-figure register-figure--main" aria-labelledby="past-cap">
-          <figcaption id="past-cap" class="table-caption">Table III. Every call and its result{% if view.since %} since {{ view.since | longdate }}{% endif %}, newest first. <span class="count" data-count-for="past" aria-live="polite"></span></figcaption>
+          <figcaption id="past-cap" class="table-caption">Table V. The last {{ view.recent_days }} days, newest first. <span class="count" data-count-for="past" aria-live="polite"></span></figcaption>
           {% if view.past %}
           <div class="table-scroll">{{ fixtures(view.past, results=True, id='past') }}</div>
           {% endif %}
-          <p class="empty fx-empty" data-empty-for="past"{% if view.past %} hidden{% endif %}>{% if view.past %}No result fits these filters.{% else %}No results yet.{% endif %}</p>
+          <p class="empty fx-empty" data-empty-for="past"{% if view.past %} hidden{% endif %}>{% if view.past %}No result fits these filters.{% else %}No results in the last {{ view.recent_days }} days.{% endif %}</p>
         </figure>
+        {% if view.months %}
+        <p class="month-index"><span class="month-index-lead">By month</span> {% for m in view.months %}<a href="results/{{ m.key }}.html">{{ m.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+        {% endif %}
       </section>
     </div>
 

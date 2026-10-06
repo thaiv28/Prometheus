@@ -1,0 +1,37 @@
+{% extends 'base.html.j2' %}
+{% from '_marks.html.j2' import fixtures, filter_line %}
+{% block title %}Results, {{ month.label }} · Prometheus{% endblock %}
+{% block description %}Every Prometheus call for {{ month.label }} and its result.{% endblock %}
+{% block canonical_path %}results/{{ month.key }}.html{% endblock %}
+{% block content %}
+  <div class="spread">
+    <div class="spread-main">
+      <header class="section-head">
+        <h1>Results <span class="full-name">{{ month.label }}</span></h1>
+        <p class="lede">Every call for {{ month.label }} and its result. <a href="../predictions.html">Predictions</a> has what's coming up and the record.</p>
+      </header>
+
+      {{ filter_line(view) }}
+
+      <section class="fixtures-block" aria-labelledby="month-heading">
+        <div class="block-head">
+          <h2 id="month-heading" class="visually-hidden">{{ month.label }}</h2>
+        </div>
+        <figure class="register-figure register-figure--main" aria-labelledby="month-cap">
+          <figcaption id="month-cap" class="table-caption">{{ month.label }}, newest first. <span class="count" data-count-for="past" aria-live="polite"></span></figcaption>
+          <div class="table-scroll">{{ fixtures(month.days, results=True, root='../', id='past') }}</div>
+          <p class="empty fx-empty" data-empty-for="past" hidden>No result fits these filters.</p>
+        </figure>
+        <p class="month-index">{% if newer %}<a href="{{ newer.key }}.html" rel="prev">← {{ newer.label }}</a>{% endif %}{% if newer and older %} · {% endif %}{% if older %}<a href="{{ older.key }}.html" rel="next">{{ older.label }} →</a>{% endif %}</p>
+      </section>
+    </div>
+
+    <aside class="margin notes" aria-labelledby="about-heading">
+      <h2 id="about-heading" class="margin-head">Reading the results</h2>
+      <p class="margin-note" id="note-3">Figures beside the bar are each team's chance of taking the series, in 100; the caret marks Kalshi's last price before the start. A call marked 3 was rebuilt after the match from the ratings the day before. <a href="../predictions.html#about">More on the calls</a>.</p>
+    </aside>
+  </div>
+{% endblock %}
+{% block scripts %}
+  <script src="{{ root_path }}{{ asset('js/predictions.js') }}" defer></script>
+{% endblock %}

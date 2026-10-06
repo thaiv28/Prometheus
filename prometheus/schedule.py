@@ -31,6 +31,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from prometheus import markets
 from prometheus.elo import expected_score, get_latest_elos
 from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, FORM_POINTS, team_forms
 from prometheus.types import ALL_MAJOR_LEAGUES, INTERNATIONAL_LEAGUES
@@ -56,7 +57,7 @@ EVENT_LEAGUES = {
     "Mid-Season Invitational": "MSI",
     "Esports World Cup": "EWC",
     "First Stand": "FST",
-    "Demacia Cup Global Invitational": "DCup",
+    "Demacia Cup Global Invitational": "DCGI",
     "EMEA Masters": "EM",
     "World Star Challengers Invitational": "WSCI",
     "LCK Challengers League": "LCKC",
@@ -104,9 +105,25 @@ def strip_disambiguation(name):
 
 _opener = None
 
+# Local builds can keep the bot password in a gitignored `.env` at the repo root.
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+CREDENTIALS = ("LEAGUEPEDIA_USER", "LEAGUEPEDIA_PASSWORD")
+
+
+def credentials(env_path=ENV_PATH, environ=os.environ):
+    """(user, password) from the environment, else from `env_path` (KEY=VALUE lines)."""
+    values = {key: environ.get(key) for key in CREDENTIALS}
+    if not all(values.values()) and Path(env_path).exists():
+        for line in Path(env_path).read_text().splitlines():
+            key, sep, value = line.strip().removeprefix("export ").partition("=")
+            if sep and key.strip() in CREDENTIALS and not values[key.strip()]:
+                values[key.strip()] = value.strip().strip("'\"")
+    return values["LEAGUEPEDIA_USER"], values["LEAGUEPEDIA_PASSWORD"]
+
 
 def _client():
-    """A URL opener, logged in when LEAGUEPEDIA_USER and LEAGUEPEDIA_PASSWORD are set.
+    """A URL opener, logged in when LEAGUEPEDIA_USER and LEAGUEPEDIA_PASSWORD are set
+    (in the environment, or in `.env` for local builds).
 
     Logged-in clients (a bot password from Special:BotPasswords) get a much higher
     rate limit than anonymous ones, which matters on shared CI addresses.
@@ -116,7 +133,7 @@ def _client():
         return _opener
     _opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
     _opener.addheaders = [("User-Agent", USER_AGENT)]
-    user, password = os.environ.get("LEAGUEPEDIA_USER"), os.environ.get("LEAGUEPEDIA_PASSWORD")
+    user, password = credentials()
     if user and password:
         token_url = API_URL + "?" + urllib.parse.urlencode(
             {"action": "query", "meta": "tokens", "type": "login", "format": "json"}
@@ -371,6 +388,11 @@ def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
         started = pred["start"] <= now_s
         if not started:
             entry = {**pred, "predicted": now_s, "data_through": data_through, "reconstructed": False}
+            if old is not None and pred.get("matched"):
+                # Until a newer price replaces them.
+                for key in ("market", "market_12h"):
+                    if key in old:
+                        entry[key] = old[key]
         elif old is not None and old.get("matched"):
             entry = old
         else:
@@ -425,9 +447,34 @@ def build_predictions(states, log_path, days_back=3, days_ahead=7, backfill_days
         return {**rec, "predicted": None, "data_through": str(day - datetime.timedelta(days=1))}
 
     update_log(log, schedule, predictions, now, data_through, reconstruct)
+    priced = attach_market_prices(log, ratings, now)
     save_log(log, log_path)
     unmatched = sorted({p[f"team{i}"] for p in predictions for i in (1, 2) if p[f"ours{i}"] is None and p[f"team{i}"] not in ("TBD", None)})
-    return log, {"matches": len(predictions), "matched": sum(p["matched"] for p in predictions), "unmatched": unmatched}
+    return log, {
+        "matches": len(predictions),
+        "matched": sum(p["matched"] for p in predictions),
+        "unmatched": unmatched,
+        "priced": priced,
+        "at": now.strftime("%Y-%m-%dT%H:%MZ"),
+        "data_through": data_through,
+    }
+
+
+def attach_market_prices(log, ratings, now, fetch=None):
+    """Kalshi's current chance on every logged match that hasn't started (see
+    `markets.attach_prices`). Never fails the build: on any error, or with
+    KALSHI_PRICES=0, matches keep the prices they had. Returns the number priced,
+    or None when skipped or failed."""
+    if os.environ.get("KALSHI_PRICES", "1") == "0":
+        return None
+    try:
+        open_markets = (fetch or markets.fetch_open_markets)()
+        aliases = json.loads(ALIASES_PATH.read_text()) if ALIASES_PATH.exists() else {}
+        match_team = TeamMatcher(ratings.reset_index(), {**aliases, **markets.MARKET_ALIASES})
+        return markets.attach_prices(log, open_markets, match_team, now)
+    except Exception as e:  # network, rate limit, schema change
+        print(f"Predictions: Kalshi prices not updated ({e}).")
+        return None
 
 
 def is_major(entry):
@@ -486,4 +533,178 @@ def scorecard(entries):
                 "log_loss": None if not games else loss / games,
             }
         )
+    return rows
+
+
+# Tables III and IV: FORGE and Elo calls, each saved before the match or rebuilt
+# afterwards (the backtest).
+BET_GROUPS = [
+    ("FORGE", "saved"),
+    ("FORGE", "backtest"),
+    ("Elo", "saved"),
+    ("Elo", "backtest"),
+]
+
+
+def _group(entry):
+    """(method label, source) of a logged call, as `BET_GROUPS` names them."""
+    label = "FORGE" if entry.get("method") == "forge" else "Elo"
+    return label, "backtest" if entry.get("reconstructed") else "saved"
+
+
+# Fewest settled series before the market comparison gives an interval.
+MARKET_MIN_SERIES = 30
+
+
+def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
+    """Our series calls against Kalshi's, on settled matches priced before the start
+    and 12 hours out (`market_12h`), the matches Table IV's every-match row bets on.
+
+    `market.p` is the last price read before the start (prices stop updating
+    once a match begins; for matches before the hourly reads, the last hourly
+    quote from Kalshi's price history). Returns rows for FORGE and Elo (same- and
+    cross-league Elo calls), each split by `source`: "saved" (calls saved before
+    the match) and "backtest" (calls rebuilt afterwards from the ratings the day
+    before): series, how often each favourite won (a 50-50 call counts as half),
+    each side's mean log loss per series, and `diff` (ours minus Kalshi's, with a
+    95% paired-bootstrap interval; below 0 means we beat the market) once a row
+    has `min_n` series, else None.
+    """
+    from prometheus.evaluation import paired_bootstrap
+
+    def clip(p):
+        return min(max(p, 1e-6), 1 - 1e-6)
+
+    def right(p, won1):
+        return 0.5 if p == 0.5 else float((p > 0.5) == won1)
+
+    done = [
+        e
+        for e in entries
+        if e.get("matched")
+        and e.get("winner") in (1, 2)
+        and (e.get("market") or {}).get("p") is not None
+        and e["market"]["at"] <= e["start"]
+        and e.get("market_12h")
+    ]
+    rows = []
+    for label, source in BET_GROUPS:
+        ours, theirs, ours_right, theirs_right = [], [], 0.0, 0.0
+        for e in (e for e in done if _group(e) == (label, source)):
+            won1 = e["winner"] == 1
+            p, q = clip(e["p_series"]), clip(e["market"]["p"])
+            ours.append(-math.log(p if won1 else 1 - p))
+            theirs.append(-math.log(q if won1 else 1 - q))
+            ours_right += right(e["p_series"], won1)
+            theirs_right += right(e["market"]["p"], won1)
+        n = len(ours)
+        rows.append(
+            {
+                "label": label,
+                "source": source,
+                "series": n,
+                "ours_pct": 100 * ours_right / n if n else None,
+                "market_pct": 100 * theirs_right / n if n else None,
+                "ours_loss": sum(ours) / n if n else None,
+                "market_loss": sum(theirs) / n if n else None,
+                "diff": (
+                    tuple(float(x) for x in paired_bootstrap(ours, theirs))
+                    if n >= min_n
+                    else None
+                ),
+            }
+        )
+    return rows
+
+
+# The edges, in chance points, the page scores paper bets above.
+# None is every match, backing our pick.
+BET_EDGES = (None, 0.0, 0.03, 0.05, 0.10)
+
+
+def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
+    """Paper bets on settled matches, `markets.BET_LEAD` before the start: $1 on
+    our pick in every match (edge None, the row Table III's matches line up
+    with), or on our side where our chance beats what a contract cost then
+    (`market_12h`'s ask) by more than each edge.
+
+    The side is the one with the larger edge. Each bet scores its profit after
+    Kalshi's fee at `rate` and its CLV: the last price before the start for that
+    team (`market.p`) minus the price paid. Returns rows for "FORGE" and "Elo",
+    each edge in turn: bets, won, mean return per dollar and mean CLV, each with a
+    95% bootstrap interval once there are `min_n` bets (else None), and the share
+    of bets beating the close. Rows come in `BET_GROUPS` order, split by source
+    (calls saved before the match, and the backtest of calls rebuilt after it).
+    """
+    from prometheus.evaluation import paired_bootstrap
+
+    bets = []
+    for e in entries:
+        early, close = e.get("market_12h"), e.get("market") or {}
+        if not e.get("matched") or e.get("winner") not in (1, 2) or not early:
+            continue
+        if early.get("ours") is None:
+            continue
+        options = {}
+        for side in (1, 2):
+            cost = early.get(f"ask{side}")
+            if cost is None or not 0 < cost < 1:
+                continue
+            ours = early["ours"] if side == 1 else 1 - early["ours"]
+            options[side] = (ours - cost, cost)
+        if not options:
+            continue
+
+        def bet(side):
+            edge, cost = options[side]
+            won = e["winner"] == side
+            shut = close.get("p")
+            if shut is not None and side == 2:
+                shut = 1 - shut
+            return {
+                "edge": edge,
+                "won": won,
+                "profit": (1 / cost - 1 if won else -1) - markets.fee(cost, 1, rate),
+                "clv": None if shut is None else shut - cost,
+            }
+
+        pick = 1 if early["ours"] >= 0.5 else 2
+        bets.append(
+            {
+                "group": _group(e),
+                "value": bet(max(options, key=lambda side: options[side][0])),
+                "pick": bet(pick) if pick in options else None,
+            }
+        )
+
+    def interval(values):
+        if len(values) < min_n:
+            return None
+        _, lo, hi = paired_bootstrap(values, [0.0] * len(values))
+        return float(lo), float(hi)
+
+    rows = []
+    for label, source in BET_GROUPS:
+        group = [b for b in bets if b["group"] == (label, source)]
+        for edge in edges:
+            if edge is None:  # every match: back our pick
+                sel = [b["pick"] for b in group if b["pick"]]
+            else:
+                sel = [b["value"] for b in group if b["value"]["edge"] > edge]
+            profits = [b["profit"] for b in sel]
+            clvs = [b["clv"] for b in sel if b["clv"] is not None]
+            rows.append(
+                {
+                    "label": label,
+                    "source": source,
+                    "edge": edge,
+                    "bets": len(sel),
+                    "won": sum(b["won"] for b in sel),
+                    "roi": sum(profits) / len(profits) if profits else None,
+                    "roi_ci": interval(profits),
+                    "clv": sum(clvs) / len(clvs) if clvs else None,
+                    "clv_ci": interval(clvs),
+                    "beat": sum(c > 0 for c in clvs) / len(clvs) if clvs else None,
+                }
+            )
     return rows

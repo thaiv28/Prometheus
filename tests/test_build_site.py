@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from prometheus import schedule
 from prometheus.schedule import series_probability
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -267,16 +268,22 @@ def test_predictions_view_splits_upcoming_past_and_home():
     now = datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.timezone.utc)
     view = build_site.predictions_view(_log(), {"t1"}, now)
     assert [r["id"] for d in view["upcoming"] for r in d["rows"]] == ["soon", "later"]
-    assert [r["id"] for d in view["past"] for r in d["rows"]] == ["past"]
+    assert view["past"] == []  # 13 days old: on its month's page, not in the recent results
+    assert [(m["key"], m["label"], m["count"]) for m in view["months"]] == [("2026-09", "September 2026", 1)]
     # Home: major and international matches within four days only.
     assert [r["id"] for d in view["home"] for r in d["rows"]] == ["soon"]
     soon = view["upcoming"][0]["rows"][0]
     assert soon["pct1"] + soon["pct2"] == 100 and soon["fav"] == 1
     assert soon["slug1"] == "t1" and soon["slug2"] is None  # Gen.G has no page here
     assert view["upcoming"][0]["label"] == "Sunday 4 October"
-    past = view["past"][0]["rows"][0]
+    past = view["months"][0]["days"][0]["rows"][0]
     assert past["call"] == "missed" and past["score"] == "1–2" and past["reconstructed"]
     assert view["scorecard"][1]["series"] == 1 and view["scorecard"][0]["series"] == 0
+    assert [(g["label"], [s["name"] for s in g["sources"]]) for g in view["vs_market"]] == [
+        ("FORGE", ["saved", "backtest"]),
+        ("Elo", ["saved", "backtest"]),
+    ]
+    assert view["alerts"]["settled"] == 0 and view["alerts"]["clv"] is None
     assert view["leagues"][:2] == ["LCK", "Worlds"]
 
 
@@ -286,6 +293,23 @@ def test_fixture_row_names_fall_back_to_leaguepedia_without_disambiguation():
     assert row["name2"] == "soon-b" and row["slug1"] is None
 
 
+def test_fixture_row_and_register_carry_the_market_price():
+    entry = {**_log()["soon"], "market": {"p": 0.634, "spread": 0.02, "at": "2026-10-03T02:30Z", "ticker": "K"}}
+    row = build_site.fixture_row(entry, set())
+    assert (row["mkt1"], row["mkt2"], row["mkt_at"]) == (63, 37, "3 Oct 02:30 UTC")
+    entry["market"]["ticker"] = "KXLOLGAME-26OCT041600T1GEN"
+    row = build_site.fixture_row(entry, set())
+    assert row["mkt_url"] == "https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct041600t1gen"
+    html = build_site.env.from_string(
+        "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days) }}{{ fixtures(days, results=True) }}"
+    ).render(days=[{"day": row["day"], "label": "Sunday 4 October", "rows": [row]}])
+    assert html.count('class="fx-mkt" style="--m: 63"') == 2  # the caret on both registers
+    assert ">63–37</a>" in html and 'href="https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct041600t1gen"' in html
+    assert ">Kalshi<" in html and 'colspan="11"' in html
+    plain = build_site.fixture_row(_log()["soon"], set())
+    assert "mkt1" not in plain
+
+
 def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
     monkeypatch.setattr(build_site, "OUTPUT_DIR", str(tmp_path))
     view = build_site.predictions_view(_log(), {"t1"}, datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.timezone.utc))
@@ -293,14 +317,34 @@ def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
     html = (tmp_path / "predictions.html").read_text()
     assert 'aria-current="page">Predictions' in html
     assert 'data-start="2026-10-04T08:00Z"' in html and "Sunday 4 October" in html
-    assert "Missed" in html and 'href="#note-3"' in html
+    assert 'href="results/2026-09.html">September 2026' in html
     assert "3 of 4 scheduled matches" in html
+    build_site.render_results(view, "October 3, 2026")
+    month = (tmp_path / "results" / "2026-09.html").read_text()
+    assert "Missed" in month and 'href="#note-3"' in month and 'id="note-3"' in month
+    assert 'href="../teams/' not in month or "../teams/t1.html" in month
+    assert '../css/' in month and "All leagues" in month
     assert 'data-select="LCK,LPL,LEC,LCS,Worlds' in html
     # The home page's compact table: no method column, no results.
     home = build_site.env.from_string(
         "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days, compact=True) }}"
     ).render(days=view["home"])
-    assert "fx-by" not in home and "Result" not in home and 'colspan="9"' in home
+    assert "fx-by" not in home and "Result" not in home and 'colspan="10"' in home
+
+
+def test_method_groups_split_saved_calls_from_the_backtest():
+    rows = [{"label": l, "source": src, "edge": 0.05} for l, src in schedule.BET_GROUPS]
+    forge, elo = build_site.method_groups(rows)
+    assert forge["label"] == "FORGE" and [s["name"] for s in forge["sources"]] == ["saved", "backtest"]
+    assert all(len(s["rows"]) == 1 for g in (forge, elo) for s in g["sources"])
+    entries = [
+        {"start": "2026-01-14T08:00Z", "reconstructed": True, "market_12h": {"p": 0.5}, "winner": 1},
+        {"start": "2026-10-03T08:00Z", "reconstructed": True, "market_12h": {"p": 0.5}, "winner": 2},
+        {"start": "2026-10-05T08:00Z", "market_12h": {"p": 0.5}, "winner": 1},  # saved
+        {"start": "2026-10-04T08:00Z", "reconstructed": True, "market_12h": {"p": 0.5}},  # no result
+    ]
+    assert build_site.backtest_span(entries) == ("2026-01-14", "2026-10-03")
+    assert build_site.backtest_span([]) is None
 
 
 def _game_log(n_series):
