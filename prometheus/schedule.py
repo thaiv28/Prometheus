@@ -536,6 +536,22 @@ def scorecard(entries):
     return rows
 
 
+# Tables III and IV: FORGE and Elo calls, each saved before the match or rebuilt
+# afterwards (the backtest).
+BET_GROUPS = [
+    ("FORGE", "saved"),
+    ("FORGE", "backtest"),
+    ("Elo", "saved"),
+    ("Elo", "backtest"),
+]
+
+
+def _group(entry):
+    """(method label, source) of a logged call, as `BET_GROUPS` names them."""
+    label = "FORGE" if entry.get("method") == "forge" else "Elo"
+    return label, "backtest" if entry.get("reconstructed") else "saved"
+
+
 # Fewest settled series before the market comparison gives an interval.
 MARKET_MIN_SERIES = 30
 
@@ -546,12 +562,13 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
 
     `market.p` is the last price read before the start (prices stop updating
     once a match begins; for matches before the hourly reads, the last hourly
-    quote from Kalshi's price history). Returns rows for "FORGE", "Elo"
-    (same-league and cross-league Elo calls), "All" and "Saved calls" (all,
-    without calls rebuilt after the match): series, how often each favourite won (a
-    50-50 call counts as half), each side's mean log loss per series, and
-    `diff` (ours minus Kalshi's, with a 95% paired-bootstrap interval; below 0
-    means we beat the market) once a row has `min_n` series, else None.
+    quote from Kalshi's price history). Returns rows for FORGE and Elo (same- and
+    cross-league Elo calls), each split by `source`: "saved" (calls saved before
+    the match) and "backtest" (calls rebuilt afterwards from the ratings the day
+    before): series, how often each favourite won (a 50-50 call counts as half),
+    each side's mean log loss per series, and `diff` (ours minus Kalshi's, with a
+    95% paired-bootstrap interval; below 0 means we beat the market) once a row
+    has `min_n` series, else None.
     """
     from prometheus.evaluation import paired_bootstrap
 
@@ -570,16 +587,10 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
         and e["market"]["at"] <= e["start"]
         and e.get("market_12h")
     ]
-    groups = [
-        ("FORGE", lambda e: e.get("method") == "forge"),
-        ("Elo", lambda e: e.get("method") != "forge"),
-        ("All", lambda e: True),
-        ("Saved calls", lambda e: not e.get("reconstructed")),
-    ]
     rows = []
-    for label, keep in groups:
+    for label, source in BET_GROUPS:
         ours, theirs, ours_right, theirs_right = [], [], 0.0, 0.0
-        for e in filter(keep, done):
+        for e in (e for e in done if _group(e) == (label, source)):
             won1 = e["winner"] == 1
             p, q = clip(e["p_series"]), clip(e["market"]["p"])
             ours.append(-math.log(p if won1 else 1 - p))
@@ -590,6 +601,7 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
         rows.append(
             {
                 "label": label,
+                "source": source,
                 "series": n,
                 "ours_pct": 100 * ours_right / n if n else None,
                 "market_pct": 100 * theirs_right / n if n else None,
@@ -621,7 +633,8 @@ def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
     team (`market.p`) minus the price paid. Returns rows for "FORGE" and "Elo",
     each edge in turn: bets, won, mean return per dollar and mean CLV, each with a
     95% bootstrap interval once there are `min_n` bets (else None), and the share
-    of bets beating the close.
+    of bets beating the close. Rows come in `BET_GROUPS` order, split by source
+    (calls saved before the match, and the backtest of calls rebuilt after it).
     """
     from prometheus.evaluation import paired_bootstrap
 
@@ -658,7 +671,7 @@ def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
         pick = 1 if early["ours"] >= 0.5 else 2
         bets.append(
             {
-                "forge": e.get("method") == "forge",
+                "group": _group(e),
                 "value": bet(max(options, key=lambda side: options[side][0])),
                 "pick": bet(pick) if pick in options else None,
             }
@@ -671,17 +684,19 @@ def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
         return float(lo), float(hi)
 
     rows = []
-    for label, forge in (("FORGE", True), ("Elo", False)):
+    for label, source in BET_GROUPS:
+        group = [b for b in bets if b["group"] == (label, source)]
         for edge in edges:
             if edge is None:  # every match: back our pick
-                sel = [b["pick"] for b in bets if b["forge"] == forge and b["pick"]]
+                sel = [b["pick"] for b in group if b["pick"]]
             else:
-                sel = [b["value"] for b in bets if b["forge"] == forge and b["value"]["edge"] > edge]
+                sel = [b["value"] for b in group if b["value"]["edge"] > edge]
             profits = [b["profit"] for b in sel]
             clvs = [b["clv"] for b in sel if b["clv"] is not None]
             rows.append(
                 {
                     "label": label,
+                    "source": source,
                     "edge": edge,
                     "bets": len(sel),
                     "won": sum(b["won"] for b in sel),

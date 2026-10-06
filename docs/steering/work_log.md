@@ -3,6 +3,14 @@
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
 
+
+## 2026-10-06 — Tables III and IV: saved calls against the backtest
+
+- **Why.** With the log back to January, its rows were almost all rebuilt calls, a second backtest beside the `market_bets.json` one (user: "Since 14 Jan is essentially a backtest").
+- **What.** `schedule.BET_GROUPS` splits both tables by method (FORGE / Elo) and source: *Saved* (calls made before the match, the forward record) and *Backtest* (calls rebuilt from the day before; caption: 14 Jan – 3 Oct 2026, weights saw those games). `market_scorecard` and `edge_record` return rows with `source`; `build_site.method_groups` groups them, `backtest_span` dates them. Table III loses its All row. The page no longer shows the `evaluate_markets.py` betting rows: `bet_summary`, `docs/market_bets.json` and `edge_groups` are removed (the report keeps its betting section).
+- On the current log: Table III FORGE saved 2 series, backtest 730 (Δ +0.015, +0.000 to +0.031); Elo saved 13, backtest 1,398 (+0.087, +0.067 to +0.106). Table IV FORGE backtest above 5 points: 310 bets, +16.9% (+0.8 to +33.0), CLV +0.9 (+0.2 to +1.7). Saved rows have 2 (FORGE) and 13 (Elo) bets so far, no intervals.
+- Verification: `uv run pytest -q` (all pass; tests rewritten for the split); local build from the S3 log with Playwright at 1440, 1280 and 390 px: both tables' scrollers fit at 390, no horizontal scroll, no page errors.
+
 ## 2026-10-06 — Log back to 1 Jan 2026, results by month, majors by default
 
 - **Log extended** (`scripts/extend_log.py`, user's request): Leaguepedia's schedule from 1 Jan to 1 Sep 2026, fetched a month at a time, added through `update_log` with calls rebuilt from the ratings the day before each match (as a new log's 30-day rebuild does). 11,373 matches added, 4,258 rated in all; rebuilt calls: favourite won 67.3% of 4,204 series, log loss 0.638 per game. Merged add-only into the CI log at 17:58 UTC (between runs; previous log kept as `predictions.before-2026-extension.json`), keeping everything the jobs wrote since: 97 missing prices filled, 31 Demacia Cup entries relabelled.
