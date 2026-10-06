@@ -184,6 +184,76 @@ def other_league_games(games, international, majors):
     return out[keep].reset_index(drop=True)
 
 
+def _slope_and_se(gap, won, start=0.0, steps=25):
+    """Logistic slope through the origin (win chance 1/2 at an even gap) and its
+    standard error, by Newton's method."""
+    b = start
+    with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
+        for _ in range(steps):
+            p = 1 / (1 + np.exp(-b * gap))
+            info = np.sum(p * (1 - p) * gap**2)
+            b += np.sum((won - p) * gap) / info
+        p = 1 / (1 + np.exp(-b * gap))
+        se = 1 / np.sqrt(np.sum(p * (1 - p) * gap**2))
+    # A league whose results the gap separates perfectly has no finite slope.
+    return (b, se) if np.isfinite(b) and np.isfinite(se) else (np.nan, np.inf)
+
+
+def shrunk_league_slopes(gap, won, leagues):
+    """Win-curve slope per league, shrunk toward the pooled slope (empirical Bayes).
+
+    Each league's slope is fit on its own games; how far it may stray from the
+    pooled slope depends on how much true slopes vary between leagues (estimated
+    from the spread of the league slopes beyond their sampling error) against its
+    own sampling error. Nothing is tuned: a small league ends near the pooled slope.
+
+    Args:
+        gap: Rating gaps (side order arbitrary, so no intercept).
+        won: 1 when the first side won.
+        leagues: League of each game.
+    Returns:
+        (pooled slope, {league: shrunk slope}).
+    """
+    gap, won, leagues = np.asarray(gap, float), np.asarray(won, float), np.asarray(leagues)
+    pooled, _ = _slope_and_se(gap, won)
+    fits = {}
+    for league in np.unique(leagues):
+        rows = leagues == league
+        fits[league] = _slope_and_se(gap[rows], won[rows], start=pooled)
+    fits = {league: fit for league, fit in fits.items() if np.isfinite(fit[0])}
+    slopes = np.array([s for s, _ in fits.values()])
+    errors = np.array([se for _, se in fits.values()])
+    # Variance of the true slopes between leagues (DerSimonian-Laird): how much the
+    # league slopes disagree beyond what their sampling errors explain.
+    weights = 1 / errors**2
+    mean = np.sum(weights * slopes) / np.sum(weights)
+    q = np.sum(weights * (slopes - mean) ** 2)
+    scale = np.sum(weights) - np.sum(weights**2) / np.sum(weights)
+    spread = max((q - (len(slopes) - 1)) / scale, 0.0) if scale > 0 else 0.0
+    return pooled, {
+        league: pooled + spread / (spread + se**2) * (slope - pooled) for league, (slope, se) in fits.items()
+    }
+
+
+def out_of_year_league_probabilities(frame, diff_col="elo_live", league_col="league"):
+    """Win probabilities from per-league curves (`shrunk_league_slopes`) fit on all
+    *other* years; a league with no curve in the training years uses the pooled one.
+
+    Args:
+        frame: One row per game with `year`, `won`, the gap and the league.
+    Returns:
+        Array of probabilities aligned with `frame`.
+    """
+    probs = np.full(len(frame), np.nan)
+    for year in frame["year"].unique():
+        test = (frame["year"] == year).to_numpy()
+        train = frame[~test] if (~test).any() else frame
+        pooled, slopes = shrunk_league_slopes(train[diff_col], train["won"], train[league_col])
+        slope = frame.loc[test, league_col].map(slopes).fillna(pooled).to_numpy()
+        probs[test] = 1 / (1 + np.exp(-slope * frame.loc[test, diff_col].to_numpy()))
+    return probs
+
+
 def spearman_brown(r, factor):
     """Reliability of a measure `factor` times as long, from reliability `r`."""
     return factor * r / (1 + (factor - 1) * r)

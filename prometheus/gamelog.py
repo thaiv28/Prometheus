@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, FORM_POINTS, OTHER_LEAGUE_ELO_WEIGHT
+from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, FORM_POINTS, other_league_weight
 from prometheus.form import league_relative, load_weights as load_form_weights, scores
 from prometheus.schedule import series_probability
 from prometheus.types import ALL_MAJOR_LEAGUES
@@ -108,7 +108,7 @@ def add_calls(games, states, form_weights=None):
         np.where(
             forge,
             1 / (1 + np.exp(-ELO_WEIGHT * ((e + f) - (oe + of)))),
-            1 / (1 + np.exp(-OTHER_LEAGUE_ELO_WEIGHT * (e - oe))),
+            1 / (1 + np.exp(-np.array([other_league_weight(l) for l in h]) * (e - oe))),
         ),
     )
     method = np.where(cross, "elo-cross", np.where(forge, "forge", "elo")).astype(

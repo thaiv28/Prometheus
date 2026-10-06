@@ -18,8 +18,9 @@ Test sets:
   league a team played most that season. Scored with Elo (live) only, as the site
   forecasts these games; it is the benchmark for league offsets below the majors.
 - Within other leagues: games inside one non-major league (both teams' home is that
-  league). Elo on the standard 400-point curve against Elo on a fitted curve; the
-  fitted slope is published as `other_league_elo_weight`.
+  league). Elo on the standard 400-point curve, on one fitted curve, and on a
+  fitted curve per league (shrunk toward the pooled one). The pooled slope is
+  published as `other_league_elo_weight`, the per-league ones in `league_curves.json`.
 
 Every forecast is scored on exactly the same games (both teams need 5+ games that
 season before the month starts), and each is compared with "win % so far this
@@ -46,13 +47,17 @@ from prometheus.evaluation import (
     cross_league_games,
     elo_as_of,
     other_league_games,
+    out_of_year_league_probabilities,
+    shrunk_league_slopes,
     game_losses,
     out_of_year_probabilities,
     paired_bootstrap,
 )
 from prometheus.forge import (
     WEIGHT_TOLERANCE,
+    load_league_curves,
     load_weights,
+    save_league_curves,
     save_weights,
     weight_changes,
 )
@@ -124,23 +129,31 @@ def load_pair_games():
 
 
 def summarize_other_leagues(games):
-    """Elo within non-major leagues: the standard 400-point curve against a fitted one."""
+    """Elo within non-major leagues: the standard 400-point curve, one fitted curve,
+    and a fitted curve per league."""
     standard = game_losses(1 / (1 + 10 ** (-games["elo_live"] / 400)), games["won"])
     fitted = game_losses(out_of_year_probabilities(games, "elo_live"), games["won"])
+    per_league = game_losses(out_of_year_league_probabilities(games), games["won"])
     lines = [
         f"\n### Within other leagues: {len(games):,} games, {games['year'].min()}–{games['year'].max()}\n",
-        "Elo on games inside one non-major league, with the standard 400-point curve and "
-        "with a curve fit on the other seasons.\n",
-        "| Games | n | Standard curve log loss | Fitted curve log loss | Difference (95% CI) |",
-        "|---|---:|---:|---:|---|",
+        "Elo on games inside one non-major league: the standard 400-point curve, one curve fit "
+        "on the other seasons, and a curve per league fit the same way (each league's slope "
+        "shrunk toward the pooled one by its sampling error).\n",
+        "| Games | n | Standard | One curve | Per league | One curve vs standard (95% CI) "
+        "| Per league vs one curve (95% CI) |",
+        "|---|---:|---:|---:|---:|---|---|",
     ]
+
+    def delta(a, b):
+        mean, lo, hi = paired_bootstrap(a, b)
+        return f"{mean:+.4f} ({lo:+.4f} to {hi:+.4f})"
+
     for label, mask in (("All", games["year"] > 0), ("2022 on", games["year"] >= 2022)):
         mask = mask.to_numpy()
-        a, b = fitted["log_loss"].to_numpy()[mask], standard["log_loss"].to_numpy()[mask]
-        mean, lo, hi = paired_bootstrap(a, b)
+        s, f, l = (x["log_loss"].to_numpy()[mask] for x in (standard, fitted, per_league))
         lines.append(
-            f"| {label} | {int(mask.sum()):,} | {b.mean():.4f} | {a.mean():.4f} "
-            f"| {mean:+.4f} ({lo:+.4f} to {hi:+.4f}) |"
+            f"| {label} | {int(mask.sum()):,} | {s.mean():.4f} | {f.mean():.4f} | {l.mean():.4f} "
+            f"| {delta(f, s)} | {delta(l, f)} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -419,7 +432,8 @@ def published_weights(frame, states, other):
         (form_weights, forge_weights). Form: log-odds per unit of each stat's gap,
         fit on domestic games. FORGE: elo_weight and form_weight (same-league
         games), cross_region_elo_weight (every game) and other_league_elo_weight
-        (`other`: games inside one non-major league).
+        (`other`: games inside one non-major league), plus per-league slopes for
+        `league_curves.json`. Returns (form_weights, league_curves, forge_weights).
     """
     gaps = _state_gaps(frame, states)
     domestic = (frame["test_set"] == "Domestic").to_numpy()
@@ -435,7 +449,8 @@ def published_weights(frame, states, other):
     elo_w, form_w = _slopes(np.c_[frame["elo_live"].to_numpy()[same], (blue - red)[same]], won[same])
     (cross_w,) = _slopes(frame["elo_live"].to_numpy(), won)
     (other_w,) = _slopes(other["elo_live"].to_numpy(), other["won"].to_numpy())
-    return form_weights, {
+    _, league_curves = shrunk_league_slopes(other["elo_live"], other["won"], other["league"])
+    return form_weights, league_curves, {
         "elo_weight": elo_w,
         "form_weight": form_w,
         "cross_region_elo_weight": cross_w,
@@ -451,23 +466,32 @@ def format_weights(forge):
     )
 
 
-def _tracked_and_refit(form_weights, forge):
-    tracked = {**load_weights(), **{f"form_{k}": v for k, v in form.load_weights()["weights"].items()}}
-    refit = {**forge, **{f"form_{k}": v for k, v in form_weights.items()}}
+def _tracked_and_refit(form_weights, forge, league_curves):
+    tracked = {
+        **load_weights(),
+        **{f"form_{k}": v for k, v in form.load_weights()["weights"].items()},
+        **{f"league_{k}": v for k, v in load_league_curves().items()},
+    }
+    refit = {
+        **forge,
+        **{f"form_{k}": v for k, v in form_weights.items()},
+        **{f"league_{k}": v for k, v in league_curves.items()},
+    }
     return tracked, refit
 
 
-def check_weights(form_weights, forge):
+def check_weights(form_weights, forge, league_curves):
     """Compare refit weights with the tracked ones; warn (GitHub annotation) on a big move."""
-    tracked, weights = _tracked_and_refit(form_weights, forge)
-    changes = weight_changes(tracked, weights)
+    tracked, weights = _tracked_and_refit(form_weights, forge, league_curves)
+    changes = weight_changes({k: v for k, v in tracked.items() if k in weights}, weights)
     for key, change in changes.items():
         print(f"{key}: tracked {tracked[key]:.5f}, refit {weights[key]:.5f} ({change:+.1%})")
     # Only the blend weights can raise a warning: some Form stat weights are near
-    # zero, so their relative changes are noise. They are printed above for review.
+    # zero, and small leagues' slopes move with a few games, so their relative
+    # changes are noise. They are printed above for review.
     moved = [
         key for key, change in changes.items()
-        if not key.startswith("form_") and change > WEIGHT_TOLERANCE
+        if not key.startswith(("form_", "league_")) and change > WEIGHT_TOLERANCE
     ]
     if moved:
         print(
@@ -507,9 +531,9 @@ def main():
     frame = add_form(backtest(games, results, elo_timeline, years), states)
     pairs = load_pair_games()
     other = other_league_games(pairs, INTERNATIONAL_LEAGUES, MAJORS)
-    form_weights, weights = published_weights(frame, states, other)
+    form_weights, league_curves, weights = published_weights(frame, states, other)
     if args.check_weights:
-        check_weights(form_weights, weights)
+        check_weights(form_weights, weights, league_curves)
         return
 
     report = (
@@ -526,7 +550,11 @@ def main():
     if args.write_weights:
         save_weights(weights)
         form.save_weights(form_weights)
-        print("Saved weights to prometheus/forge_weights.json and prometheus/form_weights.json")
+        save_league_curves(league_curves)
+        print(
+            "Saved weights to prometheus/forge_weights.json, prometheus/form_weights.json "
+            "and prometheus/league_curves.json"
+        )
 
 
 if __name__ == "__main__":

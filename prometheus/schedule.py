@@ -37,7 +37,7 @@ from prometheus.forge import (
     CROSS_REGION_ELO_WEIGHT,
     ELO_WEIGHT,
     FORM_POINTS,
-    OTHER_LEAGUE_ELO_WEIGHT,
+    other_league_weight,
     team_forms,
 )
 from prometheus.types import ALL_MAJOR_LEAGUES, INTERNATIONAL_LEAGUES
@@ -287,7 +287,8 @@ def game_probability(a, b):
         return 1 / (1 + math.exp(-CROSS_REGION_ELO_WEIGHT * (a["elo"] - b["elo"]))), "elo-cross"
     if a["league"] in MAJORS:
         return 1 / (1 + math.exp(-ELO_WEIGHT * (a["forge"] - b["forge"]))), "forge"
-    return 1 / (1 + math.exp(-OTHER_LEAGUE_ELO_WEIGHT * (a["elo"] - b["elo"]))), "elo"
+    weight = other_league_weight(a["league"])
+    return 1 / (1 + math.exp(-weight * (a["elo"] - b["elo"]))), "elo"
 
 
 def event_league(row, home1, home2):

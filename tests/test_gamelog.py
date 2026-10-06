@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from prometheus import gamelog
-from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, OTHER_LEAGUE_ELO_WEIGHT
+from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, other_league_weight
 from prometheus.schedule import series_probability
 from prometheus.types import GLORY_FEATURES
 
@@ -119,12 +119,12 @@ def test_calls_use_forge_within_a_major_league_and_elo_otherwise():
     assert a_vs_c["p"] == pytest.approx(
         1 / (1 + math.exp(-CROSS_REGION_ELO_WEIGHT * 100))
     )
-    # A minor league uses Elo on its own fitted curve.
+    # A minor league uses Elo on that league's fitted curve.
     minor = gamelog.add_calls(
         games.assign(league="LJL"), _states(games.assign(league="LJL")), weights
     )
     assert minor.iloc[0]["method"] == "elo"
-    assert minor.iloc[0]["p"] == pytest.approx(1 / (1 + math.exp(-OTHER_LEAGUE_ELO_WEIGHT * 100)))
+    assert minor.iloc[0]["p"] == pytest.approx(1 / (1 + math.exp(-other_league_weight("LJL") * 100)))
 
 
 def test_calls_skip_games_without_pre_game_elo():
