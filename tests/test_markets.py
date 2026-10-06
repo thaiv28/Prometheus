@@ -54,6 +54,7 @@ def test_attach_prices_orients_to_the_logged_team_order():
     assert markets.attach_prices(log, book, lambda name: name, NOW) == 1
     m = log["m"]["market"]
     assert m["p"] == pytest.approx(0.835) and m["spread"] == pytest.approx(0.01)
+    assert (m["ask1"], m["ask2"]) == pytest.approx((0.84, 0.17))
     assert (m["at"], m["ticker"]) == ("2026-10-06T03:00Z", "KXLOLGAME-E1")
 
 

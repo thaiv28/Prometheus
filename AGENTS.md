@@ -46,7 +46,7 @@ uv run python scripts/evaluate_metrics.py --out docs/metric_backtest.md   # back
 uv run python scripts/evaluate_metrics.py --write-weights   # also refresh Form and FORGE weights
 uv run python scripts/evaluate_season_stats.py --out docs/season_stats_report.md   # season-stat stability (~5s)
 uv run python scripts/evaluate_aura.py --out docs/aura_report.md   # AURA calibration and player tests (~40s)
-uv run python scripts/evaluate_markets.py --out docs/market_report.md   # our calls vs Kalshi's prices (~10 min; first run ~1 h fetching)
+uv run python scripts/evaluate_markets.py --out docs/market_report.md   # our calls vs Kalshi's prices (~10 min; first run ~1 h fetching; --reuse rewrites the report in seconds)
 python -m http.server -d output 8000    # preview the built site locally
 ```
 
@@ -71,6 +71,7 @@ python -m http.server -d output 8000    # preview the built site locally
 | `scripts/NNN_*.sql\|py` | DB build steps. `setup_db.sh` runs them **in numeric order**. |
 | `scripts/build_site.py` | Static site generator |
 | `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtest: how well each forecast, from earlier games only, predicts winners (domestic and cross-region); fits the forecast weights. Results in `docs/metric_backtest.md` |
+| `prometheus/markets.py`, `prometheus/alerts.py` | Kalshi's prediction market: parsing, quotes, name aliases and the prices stored on upcoming logged matches; the daily alert (FORGE beating Kalshi's ask by 5+ points, 6–36 hours out), recorded in the log and posted as a `kalshi-alert` GitHub issue by CI |
 | `scripts/evaluate_markets.py` | Market benchmark: our match calls against Kalshi's pre-match prices on the same series and map-1 games, and whether our call adds to the market. Results in `docs/market_report.md` |
 | `scripts/evaluate_season_stats.py` | Season-stat report: split-half reliability, games to 0.5, and fit to same-season results. Results in `docs/season_stats_report.md` |
 | `templates/*.html.j2` | Jinja2 templates: `base` (shell, with the Teams and Players menus), `index`, `rankings` (every metric page, driven by a column config), `predictions`, `team`, `player`, `sunset`, `redirect`, `404`, and the `_marks` macros (league mark, signed number, ordinal, the fixture register) |

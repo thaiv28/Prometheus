@@ -15,6 +15,7 @@ hasn't started (`attach_prices`). Like our call, it is frozen at the start.
 import datetime
 import http.client
 import json
+import math
 import re
 import time
 import urllib.error
@@ -154,19 +155,25 @@ def mid(bid, ask):
     return None, None
 
 
-def quote_at(candles, ts):
-    """(mid, spread) from the last hourly candle that ended by `ts` with a
+def book_at(candles, ts):
+    """(bid, ask) for "yes" from the last hourly candle that ended by `ts` with a
     two-sided quote, or (None, None)."""
-    best = None
+    best = (None, None)
     for c in candles:
         if c["end_period_ts"] > ts:
             break
-        quote = mid(
-            _dollars(c.get("yes_bid"), "close"), _dollars(c.get("yes_ask"), "close")
+        bid, ask = _dollars(c.get("yes_bid"), "close"), _dollars(
+            c.get("yes_ask"), "close"
         )
-        if quote[0] is not None:
-            best = quote
-    return best or (None, None)
+        if mid(bid, ask)[0] is not None:
+            best = (bid, ask)
+    return best
+
+
+def quote_at(candles, ts):
+    """(mid, spread) from the last hourly candle that ended by `ts` with a
+    two-sided quote, or (None, None)."""
+    return mid(*book_at(candles, ts))
 
 
 def events(markets, settled=True):
@@ -213,6 +220,28 @@ def chance_now(row, team1):
     return sum(chances) / len(chances), sum(spreads) / len(spreads)
 
 
+def buy_costs(row, team1):
+    """(cost of a team-1 contract, cost of a team-2 contract) for a market order
+    now: the cheaper of a team's "yes" ask and one minus the opponent's "yes" bid,
+    over quotes within `MAX_SPREAD`. None for a side with no usable quote."""
+    best = [None, None]
+    for m in row["markets"]:
+        if mid(m["bid"], m["ask"])[0] is None or m["ask"] - m["bid"] > MAX_SPREAD:
+            continue
+        mine, other = (0, 1) if m["side"] == team1 else (1, 0)
+        for side, cost in ((mine, m["ask"]), (other, 1 - m["bid"])):
+            best[side] = cost if best[side] is None else min(best[side], cost)
+    return tuple(best)
+
+
+def fee(price, stake, rate=0.07):
+    """Kalshi's fee on one order of `stake` dollars at `price`:
+    ceil(rate × contracts × P × (1 − P)) to the cent (7% for orders that take
+    the book, 1.75% for resting orders)."""
+    contracts = stake / price
+    return math.ceil(round(rate * contracts * price * (1 - price) * 100, 6)) / 100
+
+
 # ---------------------------------------------------------------- the log
 
 
@@ -228,7 +257,8 @@ def attach_prices(log, markets, match_team, now):
     `markets` are Kalshi's open series markets; `match_team` resolves Kalshi team
     names to ours (`schedule.TeamMatcher` with `MARKET_ALIASES`). A logged match
     takes the market between the same two teams whose start is nearest within
-    `MATCH_WINDOW`. The entry gets `market`: {"p": team1's chance, "spread", "at"
+    `MATCH_WINDOW`. The entry gets `market`: {"p": team1's chance, "spread",
+    "ask1"/"ask2" (what a contract on each team costs now, `buy_costs`), "at"
     (when the price was read), "ticker"}. A match without a usable quote keeps
     the price it had. Started matches are left alone, so the last price before
     the start stays. Returns the number of matches priced.
@@ -260,9 +290,12 @@ def attach_prices(log, markets, match_team, now):
         p, spread = chance_now(row, team1)
         if p is None:
             continue
+        ask1, ask2 = buy_costs(row, team1)
         entry["market"] = {
             "p": round(p, 4),
             "spread": round(spread, 4),
+            "ask1": ask1,
+            "ask2": ask2,
             "at": now_s,
             "ticker": row["event_ticker"],
         }

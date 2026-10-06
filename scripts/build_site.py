@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
-from prometheus import aura, markets, schedule
+from prometheus import alerts, aura, markets, schedule
 from prometheus.elo import (
     get_elo_history,
     get_latest_elos,
@@ -287,6 +287,9 @@ PREDICTIONS = {
 # within this many days.
 HOME_FIXTURES = 10
 HOME_FIXTURE_DAYS = 4
+# The day's Kalshi alert (title and body of a GitHub issue), written only when
+# there is one; the publish workflow posts it. Never published to the site.
+KALSHI_ALERT = os.environ.get("KALSHI_ALERT", os.path.join(ROOT_DIR, "data", "kalshi_alert.json"))
 # The prediction log; CI restores it from and saves it to the data backup bucket.
 PREDICTIONS_LOG = os.environ.get("PREDICTIONS_LOG", os.path.join(ROOT_DIR, "data", "predictions.json"))
 
@@ -790,6 +793,30 @@ def update_predictions(states):
         return schedule.load_log(PREDICTIONS_LOG), None
 
 
+def write_kalshi_alert(log, coverage, team_slugs, path=None):
+    """Pick today's alerts (`alerts.select`), record them in the log and write the
+    issue to `path`. Runs only on fresh prices (this build's fetch worked) and
+    unless KALSHI_ALERTS=0. A stale file from an earlier build is always removed,
+    so a day without alerts posts nothing. Returns the alerts."""
+    path = path or KALSHI_ALERT
+    if os.path.exists(path):
+        os.remove(path)
+    if os.environ.get("KALSHI_ALERTS", "1") == "0" or not coverage or not coverage.get("priced"):
+        return []
+    now = datetime.datetime.strptime(coverage["at"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=datetime.timezone.utc)
+    chosen = alerts.select(log, now)
+    if not chosen:
+        return []
+    alerts.record(chosen, now)
+    schedule.save_log(log, PREDICTIONS_LOG)
+    title, body = alerts.issue(chosen, log, now, coverage.get("data_through"), _slugify, team_slugs)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump({"title": title, "body": body, "day": alerts.day_key(now)}, f, ensure_ascii=False)
+    print(f"Kalshi alert: {len(chosen)} match(es) written to {path}")
+    return chosen
+
+
 def render_sunset(last_update):
     _write(
         os.path.join(OUTPUT_DIR, "sunset.html"),
@@ -1174,6 +1201,7 @@ def main():
         player_latest.set_index("playerid")["elo"].to_dict(),
     )
     pages = _team_pages(glory_all, forge_seasons, forge, elo_history, latest_elos, glory_df, rosters)
+    write_kalshi_alert(prediction_log, coverage, set(pages))
     predictions = predictions_view(prediction_log, set(pages), datetime.datetime.now(datetime.timezone.utc))
     render_predictions(predictions, coverage, last_update)
     with open(os.path.join(OUTPUT_DIR, "predictions.json"), "w") as f:

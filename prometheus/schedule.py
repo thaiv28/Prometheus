@@ -452,6 +452,8 @@ def build_predictions(states, log_path, days_back=3, days_ahead=7, backfill_days
         "matched": sum(p["matched"] for p in predictions),
         "unmatched": unmatched,
         "priced": priced,
+        "at": now.strftime("%Y-%m-%dT%H:%MZ"),
+        "data_through": data_through,
     }
 
 

@@ -29,6 +29,7 @@ Required repository settings:
 | Variable | `DATA_BACKUP_BUCKET` | `ThaivProjectPlatform` `PlatformArtifacts` bucket |
 | Secret (optional) | `LEAGUEPEDIA_USER`, `LEAGUEPEDIA_PASSWORD` | A Leaguepedia bot password (Special:BotPasswords on lol.fandom.com, read access only). Logged-in clients get a much higher rate limit; without them the build reads the schedule anonymously and, if refused, keeps yesterday's calls. Set 2026-10-06; local builds read the same two values from a gitignored `.env`. |
 | Env (optional) | `KALSHI_PRICES` | Set to `0` to skip reading Kalshi's prices at build time (the Predictions page then keeps the prices already in the log). Unset in CI: each build makes one unauthenticated call to Kalshi's public API. |
+| Env (optional) | `KALSHI_ALERTS` | Set to `0` to skip the daily alert. Otherwise each build that priced matches writes `data/kalshi_alert.json` when FORGE beats Kalshi's ask by 5+ points on a match 6–36 hours out, and the publish workflow's *Post the Kalshi alert* step (main only, `issues: write`, the workflow's own token, `continue-on-error`) creates a `kalshi-alert` issue mentioning the owner, edits that day's issue on a second run, and closes the previous day's. GitHub's notification email is the alert. |
 
 ## Data backup
 

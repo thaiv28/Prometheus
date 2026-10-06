@@ -55,7 +55,9 @@ from prometheus.markets import (
     MARKET_ALIASES,
     MAX_SPREAD,
     SERIES,
+    book_at,
     events,
+    fee,
     get,
     quote_at,
 )
@@ -65,6 +67,14 @@ from prometheus.form import form_states, load_form_games, opponent_adjust
 
 CACHE = Path("data/markets")
 EARLY_HOURS = 12
+# Betting: hours before the start the bets are placed, Kalshi's fee rates
+# (fee per order = ceil(rate × contracts × P × (1 − P)), to the cent; taker 7%,
+# resting maker orders 1.75%), and the value-bet edges tried, fixed in advance.
+BET_HOURS = 12
+FEE_RATES = (("Taker 7%", 0.07), ("Maker 1.75%", 0.0175), ("None", 0.0))
+EDGES = (0.0, 0.03, 0.05, 0.10)
+# Lead times for the ladder: the market's price this many hours before the start.
+LEAD_HOURS = (6, 12, 18, 24)
 
 
 # ---------------------------------------------------------------- fetching
@@ -186,6 +196,99 @@ def market_chance(markets, team1, at):
 # ---------------------------------------------------------------- our calls
 
 
+def costs_at(markets, team1, at):
+    """(cost of a team-1 contract, cost of a team-2 contract) when buying at the
+    market at time `at`: the cheaper of the team's "yes" ask and one minus the
+    opponent's "yes" bid, over cached quotes with a spread of at most
+    `MAX_SPREAD`. None for a side with no quote."""
+    best = [None, None]
+    for m in markets:
+        candles = cached_candles(m["ticker"])
+        if candles is None:
+            continue
+        bid, ask = book_at(candles, _ts(at))
+        if bid is None or ask - bid > MAX_SPREAD:
+            continue
+        mine, other = (0, 1) if m["side"] == team1 else (1, 0)
+        for side, cost in ((mine, ask), (other, 1 - bid)):
+            best[side] = cost if best[side] is None else min(best[side], cost)
+    return tuple(best)
+
+
+def _priced(cost):
+    return cost is not None and cost == cost  # not None, not NaN
+
+
+def bet_profits(frame, rate, edge=None, stake=1.0):
+    """Profit of each bet: $`stake` on our pick at its cost (edge None), or only on
+    a team whose chance by us beats its cost by more than `edge`."""
+    out = []
+    for r in frame.itertuples():
+        options = [(r.p_series, r.cost1, r.won1), (1 - r.p_series, r.cost2, not r.won1)]
+        if edge is None:
+            p, cost, won = options[0] if r.p_series >= 0.5 else options[1]
+            if not _priced(cost):
+                continue
+        else:
+            value = [
+                (p - c, p, c, w) for p, c, w in options if _priced(c) and p - c > edge
+            ]
+            if not value:
+                continue
+            _, p, cost, won = max(value)
+        out.append((stake / cost - stake if won else -stake) - fee(cost, stake, rate))
+    return np.array(out)
+
+
+def roi_interval(profits, n_resamples=2000, seed=0):
+    """95% bootstrap interval of the mean profit per bet."""
+    rng = np.random.default_rng(seed)
+    means = [
+        profits[rng.integers(0, len(profits), len(profits))].mean()
+        for _ in range(n_resamples)
+    ]
+    return np.percentile(means, [2.5, 97.5])
+
+
+def betting_section(s):
+    frame = s[s["cost1"].notna() | s["cost2"].notna()]
+    lines = [
+        f"## Betting $1 a match, {BET_HOURS} hours before the start",
+        "",
+        f"Each bet buys $1 of a team's contract {BET_HOURS} hours before the scheduled start at the price a market "
+        "order would pay (the team's ask, or one minus the opponent's bid, whichever is cheaper), then pays Kalshi's "
+        "fee per order: ceil(rate × contracts × P × (1 − P)), to the cent (taker orders 7%, resting maker orders "
+        "1.75%, which would fill at a better price than assumed here). *Back our pick* bets every match on the team "
+        "we favour; *value* bets only where our chance beats the price by more than the edge shown. ROI is profit "
+        "per dollar staked, with a 95% bootstrap interval over bets. Contracts are treated as divisible, and the "
+        "matches are those with an exact start time. The strategies were fixed before looking at the results.",
+        "",
+    ]
+    for label, part in slices_of(frame):
+        if label not in ("All", "FORGE (same major league)", "Other leagues"):
+            continue
+        lines += [
+            f"**{label}** ({len(part)} series with a price)",
+            "",
+            "| Strategy | Fee | Bets | Won | Profit | ROI (95%) |",
+            "|---|---|---:|---:|---:|---:|",
+        ]
+        for name, edge in [("Back our pick", None)] + [
+            (f"Value, edge > {e:.2f}", e) for e in EDGES
+        ]:
+            for fee_name, rate in FEE_RATES:
+                prof = bet_profits(part, rate, edge)
+                if len(prof) < 10:
+                    continue
+                lo, hi = roi_interval(prof)
+                lines.append(
+                    f"| {name} | {fee_name} | {len(prof)} | {int((prof > 0).sum())} | {prof.sum():+.2f} | "
+                    f"{100 * prof.mean():+.1f}% ({100 * lo:+.1f}% to {100 * hi:+.1f}%) |"
+                )
+        lines.append("")
+    return lines
+
+
 def load_pairs(since):
     """Every game since `since` from each team's side: gameid, date, team, opponent, result."""
     stmt = """
@@ -215,6 +318,10 @@ def series_games(pairs, team1, team2, start):
     return int(games["result"].sum()), int((1 - games["result"]).sum())
 
 
+def _log(message):
+    print(f"[{datetime.datetime.now():%H:%M:%S}] {message}", flush=True)
+
+
 def our_calls(rows, states, match_team, cache):
     """Adds p_game, method, our names and `major` to rows we can rate. `cache`
     holds `ratings_before` by day, shared between calls."""
@@ -226,6 +333,8 @@ def our_calls(rows, states, match_team, cache):
         day = row["start"].date()
         if day not in cache:
             cache[day] = schedule.ratings_before(states, day)
+            if len(cache) % 25 == 0:
+                _log(f"ratings for {len(cache)} match days")
         ratings = cache[day]
         if not all(t in ratings.index for t in ours):
             continue
@@ -349,6 +458,50 @@ def slices_of(frame):
     ]
 
 
+def lead_ladder(s):
+    """Ours against the market at each lead time, on the same matches: those with
+    an exact start time (day-only starts have no real lead time) and a quote at the
+    longest lead. Log loss with a paired bootstrap, and our weight beside the
+    market in the joint fit at that lead."""
+    common = s[s["timed"]].dropna(subset=[f"market_{h}h" for h in LEAD_HOURS])
+    cols = [("At the close", "market_close")] + [
+        (f"{h} hours before", f"market_{h}h") for h in LEAD_HOURS
+    ]
+    lines = [
+        "## By lead time",
+        "",
+        f"The market's price at each lead time against our call (from the day before), on the same matches: "
+        f"exact start times and a usable quote at every lead time up to {max(LEAD_HOURS)} hours. Our weight is from the joint fit described "
+        "in the next section, refit at each lead time.",
+        "",
+    ]
+    for label, frame in slices_of(common):
+        if (
+            label
+            not in (
+                "FORGE (same major league)",
+                "Major league or international",
+                "Other leagues",
+            )
+            or len(frame) < 50
+        ):
+            continue
+        lines += [
+            f"**{label}** ({len(frame)} series; our log loss {game_losses(frame['p_series'], frame['won1'])['log_loss'].mean():.4f})",
+            "",
+            "| Market price | Market log loss | Δ log loss, ours − market (95%) | Our weight beside it (95%) |",
+            "|---|---:|---:|---:|",
+        ]
+        for name, col in cols:
+            r = compare(frame, "p_series", col)
+            w = combined_weights(frame, "p_series", col)["ours"]
+            lines.append(
+                f"| {name} | {r['market_log_loss']:.4f} | {_fmt_diff(r, 'log_loss')} | {w[0]:.2f} ({w[1]:.2f} to {w[2]:.2f}) |"
+            )
+        lines.append("")
+    return lines
+
+
 def report(series_frame, map_frame, counts):
     s = series_frame
     lines = [
@@ -390,6 +543,8 @@ def report(series_frame, map_frame, counts):
         + _fmt_diff(compare(early, "market_early", "market_close"), "log_loss")
         + " log loss (early minus close).",
         "",
+        *lead_ladder(s),
+        *betting_section(s[s["timed"]]),
         "## Does our call add to the market?",
         "",
         "Logistic fit of the series result on the market's log-odds at the close and ours, without an intercept. "
@@ -444,8 +599,18 @@ def main():
     parser.add_argument(
         "--refresh", action="store_true", help="Refetch Kalshi's market lists"
     )
+    parser.add_argument(
+        "--reuse",
+        action="store_true",
+        help="Rewrite the report from the last run's saved match tables (skips the slow ratings)",
+    )
     args = parser.parse_args()
+    saved = CACHE / "frames.pkl"
+    if args.reuse:
+        series_frame, map_frame, counts, unmatched = pd.read_pickle(saved)
+        return _finish(series_frame, map_frame, counts, unmatched, args.out)
 
+    _log("loading games and Form states")
     states = form_states(opponent_adjust(load_form_games()))
     data_end = pd.to_datetime(states["date"]).max().date()
     match_team = schedule.TeamMatcher(
@@ -490,10 +655,18 @@ def main():
         )
         early = r["start"] - datetime.timedelta(hours=EARLY_HOURS)
         r["market_early"], _ = market_chance(r["markets"], r["team1"], early)
+        bet_at = r["start"] - datetime.timedelta(hours=BET_HOURS)
+        r["cost1"], r["cost2"] = costs_at(r["markets"], r["team1"], bet_at)
+        for h in LEAD_HOURS:
+            at = r["start"] - datetime.timedelta(hours=h)
+            r[f"market_{h}h"], _ = market_chance(r["markets"], r["team1"], at)
         if r["market_close"] is not None:
             rows.append(r)
     series_frame = pd.DataFrame(rows).drop(columns=["markets"])
-    series_frame["market_early"] = series_frame["market_early"].astype(float)
+    for col in ["market_early", "cost1", "cost2"] + [
+        f"market_{h}h" for h in LEAD_HOURS
+    ]:
+        series_frame[col] = series_frame[col].astype(float)
 
     # Map 1, priced at the series' start.
     map_rows = [
@@ -519,12 +692,18 @@ def main():
         "series_early": int(series_frame["market_early"].notna().sum()),
         "unmatched": len(unmatched),
     }
+    pd.to_pickle((series_frame, map_frame, counts, unmatched), saved)
+    _finish(series_frame, map_frame, counts, unmatched, args.out)
+
+
+def _finish(series_frame, map_frame, counts, unmatched, out):
+    _log("writing the report")
     text = report(series_frame, map_frame, counts)
     print(text)
     print("\nUnmatched Kalshi names:", ", ".join(unmatched))
-    if args.out:
-        Path(args.out).write_text(text + "\n")
-        print(f"Wrote {args.out}")
+    if out:
+        Path(out).write_text(text + "\n")
+        print(f"Wrote {out}")
 
 
 if __name__ == "__main__":
