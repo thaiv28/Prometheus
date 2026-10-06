@@ -2,7 +2,6 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
-
 ## 2026-10-06 — Hourly prices started from cron-job.org
 
 - GitHub's scheduler started `prices.yml` once (14:14 UTC) in the 12 hours after it merged, and the daily publish has started 4–9 hours after its 10:00 UTC slot every day this week (scheduled runs are best effort and dropped under load). The user set up a cron-job.org job that dispatches `prices.yml` through GitHub's API every hour at :17 with a fine-grained token (this repo, Actions read and write only). `docs/steering/deployment.md` records it.
