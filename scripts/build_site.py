@@ -750,6 +750,7 @@ def predictions_view(log, team_slugs, now):
         "past_count": len(past),
         "scorecard": schedule.scorecard(entries),
         "vs_market": schedule.market_scorecard(entries),
+        "edges": schedule.edge_record(entries),
         "alerts": alert_record(entries),
         "market_min": schedule.MARKET_MIN_SERIES,
         "home": _by_day(home),

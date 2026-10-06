@@ -2,6 +2,13 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-06 — Paper bets by edge on the Predictions page
+
+- **What.** Table IV under *How the calls have done* (Results became Table V): $1 on our side 12 hours before the start where our chance beat Kalshi's price (the ask) by more than 0, 3, 5 or 10 points, FORGE and Elo apart: bets, won, return after the 7% fee and CLV (last price before the start minus the price paid), each with a 95% bootstrap interval from 30 bets, and the share beating the close (`schedule.edge_record`). Same method as the backtest's betting section, on the log's calls.
+- **The 12-hour price.** `markets.attach_prices` now also keeps each read made at least `BET_LEAD` (12 h) before the start as `market_12h` {p, ask1, ask2, at, ours: our call then}; `update_log` keeps it with `market`. `backfill_prices` takes a `bet_at` and the script fills `market_12h` from Kalshi's price history for past matches (`backfilled`), our call there being the logged one.
+- **Run on the CI log** (16:23 UTC; previous log kept as `predictions.before-12h-backfill-2026-10-06.json`): 215 matches got a 12-hour price. Table IV on it: FORGE above 0 / 3 / 5 / 10 points: 40 / 26 / 20 / 8 bets, return −3.6% (−38.0 to +33.5) / −24.5% / −37.6% / −58.8%, CLV −0.4 (−1.1 to +0.3) / −0.6 / −0.9 / −0.5 points, 27–38% beating the close. Elo: 162 / 133 / 115 / 83 bets, return −26.4% (−50.7 to −0.5) / −23.5% / −19.9% / −14.7%, CLV −0.3 to −0.8 (every interval spans 0). Far smaller and noisier than the backtest (FORGE above 5 points: 215 bets, +12.9% return, +0.95 CLV); the forward record decides.
+- Verification: `uv run pytest -q` (all pass; new tests for `edge_record`, the 12-hour read in `attach_prices`, `update_log` keeping it, and `backfill_prices` with `bet_at`); a dry run on a copy of the S3 log first; local build with Playwright at 1440, 1280 and 390 px (no horizontal scroll, no page errors).
+
 ## 2026-10-06 — Kalshi prices backfilled on the prediction log
 
 - **Why.** Table III (against the market) used only prices read live, from 6 Oct, so it would have taken weeks to reach 30 series a row. The user has read Kalshi's Developer Agreement: republishing prices is allowed.
