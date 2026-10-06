@@ -137,6 +137,8 @@ Between teams from the same league: a logistic curve on their Elo gap and Form g
 $ prometheus predict --days 2 --major
 ```
 
+Where Kalshi, a prediction market, lists the match, the page also shows the market's chance of each team taking the series (a Kalshi column, and a caret on the bar), read at each daily update and frozen at the start. How do the calls compare with the market? `scripts/evaluate_markets.py` ([docs/market_report.md](docs/market_report.md)) scores them against Kalshi's prices on about 2,000 past series. In major leagues, 12 hours before the start, FORGE is level with the market (log loss 0.582 for both); by the start the market is ahead, because it reacts to lineups and late news. In smaller leagues and between leagues, where we use Elo alone, the market is clearly better.
+
 ### How accurate are the metrics?
 `scripts/evaluate_metrics.py` backtests the forecasts. Each game is predicted from earlier games only: from ratings at the start of the month, or from each team's rating going into the game ("live"). Results are scored by accuracy, Brier score and log loss, and compared with a simple baseline (win % so far this season) using a paired bootstrap. International games between teams from different major regions are scored separately, because they are the only direct test of cross-region strength. Latest results: [docs/metric_backtest.md](docs/metric_backtest.md).
 

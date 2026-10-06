@@ -31,6 +31,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from prometheus import markets
 from prometheus.elo import expected_score, get_latest_elos
 from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, FORM_POINTS, team_forms
 from prometheus.types import ALL_MAJOR_LEAGUES, INTERNATIONAL_LEAGUES
@@ -104,9 +105,25 @@ def strip_disambiguation(name):
 
 _opener = None
 
+# Local builds can keep the bot password in a gitignored `.env` at the repo root.
+ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+CREDENTIALS = ("LEAGUEPEDIA_USER", "LEAGUEPEDIA_PASSWORD")
+
+
+def credentials(env_path=ENV_PATH, environ=os.environ):
+    """(user, password) from the environment, else from `env_path` (KEY=VALUE lines)."""
+    values = {key: environ.get(key) for key in CREDENTIALS}
+    if not all(values.values()) and Path(env_path).exists():
+        for line in Path(env_path).read_text().splitlines():
+            key, sep, value = line.strip().removeprefix("export ").partition("=")
+            if sep and key.strip() in CREDENTIALS and not values[key.strip()]:
+                values[key.strip()] = value.strip().strip("'\"")
+    return values["LEAGUEPEDIA_USER"], values["LEAGUEPEDIA_PASSWORD"]
+
 
 def _client():
-    """A URL opener, logged in when LEAGUEPEDIA_USER and LEAGUEPEDIA_PASSWORD are set.
+    """A URL opener, logged in when LEAGUEPEDIA_USER and LEAGUEPEDIA_PASSWORD are set
+    (in the environment, or in `.env` for local builds).
 
     Logged-in clients (a bot password from Special:BotPasswords) get a much higher
     rate limit than anonymous ones, which matters on shared CI addresses.
@@ -116,7 +133,7 @@ def _client():
         return _opener
     _opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
     _opener.addheaders = [("User-Agent", USER_AGENT)]
-    user, password = os.environ.get("LEAGUEPEDIA_USER"), os.environ.get("LEAGUEPEDIA_PASSWORD")
+    user, password = credentials()
     if user and password:
         token_url = API_URL + "?" + urllib.parse.urlencode(
             {"action": "query", "meta": "tokens", "type": "login", "format": "json"}
@@ -371,6 +388,8 @@ def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
         started = pred["start"] <= now_s
         if not started:
             entry = {**pred, "predicted": now_s, "data_through": data_through, "reconstructed": False}
+            if old is not None and "market" in old and pred.get("matched"):
+                entry["market"] = old["market"]  # until a newer price replaces it
         elif old is not None and old.get("matched"):
             entry = old
         else:
@@ -425,9 +444,32 @@ def build_predictions(states, log_path, days_back=3, days_ahead=7, backfill_days
         return {**rec, "predicted": None, "data_through": str(day - datetime.timedelta(days=1))}
 
     update_log(log, schedule, predictions, now, data_through, reconstruct)
+    priced = attach_market_prices(log, ratings, now)
     save_log(log, log_path)
     unmatched = sorted({p[f"team{i}"] for p in predictions for i in (1, 2) if p[f"ours{i}"] is None and p[f"team{i}"] not in ("TBD", None)})
-    return log, {"matches": len(predictions), "matched": sum(p["matched"] for p in predictions), "unmatched": unmatched}
+    return log, {
+        "matches": len(predictions),
+        "matched": sum(p["matched"] for p in predictions),
+        "unmatched": unmatched,
+        "priced": priced,
+    }
+
+
+def attach_market_prices(log, ratings, now, fetch=None):
+    """Kalshi's current chance on every logged match that hasn't started (see
+    `markets.attach_prices`). Never fails the build: on any error, or with
+    KALSHI_PRICES=0, matches keep the prices they had. Returns the number priced,
+    or None when skipped or failed."""
+    if os.environ.get("KALSHI_PRICES", "1") == "0":
+        return None
+    try:
+        open_markets = (fetch or markets.fetch_open_markets)()
+        aliases = json.loads(ALIASES_PATH.read_text()) if ALIASES_PATH.exists() else {}
+        match_team = TeamMatcher(ratings.reset_index(), {**aliases, **markets.MARKET_ALIASES})
+        return markets.attach_prices(log, open_markets, match_team, now)
+    except Exception as e:  # network, rate limit, schema change
+        print(f"Predictions: Kalshi prices not updated ({e}).")
+        return None
 
 
 def is_major(entry):

@@ -46,6 +46,7 @@ uv run python scripts/evaluate_metrics.py --out docs/metric_backtest.md   # back
 uv run python scripts/evaluate_metrics.py --write-weights   # also refresh Form and FORGE weights
 uv run python scripts/evaluate_season_stats.py --out docs/season_stats_report.md   # season-stat stability (~5s)
 uv run python scripts/evaluate_aura.py --out docs/aura_report.md   # AURA calibration and player tests (~40s)
+uv run python scripts/evaluate_markets.py --out docs/market_report.md   # our calls vs Kalshi's prices (~10 min; first run ~1 h fetching)
 python -m http.server -d output 8000    # preview the built site locally
 ```
 
@@ -70,6 +71,7 @@ python -m http.server -d output 8000    # preview the built site locally
 | `scripts/NNN_*.sql\|py` | DB build steps. `setup_db.sh` runs them **in numeric order**. |
 | `scripts/build_site.py` | Static site generator |
 | `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtest: how well each forecast, from earlier games only, predicts winners (domestic and cross-region); fits the forecast weights. Results in `docs/metric_backtest.md` |
+| `scripts/evaluate_markets.py` | Market benchmark: our match calls against Kalshi's pre-match prices on the same series and map-1 games, and whether our call adds to the market. Results in `docs/market_report.md` |
 | `scripts/evaluate_season_stats.py` | Season-stat report: split-half reliability, games to 0.5, and fit to same-season results. Results in `docs/season_stats_report.md` |
 | `templates/*.html.j2` | Jinja2 templates: `base` (shell, with the Teams and Players menus), `index`, `rankings` (every metric page, driven by a column config), `predictions`, `team`, `player`, `sunset`, `redirect`, `404`, and the `_marks` macros (league mark, signed number, ordinal, the fixture register) |
 | `site_static/{css,js,fonts}` | Hand-written CSS (`tokens.css` holds all colors and the `@font-face` rules, including league inks), vanilla JS (`names.js` for name folding, slugs and search ranking shared by the others and unit-tested under Node, `rankings.js` for filtering, sorting and the distribution figure, `team.js` for the SVG Elo chart on team and player pages, `forecast.js` for the FORGE head-to-head box, `search.js` for the header team and player search, `nav.js` for the header's Teams and Players menus, `predictions.js` for local times and filters on the fixture registers), and the self-hosted Source Serif 4 font (OFL), all copied verbatim into `output/` |
@@ -102,7 +104,7 @@ python -m http.server -d output 8000    # preview the built site locally
 - `setup_db.sh` **deletes** `db/prometheus.db` before rebuilding.
 - Several modules end in `if __name__ == "__main__":` scratch blocks. They aren't real entry points.
 - `scripts/004_bootstrap_elo.py` clears and refills `game_length_elo`, so it's safe to rerun.
-- Leaguepedia rate-limits anonymous API calls after a few in a row and stays shut for minutes. Don't loop on it while developing: cache a fetched schedule (`fetch_schedule(...).to_pickle(...)`) and pass it as `schedule=` to `build_predictions`, or build with `PREDICTIONS_FETCH=0`.
+- Leaguepedia rate-limits anonymous API calls after a few in a row and stays shut for minutes. Put a bot password in a gitignored `.env` (`LEAGUEPEDIA_USER=Name@bot`, `LEAGUEPEDIA_PASSWORD=...`) and local builds log in for a higher limit. Don't loop on it while developing: cache a fetched schedule (`fetch_schedule(...).to_pickle(...)`) and pass it as `schedule=` to `build_predictions`, or build with `PREDICTIONS_FETCH=0`.
 
 ## Before you finish a change
 

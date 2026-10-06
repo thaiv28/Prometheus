@@ -2,6 +2,33 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-06 — Kalshi's prices on the Predictions page
+
+- **Data.** New `prometheus/markets.py` (Kalshi parsing, quotes and aliases, now shared with `scripts/evaluate_markets.py`) and `schedule.attach_market_prices`: each build reads Kalshi's open `KXLOLGAME` markets once and stores the market's series chance (`market`: p, spread, at, ticker) on every logged match that hasn't started, matched by our team names and the nearest start within 18 hours; thin quotes (spread over 0.10) are skipped; `update_log` keeps an upcoming match's last price, and a started match keeps its last one. Any Kalshi error or `KALSHI_PRICES=0` leaves prices as they were. Added `INTZ e-Sports` to the aliases.
+- **Dynamic?** Not possible on the static site: Kalshi's API answers a request carrying another site's Origin with 403, so the browser can't read it. Prices are as fresh as the daily build.
+- **Site.** Fixture register: a Kalshi column (pair, ink-2, beside One game, phone-hidden) in upcoming registers and an ink-2 caret on the duel bar at the market's chance (both registers; results via the bar's tooltip). Note 5 explains the price and the benchmark result. Designed with the impeccable skill inside the Almanac fixture register.
+- **Checked live:** 32 open markets (16 matches) on 2026-10-06; every name but two resolved; the one upcoming match also in the local log (Cupid Esports v Fuego) took Cupid 83.5% from a 0.83/0.84 book, oriented correctly.
+- Docs: DESIGN.md (fixture register, Predictions page), tech.md (pipeline, Predictions, tests), deployment.md (`KALSHI_PRICES`), current_state, README.
+- Verification: `uv run pytest -q` (130 passed on this branch, e2e included; new `tests/test_markets.py`, `update_log` and `attach_market_prices` tests, `fixture_row`/register market test). A build from a scratch copy of the log with made-up prices on 25 rows (screenshots only; the real log was not touched), Playwright at 1440 and 390px: no page errors, no horizontal scroll, caret readable at 99–1 and 4–96.
+- Limits: Kalshi's Developer Agreement on republishing prices not read (the page refused the fetch); prices up to a day old; no comparison row in the scorecard yet.
+
+## 2026-10-06 — Predictions live; Leaguepedia login for CI and local builds
+
+- **First main build** (run 37388046479, after merging #11): no saved log in S3 yet and Leaguepedia rate-limited the anonymous CI fetch (9 minutes of backoff), so the build fell back to an empty log and the live Predictions page was empty; the save step skipped because no log file was written. Fixed by seeding S3 with the local log (1,047 matches, 2 Sep–11 Oct) and setting the `LEAGUEPEDIA_USER`/`LEAGUEPEDIA_PASSWORD` secrets (a Basic-rights bot password); PRs #7 and #8 closed as already in main via #9/#10.
+- **Local login.** `schedule.credentials()` reads the two values from the environment, else from a gitignored `.env` at the repo root, so local builds and `prometheus predict` log in too. New test in `tests/test_schedule.py`.
+- Docs: tech.md (schedule), AGENTS.md (rate-limit gotcha), current_state (known limit, predictions follow-ups).
+- Verification: `uv run pytest -q tests/test_schedule.py` (21 passed); one live login with the `.env` credentials succeeded (no schedule query).
+
+## 2026-10-04 — Market benchmark: our calls against Kalshi's prices
+
+- **Source.** Kalshi's public API (no key) lists settled LoL markets back to Dec 2025: `KXLOLGAME` (series winner, one contract per team; 2,768 settled series) and `KXLOLMAP` (single maps), from the majors to ERLs and academies, plus price history (hourly candlesticks) on live and historical endpoints. Polymarket also lists per-match markets, many with no order book; not used yet.
+- **`scripts/evaluate_markets.py`** (new): fetch and cache markets and candlesticks (`data/markets/`), parse each market's rules text (teams, event, Eastern start; day-only starts as midnight), match names (`TeamMatcher` + `MARKET_ALIASES`, 14 pre-rebrand names), rebuild our call from `ratings_before(day)`, take the best-of and check the result from our games, price the market at the close and 12 hours before (bid-ask mid, spread ≤ 0.10), and report accuracy, Brier, log loss with paired bootstraps by slice, a logistic fit on both log-odds, calibration, and map 1 against our one-game chance. Report: `docs/market_report.md`.
+- **Results** (2,156 series with a closing quote). Major leagues and international, 12 hours out: FORGE 0.5816 vs market 0.5822 log loss (Δ −0.0006, −0.016 to +0.015, n 708), a tie; at the close +0.013 (−0.004 to +0.029). The market gains 0.020 log loss over its last 12 hours. Other leagues (Elo) +0.049 at 12 hours, +0.076 at the close; cross-league Elo +0.164 / +0.187. Our weight beside the market's in a joint fit: 0.01 (−0.18 to +0.17). Map 1: FORGE +0.004 (−0.007 to +0.015), other leagues +0.037. No metric was changed.
+- **Fetching.** Kalshi refuses bursts: 8 and then 3 parallel requests spent most of two runs in backoff (the first run was killed at its 30-minute limit, a later one at 2 hours). It now fetches one contract per match, one request at a time with a 0.1 s pause, and goes straight to the historical endpoint for markets settled before Kalshi's cutoff. Network errors are retried.
+- Docs: current_state (Working, Known limits, Future work: market follow-ups replace the plan), tech.md (pipeline, Predictions section, tests), product.md, README (Predictions), AGENTS.md (command, layout).
+- Verification: `uv run pytest -q tests/test_evaluate_markets.py` (9 tests, synthetic, no network); full runs of the script against the live API and the built DB; the report numbers above are from the last run. `uv run pytest -q`: 122 passed.
+- Limits: our calls are reconstructed and the forecast weights were fit on data that includes them; prices at the moment a call was saved aren't recorded yet; 52 Kalshi names unmatched; six series dropped where Kalshi's result disagreed with our games.
+
 ## 2026-10-03 — Predictions: upcoming matches from Leaguepedia, a prediction log, Predictions page and home fixtures
 
 - **Source.** Checked schedule APIs: lolesports.com's persisted API now returns 403 with the public key; Leaguepedia's Cargo API (`MatchSchedule` ⨝ `Tournaments`) answers without a key but rate-limits anonymous clients after about three quick calls, staying shut for several minutes. PandaScore and GRID were not tried. Chosen: Leaguepedia, with backoff and optional bot-password login (`LEAGUEPEDIA_USER`/`LEAGUEPEDIA_PASSWORD`).

@@ -279,6 +279,7 @@ PREDICTIONS = {
         "Two teams from the same major league (LCK, LPL, LEC, LCS) are called by FORGE. Teams from different leagues are called by Elo alone, on a curve fit to international games, as in FORGE's head to head. Two teams from any other league are called by their Elo.",
         "A match's call is refreshed at every daily update until it starts, then frozen. Matches that had already been played when the log began carry a call rebuilt from the ratings as they stood the day before, marked with this note. They use only earlier games, but the forecast weights were fit on data that includes them, so trust the calls saved before the match more.",
         "Log loss scores the one-game chance against every game played: a coin flip scores 0.693, and lower is better. It punishes a confident miss more than a timid one.",
+        "Kalshi is a prediction market. Its figures are the market's chance of each team taking the series: the middle of the best bid and offer, read at each daily update and kept from the last one before the match (so up to a day old), and left out when the quote is too thin. The caret over the bar marks it. On about 2,000 past series the market's last price before the start beat our calls; a day out, FORGE was level with it in the major leagues.",
     ],
     "caveats": "The schedule comes from Leaguepedia. Matches with a team Oracle's Elixir doesn't cover can't be rated and aren't shown. Calls ignore side selection, roster changes since a team's last game, and new patches. Times are in your time zone.",
 }
@@ -693,6 +694,11 @@ def fixture_row(entry, team_slugs):
         "reconstructed": bool(entry.get("reconstructed")),
         "winner": entry.get("winner"),
     }
+    market = entry.get("market")
+    if market:
+        row["mkt1"], row["mkt2"] = _pct_pair(market["p"])
+        at = datetime.datetime.strptime(market["at"], "%Y-%m-%dT%H:%MZ")
+        row["mkt_at"] = f"{at.day} {at.strftime('%b')} {at.strftime('%H:%M')} UTC"
     for side in (1, 2):
         name = schedule.display_name(entry, side)
         slug = _slugify(entry[f"ours{side}"]) if entry.get(f"ours{side}") else None
@@ -775,7 +781,8 @@ def update_predictions(states):
     try:
         log, coverage = schedule.build_predictions(states, PREDICTIONS_LOG)
         print(f"Predictions: {coverage['matched']} of {coverage['matches']} scheduled matches rated; "
-              f"{len(coverage['unmatched'])} team names not matched")
+              f"{len(coverage['unmatched'])} team names not matched; "
+              f"{coverage.get('priced') if coverage.get('priced') is not None else 'no'} priced by Kalshi")
         return log, coverage
     except Exception as e:  # network, rate limit, schema change: never block the build
         print(f"Predictions: schedule not updated ({e}); using the saved log.")

@@ -27,7 +27,8 @@ Required repository settings:
 | Variable | `CLOUDFRONT_DISTRIBUTION_ID` | `ThaivPrometheusProject` output `CloudFrontDistributionId` |
 | Secret | `AWS_ROLE_ARN` | `ThaivProjectPlatform` output `DeploymentRoleArn` |
 | Variable | `DATA_BACKUP_BUCKET` | `ThaivProjectPlatform` `PlatformArtifacts` bucket |
-| Secret (optional) | `LEAGUEPEDIA_USER`, `LEAGUEPEDIA_PASSWORD` | A Leaguepedia bot password (Special:BotPasswords on lol.fandom.com, read access only). Logged-in clients get a much higher rate limit; without them the build reads the schedule anonymously and, if refused, keeps yesterday's calls. |
+| Secret (optional) | `LEAGUEPEDIA_USER`, `LEAGUEPEDIA_PASSWORD` | A Leaguepedia bot password (Special:BotPasswords on lol.fandom.com, read access only). Logged-in clients get a much higher rate limit; without them the build reads the schedule anonymously and, if refused, keeps yesterday's calls. Set 2026-10-06; local builds read the same two values from a gitignored `.env`. |
+| Env (optional) | `KALSHI_PRICES` | Set to `0` to skip reading Kalshi's prices at build time (the Predictions page then keeps the prices already in the log). Unset in CI: each build makes one unauthenticated call to Kalshi's public API. |
 
 ## Data backup
 

@@ -182,3 +182,31 @@ def test_is_major():
     assert not schedule.is_major({"league": "EM", "home1": "EM", "home2": "EM"})
     # An LCS promotion series between two challenger teams isn't a major-league match.
     assert not schedule.is_major({"league": "LCS", "home1": "NACL", "home2": "NACL"})
+
+
+def test_credentials_prefer_environment_then_env_file(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("# local\nLEAGUEPEDIA_USER='Me@bot'\nexport LEAGUEPEDIA_PASSWORD=\"secret\"\nOTHER=x\n")
+    assert schedule.credentials(env, {}) == ("Me@bot", "secret")
+    assert schedule.credentials(env, {"LEAGUEPEDIA_USER": "Ci@bot", "LEAGUEPEDIA_PASSWORD": "ci"}) == ("Ci@bot", "ci")
+    assert schedule.credentials(tmp_path / "missing", {}) == (None, None)
+
+
+def test_update_log_keeps_the_market_price_until_a_newer_one():
+    log = {}
+    sched = _schedule([{"match_id": "m1", "start": "2026-10-04 08:00:00", "team1": "A", "team2": "B"}])
+    first = datetime.datetime(2026, 10, 3, 10, tzinfo=UTC)
+    schedule.update_log(log, sched, [_pred("m1", "2026-10-04T08:00Z")], first, "2026-10-02")
+    log["m1"]["market"] = {"p": 0.55, "at": "2026-10-03T10:00Z"}
+    second = datetime.datetime(2026, 10, 4, 6, tzinfo=UTC)
+    schedule.update_log(log, sched, [_pred("m1", "2026-10-04T08:00Z", 0.7)], second, "2026-10-03")
+    assert log["m1"]["p_game"] == 0.7 and log["m1"]["market"]["p"] == 0.55
+
+
+def test_attach_market_prices_never_fails_the_build(monkeypatch):
+    def boom():
+        raise OSError("down")
+
+    assert schedule.attach_market_prices({}, _ratings(), datetime.datetime.now(UTC), fetch=boom) is None
+    monkeypatch.setenv("KALSHI_PRICES", "0")
+    assert schedule.attach_market_prices({}, _ratings(), datetime.datetime.now(UTC), fetch=lambda: pytest.fail("skipped")) is None
