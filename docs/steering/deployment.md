@@ -52,7 +52,8 @@ Google Drive rate-limits the shared Oracle's Elixir CSVs. Each build tries Drive
 
 ## Hourly Kalshi prices (`.github/workflows/prices.yml`)
 
-- Runs at :17 every hour (GitHub may start scheduled runs late) and on manual dispatch; main only; about a minute.
+- Runs at :17 every hour and on manual dispatch; main only; about a minute.
+- **External trigger (since 2026-10-06).** GitHub's scheduler is best effort: on 6 Oct it started this hourly job once in about 12 hours, and the daily publish (10:00 UTC) starts 4–9 hours late most days. A cron-job.org job (account owned by the repo owner) POSTs `https://api.github.com/repos/thaiv28/Prometheus/actions/workflows/prices.yml/dispatches` with body `{"ref":"main"}` every hour at :17, authenticated with a fine-grained personal access token limited to this repository with only *Actions: read and write*. Dispatched runs start at once. The GitHub schedule stays as a backup; a duplicate run is harmless (concurrency group `kalshi-prices` runs them in turn). If prices stop updating, check the cron-job.org job's history (a 401/403 means the token expired or lost its permission; renew it and update the job's `Authorization: Bearer` header).
 - Skips the hour while a publish run is queued or running: both read and write the prediction log, and publish holds it for several minutes between restore and save. The hourly job finishes well before a publish that starts after it restores the log.
 - Steps: restore `data/predictions.json` from the backup bucket, `scripts/update_prices.py`, save the log back, copy `kalshi.json` and `predictions.json` into the site bucket's `current/` (`max-age=300`) and invalidate those two paths, then post the alert.
 - Uses the same role as the publish workflow (`AWS_ROLE_ARN`: backup bucket read-write, site bucket write, CloudFront invalidation) and the `DATA_BACKUP_BUCKET`, `DEPLOYMENT_BUCKET`, `CLOUDFRONT_DISTRIBUTION_ID` variables.

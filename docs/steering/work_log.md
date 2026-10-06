@@ -2,6 +2,11 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-06 — Hourly prices started from cron-job.org
+
+- GitHub's scheduler started `prices.yml` once (14:14 UTC) in the 12 hours after it merged, and the daily publish has started 4–9 hours after its 10:00 UTC slot every day this week (scheduled runs are best effort and dropped under load). The user set up a cron-job.org job that dispatches `prices.yml` through GitHub's API every hour at :17 with a fine-grained token (this repo, Actions read and write only). `docs/steering/deployment.md` records it.
+- Verification: the job's test call created a `workflow_dispatch` run at 20:48 UTC within seconds (it skipped the hour because a publish run was queued, as designed); the first scheduled dispatch is checked in the PR. No code changed.
+
 ## 2026-10-06 — GLORY skips a season with no qualified team (build fix)
 
 - The PR build failed: Oracle's Elixir's 2026 file (Drive copy of 6 Oct) now files the first games of the 2027 season (P11 Esports in the LIT, the EBL, 8 LCS team-games) under year 2027, so GLORY's 2027 loop had no team with 5 games and StandardScaler got an empty frame. `get_glory_ranking` now skips a year with no team-season to rank. `main`'s next daily build would have hit the same error.
