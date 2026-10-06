@@ -30,7 +30,7 @@ Season stats (GLORY; sunset: Record, Luck) describe a team-season with hindsight
 
 Each published stat answers one question: GLORY, how well did a team play this season? FORGE, who wins if two teams play today? Team Elo, how strong is a team now, judged by its results? Player Elo, how have a player's teams done across a career? AURA, how much did a player's own play swing their team's chances? The header's Teams and Players menus and the home contents show these questions next to the names.
 
-Predictions (2026-10-03) put the forecasts to work on real fixtures: every scheduled match between two rated teams (schedule from Leaguepedia) gets each team's series chance, saved before the match and scored against the result. It is a use of FORGE and Elo, not a new metric; the market benchmark in Future work is how we would judge it against the best public forecast.
+Predictions (2026-10-03) put the forecasts to work on real fixtures: every scheduled match between two rated teams (schedule from Leaguepedia) gets each team's series chance, saved before the match and scored against the result. It is a use of FORGE and Elo, not a new metric. The market benchmark (`docs/market_report.md`, 2026-10-04) judges it against Kalshi's prices: in major leagues FORGE ties the market a day out but trails it at the close (late news); in other leagues and across leagues the market is clearly better.
 
 Scope: season stats and FORGE cover the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present; Elo and Form cover every region. Data comes from Oracle's Elixir and refreshes daily via CI.
 

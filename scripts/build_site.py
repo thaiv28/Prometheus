@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
-from prometheus import aura, schedule
+from prometheus import alerts, aura, markets, schedule
 from prometheus.elo import (
     get_elo_history,
     get_latest_elos,
@@ -279,6 +279,7 @@ PREDICTIONS = {
         "Two teams from the same major league (LCK, LPL, LEC, LCS) are called by FORGE. Teams from different leagues are called by Elo alone, on a curve fit to international games, as in FORGE's head to head. Two teams from any other league are called by their Elo.",
         "A match's call is refreshed at every daily update until it starts, then frozen. Matches that had already been played when the log began carry a call rebuilt from the ratings as they stood the day before, marked with this note. They use only earlier games, but the forecast weights were fit on data that includes them, so trust the calls saved before the match more.",
         "Log loss scores the one-game chance against every game played: a coin flip scores 0.693, and lower is better. It punishes a confident miss more than a timid one.",
+        "Kalshi is a prediction market. Its figures are the market's chance of each team taking the series: the middle of the best bid and offer, read at each daily update and kept from the last one before the match (so up to a day old), and left out when the quote is too thin. The caret over the bar marks it, and the figures link to the match on Kalshi. On about 2,000 past series the market's last price before the start beat our calls; a day out, FORGE was level with it in the major leagues.",
     ],
     "caveats": "The schedule comes from Leaguepedia. Matches with a team Oracle's Elixir doesn't cover can't be rated and aren't shown. Calls ignore side selection, roster changes since a team's last game, and new patches. Times are in your time zone.",
 }
@@ -286,6 +287,9 @@ PREDICTIONS = {
 # within this many days.
 HOME_FIXTURES = 10
 HOME_FIXTURE_DAYS = 4
+# The day's Kalshi alert (title and body of a GitHub issue), written only when
+# there is one; the publish workflow posts it. Never published to the site.
+KALSHI_ALERT = os.environ.get("KALSHI_ALERT", os.path.join(ROOT_DIR, "data", "kalshi_alert.json"))
 # The prediction log; CI restores it from and saves it to the data backup bucket.
 PREDICTIONS_LOG = os.environ.get("PREDICTIONS_LOG", os.path.join(ROOT_DIR, "data", "predictions.json"))
 
@@ -693,6 +697,12 @@ def fixture_row(entry, team_slugs):
         "reconstructed": bool(entry.get("reconstructed")),
         "winner": entry.get("winner"),
     }
+    market = entry.get("market")
+    if market:
+        row["mkt1"], row["mkt2"] = _pct_pair(market["p"])
+        at = datetime.datetime.strptime(market["at"], "%Y-%m-%dT%H:%MZ")
+        row["mkt_at"] = f"{at.day} {at.strftime('%b')} {at.strftime('%H:%M')} UTC"
+        row["mkt_url"] = markets.event_url(market["ticker"]) if market.get("ticker") else None
     for side in (1, 2):
         name = schedule.display_name(entry, side)
         slug = _slugify(entry[f"ours{side}"]) if entry.get(f"ours{side}") else None
@@ -775,11 +785,36 @@ def update_predictions(states):
     try:
         log, coverage = schedule.build_predictions(states, PREDICTIONS_LOG)
         print(f"Predictions: {coverage['matched']} of {coverage['matches']} scheduled matches rated; "
-              f"{len(coverage['unmatched'])} team names not matched")
+              f"{len(coverage['unmatched'])} team names not matched; "
+              f"{coverage.get('priced') if coverage.get('priced') is not None else 'no'} priced by Kalshi")
         return log, coverage
     except Exception as e:  # network, rate limit, schema change: never block the build
         print(f"Predictions: schedule not updated ({e}); using the saved log.")
         return schedule.load_log(PREDICTIONS_LOG), None
+
+
+def write_kalshi_alert(log, coverage, team_slugs, path=None):
+    """Pick today's alerts (`alerts.select`), record them in the log and write the
+    issue to `path`. Runs only on fresh prices (this build's fetch worked) and
+    unless KALSHI_ALERTS=0. A stale file from an earlier build is always removed,
+    so a day without alerts posts nothing. Returns the alerts."""
+    path = path or KALSHI_ALERT
+    if os.path.exists(path):
+        os.remove(path)
+    if os.environ.get("KALSHI_ALERTS", "1") == "0" or not coverage or not coverage.get("priced"):
+        return []
+    now = datetime.datetime.strptime(coverage["at"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=datetime.timezone.utc)
+    chosen = alerts.select(log, now)
+    if not chosen:
+        return []
+    alerts.record(chosen, now)
+    schedule.save_log(log, PREDICTIONS_LOG)
+    title, body = alerts.issue(chosen, log, now, coverage.get("data_through"), _slugify, team_slugs)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        json.dump({"title": title, "body": body, "day": alerts.day_key(now)}, f, ensure_ascii=False)
+    print(f"Kalshi alert: {len(chosen)} match(es) written to {path}")
+    return chosen
 
 
 def render_sunset(last_update):
@@ -1166,6 +1201,7 @@ def main():
         player_latest.set_index("playerid")["elo"].to_dict(),
     )
     pages = _team_pages(glory_all, forge_seasons, forge, elo_history, latest_elos, glory_df, rosters)
+    write_kalshi_alert(prediction_log, coverage, set(pages))
     predictions = predictions_view(prediction_log, set(pages), datetime.datetime.now(datetime.timezone.utc))
     render_predictions(predictions, coverage, last_update)
     with open(os.path.join(OUTPUT_DIR, "predictions.json"), "w") as f:

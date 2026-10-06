@@ -11,6 +11,7 @@ on:
 permissions:
   contents: read
   id-token: write
+  issues: write # the daily Kalshi alert issue
 
 concurrency:
   group: deploy-prometheus-${{ github.ref }}
@@ -82,6 +83,29 @@ jobs:
       - name: Save the prediction log
         if: env.CAN_USE_AWS == 'true' && hashFiles('data/predictions.json') != ''
         run: aws s3 cp data/predictions.json "$PREDICTIONS_BACKUP" --only-show-errors
+      # The build writes data/kalshi_alert.json when FORGE beats Kalshi's price by 5+
+      # points on a match in the next 6-36 hours (prometheus/alerts.py). Post it as an
+      # issue: a second build the same day updates that day's issue; a new day closes
+      # the last one. Never blocks the deploy.
+      - name: Post the Kalshi alert
+        if: env.CAN_USE_AWS == 'true' && hashFiles('data/kalshi_alert.json') != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          title=$(jq -r .title data/kalshi_alert.json)
+          day=$(jq -r .day data/kalshi_alert.json)
+          jq -r .body data/kalshi_alert.json > "$RUNNER_TEMP/alert.md"
+          gh label create kalshi-alert --color 2342a0 --description "FORGE vs Kalshi daily edges" 2>/dev/null || true
+          open=$(gh issue list --label kalshi-alert --state open --json number,title)
+          today=$(jq -r --arg d "$day" '.[] | select(.title | startswith($d)) | .number' <<<"$open" | head -1)
+          if [ -n "$today" ]; then
+            gh issue edit "$today" --title "$title" --body-file "$RUNNER_TEMP/alert.md"
+            exit 0
+          fi
+          for n in $(jq -r '.[].number' <<<"$open"); do gh issue close "$n" --comment "Superseded by today's alert."; done
+          gh issue create --title "$title" --body-file "$RUNNER_TEMP/alert.md" --label kalshi-alert
       - uses: actions/upload-artifact@v4
         with:
           name: site

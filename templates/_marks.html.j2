@@ -28,7 +28,8 @@
 {#- The fixture register: matches grouped by day, each team's series chance either
     side of a duel bar. `days` from `predictions_view`; `results` adds the score
     and the call; `root` prefixes team links; `compact` (home) drops the method
-    column. Rows carry data-start (UTC) so predictions.js can set local times and
+    column. A match with a Kalshi price gets a caret on its duel bar at the
+    market's chance and, in upcoming registers, a Kalshi column. Rows carry data-start (UTC) so predictions.js can set local times and
     regroup the days, and data-league / data-teams for its filters. -#}
 {% macro fixtures(days, results=False, root='', compact=False, id='') -%}
 {%- set by = not compact and not results -%}
@@ -42,13 +43,14 @@
       <th scope="col" class="fx-team fx-team--2"><span class="visually-hidden">Second team</span></th>
       {% if not results %}<th scope="col" class="phone-hide">Bo</th>{% endif %}
       {% if not results %}<th scope="col" class="num phone-hide" title="Chance of winning one game, first team–second team">One game{% if not compact %}<sup class="th-note" aria-hidden="true">1</sup>{% endif %}</th>{% endif %}
+      {% if not results %}<th scope="col" class="num phone-hide" title="Kalshi’s prediction market: each team’s chance of taking the series, as of the last update">Kalshi{% if not compact %}<sup class="th-note" aria-hidden="true">5</sup>{% endif %}</th>{% endif %}
       {% if by %}<th scope="col" class="wide-only">By{% if not compact %}<sup class="th-note" aria-hidden="true">2</sup>{% endif %}</th>{% endif %}
       {% if results %}<th scope="col" class="num">Result</th><th scope="col">Call</th>{% endif %}
     </tr>
   </thead>
   {% for day in days %}
   <tbody class="fx-day" data-day="{{ day.day }}">
-    <tr class="fx-day-row"><th scope="rowgroup" colspan="{{ 10 if by else 9 }}">{{ day.label }}</th></tr>
+    <tr class="fx-day-row"><th scope="rowgroup" colspan="{{ 7 + (2 if results else 3) + (1 if by else 0) }}">{{ day.label }}</th></tr>
     {% for r in day.rows %}
     <tr class="fx" data-start="{{ r.start }}" data-league="{{ r.league }}" data-teams="{{ r.name1 }}|{{ r.name2 }}"{% if r.winner %} data-winner="{{ r.winner }}"{% endif %}>
       <td class="fx-time"><time datetime="{{ r.start | replace('Z', ':00Z') }}">{{ r.time }}</time><span class="fx-meta">{{ league(r.league, show_code=False) }}</span></td>
@@ -57,7 +59,7 @@
       {% set name = r['name' ~ side] %}{% set slug = r['slug' ~ side] %}
       {% set cls = 'fx-fav' if r.fav == side else ('fx-dog' if r.fav else '') %}
       {% if side == 2 %}
-      <td class="fx-bar-col" aria-hidden="true" title="Called by {{ r.method }}{{ ' alone, across leagues' if r.cross }}"><span class="fx-bar" style="--p: {{ r.pct1 }}"></span></td>
+      <td class="fx-bar-col" aria-hidden="true" title="Called by {{ r.method }}{{ ' alone, across leagues' if r.cross }}{% if r.mkt1 %}; Kalshi {{ r.mkt1 }}–{{ r.mkt2 }}, {{ r.mkt_at }}{% endif %}"><span class="fx-bar" style="--p: {{ r.pct1 }}">{% if r.mkt1 %}<span class="fx-mkt" style="--m: {{ r.mkt1 }}"></span>{% endif %}</span></td>
       {% endif %}
       {% if side == 1 %}
       <td class="fx-team fx-team--1 {{ cls }}{% if r.winner == 1 %} fx-won{% endif %}">{% if slug %}<a href="{{ root }}teams/{{ slug }}.html">{{ name }}</a>{% else %}{{ name }}{% endif %}</td>
@@ -69,6 +71,7 @@
       {% endfor %}
       {% if not results %}<td class="fx-bo">Bo{{ r.best_of }}</td>{% endif %}
       {% if not results %}<td class="num phone-hide fx-game">{% if r.best_of > 1 %}{{ r.game1 }}–{{ r.game2 }}{% else %}<span class="muted">same</span>{% endif %}</td>{% endif %}
+      {% if not results %}<td class="num phone-hide fx-market"{% if r.mkt1 %} title="As of {{ r.mkt_at }}; opens the match on Kalshi"{% endif %}>{% if r.mkt1 and r.mkt_url %}<a href="{{ r.mkt_url }}" aria-label="Kalshi’s market for {{ r.name1 }} against {{ r.name2 }}: {{ r.mkt1 }}–{{ r.mkt2 }}">{{ r.mkt1 }}–{{ r.mkt2 }}</a>{% elif r.mkt1 %}{{ r.mkt1 }}–{{ r.mkt2 }}{% else %}<span class="muted" title="No Kalshi market, or too thin a quote">—</span>{% endif %}</td>{% endif %}
       {% if by %}<td class="wide-only fx-by">{{ r.method }}{% if r.cross %}<span class="fx-cross" title="Teams from different leagues: Elo alone"> across</span>{% endif %}</td>{% endif %}
       {% if results %}
       <td class="num fx-score" title="Best of {{ r.best_of }}">{{ r.score or '—' }}</td>
