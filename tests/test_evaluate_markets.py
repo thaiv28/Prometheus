@@ -201,3 +201,18 @@ def test_bets_take_the_value_side_with_profit_after_fees_and_clv():
     # Back our pick bets every priced match, the third without a close.
     assert len(evaluate_markets.bet_profits(frame, 0.07)) == 3
     assert len(evaluate_markets.bet_clv(frame)) == 2
+
+
+def test_backfill_last_quote_takes_the_last_tight_quote_by_the_start():
+    import sys
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import backfill_market_prices as backfill
+
+    candles = [
+        _candle(1000, 0.40, 0.42),
+        _candle(2000, 0.10, 0.90),  # too wide
+        _candle(3000, 0.50, 0.52),  # after the start
+    ]
+    assert backfill.last_quote(candles, 2500) == pytest.approx((0.41, 0.02, 1000))
+    assert backfill.last_quote(candles, 500) is None

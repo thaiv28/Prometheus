@@ -541,8 +541,10 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
     """Our series calls against Kalshi's, on settled matches priced before the start.
 
     `market.p` is the last price read before the start (prices stop updating
-    once a match begins). Returns rows for "FORGE", "Elo" (same-league and
-    cross-league Elo calls) and "All": series, how often each favourite won (a
+    once a match begins; for matches before the hourly reads, the last hourly
+    quote from Kalshi's price history). Returns rows for "FORGE", "Elo"
+    (same-league and cross-league Elo calls), "All" and "Saved calls" (all,
+    without calls rebuilt after the match): series, how often each favourite won (a
     50-50 call counts as half), each side's mean log loss per series, and
     `diff` (ours minus Kalshi's, with a 95% paired-bootstrap interval; below 0
     means we beat the market) once a row has `min_n` series, else None.
@@ -561,12 +563,13 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
         if e.get("matched")
         and e.get("winner") in (1, 2)
         and (e.get("market") or {}).get("p") is not None
-        and e["market"]["at"] < e["start"]
+        and e["market"]["at"] <= e["start"]
     ]
     groups = [
         ("FORGE", lambda e: e.get("method") == "forge"),
         ("Elo", lambda e: e.get("method") != "forge"),
         ("All", lambda e: True),
+        ("Saved calls", lambda e: not e.get("reconstructed")),
     ]
     rows = []
     for label, keep in groups:

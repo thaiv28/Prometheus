@@ -328,3 +328,50 @@ def attach_prices(log, markets, match_team, now):
         }
         priced += 1
     return priced
+
+
+def backfill_prices(log, rows, match_team, price_at, now):
+    """Give started matches without a price the market's last price before their
+    start, from Kalshi's price history, in place.
+
+    `rows` are settled series events (`events`); `price_at(row, team1, start)`
+    returns (team1's chance, spread, when it was read: a datetime before `start`)
+    or None. Matching is as in `attach_prices`. The entry gets the same `market`
+    a live read would have left, plus `"backfilled": True`. Returns the number of
+    matches priced.
+    """
+    now_s = now.strftime("%Y-%m-%dT%H:%MZ")
+    by_pair = {}
+    for row in rows:
+        if row["map"] is not None:
+            continue
+        ours = (match_team(row["team1"]), match_team(row["team2"]))
+        if None not in ours:
+            by_pair.setdefault(frozenset(ours), []).append((row, ours))
+    priced = 0
+    for entry in log.values():
+        if not entry.get("matched") or entry["start"] > now_s or entry.get("market"):
+            continue
+        start = _parse_start(entry["start"])
+        near = [
+            (abs(row["start"] - start), row, ours)
+            for row, ours in by_pair.get(frozenset((entry["ours1"], entry["ours2"])), [])
+            if abs(row["start"] - start) <= MATCH_WINDOW
+        ]
+        if not near:
+            continue
+        _, row, ours = min(near, key=lambda x: x[0])
+        team1 = row["team1"] if ours[0] == entry["ours1"] else row["team2"]
+        quote = price_at(row, team1, start)
+        if quote is None:
+            continue
+        p, spread, at = quote
+        entry["market"] = {
+            "p": round(p, 4),
+            "spread": round(spread, 4),
+            "at": at.strftime("%Y-%m-%dT%H:%MZ"),
+            "ticker": row["event_ticker"],
+            "backfilled": True,
+        }
+        priced += 1
+    return priced

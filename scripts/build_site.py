@@ -280,7 +280,7 @@ PREDICTIONS = {
         "Same major league (LCK, LPL, LEC, LCS): FORGE. Any other pairing: Elo, across leagues on a curve fit to international games.",
         "Calls refresh daily and freeze at the start. Matches played before the log began carry a call rebuilt from the day before; the weights saw those games, so trust saved calls more.",
         "Log loss: lower is better; a coin flip scores 0.693. Table II scores the one-game chance per game, Table III the series chance per series.",
-        "Kalshi is a prediction market. Its figure is the market's series chance (mid of bid and offer), read hourly and frozen at the start; the caret on the bar marks it. Over 2,180 past series it beat us; 12 hours out, FORGE tied it in the major leagues. Alerts flag FORGE calls 5 points above Kalshi's price; closing line value is the last price minus the alerted one, above 0 when the market moved our way.",
+        "Kalshi is a prediction market. Its figure is the market's series chance (mid of bid and offer), read hourly (before 6 Oct, from Kalshi's price history) and frozen at the start; the caret on the bar marks it. Over 2,180 past series it beat us; 12 hours out, FORGE tied it in the major leagues. Alerts flag FORGE calls 5 points above Kalshi's price; closing line value is the last price minus the alerted one, above 0 when the market moved our way.",
     ],
     "caveats": "Schedule from Leaguepedia; teams Oracle's Elixir doesn't cover aren't shown. Calls ignore side selection, roster changes and new patches. Times are local.",
 }

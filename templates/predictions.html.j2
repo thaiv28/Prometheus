@@ -103,8 +103,8 @@
               </thead>
               <tbody>
                 {% for row in vs %}
-                <tr{% if loop.last %} class="record-total"{% endif %}>
-                  <th scope="row">{{ row.label }}</th>
+                <tr{% if row.label == 'All' %} class="record-total"{% endif %}>
+                  <th scope="row">{{ row.label }}{% if row.label == 'All' %}<a class="note-ref" href="#note-3" aria-label="Includes rebuilt calls: note 3">3</a>{% endif %}</th>
                   <td class="num">{{ row.series }}</td>
                   {% if row.series %}
                   <td class="num phone-hide">{{ row.ours_pct | round | int }}<span class="of"> %</span></td>
@@ -126,7 +126,7 @@
           </div>
         </figure>
         {% set al = view.alerts %}
-        <p class="section-prose record-note">{% if vs[2].series < view.market_min %}Too few series for an interval yet ({{ view.market_min }} needed). {% endif %}<strong>Alerts:</strong> {% if al.settled %}{{ al.settled }} settled, {{ al.won }} won{% if al.clv is not none %}; closing line value {{ '%+.1f' | format(100 * al.clv) }} points, {{ (100 * al.beat) | round | int }}% beat the close{% endif %}; {{ '%+.1f' | format(100 * al.roi) }}% after fees{% if al.interval %} ({{ '%+.1f' | format(100 * al.interval[0]) }}% to {{ '%+.1f' | format(100 * al.interval[1]) }}%){% else %}, too few for an interval{% endif %}.{% else %}none settled yet.{% endif %}</p>
+        <p class="section-prose record-note">{% if vs[2].series < view.market_min or vs[3].series < view.market_min %}Intervals from {{ view.market_min }} series. {% endif %}<strong>Alerts:</strong> {% if al.settled %}{{ al.settled }} settled, {{ al.won }} won{% if al.clv is not none %}; closing line value {{ '%+.1f' | format(100 * al.clv) }} points, {{ (100 * al.beat) | round | int }}% beat the close{% endif %}; {{ '%+.1f' | format(100 * al.roi) }}% after fees{% if al.interval %} ({{ '%+.1f' | format(100 * al.interval[0]) }}% to {{ '%+.1f' | format(100 * al.interval[1]) }}%){% else %}, too few for an interval{% endif %}.{% else %}none settled yet.{% endif %}</p>
       </section>
 
       <section class="fixtures-block" aria-labelledby="past-heading">

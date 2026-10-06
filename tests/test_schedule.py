@@ -221,11 +221,12 @@ def test_market_scorecard_splits_forge_and_elo_and_needs_enough_series():
         {**_pred("d", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": {"p": 0.5, "at": "2026-10-04T09:00Z"}},  # priced after the start
         {**_pred("e", "2026-10-04T08:00Z", 0.8), "market": dict(market)},  # not played
     ]
-    forge, elo, total = schedule.market_scorecard(entries, min_n=2)
+    forge, elo, total, saved = schedule.market_scorecard(entries, min_n=2)
     assert (forge["series"], elo["series"], total["series"]) == (1, 1, 2)
     assert forge["ours_loss"] == pytest.approx(-math.log(0.8))
     assert forge["market_loss"] == pytest.approx(math.log(2))
     assert (forge["ours_pct"], forge["market_pct"], elo["ours_pct"]) == (100, 50, 0)
     assert forge["diff"] is None and total["diff"] is not None
     assert total["diff"][0] == pytest.approx((-math.log(0.8) - math.log(0.4)) / 2 - math.log(2))
+    assert saved["series"] == 2  # none of these is reconstructed
     assert schedule.market_scorecard([])[2]["ours_loss"] is None
