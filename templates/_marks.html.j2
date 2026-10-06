@@ -83,3 +83,29 @@
   {% endfor %}
 </table>
 {%- endmacro %}
+
+{#- The filter line over fixture registers (predictions.js): leagues, with the
+    major-league default and an all-leagues shortcut, and a team search. -#}
+{% macro filter_line(view) -%}
+      <div class="filter-line" role="group" aria-label="Filters" hidden>
+        <span class="filter-lead">Filter</span>
+        <details class="picker" data-filter="leagues">
+          <summary><span class="picker-label">leagues</span> <span class="picker-value" data-all="All" data-majors="Majors">Majors</span></summary>
+          <fieldset class="picker-panel picker-panel--leagues">
+            <legend class="picker-legend">Leagues</legend>
+            <button type="button" class="picker-shortcut" data-select="{{ view.major_set | join(',') }}">Major leagues and international events</button>
+            <button type="button" class="picker-shortcut" data-select="">All leagues</button>
+            <div class="picker-options">
+              {% for l in view.leagues %}
+              <label data-league="{{ l }}"><input type="checkbox" value="{{ l }}" /> <span class="league-mark" aria-hidden="true"></span>{{ l }}</label>
+              {% endfor %}
+            </div>
+          </fieldset>
+        </details>
+        <label class="filter-search" for="filter-search">
+          <span class="picker-label">team</span>
+          <input id="filter-search" type="search" placeholder="Any" autocomplete="off" spellcheck="false" />
+        </label>
+        <button type="button" class="clear-filters" hidden>Clear filters</button>
+      </div>
+{%- endmacro %}

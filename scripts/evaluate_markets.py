@@ -338,7 +338,7 @@ def bet_summary(s, rate=0.07):
         ("FORGE", frame[frame["method"] == "forge"]),
         ("Elo", frame[frame["method"] != "forge"]),
     ):
-        for edge in EDGES:
+        for edge in (None, *EDGES):  # None: back our pick in every match
             prof, clv = bet_profits(part, rate, edge), bet_clv(part, edge)
             row = {
                 "label": label,

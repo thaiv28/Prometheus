@@ -267,14 +267,15 @@ def test_predictions_view_splits_upcoming_past_and_home():
     now = datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.timezone.utc)
     view = build_site.predictions_view(_log(), {"t1"}, now)
     assert [r["id"] for d in view["upcoming"] for r in d["rows"]] == ["soon", "later"]
-    assert [r["id"] for d in view["past"] for r in d["rows"]] == ["past"]
+    assert view["past"] == []  # 13 days old: on its month's page, not in the recent results
+    assert [(m["key"], m["label"], m["count"]) for m in view["months"]] == [("2026-09", "September 2026", 1)]
     # Home: major and international matches within four days only.
     assert [r["id"] for d in view["home"] for r in d["rows"]] == ["soon"]
     soon = view["upcoming"][0]["rows"][0]
     assert soon["pct1"] + soon["pct2"] == 100 and soon["fav"] == 1
     assert soon["slug1"] == "t1" and soon["slug2"] is None  # Gen.G has no page here
     assert view["upcoming"][0]["label"] == "Sunday 4 October"
-    past = view["past"][0]["rows"][0]
+    past = view["months"][0]["days"][0]["rows"][0]
     assert past["call"] == "missed" and past["score"] == "1–2" and past["reconstructed"]
     assert view["scorecard"][1]["series"] == 1 and view["scorecard"][0]["series"] == 0
     assert [r["label"] for r in view["vs_market"]] == ["FORGE", "Elo", "All", "Saved calls"]
@@ -312,8 +313,13 @@ def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
     html = (tmp_path / "predictions.html").read_text()
     assert 'aria-current="page">Predictions' in html
     assert 'data-start="2026-10-04T08:00Z"' in html and "Sunday 4 October" in html
-    assert "Missed" in html and 'href="#note-3"' in html
+    assert 'href="results/2026-09.html">September 2026' in html
     assert "3 of 4 scheduled matches" in html
+    build_site.render_results(view, "October 3, 2026")
+    month = (tmp_path / "results" / "2026-09.html").read_text()
+    assert "Missed" in month and 'href="#note-3"' in month and 'id="note-3"' in month
+    assert 'href="../teams/' not in month or "../teams/t1.html" in month
+    assert '../css/' in month and "All leagues" in month
     assert 'data-select="LCK,LPL,LEC,LCS,Worlds' in html
     # The home page's compact table: no method column, no results.
     home = build_site.env.from_string(

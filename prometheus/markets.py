@@ -64,6 +64,13 @@ MARKET_ALIASES = {
     "CyberCore Esports": "SN CyberCore Esports",
     "Lyon Gaming Academy": "LYON Academy",
     "Rising Bees": "Vitality Rising Bees",
+    "The Otter Side": "Otter Side",
+    "Skillcamp Esport": "Skillcamp",
+    "The Secret Club Esport": "The Secret Club",
+    "MAGAZA": "Magaza Esports",
+    "PCIFIC": "PCIFIC Esports",
+    "Senshi Esports Club": "Senshi eSports",
+    "MVK Academy": "MVK Esports Academy",
 }
 
 

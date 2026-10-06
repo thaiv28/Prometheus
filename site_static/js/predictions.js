@@ -64,8 +64,10 @@
   // the upcoming register's caption when the prices were read.
   const stampFormat = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
   const stamp = (iso) => stampFormat.format(new Date(iso.replace("Z", ":00Z")));
-  fetch("kalshi.json", { cache: "no-store" })
-    .then((r) => (r.ok ? r.json() : null))
+  // Results pages have no upcoming register, so nothing to refresh.
+  const upcomingTables = tables.filter((t) => !t.classList.contains("register--results"));
+  (upcomingTables.length ? fetch("kalshi.json", { cache: "no-store" }) : Promise.resolve(null))
+    .then((r) => (r && r.ok ? r.json() : null))
     .then((data) => {
       if (!data || !data.matches) return;
       $$("tr.fx[data-match]").forEach((tr) => {
@@ -126,16 +128,24 @@
   const search = $("#filter-search");
   const clearBtn = $(".clear-filters", line);
   const known = new Set($$("input[type=checkbox]", picker).map((cb) => cb.value));
-  const state = { leagues: new Set(), search: "" };
+  // With no leagues in the URL the registers show the major leagues and
+  // international events; ?leagues=all shows every league.
+  const shortcuts = $$(".picker-shortcut", picker);
+  const majors = new Set((shortcuts[0]?.dataset.select || "").split(",").filter((l) => known.has(l)));
+  const isMajors = (set) => set.size === majors.size && [...set].every((l) => majors.has(l));
+  const state = { leagues: new Set(majors), search: "" };
 
   const params = new URLSearchParams(location.search);
-  (params.get("leagues") || "").split(",").filter((l) => known.has(l)).forEach((l) => state.leagues.add(l));
+  const asked = params.get("leagues");
+  if (asked === "all") state.leagues.clear();
+  else if (asked) state.leagues = new Set(asked.split(",").filter((l) => known.has(l)));
   state.search = params.get("search") || "";
   search.value = state.search;
 
   function writeUrl() {
     const q = new URLSearchParams();
-    if (state.leagues.size) q.set("leagues", [...state.leagues].join(","));
+    if (!state.leagues.size) q.set("leagues", "all");
+    else if (!isMajors(state.leagues)) q.set("leagues", [...state.leagues].join(","));
     if (state.search.trim()) q.set("search", state.search.trim());
     const qs = q.toString();
     history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + location.hash);
@@ -169,8 +179,9 @@
     $$("input[type=checkbox]", picker).forEach((cb) => { cb.checked = state.leagues.has(cb.value); });
     const value = $(".picker-value", picker);
     const chosen = [...state.leagues];
-    value.textContent = chosen.length ? (chosen.length > 3 ? `${chosen.length} selected` : chosen.join(", ")) : value.dataset.all;
-    clearBtn.hidden = !(state.leagues.size || state.search);
+    value.textContent = isMajors(state.leagues) ? value.dataset.majors
+      : chosen.length ? (chosen.length > 3 ? `${chosen.length} selected` : chosen.join(", ")) : value.dataset.all;
+    clearBtn.hidden = isMajors(state.leagues) && !state.search;
     writeUrl();
   }
 
@@ -180,13 +191,13 @@
     else state.leagues.delete(e.target.value);
     apply();
   });
-  $(".picker-shortcut", picker).addEventListener("click", (e) => {
+  shortcuts.forEach((b) => b.addEventListener("click", (e) => {
     state.leagues = new Set(e.currentTarget.dataset.select.split(",").filter((l) => known.has(l)));
     apply();
-  });
+  }));
   search.addEventListener("input", () => { state.search = search.value; apply(); });
   clearBtn.addEventListener("click", () => {
-    state.leagues.clear();
+    state.leagues = new Set(majors);
     state.search = "";
     search.value = "";
     apply();

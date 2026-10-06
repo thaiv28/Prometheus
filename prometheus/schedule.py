@@ -57,7 +57,7 @@ EVENT_LEAGUES = {
     "Mid-Season Invitational": "MSI",
     "Esports World Cup": "EWC",
     "First Stand": "FST",
-    "Demacia Cup Global Invitational": "DCup",
+    "Demacia Cup Global Invitational": "DCGI",
     "EMEA Masters": "EM",
     "World Star Challengers Invitational": "WSCI",
     "LCK Challengers League": "LCKC",
@@ -541,7 +541,8 @@ MARKET_MIN_SERIES = 30
 
 
 def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
-    """Our series calls against Kalshi's, on settled matches priced before the start.
+    """Our series calls against Kalshi's, on settled matches priced before the start
+    and 12 hours out (`market_12h`), the matches Table IV's every-match row bets on.
 
     `market.p` is the last price read before the start (prices stop updating
     once a match begins; for matches before the hourly reads, the last hourly
@@ -567,6 +568,7 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
         and e.get("winner") in (1, 2)
         and (e.get("market") or {}).get("p") is not None
         and e["market"]["at"] <= e["start"]
+        and e.get("market_12h")
     ]
     groups = [
         ("FORGE", lambda e: e.get("method") == "forge"),
@@ -604,13 +606,15 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
 
 
 # The edges, in chance points, the page scores paper bets above.
-BET_EDGES = (0.0, 0.03, 0.05, 0.10)
+# None is every match, backing our pick.
+BET_EDGES = (None, 0.0, 0.03, 0.05, 0.10)
 
 
 def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
-    """Paper bets on settled matches: $1 on our side `markets.BET_LEAD` before the
-    start, where our chance beats what a contract cost then (`market_12h`'s ask)
-    by more than each edge.
+    """Paper bets on settled matches, `markets.BET_LEAD` before the start: $1 on
+    our pick in every match (edge None, the row Table III's matches line up
+    with), or on our side where our chance beats what a contract cost then
+    (`market_12h`'s ask) by more than each edge.
 
     The side is the one with the larger edge. Each bet scores its profit after
     Kalshi's fee at `rate` and its CLV: the last price before the start for that
@@ -628,27 +632,35 @@ def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
             continue
         if early.get("ours") is None:
             continue
-        options = []
+        options = {}
         for side in (1, 2):
             cost = early.get(f"ask{side}")
             if cost is None or not 0 < cost < 1:
                 continue
             ours = early["ours"] if side == 1 else 1 - early["ours"]
-            options.append((ours - cost, side, cost))
+            options[side] = (ours - cost, cost)
         if not options:
             continue
-        edge, side, cost = max(options)
-        won = e["winner"] == side
-        shut = close.get("p")
-        if shut is not None and side == 2:
-            shut = 1 - shut
-        bets.append(
-            {
-                "forge": e.get("method") == "forge",
+
+        def bet(side):
+            edge, cost = options[side]
+            won = e["winner"] == side
+            shut = close.get("p")
+            if shut is not None and side == 2:
+                shut = 1 - shut
+            return {
                 "edge": edge,
                 "won": won,
                 "profit": (1 / cost - 1 if won else -1) - markets.fee(cost, 1, rate),
                 "clv": None if shut is None else shut - cost,
+            }
+
+        pick = 1 if early["ours"] >= 0.5 else 2
+        bets.append(
+            {
+                "forge": e.get("method") == "forge",
+                "value": bet(max(options, key=lambda side: options[side][0])),
+                "pick": bet(pick) if pick in options else None,
             }
         )
 
@@ -661,7 +673,10 @@ def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
     rows = []
     for label, forge in (("FORGE", True), ("Elo", False)):
         for edge in edges:
-            sel = [b for b in bets if b["forge"] == forge and b["edge"] > edge]
+            if edge is None:  # every match: back our pick
+                sel = [b["pick"] for b in bets if b["forge"] == forge and b["pick"]]
+            else:
+                sel = [b["value"] for b in bets if b["forge"] == forge and b["value"]["edge"] > edge]
             profits = [b["profit"] for b in sel]
             clvs = [b["clv"] for b in sel if b["clv"] is not None]
             rows.append(

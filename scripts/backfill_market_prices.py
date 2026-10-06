@@ -17,7 +17,14 @@ import datetime
 import time
 from pathlib import Path
 
-from evaluate_markets import _ts, cached_candles, fetch_candles, fetch_markets, historical_cutoff
+from evaluate_markets import (
+    CACHE,
+    _ts,
+    cached_candles,
+    fetch_candles,
+    fetch_markets,
+    historical_cutoff,
+)
 from update_prices import team_matcher
 
 from prometheus import markets, schedule
@@ -57,14 +64,26 @@ def price_history(cutoff, pause=0.1):
     what a contract on each team cost then (the cheaper of its ask and one minus
     the opponent's bid, as `markets.buy_costs`)."""
 
-    def candles_for(m, start):
+    def candles_for(m, at):
+        """The market's hourly candles through `at`. The backtest's cache stops an
+        hour after Kalshi's scheduled start, which for a day-only market is
+        midnight Eastern; when the match (the log's start) comes later, the
+        history is fetched again through it, so the last quote is the real one."""
         candles = cached_candles(m["ticker"])
-        if candles is None:
+        trading = _ts(m["close"]) > _ts(at) - 3600
+        short = (
+            candles is not None
+            and trading
+            and (not candles or candles[-1]["end_period_ts"] < _ts(at) - 3600)
+        )
+        if candles is None or short:
+            if short:
+                (CACHE / "candles" / f"{m['ticker']}.json").unlink()
             candles = fetch_candles(
                 markets.SERIES,
                 m["ticker"],
                 _ts(m["open"]),
-                _ts(max(m["start"], start)) + 3600,
+                max(_ts(m["start"]), _ts(at)) + 3600,
                 historical=m["close"] < cutoff,
             )
             time.sleep(pause)
@@ -88,7 +107,11 @@ def price_history(cutoff, pause=0.1):
             return None
         chances = [(b + a) / 2 if mine else 1 - (b + a) / 2 for mine, b, a, _ in quotes]
         spreads = [a - b for _, b, a, _ in quotes]
-        return sum(chances) / len(chances), sum(spreads) / len(spreads), when([q[3] for q in quotes])
+        return (
+            sum(chances) / len(chances),
+            sum(spreads) / len(spreads),
+            when([q[3] for q in quotes]),
+        )
 
     def bet_at(row, team1, start):
         quotes = books(row, team1, start - markets.BET_LEAD)
@@ -100,16 +123,35 @@ def price_history(cutoff, pause=0.1):
             own, other = (0, 1) if mine else (1, 0)
             for side, cost in ((own, ask), (other, round(1 - bid, 4))):
                 costs[side] = cost if costs[side] is None else min(costs[side], cost)
-        return sum(chances) / len(chances), costs[0], costs[1], when([q[3] for q in quotes])
+        return (
+            sum(chances) / len(chances),
+            costs[0],
+            costs[1],
+            when([q[3] for q in quotes]),
+        )
 
     return price_at, bet_at
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--log", default="data/predictions.json", help="The prediction log to backfill in place")
-    parser.add_argument("--refresh", action="store_true", help="Refetch Kalshi's market lists (needed for recent matches)")
-    parser.add_argument("--dry-run", action="store_true", help="Count what would be priced; don't write the log")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--log",
+        default="data/predictions.json",
+        help="The prediction log to backfill in place",
+    )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Refetch Kalshi's market lists (needed for recent matches)",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Count what would be priced; don't write the log",
+    )
     args = parser.parse_args()
 
     path = Path(args.log)
@@ -117,10 +159,20 @@ def main():
     now = datetime.datetime.now(datetime.timezone.utc)
     first = min(e["start"] for e in log.values())[:10]
     since = datetime.date.fromisoformat(first) - datetime.timedelta(days=1)
-    rows = [r for r in markets.events(fetch_markets(markets.SERIES, args.refresh)) if r["start"].date() >= since]
+    rows = [
+        r
+        for r in markets.events(fetch_markets(markets.SERIES, args.refresh))
+        if r["start"].date() >= since
+    ]
     price_at, bet_at = price_history(historical_cutoff())
-    priced = markets.backfill_prices(log, rows, team_matcher(log), price_at, now, bet_at)
-    started = [e for e in log.values() if e.get("matched") and e["start"] <= now.strftime("%Y-%m-%dT%H:%MZ")]
+    priced = markets.backfill_prices(
+        log, rows, team_matcher(log), price_at, now, bet_at
+    )
+    started = [
+        e
+        for e in log.values()
+        if e.get("matched") and e["start"] <= now.strftime("%Y-%m-%dT%H:%MZ")
+    ]
     with_price = sum(1 for e in started if e.get("market"))
     with_early = sum(1 for e in started if e.get("market_12h"))
     print(
