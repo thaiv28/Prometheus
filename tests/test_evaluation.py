@@ -4,6 +4,7 @@ import pytest
 
 from prometheus.evaluation import (
     cross_league_games,
+    other_league_games,
     elo_as_of,
     fit_win_curve,
     game_losses,
@@ -125,8 +126,8 @@ def test_spearman_brown_and_games_for_reliability():
     assert games_for_reliability(0.0, 10) == np.inf
 
 
-def test_cross_league_games_uses_most_played_league_as_home():
-    games = pd.DataFrame(
+def _league_mix():
+    return pd.DataFrame(
         [
             # A plays LCK most; one KeSPA Cup game doesn't make it a cup team.
             ("g1", 2026, "LCK", "A", "B"),
@@ -145,8 +146,18 @@ def test_cross_league_games_uses_most_played_league_as_home():
         ],
         columns=["gameid", "year", "league", "teamid", "opponent_teamid"],
     )
+
+
+def test_cross_league_games_uses_most_played_league_as_home():
+    games = _league_mix()
     out = cross_league_games(games, ["Worlds"], ["LCK", "LEC"]).set_index("gameid")
     assert sorted(out.index) == ["g3", "g6", "g8"]
     assert out.loc["g3", ["home", "opponent_home", "kind"]].tolist() == ["LCK", "LCKC", "major v other"]
     assert out.loc["g6", "kind"] == "major v major"
     assert out.loc["g8", ["home", "opponent_home", "kind"]].tolist() == ["LFL", "PRM", "other v other"]
+
+
+def test_other_league_games_keep_only_games_inside_one_minor_league():
+    out = other_league_games(_league_mix(), ["Worlds"], ["LCK", "LEC"])
+    # LCK CL, LFL and PRM games; not the majors, the KeSPA Cup, Worlds or EMEA Masters.
+    assert sorted(out["gameid"]) == ["g10", "g11", "g12", "g4", "g5", "g9"]

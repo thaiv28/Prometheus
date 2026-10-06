@@ -4,6 +4,8 @@ Between two teams from the same home league, the chance to win one game is a
 logistic curve on their Elo gap and their Form gap (see `prometheus/form.py`).
 Between leagues, Form doesn't compare (each team's Form is measured against its
 own league), so the chance comes from Elo alone, on a curve fit to past games.
+Within a non-major league (no Form there) it is Elo alone on its own fitted curve,
+`OTHER_LEAGUE_ELO_WEIGHT`, steeper than the textbook 400-point curve.
 
 A team's FORGE rating is its Elo plus its Form in Elo points
 (`FORM_WEIGHT / ELO_WEIGHT` per unit of Form), so the same-league win chance is
@@ -49,6 +51,7 @@ _WEIGHTS = load_weights()
 ELO_WEIGHT = _WEIGHTS["elo_weight"]
 FORM_WEIGHT = _WEIGHTS["form_weight"]
 CROSS_REGION_ELO_WEIGHT = _WEIGHTS["cross_region_elo_weight"]
+OTHER_LEAGUE_ELO_WEIGHT = _WEIGHTS["other_league_elo_weight"]
 # Elo points per unit of Form (log-odds against the league average).
 FORM_POINTS = FORM_WEIGHT / ELO_WEIGHT
 

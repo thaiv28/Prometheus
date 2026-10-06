@@ -121,21 +121,19 @@ def elo_as_of(timeline, offsets, cutoff):
     return last["elo"] + moved.fillna(0)
 
 
-def cross_league_games(games, international, majors):
-    """Games between teams from two different home leagues, in any league or event.
-
-    A team's home league in a season is the non-international league it played
+def season_homes(games, international):
+    """Each team's home league per season: the non-international league it played
     most that season (a cup, promotion series or EMEA Masters doesn't change it).
-    Homes come from the whole season, so this only chooses which games to score;
-    it never feeds a forecast.
+
+    Homes come from the whole season, so they only choose which games to score;
+    they never feed a forecast.
 
     Args:
-        games: One row per game: gameid, year, league, teamid, opponent_teamid.
+        games: One row per game: year, league, teamid, opponent_teamid.
         international: League names of international events.
-        majors: League names of the major leagues.
     Returns:
-        The cross-league rows with home, opponent_home and kind ("major v major",
-        "major v other" or "other v other").
+        `games` with home and opponent_home columns (NaN when a team played only
+        international events that season).
     """
     sides = pd.concat(
         [
@@ -148,16 +146,42 @@ def cross_league_games(games, international, majors):
     # Most games first, then league name, so ties resolve the same way every run.
     counts = counts.sort_values(["n", "league"], ascending=[False, True])
     home = counts.drop_duplicates(["teamid", "year"]).set_index(["teamid", "year"])["league"]
-    out = games.assign(
+    return games.assign(
         home=home.reindex(pd.MultiIndex.from_arrays([games["teamid"], games["year"]])).to_numpy(),
         opponent_home=home.reindex(
             pd.MultiIndex.from_arrays([games["opponent_teamid"], games["year"]])
         ).to_numpy(),
     )
+
+
+def cross_league_games(games, international, majors):
+    """Games between teams from two different home leagues (`season_homes`), in any
+    league or event.
+
+    Args:
+        games: One row per game: gameid, year, league, teamid, opponent_teamid.
+        international: League names of international events.
+        majors: League names of the major leagues.
+    Returns:
+        The cross-league rows with home, opponent_home and kind ("major v major",
+        "major v other" or "other v other").
+    """
+    out = season_homes(games, international)
     out = out[out["home"].notna() & out["opponent_home"].notna() & (out["home"] != out["opponent_home"])]
     n_major = out["home"].isin(majors).astype(int) + out["opponent_home"].isin(majors).astype(int)
     kinds = np.array(["other v other", "major v other", "major v major"])
     return out.assign(kind=kinds[n_major.to_numpy()]).reset_index(drop=True)
+
+
+def other_league_games(games, international, majors):
+    """Games inside one non-major league: both teams' home (`season_homes`) is the
+    league the game was played in, and it isn't a major league.
+
+    Args and the games' columns are as for `cross_league_games`.
+    """
+    out = season_homes(games, international)
+    keep = (out["home"] == out["league"]) & (out["opponent_home"] == out["league"]) & ~out["league"].isin(majors)
+    return out[keep].reset_index(drop=True)
 
 
 def spearman_brown(r, factor):

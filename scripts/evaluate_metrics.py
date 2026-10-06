@@ -17,6 +17,9 @@ Test sets:
   international) between teams whose home leagues differ, the home being the
   league a team played most that season. Scored with Elo (live) only, as the site
   forecasts these games; it is the benchmark for league offsets below the majors.
+- Within other leagues: games inside one non-major league (both teams' home is that
+  league). Elo on the standard 400-point curve against Elo on a fitted curve; the
+  fitted slope is published as `other_league_elo_weight`.
 
 Every forecast is scored on exactly the same games (both teams need 5+ games that
 season before the month starts), and each is compared with "win % so far this
@@ -42,6 +45,7 @@ from prometheus.elo import calculate_game_length_elo_change, compute_elo_records
 from prometheus.evaluation import (
     cross_league_games,
     elo_as_of,
+    other_league_games,
     game_losses,
     out_of_year_probabilities,
     paired_bootstrap,
@@ -104,8 +108,8 @@ def load_games():
     return games
 
 
-def load_cross_league():
-    """Every cross-league game (see `cross_league_games`) with each side's pre-game Elo."""
+def load_pair_games():
+    """Every game once (sides in team-id order) with the pre-game Elo gap."""
     stmt = """
     SELECT m1.gameid, m1.year, m1.league, m1.teamid, m2.teamid AS opponent_teamid,
            m1.result AS won, e1.pre_match_elo - e2.pre_match_elo AS elo_live
@@ -116,7 +120,29 @@ def load_cross_league():
     """
     games = pd.read_sql(stmt, get_engine())
     games["won"] = games["won"].astype(int)
-    return cross_league_games(games, INTERNATIONAL_LEAGUES, MAJORS)
+    return games
+
+
+def summarize_other_leagues(games):
+    """Elo within non-major leagues: the standard 400-point curve against a fitted one."""
+    standard = game_losses(1 / (1 + 10 ** (-games["elo_live"] / 400)), games["won"])
+    fitted = game_losses(out_of_year_probabilities(games, "elo_live"), games["won"])
+    lines = [
+        f"\n### Within other leagues: {len(games):,} games, {games['year'].min()}–{games['year'].max()}\n",
+        "Elo on games inside one non-major league, with the standard 400-point curve and "
+        "with a curve fit on the other seasons.\n",
+        "| Games | n | Standard curve log loss | Fitted curve log loss | Difference (95% CI) |",
+        "|---|---:|---:|---:|---|",
+    ]
+    for label, mask in (("All", games["year"] > 0), ("2022 on", games["year"] >= 2022)):
+        mask = mask.to_numpy()
+        a, b = fitted["log_loss"].to_numpy()[mask], standard["log_loss"].to_numpy()[mask]
+        mean, lo, hi = paired_bootstrap(a, b)
+        lines.append(
+            f"| {label} | {int(mask.sum()):,} | {b.mean():.4f} | {a.mean():.4f} "
+            f"| {mean:+.4f} ({lo:+.4f} to {hi:+.4f}) |"
+        )
+    return "\n".join(lines) + "\n"
 
 
 def summarize_cross_league(games):
@@ -386,13 +412,14 @@ def _slopes(x, won):
     return model.coef_[0] / sd
 
 
-def published_weights(frame, states):
+def published_weights(frame, states, other):
     """Form and FORGE weights for the site, fit on every backtest game.
 
     Returns:
         (form_weights, forge_weights). Form: log-odds per unit of each stat's gap,
         fit on domestic games. FORGE: elo_weight and form_weight (same-league
-        games) and cross_region_elo_weight (every game).
+        games), cross_region_elo_weight (every game) and other_league_elo_weight
+        (`other`: games inside one non-major league).
     """
     gaps = _state_gaps(frame, states)
     domestic = (frame["test_set"] == "Domestic").to_numpy()
@@ -407,7 +434,13 @@ def published_weights(frame, states):
     won = frame["won"].to_numpy()
     elo_w, form_w = _slopes(np.c_[frame["elo_live"].to_numpy()[same], (blue - red)[same]], won[same])
     (cross_w,) = _slopes(frame["elo_live"].to_numpy(), won)
-    return form_weights, {"elo_weight": elo_w, "form_weight": form_w, "cross_region_elo_weight": cross_w}
+    (other_w,) = _slopes(other["elo_live"].to_numpy(), other["won"].to_numpy())
+    return form_weights, {
+        "elo_weight": elo_w,
+        "form_weight": form_w,
+        "cross_region_elo_weight": cross_w,
+        "other_league_elo_weight": other_w,
+    }
 
 
 def format_weights(forge):
@@ -472,7 +505,9 @@ def main():
     states = form_states()
     print("Backtesting:")
     frame = add_form(backtest(games, results, elo_timeline, years), states)
-    form_weights, weights = published_weights(frame, states)
+    pairs = load_pair_games()
+    other = other_league_games(pairs, INTERNATIONAL_LEAGUES, MAJORS)
+    form_weights, weights = published_weights(frame, states, other)
     if args.check_weights:
         check_weights(form_weights, weights)
         return
@@ -480,7 +515,8 @@ def main():
     report = (
         f"## Metric backtest ({datetime.date.today().isoformat()})\n"
         + summarize(frame, score(frame))
-        + summarize_cross_league(load_cross_league())
+        + summarize_cross_league(cross_league_games(pairs, INTERNATIONAL_LEAGUES, MAJORS))
+        + summarize_other_leagues(other)
         + format_weights(weights)
     )
     print(report)

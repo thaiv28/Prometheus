@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from prometheus import markets, schedule
-from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT
+from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, OTHER_LEAGUE_ELO_WEIGHT
 
 UTC = datetime.timezone.utc
 
@@ -65,7 +65,9 @@ def test_game_probability_picks_the_method_by_league():
 
     p, method = schedule.game_probability(em_a, em_b)
     assert method == "elo"  # FORGE isn't validated outside the major leagues
-    assert p == pytest.approx(1 / (1 + 10 ** (-100 / 400)))
+    # Elo's own fitted curve, steeper than the textbook 400-point one.
+    assert p == pytest.approx(1 / (1 + math.exp(-OTHER_LEAGUE_ELO_WEIGHT * 100)))
+    assert p > 1 / (1 + 10 ** (-100 / 400))
 
 
 @pytest.mark.parametrize(

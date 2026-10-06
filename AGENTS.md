@@ -52,6 +52,22 @@ python -m http.server -d output 8000    # preview the built site locally
 
 `data/`, `db/`, and `output/` are gitignored build artifacts. Never commit them.
 
+### Worktrees
+
+Agents work in a separate worktree (see the global `AGENTS.md`). A new one has none of the gitignored state, so set it up from the main checkout (`MAIN`):
+
+```bash
+git worktree add ../Prometheus-<branch> -b <branch> <base> && cd ../Prometheus-<branch>
+uv sync && uv pip install -e .
+mkdir -p data && ln -s "$MAIN/data/raw" data/raw    # raw CSVs: read-only, safe to share
+cp "$MAIN/.env" .                                    # Leaguepedia bot login
+cp "$MAIN/data/predictions.json" "$MAIN/data/market_prices.json" data/   # prediction log and Kalshi prices, for site builds
+cp -R "$MAIN/data/markets" data/                     # Kalshi cache, only for evaluate_markets.py (rewrites frames.pkl)
+uv run bash scripts/setup_db.sh                      # own db/ (~1 min); never symlink db/, setup_db.sh deletes it
+```
+
+Use a port other than 8000 for `http.server` if another worktree is serving.
+
 ## Layout
 
 | Path | Purpose |
@@ -71,7 +87,7 @@ python -m http.server -d output 8000    # preview the built site locally
 | `prometheus/main.py` | Typer CLI entry point (`prometheus` script) |
 | `scripts/NNN_*.sql\|py` | DB build steps. `setup_db.sh` runs them **in numeric order**. |
 | `scripts/build_site.py` | Static site generator |
-| `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtest: how well each forecast, from earlier games only, predicts winners (domestic, cross-region, and cross-league in every league); fits the forecast weights. Results in `docs/metric_backtest.md` |
+| `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtest: how well each forecast, from earlier games only, predicts winners (domestic, cross-region, cross-league in every league, and within other leagues); fits the forecast weights. Results in `docs/metric_backtest.md` |
 | `prometheus/markets.py`, `prometheus/alerts.py` | Kalshi's prediction market: parsing, quotes, name aliases and the prices stored on upcoming logged matches; the daily alert (FORGE beating Kalshi's ask by 5+ points, 6–36 hours out), recorded in the log and posted as a `kalshi-alert` GitHub issue by CI |
 | `scripts/update_prices.py`, `scripts/post_kalshi_alert.sh` | The hourly job (`.github/workflows/prices.yml`): refresh Kalshi's prices in the prediction log without a rebuild, write `kalshi.json` / `predictions.json` for the live site, and post the day's alert issue (the shell script, shared with the publish workflow) |
 | `scripts/extend_log.py` | One-off: extend the prediction log back (`--since`) with calls rebuilt from the ratings the day before each match, as a new log's 30-day rebuild does |

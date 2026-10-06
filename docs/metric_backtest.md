@@ -54,4 +54,13 @@ Elo (live) on games between teams from two home leagues at any event; the home i
 | At an international event | 2,182 | 65.4% | 0.2142 | 0.6156 |
 | At any other event (EMEA Masters, cups, promotion) | 7,248 | 65.5% | 0.2156 | 0.6204 |
 
-FORGE weights (log-odds per point): elo_weight = 0.00483, form_weight = 0.50500, cross_region_elo_weight = 0.00874. Form: half-life 20 games, carry 0.5, prior 5 games.
+### Within other leagues: 67,926 games, 2014–2027
+
+Elo on games inside one non-major league, with the standard 400-point curve and with a curve fit on the other seasons.
+
+| Games | n | Standard curve log loss | Fitted curve log loss | Difference (95% CI) |
+|---|---:|---:|---:|---|
+| All | 67,926 | 0.6453 | 0.6285 | -0.0168 (-0.0181 to -0.0155) |
+| 2022 on | 36,120 | 0.6398 | 0.6230 | -0.0168 (-0.0187 to -0.0148) |
+
+FORGE weights (log-odds per point): elo_weight = 0.00483, form_weight = 0.50500, cross_region_elo_weight = 0.00874, other_league_elo_weight = 0.01241. Form: half-life 20 games, carry 0.5, prior 5 games.

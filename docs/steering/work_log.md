@@ -2,6 +2,15 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-06 — Fitted Elo curve within non-major leagues; worktree setup
+
+- **Change.** Predictions (`schedule.game_probability`) and game-log calls (`gamelog.add_calls`) between two teams of one non-major league used the textbook Elo curve (400 points per 10× odds, 0.00576 log-odds per point). They now use `OTHER_LEAGUE_ELO_WEIGHT` (`forge_weights.json`, `other_league_elo_weight` = 0.01241), fit by `evaluate_metrics.py` on every game inside a non-major league. Major-league and cross-league calls are unchanged.
+- **Benchmark.** New "Within other leagues" section in `evaluate_metrics.py` (`evaluation.other_league_games`, with `season_homes` factored out of `cross_league_games`; unit-tested): standard curve 0.6453 vs fitted curve (out of year) 0.6285 on 67,926 games, −0.0168 (−0.0181 to −0.0155); from 2022 on −0.0168 (−0.0187 to −0.0148). The fitted slope for major leagues is similar (0.0087), so the textbook curve was too flat everywhere; majors already used fitted curves. Domestic and international forecasts are untouched (same numbers). Classified as a forecast change judged on the games it affects, since none of the major-league benchmarks cover them.
+- **Market benchmark** (main checkout's uncommitted `evaluate_markets.py`, run on this branch's code; report not committed): our calls on 1,102 series within other leagues −0.0089 (−0.0244 to +0.0083) vs before, not significant at series level; gap to the market at 12 hours +0.0385 → +0.0342. Most of the market's edge inside minor leagues is something else.
+- **Not shipped.** A slope per league shrunk toward the pooled slope: −0.0017 (−0.0021 to −0.0013) over pooled with 500 games' shrinkage, −0.0012 with 2,000, chosen after seeing results (Future work).
+- **Worktrees.** `AGENTS.md` now has a Worktrees recipe (symlink `data/raw`, copy `.env`, the prediction log and the Kalshi cache, build an own `db/`). Global agent instructions live in `~/.codex/AGENTS.md`, imported by `~/.claude/CLAUDE.md` (outside the repo).
+- Checks: `evaluate_metrics.py --write-weights --out docs/metric_backtest.md` (other weights unchanged); `uv run pytest -q`; site build with `PREDICTIONS_FETCH=0` (below).
+
 ## 2026-10-06 — In-game and historical-objective research committed
 
 - Committed the research scripts, reports and tests below (gol.gg pilot, coverage audit and corpus collector; objective and full-corpus benchmarks; snapshot, champion and pre-match-Elo experiments; visible-input models). They were written on 5–6 Oct but left uncommitted in a working tree; their entries follow unchanged. None feed the DB build or the site.
