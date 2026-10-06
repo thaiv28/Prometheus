@@ -2,6 +2,14 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-06 — Demacia Cup and WSCI count as international events
+
+- **Bug.** The first alert run on main posted nothing: every Demacia Cup match was an Elo call. Oracle's Elixir files the Demacia Cup Global Invitational as league `DCGI` and the World Star Challengers Invitational as `WSCI`; neither was in `INTERNATIONAL_LEAGUES`, so a team's last games there made it the team's home league (12 team slots on the live log under DCGI, 2 under WSCI). Effects: same-league FORGE calls became Elo calls (no alerts), those teams left the FORGE page, and the Elo league offsets treated the events as leagues. WSCI had done this since mid-September.
+- **Fix.** `DCGI` and `WSCI` added to `INTERNATIONAL_LEAGUES`. They now link regions like Worlds and MSI, and teams keep their regional home league.
+- **Benchmark** (DB rebuilt on Oracle's Elixir data through 2026-10-05, before and after, `evaluate_metrics.py` pipeline, per-game paired bootstrap on the 17,752 games in both). Domestic (16,773): FORGE 0.6291 → 0.6291, Player Elo 0.6319 → 0.6319, Team Elo 0.6343 → 0.6343, all Δ 0.00000. International (979): FORGE 0.6295 → 0.6295 (Δ −0.00001, −0.00002 to +0.00001), Elo likewise. The change only touches games from mid-September; 14 DCGI/WSCI games join the international test set. Shipped as a data-classification fix with no measurable effect on the forecasts (user: ship unless the forecasts drop).
+- Refit the forecast weights (`--write-weights`; largest move 2.5%, from five more days of data) and refreshed `docs/metric_backtest.md`.
+- Checks: `get_latest_elos` home leagues back to LPL/LCS/LCK/LEC for the Demacia Cup teams, none left under DCGI or WSCI; a full local build from the live S3 log with live fetches made the Demacia Cup's same-league matches FORGE calls and wrote one alert (Shopify Rebellion v FlyQuest, FORGE 43% against a 36¢ ask, +7.4), not posted; `uv run pytest -q` (136 passed, e2e included). Google Drive refused the CSV download, so the 2026 CSV came from the CI backup in S3.
+
 ## 2026-10-06 — Lead-time ladder, betting backtest and daily Kalshi alerts
 
 - **Backtest additions** (`scripts/evaluate_markets.py`): a lead-time ladder (market at the close and 6/12/18/24 hours before, against our day-before call, on 485 major-league and international series with a quote at every lead) and a betting section ($1 at the ask 12 hours out, Kalshi's fee `ceil(rate × C × P × (1 − P))` at 7% taker, 1.75% maker or none; strategies fixed before the run). `--reuse` rewrites the report from saved tables; progress lines with times.

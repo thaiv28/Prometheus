@@ -101,7 +101,7 @@ python -m http.server -d output 8000    # preview the built site locally
 ## Gotchas
 
 - `get_glory_ranking()` reads and fits one model **per year** on every call. Reading the games is the slow part, so `build_site.py` loads them once with `load_glory_games()` and passes `games=` to its calls (GLORY qualified/all, unadjusted GLORY, GLORB, Luck), and fits Record once and passes it as `record=`. A build takes about 45 seconds: about 3 for the Form pass over every team-game, about 15 for AURA (every player-game and four snapshot fits per year), and most of the rest writing about 7,000 pages.
-- International events (Worlds, MSI, ...) are ingested as their own leagues (`INTERNATIONAL_LEAGUES` in `types.py`). They are the only games linking regional Elo pools. Oracle's Elixir leaves `split` empty for them, so don't reintroduce a blanket `dropna` over `split` in `002_add_matches.py`.
+- International events (Worlds, MSI, ...) are ingested as their own leagues (`INTERNATIONAL_LEAGUES` in `types.py`). They are the only games linking regional Elo pools. A new cross-region event (an invitational, a new international cup) must be added there, or it becomes its teams' home league: their FORGE calls turn into Elo calls and leave the FORGE page and the Kalshi alerts (this happened with `DCGI` and `WSCI` until 2026-10-06). Oracle's Elixir leaves `split` empty for them, so don't reintroduce a blanket `dropna` over `split` in `002_add_matches.py`.
 - `setup_db.sh` **deletes** `db/prometheus.db` before rebuilding.
 - Several modules end in `if __name__ == "__main__":` scratch blocks. They aren't real entry points.
 - `scripts/004_bootstrap_elo.py` clears and refills `game_length_elo`, so it's safe to rerun.

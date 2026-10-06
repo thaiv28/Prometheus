@@ -166,3 +166,10 @@ def test_get_team_averages_frame_team_averages(mock_retrieve):
         row = result[(result["teamname"] == team) & (result["year"] == year)]
         assert row["feature1"].iloc[0] == pytest.approx(vals["feature1"])
         assert row["feature2"].iloc[0] == pytest.approx(vals["feature2"])
+
+
+def test_cross_region_invitationals_are_international():
+    # A cross-region event missing here becomes its teams' home league.
+    from prometheus.types import INTERNATIONAL_LEAGUES
+
+    assert {"Worlds", "MSI", "DCGI", "WSCI"} <= set(INTERNATIONAL_LEAGUES)
