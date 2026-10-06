@@ -301,3 +301,50 @@ def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
         "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days, compact=True) }}"
     ).render(days=view["home"])
     assert "fx-by" not in home and "Result" not in home and 'colspan="9"' in home
+
+
+def _game_log(n_series):
+    series = [
+        {"d": f"2026-01-{i + 1:02d}", "l": "LCK", "o": "B", "w": 1, "x": 0, "p": 55, "de": 4.0, "e": 1504,
+         "g": [{"r": 1, "t": 1800, "s": "B", "p": 55, "de": 4.0, "ro": [0]}]}
+        for i in range(n_series)
+    ][::-1]
+    return {"players": [["Mid", "mid"]], "series": series}
+
+
+def test_game_log_context_embeds_the_newest_and_writes_the_rest(tmp_path, monkeypatch):
+    monkeypatch.setattr(build_site, "OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setattr(build_site, "GAME_LOG_SERIES", 2)
+    games = build_site.game_log_context("team", _game_log(3), "t1")
+    assert (games["series"], games["games"], games["shown"], games["since"]) == (3, 3, 2, "2026")
+    assert [s["d"] for s in games["data"]["series"]] == ["2026-01-03", "2026-01-02"]
+    assert games["data"]["src"] == "../games/teams/t1.json"
+    assert games["data"]["years"] == [["2026", 3, 0, 3, 0]]
+    full = json.loads((tmp_path / "games" / "teams" / "t1.json").read_text())
+    assert len(full["series"]) == 3 and full["players"] == [["Mid", "mid"]]
+
+    short = build_site.game_log_context("player", {"teams": ["T1"], "series": _game_log(1)["series"]}, "mid")
+    assert "src" not in short["data"] and short["data"]["teams"] == ["T1"]
+    assert not (tmp_path / "games" / "players").exists()
+    assert build_site.game_log_context("team", {"players": [], "series": []}, "x") is None
+
+
+def test_team_page_orders_sections_and_lists_contents(tmp_path, monkeypatch):
+    monkeypatch.setattr(build_site, "OUTPUT_DIR", str(tmp_path))
+    roster = build_site.team_rosters(_roster_history(), {}, {})["T1"]
+    series = [{"date": "2026-02-01", "elo": 1600.0}]
+    html = build_site.env.get_template("team.html.j2").render(
+        page_key="team", root_path="../", last_update="today", teamname="T1", slug="t1",
+        series=[{"year": 2026, "league": "LCK", "glory": 60.0, "forge": 1600, "year_rank": 1, "field": 10}],
+        elo_series=series, best=None, current_elo=1600, current_forge=None,
+        current_league="LCK", leagues=["LCK"], roster=roster,
+        elo_summary={"games": 1, "peak": series[0], "low": series[0], "first": series[0], "last": series[0]},
+        games=build_site.game_log_context("team", _game_log(1), "t1"),
+    )
+    order = [html.index(f'<section class="{c}" id="{i}"') for c, i in
+             [("elo", "elo"), ("seasons", "seasons"), ("rosters", "roster"), ("games", "games")]]
+    assert order == sorted(order)
+    assert html.count('class="entry-contents') == 2  # margin and inline copies
+    assert '<a href="#games"><span class="toc-name">Games</span><span class="toc-figure">1</span></a>' in html
+    assert 'id="games-data">{' in html and "games-all" not in html  # everything is embedded
+    assert "entry.js" in html and "css/entry.css" in html

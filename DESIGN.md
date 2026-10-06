@@ -133,7 +133,7 @@ The world refuses the dark-neon esports stat hub, the card grid, and the parchme
 - Booktabs registers: 2px top and bottom rules, a hairline mid rule, a light rule every five rows, about 28px rows.
 - One spot ink (ledger blue) for marks, active state, focus and tracing; league inks only as marks and lines.
 - A main column plus a 17rem outer margin for marginalia; on narrow screens the margin follows the main text.
-- Small printed figures drawn from the data: a distribution histogram over every register, a column chart and an Elo line on team pages, a short printed bar beside each value.
+- Small printed figures drawn from the data: a distribution histogram over every register, an Elo line and a column chart on team pages, a short printed bar beside each value.
 - One signature motion: register rows re-rank in place when the view changes.
 
 ## Colors
@@ -247,16 +247,30 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 
 ### Franchise entry (team pages)
 - Name in display size; a small-caps fact line (league marks, seasons ranked, FORGE now, Elo); a prose summary with the best season, its year rank, and the Elo peak.
-- Figure 1: printed column chart of GLORY by season (0 to 100).
+- Sections in order: Elo, Season by season, Roster, Games.
+- Figure 1: hand-drawn SVG Elo line in the league ink, dashed 1500 rule, annotated peak, and a pointer and arrow-key readout.
+- Figure 2: printed column chart of GLORY by season (0 to 100).
 - Season register: year, league, GLORY, year rank ("2nd of 47", or "Unranked" when the season had fewer than 5 games) and season-end FORGE. Under 480px the league column drops.
 - Rosters: "Roster" (or "Last roster" for a team not active in six months), a three-column register of the last lineup (role in ink-3, player, Elo); then starters by season: year and one column per role, the main starter in body type and others under it at caption size with games started in ink-3, "+N more" past three. Under 480px the season table becomes a list: the year in 600, then a line per role with the role in ink-3 in a 4.75rem column; seasons are divided by hairlines.
-- Figure 2: hand-drawn SVG Elo line in the league ink, dashed 1500 rule, annotated peak, and a pointer and arrow-key readout.
+- Games (the game log, shared with player pages; see below).
 
 ### Player entry (player pages)
 - Set like the franchise entry: name in display size; a small-caps fact line (role, league mark, "Plays for" or "Last played for" the team, Elo); a prose summary with the peak, the latest rating, games, teams and other names, and the best AURA season ("Best AURA season 2021, +10.6 a game, 2nd of 52 major-league mid laners that year.") when there is one.
 - Figure 1: the same SVG Elo line as team pages.
 - AURA by season (players with major-league snapshot games), between the Elo figure and the career register: a block head with "See in AURA rankings", a caption, and a register of year, team, league, role, games, AURA (signed, 600) and role rank ("1st of 31", ink-3, or *Unranked* under 20 games), newest first, one row per season and role. Under 480px league and role drop. A margin note (4) explains AURA.
 - Career register: one row per run of games with a team (team, league, role, from, to, games, Elo at the end), newest first. Under 480px league, role and "to" drop.
+- Then Games, the game log.
+
+### On this page (team and player pages)
+- At the top of the sticky margin, above Key terms: a small-caps "On this page" head over an ink rule, then one line per section set like a book's contents: name in ink-2, a dotted hairline leader, and a figure in ink-3 tabular (latest Elo, seasons, stints, games; none for Roster). The section in view is marked like the current menu (ink 600, 2px ledger-blue underline). Under 1000px the margin copy hides and a second copy sits under the entry head as a wrapped line of names and figures, no head or leaders.
+
+### Game log (team and player pages)
+- Block head "Games" with an italic count ("1,325 games in 532 series since 2015"); a "Seasons" line (small-caps label, underlined years) that jumps to any year, loading the whole log first if needed; a caption; then a booktabs register drawn by `entry.js`.
+- Team columns: date, opponent (league mark only, an italic ink-3 *v*, the linked name, ellipsized at 13rem), result, length, Ours, Kalshi, Elo ±, starting five. Player columns: date, team, opponent, result, champion, AURA, Ours, Kalshi, Elo ±.
+- Year rows divide the log (there is no every-fifth-row rule): the year in small caps 600 over an ink hairline, with "22–24 in series, 52–61 in games" in ink-3 at caption size.
+- A series row: date ("4 Sep"), opponent, result (**W** in ink 600 or L in ink-3, then the score in ink-2), our chance for the team (FORGE in roman, Elo in ink-2 *italic*), Kalshi's chance linked to the match in ink-2, the Elo change signed with a true minus, and the five starters at caption size separated by hairline middots. Series are divided by soft hairlines. A one-game series is a single row with its length (and champion and AURA on player pages).
+- Game rows under a longer series: caption size, ink-2, 1.5rem tall: "Game 2" indented in ink-3, the side in italic ink-3 (with the length on player pages), result, length, our game chance, the Elo change, and the five only when they changed from game 1.
+- Under the register, "Show every series (532)" as an italic underlined text button; it loads `games/<kind>s/<slug>.json`, says so while loading and offers a retry on failure. Under 480px the length column drops; on phones the register scrolls sideways with the others.
 
 ### Home
 - Title page, then a lede naming the three things the site answers (FORGE, Elo, GLORY), each linked.

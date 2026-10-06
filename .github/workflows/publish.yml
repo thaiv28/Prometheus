@@ -24,6 +24,7 @@ jobs:
       CAN_USE_AWS: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
       DATA_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/oracles-elixir/
       PREDICTIONS_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/predictions/predictions.json
+      MARKET_PRICES_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/markets/market_prices.json
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -73,6 +74,12 @@ jobs:
       - name: Restore the prediction log
         if: env.CAN_USE_AWS == 'true'
         run: aws s3 cp "$PREDICTIONS_BACKUP" data/predictions.json --only-show-errors || echo "No saved prediction log yet."
+      # Kalshi's last price before each past series, for the game logs on team and
+      # player pages (scripts/export_market_prices.py, uploaded by hand). Without it
+      # the logs show only the prices saved in the prediction log.
+      - name: Restore Kalshi prices
+        if: env.CAN_USE_AWS == 'true'
+        run: aws s3 cp "$MARKET_PRICES_BACKUP" data/market_prices.json --only-show-errors || echo "No saved Kalshi prices."
       - name: Build static site
         env:
           # Optional bot password (Special:BotPasswords) for a higher Leaguepedia rate limit.
