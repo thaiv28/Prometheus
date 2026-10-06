@@ -69,10 +69,13 @@
 
   function five(ro) {
     if (!ro || !ro.length) return "";
-    return '<span class="log-five">' + ro.map((i) => {
+    // Each name carries its separator, so a lineup wraps after a dot and never
+    // inside a name; the title keeps a name that is cut short readable.
+    return '<span class="log-five">' + ro.map((i, k) => {
       const [name, slug] = data.players[i];
-      return slug ? `<a href="../players/${esc(slug)}.html">${esc(name)}</a>` : `<span>${esc(name)}</span>`;
-    }).join("") + "</span>";
+      const label = slug ? `<a href="../players/${esc(slug)}.html" title="${esc(name)}">${esc(name)}</a>` : `<span title="${esc(name)}">${esc(name)}</span>`;
+      return `<span class="log-p">${label}${k < ro.length - 1 ? '<span class="log-sep" aria-hidden="true">·</span>' : ""}</span>`;
+    }).join(" ") + "</span>";
   }
 
   const sameFive = (a, b) => a && b && a.length === b.length && a.every((x, i) => x === b[i]);
@@ -85,7 +88,7 @@
     const g0 = s.g[0];
     const opp = `<td class="team log-opp">${leagueMark(s.l)}<span class="log-vs">v</span> ${teamLink(s.o)}</td>`;
     const res = `<td class="log-result">${result(single ? g0.r : won, single ? "" : `${s.w}–${s.x}`)}</td>`;
-    const sideNote = single ? ` title="${g0.s === "B" ? "Blue" : "Red"} side"` : "";
+    const sideNote = single ? ` title="${g0.s === "B" ? "Blue" : "Red"} side, ${length(g0.t)}"` : "";
     let head = `<tr class="log-series${single ? " log-single" : ""}"><td class="num year log-date"${sideNote}>${day(s.d)}</td>`;
     if (isPlayer) head += `<td class="team log-team">${teamLink(data.teams[s.tm])}</td>`;
     head += opp + res;
@@ -101,7 +104,7 @@
     if (single) return head;
 
     return head + s.g.map((g, i) => {
-      let row = `<tr class="log-game"><td class="log-gameno">Game ${i + 1}</td>`;
+      let row = `<tr class="log-game" title="${g.s === "B" ? "Blue" : "Red"} side, ${length(g.t)}"><td class="log-gameno">Game ${i + 1}</td>`;
       if (isPlayer) row += "<td></td>";
       row += `<td class="log-side">${g.s === "B" ? "Blue" : "Red"} side${isPlayer ? `, ${length(g.t)}` : ""}</td>`;
       row += `<td class="log-result">${result(g.r, "")}</td>`;

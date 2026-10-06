@@ -2,6 +2,11 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-06 — Game log: long lineups no longer spill into the margin
+
+- The starting-five cell never wrapped, so long names (RPG Kingdom's "Leviathan (Ryota Horie)", Black Lion's tagged names) pushed the log table to 1,093px in an 888px column, over the margin notes. Now the five take only the width the other columns leave (`max-width: 0`, 13rem floor; 18rem on phones), wrap between names and never inside one (each name and its middot are one unbreakable unit; the middot sits outside the link, so the underline stops at the name), and a name over 12em ends in an ellipsis with a title. The figure scrolls sideways past the column as a backstop. From 1001px to 1280px Length hides (still in each game row's tooltip) and opponents cap at 10rem.
+- Checks: headless Chrome at 1440, 1366, 1280, 1180, 1024, 800 and 390px on KT Rolster, Black Lion and RPG Kingdom: the table never exceeds its box at 1180px and up and never makes the page scroll sideways; no name cut; KT's rows stay one line from 1180px up and on phones, Black Lion's and RPG's at most two lines from 1280px up. Screenshots at 1280 and 1440. Impeccable detector clean. `uv run pytest -q`.
+
 ## 2026-10-06 — GLORY skips a season with no qualified team (build fix)
 
 - The PR build failed: Oracle's Elixir's 2026 file (Drive copy of 6 Oct) now files the first games of the 2027 season (P11 Esports in the LIT, the EBL, 8 LCS team-games) under year 2027, so GLORY's 2027 loop had no team with 5 games and StandardScaler got an empty frame. `get_glory_ranking` now skips a year with no team-season to rank. `main`'s next daily build would have hit the same error.
