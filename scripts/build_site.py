@@ -294,9 +294,6 @@ RECENT_RESULT_DAYS = 3
 # The day's Kalshi alert (title and body of a GitHub issue), written only when
 # there is one; the publish workflow posts it. Never published to the site.
 KALSHI_ALERT = os.environ.get("KALSHI_ALERT", os.path.join(ROOT_DIR, "data", "kalshi_alert.json"))
-# The market backtest's paper bets by edge (written by evaluate_markets.py), shown
-# beside the log's on the Predictions page.
-MARKET_BETS = os.path.join(ROOT_DIR, "docs", "market_bets.json")
 # The prediction log; CI restores it from and saves it to the data backup bucket.
 PREDICTIONS_LOG = os.environ.get("PREDICTIONS_LOG", os.path.join(ROOT_DIR, "data", "predictions.json"))
 
@@ -760,8 +757,9 @@ def predictions_view(log, team_slugs, now):
         "recent_days": RECENT_RESULT_DAYS,
         "months": result_months(past, team_slugs),
         "scorecard": schedule.scorecard(entries),
-        "vs_market": schedule.market_scorecard(entries),
-        "edges": edge_groups(schedule.edge_record(entries), entries),
+        "vs_market": method_groups(schedule.market_scorecard(entries)),
+        "edges": method_groups(schedule.edge_record(entries)),
+        "backtest_span": backtest_span(entries),
         "alerts": alert_record(entries),
         "market_min": schedule.MARKET_MIN_SERIES,
         "home": _by_day(home),
@@ -817,27 +815,29 @@ def render_results(view, last_update):
         )
 
 
-def edge_groups(rows, entries, path=None):
-    """Table IV's row groups: for FORGE and then Elo, the log's paper bets since
-    its first priced match and the backtest's (`MARKET_BETS`, when present)."""
-    path = path or MARKET_BETS
-    backtest = json.loads(open(path).read()) if os.path.exists(path) else None
-    priced = [e["start"][:10] for e in entries if e.get("market_12h") and e.get("winner") in (1, 2)]
-    since = min(priced, default=None)
+def method_groups(rows):
+    """Tables III and IV's row groups: FORGE then Elo, each with its saved calls
+    and its backtest (`schedule.BET_GROUPS`), from rows carrying label and source."""
     groups = []
     for label in ("FORGE", "Elo"):
-        sources = [{"name": "since", "since": since, "rows": [r for r in rows if r["label"] == label]}]
-        if backtest:
-            sources.append(
-                {
-                    "name": "backtest",
-                    "from": backtest["from"],
-                    "to": backtest["to"],
-                    "rows": [r for r in backtest["rows"] if r["label"] == label],
-                }
-            )
+        sources = [
+            {"name": source, "rows": [r for r in rows if r["label"] == label and r["source"] == source]}
+            for name, source in schedule.BET_GROUPS
+            if name == label
+        ]
         groups.append({"label": label, "sources": sources})
     return groups
+
+
+def backtest_span(entries):
+    """(first, last) start day of the settled rebuilt calls with a 12-hour price:
+    the backtest rows' dates."""
+    days = [
+        e["start"][:10]
+        for e in entries
+        if e.get("reconstructed") and e.get("market_12h") and e.get("winner") in (1, 2)
+    ]
+    return (min(days), max(days)) if days else None
 
 
 def alert_record(entries):

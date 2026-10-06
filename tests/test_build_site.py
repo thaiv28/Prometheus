@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from prometheus import schedule
 from prometheus.schedule import series_probability
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -278,7 +279,10 @@ def test_predictions_view_splits_upcoming_past_and_home():
     past = view["months"][0]["days"][0]["rows"][0]
     assert past["call"] == "missed" and past["score"] == "1–2" and past["reconstructed"]
     assert view["scorecard"][1]["series"] == 1 and view["scorecard"][0]["series"] == 0
-    assert [r["label"] for r in view["vs_market"]] == ["FORGE", "Elo", "All", "Saved calls"]
+    assert [(g["label"], [s["name"] for s in g["sources"]]) for g in view["vs_market"]] == [
+        ("FORGE", ["saved", "backtest"]),
+        ("Elo", ["saved", "backtest"]),
+    ]
     assert view["alerts"]["settled"] == 0 and view["alerts"]["clv"] is None
     assert view["leagues"][:2] == ["LCK", "Worlds"]
 
@@ -328,17 +332,17 @@ def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
     assert "fx-by" not in home and "Result" not in home and 'colspan="10"' in home
 
 
-def test_edge_groups_put_the_backtest_beside_the_log(tmp_path):
-    rows = [{"label": l, "edge": e} for l in ("FORGE", "Elo") for e in (0.0, 0.05)]
+
+def test_method_groups_split_saved_calls_from_the_backtest():
+    rows = [{"label": l, "source": src, "edge": 0.05} for l, src in schedule.BET_GROUPS]
+    forge, elo = build_site.method_groups(rows)
+    assert forge["label"] == "FORGE" and [s["name"] for s in forge["sources"]] == ["saved", "backtest"]
+    assert all(len(s["rows"]) == 1 for g in (forge, elo) for s in g["sources"])
     entries = [
-        {"start": "2026-09-03T08:00Z", "market_12h": {"p": 0.5}, "winner": 1},
-        {"start": "2026-09-01T08:00Z", "market_12h": {"p": 0.5}},  # not settled
+        {"start": "2026-01-14T08:00Z", "reconstructed": True, "market_12h": {"p": 0.5}, "winner": 1},
+        {"start": "2026-10-03T08:00Z", "reconstructed": True, "market_12h": {"p": 0.5}, "winner": 2},
+        {"start": "2026-10-05T08:00Z", "market_12h": {"p": 0.5}, "winner": 1},  # saved
+        {"start": "2026-10-04T08:00Z", "reconstructed": True, "market_12h": {"p": 0.5}},  # no result
     ]
-    backtest = tmp_path / "bets.json"
-    backtest.write_text(json.dumps({"from": "2026-04-02", "to": "2026-09-30", "rows": [{"label": "FORGE", "edge": 0.05}]}))
-    forge, elo = build_site.edge_groups(rows, entries, str(backtest))
-    assert forge["label"] == "FORGE" and [s["name"] for s in forge["sources"]] == ["since", "backtest"]
-    assert forge["sources"][0]["since"] == "2026-09-03" and len(forge["sources"][0]["rows"]) == 2
-    assert forge["sources"][1]["rows"] == [{"label": "FORGE", "edge": 0.05}] and elo["sources"][1]["rows"] == []
-    alone = build_site.edge_groups(rows, entries, str(tmp_path / "missing.json"))
-    assert [len(g["sources"]) for g in alone] == [1, 1]
+    assert build_site.backtest_span(entries) == ("2026-01-14", "2026-10-03")
+    assert build_site.backtest_span([]) is None

@@ -62,14 +62,15 @@
           </div>
         </figure>
 
-        {% set vs = view.vs_market %}
+        {% set span = view.backtest_span %}
         <figure class="register-figure" aria-labelledby="market-cap">
-          <figcaption id="market-cap" class="table-caption">Table III. Against Kalshi’s last price before the start, on matches also priced 12 hours out. Difference: our log loss minus Kalshi’s; below 0 beats the market.<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
+          <figcaption id="market-cap" class="table-caption">Table III. Against Kalshi’s last price before the start, on matches also priced 12 hours out. Difference: our log loss minus Kalshi’s; below 0 beats the market. Saved: calls made before the match.{% if span %} Backtest: calls rebuilt from the day before, {{ span[0] | longdate }} – {{ span[1] | longdate }}; the forecast weights saw these games.{% endif %}<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
           <div class="table-scroll">
-            <table class="register register--record register--market">
+            <table class="register register--record register--market register--edges">
               <thead>
                 <tr>
-                  <th scope="col" rowspan="2">Calls</th>
+                  <th scope="col" rowspan="2" class="edges-calls">Calls</th>
+                  <th scope="col" rowspan="2">Source</th>
                   <th scope="col" class="num" rowspan="2">Series</th>
                   <th scope="colgroup" colspan="2" class="num phone-hide">Favourite won</th>
                   <th scope="colgroup" colspan="2" class="num">Log loss</th>
@@ -82,10 +83,13 @@
                   <th scope="col" class="num">Kalshi</th>
                 </tr>
               </thead>
+              {% for group in view.vs_market %}
               <tbody>
-                {% for row in vs %}
-                <tr{% if row.label == 'All' %} class="record-total"{% endif %}>
-                  <th scope="row">{{ row.label }}{% if row.label == 'All' %}<a class="note-ref" href="#note-3" aria-label="Includes rebuilt calls: note 3">3</a>{% endif %}</th>
+                {% for src in group.sources %}
+                {% for row in src.rows %}
+                <tr{% if src.name == 'backtest' %} class="edges-backtest"{% endif %}>
+                  {% if loop.first and src.name == 'saved' %}<th scope="rowgroup" rowspan="{{ group.sources | sum(attribute='rows', start=[]) | length }}" class="edges-calls">{{ group.label }}</th>{% endif %}
+                  <th scope="row" class="edges-source"><span class="edges-method">{{ group.label }}, </span>{{ 'Backtest' if src.name == 'backtest' else 'Saved' }}</th>
                   <td class="num">{{ row.series }}</td>
                   {% if row.series %}
                   <td class="num phone-hide">{{ row.ours_pct | round | int }}<span class="of"> %</span></td>
@@ -102,13 +106,14 @@
                   {% endif %}
                 </tr>
                 {% endfor %}
+                {% endfor %}
               </tbody>
+              {% endfor %}
             </table>
           </div>
         </figure>
-        {% set bt = (view.edges[0].sources | selectattr('name', 'equalto', 'backtest') | list) %}
         <figure class="register-figure" aria-labelledby="edges-cap">
-          <figcaption id="edges-cap" class="table-caption">Table IV. $1 on our side 12 hours before the start: our pick in every match (Any, the matches in Table III), or where our chance beat Kalshi’s price by more than the edge. Return is after the 7% fee; CLV is the closing price minus the price paid.{% if bt %} Backtest: calls rebuilt for {{ bt[0].from | longdate }} – {{ bt[0].to | longdate }}.{% endif %}<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
+          <figcaption id="edges-cap" class="table-caption">Table IV. $1 on our side 12 hours before the start: our pick in every match (Any, the matches in Table III), or where our chance beat Kalshi’s price by more than the edge. Return is after the 7% fee; CLV is the closing price minus the price paid. Saved and Backtest as in Table III.<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
           <div class="table-scroll">
             <table class="register register--record register--market register--edges">
               <thead>
@@ -131,7 +136,7 @@
                 {% for row in src.rows %}
                 <tr{% if src.name == 'backtest' %} class="edges-backtest"{% endif %}>
                   {% if outer.first and loop.first %}<th scope="rowgroup" rowspan="{{ n }}" class="edges-calls">{{ group.label }}</th>{% endif %}
-                  {% if loop.first %}<th scope="rowgroup" rowspan="{{ src.rows | length }}" class="edges-source"><span class="edges-method">{{ group.label }}, </span>{% if src.name == 'backtest' %}Backtest{% elif src.since %}Since {{ src.since | shortdate }}{% else %}Log{% endif %}</th>{% endif %}
+                  {% if loop.first %}<th scope="rowgroup" rowspan="{{ src.rows | length }}" class="edges-source"><span class="edges-method">{{ group.label }}, </span>{{ 'Backtest' if src.name == 'backtest' else 'Saved' }}</th>{% endif %}
                   <td class="num">{% if row.edge is none %}<abbr title="Every match, backing our pick">Any</abbr>{% else %}&gt; {{ (100 * row.edge) | round | int }}{% endif %}</td>
                   <td class="num">{{ row.bets }}</td>
                   <td class="num phone-hide">{{ row.won }}</td>
@@ -153,7 +158,7 @@
           </div>
         </figure>
         {% set al = view.alerts %}
-        <p class="section-prose record-note">{% if vs[2].series < view.market_min or vs[3].series < view.market_min %}Intervals from {{ view.market_min }} series or bets. {% endif %}<strong>Alerts:</strong> {% if al.settled %}{{ al.settled }} settled, {{ al.won }} won{% if al.clv is not none %}; closing line value {{ '%+.1f' | format(100 * al.clv) }} points, {{ (100 * al.beat) | round | int }}% beat the close{% endif %}; {{ '%+.1f' | format(100 * al.roi) }}% after fees{% if al.interval %} ({{ '%+.1f' | format(100 * al.interval[0]) }}% to {{ '%+.1f' | format(100 * al.interval[1]) }}%){% else %}, too few for an interval{% endif %}.{% else %}none settled yet.{% endif %}</p>
+        <p class="section-prose record-note">Intervals from {{ view.market_min }} series or bets. <strong>Alerts:</strong> {% if al.settled %}{{ al.settled }} settled, {{ al.won }} won{% if al.clv is not none %}; closing line value {{ '%+.1f' | format(100 * al.clv) }} points, {{ (100 * al.beat) | round | int }}% beat the close{% endif %}; {{ '%+.1f' | format(100 * al.roi) }}% after fees{% if al.interval %} ({{ '%+.1f' | format(100 * al.interval[0]) }}% to {{ '%+.1f' | format(100 * al.interval[1]) }}%){% else %}, too few for an interval{% endif %}.{% else %}none settled yet.{% endif %}</p>
       </section>
 
       <section class="fixtures-block" aria-labelledby="past-heading">

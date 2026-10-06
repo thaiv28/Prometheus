@@ -224,16 +224,20 @@ def test_market_scorecard_splits_forge_and_elo_and_needs_enough_series():
         {**_pred("c", "2026-10-04T08:00Z", 0.8), "winner": 1},  # no price
         {**_pred("d", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": {"p": 0.5, "at": "2026-10-04T09:00Z"}},  # priced after the start
         {**_pred("e", "2026-10-04T08:00Z", 0.8), "market": dict(market)},  # not played
+        # Two calls rebuilt after the match: the FORGE backtest.
+        {**_pred("r1", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market), "reconstructed": True, **early},
+        {**_pred("r2", "2026-10-04T08:00Z", 0.4), "winner": 1, "market": dict(market), "reconstructed": True, **early},
     ]
-    forge, elo, total, saved = schedule.market_scorecard(entries, min_n=2)
-    assert (forge["series"], elo["series"], total["series"]) == (1, 1, 2)
+    rows = {(r["label"], r["source"]): r for r in schedule.market_scorecard(entries, min_n=2)}
+    assert list(rows) == schedule.BET_GROUPS
+    forge, elo, backtest = rows[("FORGE", "saved")], rows[("Elo", "saved")], rows[("FORGE", "backtest")]
+    assert (forge["series"], elo["series"], backtest["series"], rows[("Elo", "backtest")]["series"]) == (1, 1, 2, 0)
     assert forge["ours_loss"] == pytest.approx(-math.log(0.8))
     assert forge["market_loss"] == pytest.approx(math.log(2))
     assert (forge["ours_pct"], forge["market_pct"], elo["ours_pct"]) == (100, 50, 0)
-    assert forge["diff"] is None and total["diff"] is not None
-    assert total["diff"][0] == pytest.approx((-math.log(0.8) - math.log(0.4)) / 2 - math.log(2))
-    assert saved["series"] == 2  # none of these is reconstructed
-    assert schedule.market_scorecard([])[2]["ours_loss"] is None
+    assert forge["diff"] is None and backtest["diff"] is not None
+    assert backtest["diff"][0] == pytest.approx((-math.log(0.8) - math.log(0.4)) / 2 - math.log(2))
+    assert schedule.market_scorecard([])[0]["ours_loss"] is None
 
 
 def test_edge_record_bets_the_side_with_the_edge_and_scores_return_and_clv():
@@ -247,8 +251,13 @@ def test_edge_record_bets_the_side_with_the_edge_and_scores_return_and_clv():
         bet("b", 0.30, 0.40, 0.62, 0.40, 1),  # team2: 70 vs 62, +8 edge, CLV 60 - 62 = -2, lost
         bet("c", 0.52, 0.51, 0.51, 0.50, 2, method="elo"),  # +1 edge, lost
         {**_pred("d", "2026-10-04T08:00Z", 0.9), "winner": 1},  # no 12-hour price
+        {**bet("r", 0.70, 0.60, 0.42, 0.66, 1), "reconstructed": True},  # the backtest
     ]
-    rows = {(r["label"], r["edge"]): r for r in schedule.edge_record(entries, min_n=2)}
+    out = schedule.edge_record(entries, min_n=2)
+    assert {(r["label"], r["source"]) for r in out} == set(schedule.BET_GROUPS)
+    rows = {(r["label"], r["edge"]): r for r in out if r["source"] == "saved"}
+    backtest = {(r["label"], r["edge"]): r for r in out if r["source"] == "backtest"}
+    assert backtest[("FORGE", 0.05)]["bets"] == 1 and backtest[("Elo", 0.0)]["bets"] == 0
     five = rows[("FORGE", 0.05)]
     assert (five["bets"], five["won"]) == (2, 1)
     profits = [1 / 0.60 - 1 - markets.fee(0.60, 1), -1 - markets.fee(0.62, 1)]

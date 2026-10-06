@@ -326,45 +326,6 @@ def betting_section(s):
     return lines
 
 
-def bet_summary(s, rate=0.07):
-    """The betting section's value bets at Kalshi's taker fee, split as the
-    Predictions page splits calls (FORGE, and Elo: every other call), for the
-    page's backtest rows (`docs/market_bets.json`). Like the report, only matches
-    with an exact start time."""
-    s = s[s["timed"]]
-    frame = s[s["cost1"].notna() | s["cost2"].notna()]
-    rows = []
-    for label, part in (
-        ("FORGE", frame[frame["method"] == "forge"]),
-        ("Elo", frame[frame["method"] != "forge"]),
-    ):
-        for edge in (None, *EDGES):  # None: back our pick in every match
-            prof, clv = bet_profits(part, rate, edge), bet_clv(part, edge)
-            row = {
-                "label": label,
-                "edge": edge,
-                "bets": len(prof),
-                "won": int((prof > 0).sum()),
-            }
-            row["roi"] = float(prof.mean()) if len(prof) else None
-            row["roi_ci"] = (
-                [float(x) for x in roi_interval(prof)] if len(prof) >= 30 else None
-            )
-            row["clv"] = float(clv.mean()) if len(clv) else None
-            row["clv_ci"] = (
-                [float(x) for x in roi_interval(clv)] if len(clv) >= 30 else None
-            )
-            row["beat"] = float((clv > 0).mean()) if len(clv) else None
-            rows.append(row)
-    return {
-        "generated": str(datetime.date.today()),
-        "from": f"{frame['start'].min():%Y-%m-%d}",
-        "to": f"{frame['start'].max():%Y-%m-%d}",
-        "hours_before": BET_HOURS,
-        "rows": rows,
-    }
-
-
 def load_pairs(since):
     """Every game since `since` from each team's side: gameid, date, team, opponent, result."""
     stmt = """
@@ -780,9 +741,6 @@ def _finish(series_frame, map_frame, counts, unmatched, out):
     if out:
         Path(out).write_text(text + "\n")
         print(f"Wrote {out}")
-        bets = Path(out).with_name("market_bets.json")
-        bets.write_text(json.dumps(bet_summary(series_frame), indent=1) + "\n")
-        print(f"Wrote {bets}")
 
 
 if __name__ == "__main__":
