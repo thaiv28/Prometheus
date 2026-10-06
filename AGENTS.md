@@ -46,7 +46,7 @@ uv run python scripts/evaluate_metrics.py --out docs/metric_backtest.md   # back
 uv run python scripts/evaluate_metrics.py --write-weights   # also refresh Form and FORGE weights
 uv run python scripts/evaluate_season_stats.py --out docs/season_stats_report.md   # season-stat stability (~5s)
 uv run python scripts/evaluate_aura.py --out docs/aura_report.md   # AURA calibration and player tests (~40s)
-uv run python scripts/evaluate_markets.py --out docs/market_report.md   # our calls vs Kalshi's prices (~10 min; first run ~1 h fetching; --reuse rewrites the report in seconds)
+uv run python scripts/evaluate_markets.py --out docs/market_report.md   # our calls vs Kalshi's prices, plus docs/market_bets.json for the Predictions page (~10 min; first run ~1 h fetching; --reuse rewrites the report in seconds)
 python -m http.server -d output 8000    # preview the built site locally
 ```
 

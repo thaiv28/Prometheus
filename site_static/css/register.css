@@ -482,6 +482,11 @@
 .register--market .ci { color: var(--ink-3); font-size: 0.875em; }
 .record-note { margin-top: 14px; }
 .register--edges tbody th { vertical-align: top; }
+.register--edges .edges-source { color: var(--ink-2); font-style: italic; }
+.register--edges .edges-method { display: none; }
+.register.register--edges tbody tr:nth-child(5n):not(:last-child) td { border-bottom: 0; }
+.register--edges tr.edges-backtest:first-of-type > *, .register--edges tr:not(.edges-backtest) + tr.edges-backtest > td,
+.register--edges tr:not(.edges-backtest) + tr.edges-backtest > th.edges-source { border-top: var(--hair) dotted var(--hairline); }
 .register--edges tbody + tbody tr:first-child > * { border-top: var(--hair) solid var(--hairline); }
 
 @media (max-width: 720px) {
@@ -502,6 +507,10 @@
   .register--record tbody th { white-space: normal; }
   .register--market .ci { display: block; }
   .register--market tbody :is(th, td) { vertical-align: top; }
+  .register--edges .edges-calls { display: none; }
+  .register--edges .edges-method { display: inline; font-style: normal; color: var(--ink); }
+  .register--edges :is(th, td) { padding-left: 3px; padding-right: 3px; }
+  .register--edges .edges-source { white-space: normal; padding-left: 0; }
   .register--fixtures, .register--fixtures tbody { display: block; }
   .register--fixtures thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .register--fixtures .fx-day-row, .register--fixtures .fx-day-row th { display: block; }

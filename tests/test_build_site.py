@@ -320,3 +320,19 @@ def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
         "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days, compact=True) }}"
     ).render(days=view["home"])
     assert "fx-by" not in home and "Result" not in home and 'colspan="10"' in home
+
+
+def test_edge_groups_put_the_backtest_beside_the_log(tmp_path):
+    rows = [{"label": l, "edge": e} for l in ("FORGE", "Elo") for e in (0.0, 0.05)]
+    entries = [
+        {"start": "2026-09-03T08:00Z", "market_12h": {"p": 0.5}, "winner": 1},
+        {"start": "2026-09-01T08:00Z", "market_12h": {"p": 0.5}},  # not settled
+    ]
+    backtest = tmp_path / "bets.json"
+    backtest.write_text(json.dumps({"from": "2026-04-02", "to": "2026-09-30", "rows": [{"label": "FORGE", "edge": 0.05}]}))
+    forge, elo = build_site.edge_groups(rows, entries, str(backtest))
+    assert forge["label"] == "FORGE" and [s["name"] for s in forge["sources"]] == ["since", "backtest"]
+    assert forge["sources"][0]["since"] == "2026-09-03" and len(forge["sources"][0]["rows"]) == 2
+    assert forge["sources"][1]["rows"] == [{"label": "FORGE", "edge": 0.05}] and elo["sources"][1]["rows"] == []
+    alone = build_site.edge_groups(rows, entries, str(tmp_path / "missing.json"))
+    assert [len(g["sources"]) for g in alone] == [1, 1]

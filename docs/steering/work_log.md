@@ -2,6 +2,13 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-06 — Backtest rows beside the log's paper bets
+
+- **Why.** The user remembered the backtest as finding a significant CLV and profit gain and asked whether the page could use it. It did not: FORGE value bets above 5 points returned +12.9% (−5.0 to +31.2) with CLV +0.95 (−0.13 to +2.03), every FORGE interval spanning 0. The log's bets (since 2 Sep) are the backtest's own September: on the 39 FORGE matches in both, our chance and the 12-hour asks agree to the cent, and the backtest's September alone was −45.8% and −1.00 CLV (19 bets). The backtest's betting rows cover 2 Apr – 30 Sep 2026 (only markets with an exact start time).
+- **What.** `evaluate_markets.py` writes `docs/market_bets.json` beside the report (`bet_summary`: value bets at the 7% taker fee on timed matches, split as the page splits calls, FORGE and every other call as Elo); `build_site.edge_groups` puts those rows under the log's in Table IV (Source: *Since 2 Sep* / *Backtest*, a dotted hairline between them; the caption gives the backtest's dates). The log's rows update with each build; the backtest's only when the backtest is rerun. On phones the Calls column folds into Source ("FORGE, Backtest"). Report rewritten with `--reuse` (date line only). Elo backtest rows differ from the report's "Other leagues" slice (990 bets above 0 against 968) because they include Elo calls between major-league and international teams.
+- Seen while checking: counting day-only matches too (their 12 hours and close are measured from midnight Eastern) gives FORGE above 5 points 300 bets, +21.3% (+5.2 to +39.0), CLV +0.78 (+0.04 to +1.55). Not used: the timed-only rule was fixed before the results, and those bets' "close" is not the real close.
+- Verification: `uv run pytest -q` (all pass; new tests for `bet_summary` and `edge_groups`); Playwright on a local build at 1440, 1280 and 390 px: no page horizontal scroll, Table IV's scroller fits at 390, no page errors; the local server was stopped afterwards.
+
 ## 2026-10-06 — Paper bets by edge on the Predictions page
 
 - **What.** Table IV under *How the calls have done* (Results became Table V): $1 on our side 12 hours before the start where our chance beat Kalshi's price (the ask) by more than 0, 3, 5 or 10 points, FORGE and Elo apart: bets, won, return after the 7% fee and CLV (last price before the start minus the price paid), each with a 95% bootstrap interval from 30 bets, and the share beating the close (`schedule.edge_record`). Same method as the backtest's betting section, on the log's calls.

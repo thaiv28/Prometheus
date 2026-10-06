@@ -125,13 +125,15 @@
             </table>
           </div>
         </figure>
+        {% set bt = (view.edges[0].sources | selectattr('name', 'equalto', 'backtest') | list) %}
         <figure class="register-figure" aria-labelledby="edges-cap">
-          <figcaption id="edges-cap" class="table-caption">Table IV. $1 on our side 12 hours before the start, where our chance beat Kalshi’s price by more than the edge. Return is after the 7% fee; CLV is the closing price minus the price paid.<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
+          <figcaption id="edges-cap" class="table-caption">Table IV. $1 on our side 12 hours before the start, where our chance beat Kalshi’s price by more than the edge. Return is after the 7% fee; CLV is the closing price minus the price paid.{% if bt %} Backtest: calls rebuilt for {{ bt[0].from | longdate }} – {{ bt[0].to | longdate }}.{% endif %}<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
           <div class="table-scroll">
             <table class="register register--record register--market register--edges">
               <thead>
                 <tr>
-                  <th scope="col">Calls</th>
+                  <th scope="col" class="edges-calls">Calls</th>
+                  <th scope="col">Source</th>
                   <th scope="col" class="num">Edge</th>
                   <th scope="col" class="num">Bets</th>
                   <th scope="col" class="num phone-hide">Won</th>
@@ -140,11 +142,15 @@
                   <th scope="col" class="num phone-hide">Beat close</th>
                 </tr>
               </thead>
-              {% for group in view.edges | groupby('label') | sort(attribute='grouper', reverse=True) %}
+              {% for group in view.edges %}
               <tbody>
-                {% for row in group.list %}
-                <tr>
-                  {% if loop.first %}<th scope="rowgroup" rowspan="{{ group.list | length }}">{{ group.grouper }}</th>{% endif %}
+                {% set n = group.sources | sum(attribute='rows', start=[]) | length %}
+                {% for src in group.sources %}
+                {% set outer = loop %}
+                {% for row in src.rows %}
+                <tr{% if src.name == 'backtest' %} class="edges-backtest"{% endif %}>
+                  {% if outer.first and loop.first %}<th scope="rowgroup" rowspan="{{ n }}" class="edges-calls">{{ group.label }}</th>{% endif %}
+                  {% if loop.first %}<th scope="rowgroup" rowspan="{{ src.rows | length }}" class="edges-source"><span class="edges-method">{{ group.label }}, </span>{% if src.name == 'backtest' %}Backtest{% elif src.since %}Since {{ src.since | shortdate }}{% else %}Log{% endif %}</th>{% endif %}
                   <td class="num">&gt; {{ (100 * row.edge) | round | int }}</td>
                   <td class="num">{{ row.bets }}</td>
                   <td class="num phone-hide">{{ row.won }}</td>
@@ -158,6 +164,7 @@
                   <td class="num phone-hide"><span class="muted">—</span></td>
                   {% endif %}
                 </tr>
+                {% endfor %}
                 {% endfor %}
               </tbody>
               {% endfor %}
