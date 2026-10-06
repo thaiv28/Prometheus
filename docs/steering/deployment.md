@@ -39,10 +39,14 @@ Google Drive rate-limits the shared Oracle's Elixir CSVs. Each build tries Drive
 
 `s3://$DATA_BACKUP_BUCKET/prometheus/predictions/predictions.json` holds every call saved before its match and the results (the deploy role has read-write on the whole bucket). Main builds restore it before `build_site.py` and copy it back after, so calls accumulate across days; PR builds can't reach it and start a fresh log (with a 30-day reconstructed backfill) that is thrown away. If the file is lost, the next build starts a new log and the "saved before the match" record restarts from that day. The site is rebuilt once a day (10:00 UTC), so a match's saved call uses the data through the previous day.
 
+## Kalshi prices
+
+`s3://$DATA_BACKUP_BUCKET/prometheus/markets/market_prices.json` holds Kalshi's last price before each past series, for the game logs on team and player pages. Main builds restore it before `build_site.py` (read-only; the build never writes it). It is refreshed by hand: run `scripts/evaluate_markets.py` (slow, fetches Kalshi), then `scripts/export_market_prices.py`, then `aws s3 cp data/market_prices.json s3://$DATA_BACKUP_BUCKET/prometheus/markets/market_prices.json`. Without it, logs show only the prices saved in the prediction log.
+
 ## Notes
 
 - Rolling back means syncing an older `releases/<run id>` prefix to `current` and invalidating.
-- Each run adds a full release to `releases/`: about 100 MB since player pages (2026-10-02; about 30 MB before). Add an S3 lifecycle rule in the infrastructure stack to expire old releases.
+- Each run adds a full release to `releases/`: about 290 MB since game logs (2026-10-06; 100 MB from 2026-10-02, about 30 MB before). Add an S3 lifecycle rule in the infrastructure stack to expire old releases.
 - GitHub disables scheduled workflows after 60 days without repository activity. If the daily rebuild stops, re-enable it under Actions.
 - The old GitHub Pages site (`thaiv28.github.io/Prometheus`) should be turned off once the AWS site is live.
 

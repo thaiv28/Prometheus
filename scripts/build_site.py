@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
-from prometheus import alerts, aura, markets, schedule
+from prometheus import alerts, aura, gamelog, markets, schedule
 from prometheus.evaluation import paired_bootstrap
 from prometheus.elo import (
     get_elo_history,
@@ -296,6 +296,12 @@ RECENT_RESULT_DAYS = 3
 KALSHI_ALERT = os.environ.get("KALSHI_ALERT", os.path.join(ROOT_DIR, "data", "kalshi_alert.json"))
 # The prediction log; CI restores it from and saves it to the data backup bucket.
 PREDICTIONS_LOG = os.environ.get("PREDICTIONS_LOG", os.path.join(ROOT_DIR, "data", "predictions.json"))
+# Kalshi's last price before each settled series (scripts/export_market_prices.py);
+# CI restores it from the data-backup bucket. Missing is fine: logs then show only
+# the prices saved in the prediction log.
+MARKET_PRICES = os.environ.get("MARKET_PRICES", os.path.join(ROOT_DIR, "data", "market_prices.json"))
+# Team and player pages embed this many of their newest series; the rest load on request.
+GAME_LOG_SERIES = 20
 
 # Players get a page if they ever played in a major league or at an international
 # event, or played anywhere within this window of the newest game.
@@ -1143,6 +1149,56 @@ def write_team_index(pages):
         json.dump(teams, f, ensure_ascii=False, separators=(",", ":"))
 
 
+def game_log_context(kind, log, slug):
+    """A page's game log: its newest series embedded, the rest written to games/<kind>s/<slug>.json.
+
+    Returns the template's `games` context, or None for an empty log.
+    """
+    series = log["series"]
+    if not series:
+        return None
+    people = "players" if kind == "team" else "teams"
+    data = {"kind": kind, people: log[people], "series": series[:GAME_LOG_SERIES], "years": gamelog.year_records(series)}
+    if len(series) > GAME_LOG_SERIES:
+        path = os.path.join(OUTPUT_DIR, "games", f"{kind}s", f"{slug}.json")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            json.dump({people: log[people], "series": series}, f, ensure_ascii=False, separators=(",", ":"))
+        data["src"] = f"../games/{kind}s/{slug}.json"
+    return {
+        "data": data,
+        "series": len(series),
+        "games": sum(len(s["g"]) for s in series),
+        "shown": min(len(series), GAME_LOG_SERIES),
+        "since": series[-1]["d"][:4],
+        "years": [y[0] for y in data["years"]],
+    }
+
+
+def add_game_logs(team_pages, player_pages, states, prediction_log, player_slugs, aura_games):
+    """Attach a game log to every team and player page (as `games`).
+
+    `player_slugs` maps playerid to page slug; `aura_games` is `aura.get_aura`
+    output, whose major-league games give the per-game AURA on player logs.
+    """
+    shutil.rmtree(os.path.join(OUTPUT_DIR, "games"), ignore_errors=True)
+    games = gamelog.add_series(gamelog.add_calls(gamelog.load_team_games(), states))
+    players = gamelog.load_player_games()
+    prices = gamelog.load_prices(MARKET_PRICES, prediction_log)
+    heads = gamelog.series_heads(games, gamelog.PriceBook(prices))
+    teams = gamelog.team_logs(games, players, heads, player_slugs)
+    for page in team_pages.values():
+        log = teams.get(page["teamname"])
+        page["games"] = game_log_context("team", log, page["slug"]) if log else None
+    majors = aura_games[aura_games["league"].isin(env.globals["major_leagues"])].dropna(subset=["aura"])
+    aura_by_game = dict(zip(zip(majors["gameid"], majors["playerid"]), majors["aura"] * aura.POINTS))
+    for slug, log in gamelog.player_logs(games, players, heads, player_slugs, aura_by_game).items():
+        if slug in player_pages:
+            player_pages[slug]["games"] = game_log_context("player", log, slug)
+    priced = sum(1 for log in teams.values() for s in log["series"] if "k" in s)
+    print(f"Game logs: {len(heads):,} team-series, {priced:,} with a Kalshi price ({len(prices):,} prices on file)")
+
+
 def render_team_pages(pages, last_update):
     template = env.get_template("team.html.j2")
     for page in pages.values():
@@ -1279,7 +1335,8 @@ def main():
     )
 
     # AURA per player-season (major leagues), on its own page and on player pages.
-    aura_seasons = aura.season_aura(aura.get_aura(), majors)
+    aura_games = aura.get_aura()
+    aura_seasons = aura.season_aura(aura_games, majors)
     aura_rows, aura_by_player = aura_rows_and_seasons(aura_seasons, listed_players.set_index("playerid")["slug"])
     for slug, page in player_pages.items():
         page["aura_seasons"] = aura_by_player.get(slug, [])
@@ -1323,6 +1380,8 @@ def main():
         last_update,
         fixtures=predictions["home"],
     )
+    add_game_logs(pages, player_pages, states, prediction_log,
+                  listed_players.set_index("playerid")["slug"].to_dict(), aura_games)
     render_team_pages(pages, last_update)
     write_team_index(pages)
 
