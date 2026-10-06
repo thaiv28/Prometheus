@@ -140,7 +140,7 @@ $ prometheus predict --days 2 --major
 ### How accurate are the metrics?
 `scripts/evaluate_metrics.py` backtests the forecasts. Each game is predicted from earlier games only: from ratings at the start of the month, or from each team's rating going into the game ("live"). Results are scored by accuracy, Brier score and log loss, and compared with a simple baseline (win % so far this season) using a paired bootstrap. International games between teams from different major regions are scored separately, because they are the only direct test of cross-region strength. Latest results: [docs/metric_backtest.md](docs/metric_backtest.md).
 
-On 16,765 major-league games, FORGE picks the winner 64.7% of the time with log loss 0.6291, against Elo's 64.3% and 0.6319 (and 0.6343 for team Elo without player ratings); on 979 cross-region international games it equals Elo (65.5%, 0.6295).
+On 16,765 major-league games, FORGE picks the winner 64.8% of the time with log loss 0.6292, against Elo's 64.3% and 0.6320 (and 0.6347 for team Elo without player ratings); on 979 cross-region international games it equals Elo (65.1%, 0.6299). On 9,432 games between teams from different leagues at any event (EMEA Masters, cups, promotion and international), Elo's log loss is 0.6194.
 
 Season stats are judged separately by `scripts/evaluate_season_stats.py` ([docs/season_stats_report.md](docs/season_stats_report.md)): each team-season's games are split into two random halves, and a stat is reliable when the halves agree. It also reports how well each stat matches that season's win % and Record.
 

@@ -140,8 +140,9 @@ CREATE TABLE game_length_elo (
     pre_match_elo   REAL NOT NULL,
     post_match_elo  REAL NULL,
     elo_change      REAL NOT NULL,
-    home_league     TEXT NULL,           -- last domestic league; NULL if only seen at international events
+    home_league     TEXT NULL,           -- most-played domestic league this year; NULL if only seen at international events
     league_offset   REAL NOT NULL,       -- home league's offset after this game (included in the ratings)
+    main_elo        REAL NULL,           -- rating with the team's main roster after this game (forecasts use it)
 
     PRIMARY KEY(gameid, teamid),
     FOREIGN KEY(gameid, teamid) REFERENCES matches(gameid, teamid)
