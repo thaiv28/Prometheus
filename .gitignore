@@ -1,6 +1,7 @@
 data/
 db/
 output/
+output-prices/
 .DS_Store
 settings.json
 

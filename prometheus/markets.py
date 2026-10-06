@@ -245,6 +245,33 @@ def fee(price, stake, rate=0.07):
 # ---------------------------------------------------------------- the log
 
 
+def prices_file(log, now, days_back=2):
+    """The site's `kalshi.json`: when prices were last read and, for every rated
+    match with a price that starts after `now` − `days_back` days, team 1's and
+    team 2's chance (whole numbers adding to 100, as the register shows them),
+    when that price was read and the market's page. The fixture registers apply
+    it in the browser, so prices refreshed between site builds show."""
+    since = (now - datetime.timedelta(days=days_back)).strftime("%Y-%m-%dT%H:%MZ")
+    out = {}
+    for entry in log.values():
+        market = entry.get("market")
+        if not entry.get("matched") or not market or entry["start"] < since:
+            continue
+        p1 = min(99, max(1, round(market["p"] * 100)))
+        out[entry["match_id"]] = {
+            "p1": p1,
+            "p2": 100 - p1,
+            "at": market["at"],
+            "url": event_url(market["ticker"]) if market.get("ticker") else None,
+        }
+    return {"at": now.strftime("%Y-%m-%dT%H:%MZ"), "matches": out}
+
+
+def published_log(log):
+    """The site's `predictions.json`: every rated match in the log."""
+    return {"matches": [e for e in log.values() if e.get("matched")]}
+
+
 def _parse_start(value):
     return datetime.datetime.strptime(value, "%Y-%m-%dT%H:%MZ").replace(
         tzinfo=datetime.timezone.utc

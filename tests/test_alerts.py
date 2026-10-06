@@ -74,26 +74,22 @@ def test_record_keeps_the_first_alert_and_paper_record_scores_it_after_fees():
     assert profit == pytest.approx(1 / 0.54 - 1 - markets.fee(0.54, 1))
 
 
-def test_issue_lists_matches_with_links_and_the_record():
+SLUG = lambda n: n.lower().replace(" ", "-")  # noqa: E731
+
+
+def test_update_writes_the_issue_with_links_and_a_comment_for_new_matches():
     log = {"m": _entry("m")}
-    chosen = alerts.select(log, NOW)
-    title, body = alerts.issue(
-        chosen,
-        log,
-        NOW,
-        "2026-10-05",
-        lambda n: n.lower().replace(" ", "-"),
-        {"jd-gaming"},
-    )
+    alert = alerts.update(log, NOW, "2026-10-05", SLUG, {"jd-gaming"})
     assert (
-        title
+        alert["title"]
         == "Kalshi edges for Tue 6 Oct: 1 FORGE call at least 5 points above the price"
     )
-    assert title.startswith(alerts.day_key(NOW))
-    assert (
-        "| Wed 7 Oct 11:00 / 04:00 | Demacia Cup | **JD Gaming** v LGD Gaming | 61% | 54¢ | **+7.0** |"
-        in body
+    assert alert["day"] == alerts.day_key(NOW) and alert["title"].startswith(
+        alert["day"]
     )
+    body = alert["body"]
+    row = "| Wed 7 Oct 11:00 / 04:00 | Demacia Cup | **JD Gaming** v LGD Gaming | 61% | 54¢ | **+7.0** |"
+    assert row in body
     assert (
         "[Kalshi](https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct070700jdglgd)"
         in body
@@ -109,6 +105,54 @@ def test_issue_lists_matches_with_links_and_the_record():
         and "games through 2026-10-05" in body
         and "cc @thaiv28" in body
     )
+    assert alert["new"] == 1 and row in alert["comment"]
+
+
+def test_update_an_hour_later_edits_quietly_and_marks_a_gone_edge():
+    log = {"m": _entry("m")}
+    alerts.update(log, NOW, "2026-10-05", SLUG, set())
+    later = NOW + datetime.timedelta(hours=1)
+    log["m"]["market"].update(
+        ask1=0.52, at="2026-10-06T11:00Z"
+    )  # edge grows: no new match, no comment
+    again = alerts.update(log, later, "2026-10-05", SLUG, set())
+    assert (
+        again["new"] == 0 and again["comment"] is None and "**+9.0**" in again["body"]
+    )
+    log["m"]["market"].update(
+        ask1=0.60, at="2026-10-06T12:00Z"
+    )  # edge gone: still listed, marked
+    gone = alerts.update(
+        log, NOW + datetime.timedelta(hours=2), "2026-10-05", SLUG, set()
+    )
+    assert gone["title"].endswith(
+        "0 FORGE calls at least 5 points above the price (1 gone)"
+    )
+    assert "gone: +1.0 now (alerted at +7.0)" in gone["body"]
+    assert log["m"]["alert"]["price"] == 0.54  # the paper bet keeps its first price
+    # Next day: an alert from yesterday that no longer qualifies isn't shown.
+    assert (
+        alerts.update(
+            log, NOW + datetime.timedelta(days=1, hours=-9), "2026-10-05", SLUG, set()
+        )
+        is None
+    )
+
+
+def test_prices_file_lists_recent_priced_matches():
+    log = {
+        "m": _entry("m"),
+        "old": _entry("old", start="2026-10-01T10:00Z"),
+        "nope": {**_entry("nope"), "matched": False},
+    }
+    out = markets.prices_file(log, NOW)
+    assert out["at"] == AT and list(out["matches"]) == ["m"]
+    assert out["matches"]["m"] == {
+        "p1": 53,
+        "p2": 47,
+        "at": AT,
+        "url": "https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct070700jdglgd",
+    }
 
 
 def test_buy_costs_take_the_cheaper_route_and_skip_wide_books():
@@ -143,7 +187,7 @@ def test_write_kalshi_alert_writes_the_issue_and_clears_stale_files(
     path = tmp_path / "alert.json"
     log = {"m": _entry("m")}
     coverage = {"priced": 1, "at": AT, "data_through": "2026-10-05"}
-    assert len(build_site.write_kalshi_alert(log, coverage, set(), str(path))) == 1
+    assert build_site.write_kalshi_alert(log, coverage, set(), str(path))["new"] == 1
     issue = json.loads(path.read_text())
     assert issue["day"] == "Kalshi edges for Tue 6 Oct:" and issue["title"].startswith(
         issue["day"]
@@ -152,5 +196,5 @@ def test_write_kalshi_alert_writes_the_issue_and_clears_stale_files(
         "alert" in json.loads((tmp_path / "predictions.json").read_text())["matches"][0]
     )
     # No fresh prices (the fetch failed): nothing is written, and an old file goes.
-    assert build_site.write_kalshi_alert(log, None, set(), str(path)) == []
+    assert build_site.write_kalshi_alert(log, None, set(), str(path)) is None
     assert not path.exists()

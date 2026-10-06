@@ -12,6 +12,7 @@
 .figure-caption { margin: 8px 0 0; }
 .dist .figure-caption { margin: 0 0 4px; }
 .count { color: var(--ink-3); font-variant-numeric: lining-nums; white-space: nowrap; }
+.kalshi-asof { color: var(--ink-3); }
 .dist-hint { color: var(--ink-3); font-style: italic; }
 
 .register-figure { margin: 0 0 44px; }
