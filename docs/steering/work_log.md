@@ -2,6 +2,12 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+
+## 2026-10-06 — Kalshi's closing line in the results
+
+- Results registers (the Predictions page's last 3 days and the month pages) gain a *Close* column: Kalshi's last price before the start (`market.p`, the same figure as the caret), as the pair linked to the match on Kalshi; an ink-3 dash when there was no market or no tight quote. In results the league folds into the time cell under 840px of room so Close can stay; Close drops under 660px and on phones. The month pages' margin note mentions it.
+- Verification: `uv run pytest -q` (all pass; new test for the column); Playwright on a local build from the S3 log: no horizontal scroll at 1440, 1280, 1100, 1024, 800, 620 and 390 px; Close shown at 1440, 1280, 1100 and 800, hidden at 1024 (margin beside a narrow column), 620 and 390; no page errors.
+
 ## 2026-10-06 — Player Elo margins of victory: 28 variants, none ships
 
 - **Question** (user): player Elo scores a win by game length; would gold difference, kill share, gold share, towers and so on do better? Tested by four subagents on a shared harness, under the significance rule.

@@ -467,6 +467,16 @@
   .register--fixtures .fx-meta .league-mark { margin-right: 0; }
   .register--fixtures .fx-team { max-width: 7rem; }
 }
+/* Results keep Kalshi's closing line longer: the league folds into the time cell
+   first (under 840px), the closing line goes under 660px. */
+@container (max-width: 840px) {
+  .register--results .fx-lg { display: none; }
+  .register--results .fx-meta { display: inline; margin-left: 6px; }
+  .register--results .fx-meta .league-mark { margin-right: 0; }
+}
+@container (max-width: 660px) {
+  .register--results .fx-close { display: none; }
+}
 @container (max-width: 640px) {
   .register--fixtures .fx-team { max-width: 6.25rem; }
 }

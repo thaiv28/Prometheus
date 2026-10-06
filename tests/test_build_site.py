@@ -346,3 +346,17 @@ def test_method_groups_split_saved_calls_from_the_backtest():
     ]
     assert build_site.backtest_span(entries) == ("2026-01-14", "2026-10-03")
     assert build_site.backtest_span([]) is None
+
+
+def test_results_register_shows_the_kalshi_closing_line():
+    entry = {**_log()["past"], "market": {"p": 0.634, "spread": 0.02, "at": "2026-09-20T07:00Z", "ticker": "KXLOLGAME-26SEP20T1GEN"}}
+    days = build_site._by_day([build_site.fixture_row(entry, set())])
+    html = build_site.env.from_string(
+        "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days, results=True) }}"
+    ).render(days=days)
+    assert ">Close<" in html and "63–37</a>" in html and "kxlolgame-26sep20t1gen" in html
+    assert 'colspan="10"' in html
+    plain = build_site.env.from_string(
+        "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days, results=True) }}"
+    ).render(days=build_site._by_day([build_site.fixture_row(_log()["past"], set())]))
+    assert "No Kalshi market" in plain

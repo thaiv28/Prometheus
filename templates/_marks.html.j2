@@ -29,7 +29,7 @@
     side of a duel bar. `days` from `predictions_view`; `results` adds the score
     and the call; `root` prefixes team links; `compact` (home) drops the method
     column. A match with a Kalshi price gets a caret on its duel bar at the
-    market's chance and, in upcoming registers, a Kalshi column. Rows carry data-start (UTC) so predictions.js can set local times and
+    market's chance and a Kalshi column: the current price in upcoming registers, the closing line (last price before the start) in results. Rows carry data-start (UTC) so predictions.js can set local times and
     regroup the days, and data-league / data-teams for its filters. -#}
 {% macro fixtures(days, results=False, root='', compact=False, id='') -%}
 {%- set by = not compact and not results -%}
@@ -45,12 +45,12 @@
       {% if not results %}<th scope="col" class="num phone-hide fx-opt" title="Chance of winning one game, first team–second team">Game{% if not compact %}<sup class="th-note" aria-hidden="true">1</sup>{% endif %}</th>{% endif %}
       {% if not results %}<th scope="col" class="num phone-hide" title="Kalshi’s prediction market: each team’s chance of taking the series, as of the last update">Kalshi{% if not compact %}<sup class="th-note" aria-hidden="true">5</sup>{% endif %}</th>{% endif %}
       {% if by %}<th scope="col" class="wide-only fx-opt">By{% if not compact %}<sup class="th-note" aria-hidden="true">2</sup>{% endif %}</th>{% endif %}
-      {% if results %}<th scope="col" class="num">Result</th><th scope="col">Call</th>{% endif %}
+      {% if results %}<th scope="col" class="num phone-hide fx-close" title="Kalshi’s closing line: its last price before the start, each team’s chance of taking the series">Close{% if not compact %}<sup class="th-note" aria-hidden="true">5</sup>{% endif %}</th><th scope="col" class="num">Result</th><th scope="col">Call</th>{% endif %}
     </tr>
   </thead>
   {% for day in days %}
   <tbody class="fx-day" data-day="{{ day.day }}">
-    <tr class="fx-day-row"><th scope="rowgroup" colspan="{{ 7 + (2 if results else 3) + (1 if by else 0) }}">{{ day.label }}</th></tr>
+    <tr class="fx-day-row"><th scope="rowgroup" colspan="{{ 10 + (1 if by else 0) }}">{{ day.label }}</th></tr>
     {% for r in day.rows %}
     <tr class="fx" data-match="{{ r.id }}" data-start="{{ r.start }}" data-league="{{ r.league }}" data-teams="{{ r.name1 }}|{{ r.name2 }}"{% if r.winner %} data-winner="{{ r.winner }}"{% endif %}>
       <td class="fx-time"><time datetime="{{ r.start | replace('Z', ':00Z') }}">{{ r.time }}</time><span class="fx-meta">{{ league(r.league, show_code=False) }}</span></td>
@@ -74,6 +74,7 @@
       {% if not results %}<td class="num phone-hide fx-market"{% if r.mkt1 %} title="As of {{ r.mkt_at }}; opens the match on Kalshi"{% endif %}>{% if r.mkt1 and r.mkt_url %}<a href="{{ r.mkt_url }}" aria-label="Kalshi’s market for {{ r.name1 }} against {{ r.name2 }}: {{ r.mkt1 }}–{{ r.mkt2 }}">{{ r.mkt1 }}–{{ r.mkt2 }}</a>{% elif r.mkt1 %}{{ r.mkt1 }}–{{ r.mkt2 }}{% else %}<span class="muted" title="No Kalshi market, or too thin a quote">—</span>{% endif %}</td>{% endif %}
       {% if by %}<td class="wide-only fx-opt fx-by">{{ r.method }}{% if r.cross %}<span class="fx-cross" title="Teams from different leagues: Elo alone"> across</span>{% endif %}</td>{% endif %}
       {% if results %}
+      <td class="num phone-hide fx-close fx-market"{% if r.mkt1 %} title="Kalshi’s last price before the start ({{ r.mkt_at }}); opens the match on Kalshi"{% endif %}>{% if r.mkt1 and r.mkt_url %}<a href="{{ r.mkt_url }}" aria-label="Kalshi’s closing line for {{ r.name1 }} against {{ r.name2 }}: {{ r.mkt1 }}–{{ r.mkt2 }}">{{ r.mkt1 }}–{{ r.mkt2 }}</a>{% elif r.mkt1 %}{{ r.mkt1 }}–{{ r.mkt2 }}{% else %}<span class="muted" title="No Kalshi market, or too thin a quote">—</span>{% endif %}</td>
       <td class="num fx-score" title="Best of {{ r.best_of }}">{{ r.score or '—' }}</td>
       <td class="fx-call fx-call--{{ r.call or 'pending' }}">{% if r.call == 'right' %}Right{% elif r.call == 'missed' %}Missed{% elif r.call == 'even' %}Even{% else %}<i>To come</i>{% endif %}{% if r.reconstructed %}<a class="note-ref" href="#note-3" aria-label="Rebuilt after the match: note 3">3</a>{% endif %}</td>
       {% endif %}
