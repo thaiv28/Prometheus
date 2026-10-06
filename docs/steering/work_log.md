@@ -7,6 +7,16 @@ Append one dated entry for each substantive agent work session, newest first. Re
 - The starting-five cell never wrapped, so long names (RPG Kingdom's "Leviathan (Ryota Horie)", Black Lion's tagged names) pushed the log table to 1,093px in an 888px column, over the margin notes. Now the five take only the width the other columns leave (`max-width: 0`, 13rem floor; 18rem on phones), wrap between names and never inside one (each name and its middot are one unbreakable unit; the middot sits outside the link, so the underline stops at the name), and a name over 12em ends in an ellipsis with a title. The figure scrolls sideways past the column as a backstop. From 1001px to 1280px Length hides (still in each game row's tooltip) and opponents cap at 10rem.
 - Checks: headless Chrome at 1440, 1366, 1280, 1180, 1024, 800 and 390px on KT Rolster, Black Lion and RPG Kingdom: the table never exceeds its box at 1180px and up and never makes the page scroll sideways; no name cut; KT's rows stay one line from 1180px up and on phones, Black Lion's and RPG's at most two lines from 1280px up. Screenshots at 1280 and 1440. Impeccable detector clean. `uv run pytest -q`.
 
+## 2026-10-06 — Kalshi's closing line in the results
+
+- Results registers (the Predictions page's last 3 days and the month pages) gain a *Close* column: Kalshi's last price before the start (`market.p`, the same figure as the caret), as the pair linked to the match on Kalshi; an ink-3 dash when there was no market or no tight quote. In results the league folds into the time cell under 840px of room so Close can stay; Close drops under 660px and on phones. The month pages' margin note mentions it.
+- Verification: `uv run pytest -q` (all pass; new test for the column); Playwright on a local build from the S3 log: no horizontal scroll at 1440, 1280, 1100, 1024, 800, 620 and 390 px; Close shown at 1440, 1280, 1100 and 800, hidden at 1024 (margin beside a narrow column), 620 and 390; no page errors.
+
+## 2026-10-06 — Hourly prices started from cron-job.org
+
+- GitHub's scheduler started `prices.yml` once (14:14 UTC) in the 12 hours after it merged, and the daily publish has started 4–9 hours after its 10:00 UTC slot every day this week (scheduled runs are best effort and dropped under load). The user set up a cron-job.org job that dispatches `prices.yml` through GitHub's API every hour at :17 with a fine-grained token (this repo, Actions read and write only). `docs/steering/deployment.md` records it.
+- Verification: the job's test call created a `workflow_dispatch` run at 20:48 UTC within seconds (it skipped the hour because a publish run was queued, as designed); the first scheduled dispatch is checked in the PR. No code changed.
+
 ## 2026-10-06 — GLORY skips a season with no qualified team (build fix)
 
 - The PR build failed: Oracle's Elixir's 2026 file (Drive copy of 6 Oct) now files the first games of the 2027 season (P11 Esports in the LIT, the EBL, 8 LCS team-games) under year 2027, so GLORY's 2027 loop had no team with 5 games and StandardScaler got an empty frame. `get_glory_ranking` now skips a year with no team-season to rank. `main`'s next daily build would have hit the same error.
