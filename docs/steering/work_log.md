@@ -2,6 +2,11 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-06 — GLORY skips a season with no qualified team (build fix)
+
+- The PR build failed: Oracle's Elixir's 2026 file (Drive copy of 6 Oct) now files the first games of the 2027 season (P11 Esports in the LIT, the EBL, 8 LCS team-games) under year 2027, so GLORY's 2027 loop had no team with 5 games and StandardScaler got an empty frame. `get_glory_ranking` now skips a year with no team-season to rank. `main`'s next daily build would have hit the same error.
+- Checks: rebuilt the DB with the fresh 2026 file and built the site (2,087 team pages, 4,845 player pages); new `test_glory_skips_a_season_with_no_qualified_team` fails without the fix and passes with it; `uv run pytest -q`.
+
 ## 2026-10-06 — Merge main into the game-logs branch
 
 - Merged `main` (PRs #12–#20: Kalshi alerts and hourly prices, saved-vs-backtest tables, Elo margin variants, DCGI/WSCI as international events) with this branch's home-league / main-roster fix and game logs. Conflicts were in docs, the `build_site.py` imports (kept `alerts`, `markets`, `gamelog`), `test_build_site.py` (kept both sides' tests) and the forecast weights.
