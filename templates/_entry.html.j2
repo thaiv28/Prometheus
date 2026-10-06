@@ -1,0 +1,64 @@
+{# Team and player pages: the contents list and the game log. #}
+
+{# Contents: [(section id, label, figure or none)]. "margin" sits at the top of the sticky margin;
+   "inline" sits under the entry head and shows only when the margin falls below the page. #}
+{% macro contents(items, where) %}
+<nav class="entry-contents entry-contents--{{ where }}" aria-label="On this page">
+  <h2 class="margin-head">On this page</h2>
+  <ol>
+    {% for id, label, figure in items %}<li><a href="#{{ id }}"><span class="toc-name">{{ label }}</span>{% if figure is not none %}<span class="toc-figure">{{ figure }}</span>{% endif %}</a></li>{% endfor %}
+  </ol>
+</nav>
+{% endmacro %}
+
+{# The game log: series rows with their games under them, newest first, drawn by entry.js
+   from #games-data; "Show every series" fetches the rest. `kind` is "team" or "player". #}
+{% macro game_log(games, kind, name, note) %}
+{% set player = kind == 'player' %}
+<section class="games" id="games" aria-labelledby="games-heading">
+  <div class="block-head">
+    <h2 id="games-heading">Games</h2>
+    <span class="more">{{ '{:,}'.format(games.games) }} game{{ 's' if games.games != 1 }} in {{ '{:,}'.format(games.series) }} series since {{ games.since }}</span>
+  </div>
+  {% if games.years | length > 1 %}
+  <p class="log-years" id="games-years"><span class="log-years-label">Seasons</span>
+    {%- for y in games.years %} <a href="#games-{{ y }}">{{ y }}</a>{% endfor %}</p>
+  {% endif %}
+  <figure class="register-figure log-figure" aria-labelledby="games-cap">
+    <figcaption id="games-cap" class="table-caption">
+      <span id="games-cap-count" data-all="Every series, newest first, its games under it.">{% if games.shown < games.series %}The latest {{ games.shown }} series, newest first, its games under it.{% else %}Every series, newest first, its games under it.{% endif %}</span>
+      {% if player %}Result and Ours are the team’s; Elo ± is {{ name }}’s.{% else %}A game shows its five only if they changed.{% endif %}
+      <a class="note-ref" href="#note-call">{{ note }}</a>
+    </figcaption>
+    <div class="table-scroll">
+      <table class="register register--log{{ ' register--log-player' if player }}">
+        <thead>
+          <tr>
+            <th scope="col" class="num">Date</th>
+            {% if player %}<th scope="col">Team</th>{% endif %}
+            <th scope="col">Opponent</th>
+            <th scope="col">Result</th>
+            {% if player %}<th scope="col">Champion</th><th scope="col" class="num" title="Win-chance points, major leagues">AURA</th>{% else %}<th scope="col" class="num log-len">Length</th>{% endif %}
+            <th scope="col" class="num" title="Our chance this {{ 'team' if not player else 'player’s team' }} wins, from before the series or game">Ours</th>
+            <th scope="col" class="num" title="Kalshi’s last price before the series">Kalshi</th>
+            <th scope="col" class="num" title="Elo change">Elo ±</th>
+            {% if not player %}<th scope="col">Starting five</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody id="games-rows">
+          <tr><td class="empty" colspan="{{ 9 if player else 8 }}"><noscript>Turn on JavaScript to see the games.</noscript></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </figure>
+  {% if games.shown < games.series %}
+  <p class="log-more"><button type="button" class="clear-filters" id="games-all">Show every series ({{ '{:,}'.format(games.series) }})</button></p>
+  {% endif %}
+  <script type="application/json" id="games-data">{{ games.data | tojson }}</script>
+</section>
+{% endmacro %}
+
+{# Margin note for the game log's columns. #}
+{% macro game_log_note(player, note) %}
+<li id="note-call"><span class="note-mark" aria-hidden="true">{{ note }}</span><b>Ours</b> is our chance for the {{ 'player’s ' if player }}team before the series or game: FORGE within a major league, Elo otherwise (<i>italic</i>). <b>Kalshi</b> is the market’s last price before the series, from April 2026.</li>
+{% endmacro %}

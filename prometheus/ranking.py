@@ -111,6 +111,10 @@ def get_glory_ranking(
         averages = team_season_averages(
             _filter_leagues(year_games, league), minimum_matches
         )
+        # A season that has only just begun (Oracle's Elixir files the first games
+        # of next year's season early) may have no team with enough games yet.
+        if averages.empty:
+            continue
 
         if not baseline:
             scores = pipeline.predict(averages[features])
