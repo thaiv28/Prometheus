@@ -95,9 +95,14 @@ EVENT_LEAGUES = {
 ALIASES_PATH = Path(__file__).with_name("team_aliases.json")
 
 
+# Letters that Unicode doesn't split into a base letter and an accent.
+_PLAIN_LETTERS = str.maketrans({"ø": "o", "æ": "ae", "œ": "oe", "ß": "ss", "đ": "d", "ł": "l", "þ": "th"})
+
+
 def fold(name):
     """Lower-case, accent-free, punctuation-free form of a team name."""
-    name = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode()
+    name = str(name).lower().translate(_PLAIN_LETTERS)
+    name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
 
 
