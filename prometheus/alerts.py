@@ -11,7 +11,8 @@ Each alert is recorded on its log entry (`alert`: the team backed, FORGE's
 chance, the price, the edge and when), once: a match alerted on two days keeps
 its first alert, as a paper bet would. `paper_record` scores settled alerts as
 $1 bets after Kalshi's taker fee, so the issue carries a running record of calls
-made before the match. `issue` writes the GitHub issue the publish workflow posts.
+made before the match, with CLV (the closing price for the team backed minus
+the alerted price). `issue` writes the GitHub issue the publish workflow posts.
 """
 
 import datetime
@@ -91,19 +92,43 @@ def record(alerts, now):
 def paper_record(log, rate=0.07):
     """(alerts settled, won, staked, profit) for $1 on each recorded alert after
     Kalshi's fee at `rate`."""
-    settled = won = 0
-    profit = 0.0
+    bets = settled_alerts(log, rate)
+    profit = sum(b["profit"] for b in bets)
+    return len(bets), sum(b["won"] for b in bets), float(len(bets)), profit
+
+
+def settled_alerts(log, rate=0.07):
+    """Each settled alert as a $1 paper bet: won, profit after Kalshi's fee at
+    `rate`, and CLV (closing line value: the last price before the start for the
+    team backed, minus the price alerted; None when the match has no price). CLV
+    doesn't wait on the result, so it shows an edge in far fewer bets than profit."""
+    out = []
     for entry in log.values():
         alert = entry.get("alert")
         if not alert or entry.get("winner") not in (1, 2):
             continue
-        settled += 1
-        hit = entry["winner"] == alert["side"]
-        won += hit
-        profit += (1 / alert["price"] - 1 if hit else -1) - markets.fee(
-            alert["price"], 1, rate
+        won = entry["winner"] == alert["side"]
+        price = alert["price"]
+        close = (entry.get("market") or {}).get("p")
+        if close is not None and alert["side"] == 2:
+            close = 1 - close
+        out.append(
+            {
+                "won": won,
+                "profit": (1 / price - 1 if won else -1) - markets.fee(price, 1, rate),
+                "clv": None if close is None else close - price,
+            }
         )
-    return settled, won, float(settled), profit
+    return out
+
+
+def clv_summary(bets):
+    """(mean CLV, share of bets beating the close) over bets with a close, or
+    (None, None)."""
+    clvs = [b["clv"] for b in bets if b["clv"] is not None]
+    if not clvs:
+        return None, None
+    return sum(clvs) / len(clvs), sum(c > 0 for c in clvs) / len(clvs)
 
 
 def _name(entry, side):
@@ -195,46 +220,47 @@ def issue(entries, log, now, data_through, slugify, team_slugs):
     )
     gone = len(entries) - live
     title = (
-        f"{day_key(now)} {live} FORGE call{'s' if live != 1 else ''} at least {round(100 * EDGE)} points above the price"
+        f"{day_key(now)} {live} FORGE call{'s' if live != 1 else ''} {round(100 * EDGE)}+ points above Kalshi"
         + (f" ({gone} gone)" if gone else "")
     )
     settled, won, staked, profit = paper_record(log)
+    clv, beat = clv_summary(settled_alerts(log))
     if settled:
         record_line = (
-            f"**Alerts so far:** {settled} settled, {won} won, {profit:+.2f} dollars on {staked:.0f} staked "
-            f"({100 * profit / staked:+.1f}%) after the 7% taker fee, each at its first alerted price."
+            f"**Alerts so far:** {settled} settled, {won} won, {100 * profit / staked:+.1f}% after the 7% fee"
+            + (
+                f"; closing line value {100 * clv:+.1f} points, {round(100 * beat)}% beat the close"
+                if clv is not None
+                else ""
+            )
+            + "."
         )
     else:
         record_line = "**Alerts so far:** none settled yet."
     body = "\n".join(
         [
-            f"FORGE sees **{live} match{'es' if live != 1 else ''}** where its chance beats Kalshi's buying price "
-            f"by {round(100 * EDGE)} points or more, starting in the next {MAX_HOURS} hours"
+            f"**{live} FORGE call{'s' if live != 1 else ''}** {round(100 * EDGE)}+ points above Kalshi's ask, "
+            f"starting within {MAX_HOURS} hours"
             + (
-                f", and {gone} alerted earlier today whose edge has since gone"
+                f"; {gone} earlier alert{'s' if gone != 1 else ''} no longer qualif{'y' if gone != 1 else 'ies'}"
                 if gone
                 else ""
             )
-            + f". Prices as of {now:%H:%M} UTC (updated about hourly); FORGE's calls use games through "
-            f"{data_through}.",
+            + f". Prices as of {now:%H:%M} UTC; games through {data_through}.",
             "",
             *HEAD,
             *(_row(e, now_s, slugify, team_slugs) for e in entries),
             "",
-            "**Edge** is FORGE's series chance minus the price you'd pay now (the ask), in points. Kalshi's 7% "
-            "taker fee costs about 2–5¢ per $1 on top. New matches arrive as comments, which GitHub emails; "
-            "price changes only update this table.",
+            "**Edge:** FORGE's series chance minus the ask, in points. The 7% fee costs 2–5¢ per $1 more.",
             "",
             record_line,
             "",
             "<details><summary>How this is chosen</summary>",
             "",
-            f"Only FORGE calls (both teams from the same major league), since Elo calls in other leagues lost to "
-            f"the market in the [backtest]({REPORT_URL}). The edge must exceed {round(100 * EDGE)} points and the "
-            f"match must start {MIN_HOURS} to {MAX_HOURS} hours after the price is read. In the backtest, value bets "
-            "above 5 points returned +12.9% after taker fees (−5.0% to +31.2%), which is not significant. Treat "
-            "these as a paper-trading test, not advice. Each alerted match is recorded in the prediction log at "
-            "its first price and scored above once it is played.",
+            f"FORGE calls only (same major league); Elo lost to the market in the [backtest]({REPORT_URL}). "
+            f"Edge over {round(100 * EDGE)} points, {MIN_HOURS}–{MAX_HOURS} hours before the start. Backtest: "
+            "+12.9% after fees (−5.0% to +31.2%), closing line value +0.95 points (−0.13 to +2.03); "
+            "neither significant. A paper test, not advice. Each alert is scored at its first price.",
             "</details>",
             "",
             f"cc @{OWNER}",

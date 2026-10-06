@@ -219,25 +219,51 @@ def _priced(cost):
     return cost is not None and cost == cost  # not None, not NaN
 
 
-def bet_profits(frame, rate, edge=None, stake=1.0):
-    """Profit of each bet: $`stake` on our pick at its cost (edge None), or only on
-    a team whose chance by us beats its cost by more than `edge`."""
+def bets(frame, edge=None):
+    """Each bet as (cost, won, close): $1 on our pick (edge None), or only on a
+    team whose chance by us beats its cost by more than `edge`. `close` is the
+    market's closing chance for that team (None when unpriced)."""
     out = []
     for r in frame.itertuples():
-        options = [(r.p_series, r.cost1, r.won1), (1 - r.p_series, r.cost2, not r.won1)]
+        close = None if pd.isna(r.market_close) else r.market_close
+        options = [
+            (r.p_series, r.cost1, r.won1, close),
+            (1 - r.p_series, r.cost2, not r.won1, None if close is None else 1 - close),
+        ]
         if edge is None:
-            p, cost, won = options[0] if r.p_series >= 0.5 else options[1]
+            p, cost, won, shut = options[0] if r.p_series >= 0.5 else options[1]
             if not _priced(cost):
                 continue
         else:
             value = [
-                (p - c, p, c, w) for p, c, w in options if _priced(c) and p - c > edge
+                (p - c, p, c, w, x)
+                for p, c, w, x in options
+                if _priced(c) and p - c > edge
             ]
             if not value:
                 continue
-            _, p, cost, won = max(value)
-        out.append((stake / cost - stake if won else -stake) - fee(cost, stake, rate))
-    return np.array(out)
+            _, p, cost, won, shut = max(value, key=lambda v: v[0])
+        out.append((cost, won, shut))
+    return out
+
+
+def bet_profits(frame, rate, edge=None, stake=1.0):
+    """Profit of each bet (see `bets`) of $`stake` after Kalshi's fee at `rate`."""
+    return np.array(
+        [
+            (stake / cost - stake if won else -stake) - fee(cost, stake, rate)
+            for cost, won, _ in bets(frame, edge)
+        ]
+    )
+
+
+def bet_clv(frame, edge=None):
+    """Closing line value of each bet with a closing price: the market's closing
+    chance for the team backed minus the price paid. It doesn't depend on who won,
+    so it needs far fewer bets than profit to show an edge."""
+    return np.array(
+        [close - cost for cost, _, close in bets(frame, edge) if close is not None]
+    )
 
 
 def roi_interval(profits, n_resamples=2000, seed=0):
@@ -260,7 +286,9 @@ def betting_section(s):
         "fee per order: ceil(rate × contracts × P × (1 − P)), to the cent (taker orders 7%, resting maker orders "
         "1.75%, which would fill at a better price than assumed here). *Back our pick* bets every match on the team "
         "we favour; *value* bets only where our chance beats the price by more than the edge shown. ROI is profit "
-        "per dollar staked, with a 95% bootstrap interval over bets. Contracts are treated as divisible, and the "
+        "per dollar staked, with a 95% bootstrap interval over bets. CLV (closing line value) is the market's closing "
+        "chance for the team backed minus the price paid, in points, with its interval and the share of bets that "
+        "beat the close; it doesn't depend on results or fees. Contracts are treated as divisible, and the "
         "matches are those with an exact start time. The strategies were fixed before looking at the results.",
         "",
     ]
@@ -270,12 +298,21 @@ def betting_section(s):
         lines += [
             f"**{label}** ({len(part)} series with a price)",
             "",
-            "| Strategy | Fee | Bets | Won | Profit | ROI (95%) |",
-            "|---|---|---:|---:|---:|---:|",
+            "| Strategy | Fee | Bets | Won | Profit | ROI (95%) | CLV, points (95%) | Beat close |",
+            "|---|---|---:|---:|---:|---:|---:|---:|",
         ]
         for name, edge in [("Back our pick", None)] + [
             (f"Value, edge > {e:.2f}", e) for e in EDGES
         ]:
+            clv = bet_clv(part, edge)
+            if len(clv) >= 10:
+                c_lo, c_hi = roi_interval(clv)
+                clv_cells = (
+                    f"{100 * clv.mean():+.2f} ({100 * c_lo:+.2f} to {100 * c_hi:+.2f}) | "
+                    f"{100 * (clv > 0).mean():.0f}% |"
+                )
+            else:
+                clv_cells = "— | — |"
             for fee_name, rate in FEE_RATES:
                 prof = bet_profits(part, rate, edge)
                 if len(prof) < 10:
@@ -283,7 +320,7 @@ def betting_section(s):
                 lo, hi = roi_interval(prof)
                 lines.append(
                     f"| {name} | {fee_name} | {len(prof)} | {int((prof > 0).sum())} | {prof.sum():+.2f} | "
-                    f"{100 * prof.mean():+.1f}% ({100 * lo:+.1f}% to {100 * hi:+.1f}%) |"
+                    f"{100 * prof.mean():+.1f}% ({100 * lo:+.1f}% to {100 * hi:+.1f}%) | {clv_cells}"
                 )
         lines.append("")
     return lines

@@ -82,7 +82,7 @@ def test_update_writes_the_issue_with_links_and_a_comment_for_new_matches():
     alert = alerts.update(log, NOW, "2026-10-05", SLUG, {"jd-gaming"})
     assert (
         alert["title"]
-        == "Kalshi edges for Tue 6 Oct: 1 FORGE call at least 5 points above the price"
+        == "Kalshi edges for Tue 6 Oct: 1 FORGE call 5+ points above Kalshi"
     )
     assert alert["day"] == alerts.day_key(NOW) and alert["title"].startswith(
         alert["day"]
@@ -125,9 +125,7 @@ def test_update_an_hour_later_edits_quietly_and_marks_a_gone_edge():
     gone = alerts.update(
         log, NOW + datetime.timedelta(hours=2), "2026-10-05", SLUG, set()
     )
-    assert gone["title"].endswith(
-        "0 FORGE calls at least 5 points above the price (1 gone)"
-    )
+    assert gone["title"].endswith("0 FORGE calls 5+ points above Kalshi (1 gone)")
     assert "gone: +1.0 now (alerted at +7.0)" in gone["body"]
     assert log["m"]["alert"]["price"] == 0.54  # the paper bet keeps its first price
     # Next day: an alert from yesterday that no longer qualifies isn't shown.
@@ -198,3 +196,27 @@ def test_write_kalshi_alert_writes_the_issue_and_clears_stale_files(
     # No fresh prices (the fetch failed): nothing is written, and an old file goes.
     assert build_site.write_kalshi_alert(log, None, set(), str(path)) is None
     assert not path.exists()
+
+
+def test_settled_alerts_score_clv_against_the_last_price_for_the_side():
+    log = {
+        "one": _entry(
+            "one",
+            winner=1,
+            alert={"side": 1, "p": 0.61, "price": 0.54, "edge": 0.07, "at": AT},
+        ),
+        "two": _entry(
+            "two",
+            winner=1,
+            alert={"side": 2, "p": 0.6, "price": 0.50, "edge": 0.1, "at": AT},
+        ),
+        "open": _entry(
+            "open", alert={"side": 1, "p": 0.61, "price": 0.54, "edge": 0.07, "at": AT}
+        ),
+    }
+    bets = alerts.settled_alerts(log)
+    # market.p is 0.53: team1 closed at 53 (bought at 54), team2 at 47 (bought at 50).
+    assert [b["clv"] for b in bets] == pytest.approx([-0.01, -0.03])
+    assert [b["won"] for b in bets] == [True, False]
+    assert alerts.clv_summary(bets) == pytest.approx((-0.02, 0.0))
+    assert alerts.clv_summary([]) == (None, None)

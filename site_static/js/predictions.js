@@ -108,8 +108,10 @@
           if (!note) {
             note = document.createElement("span");
             note.className = "kalshi-asof";
-            cap.appendChild(document.createTextNode(" "));
-            cap.appendChild(note);
+            // Before a trailing link (home's "Every prediction"), else at the end.
+            const link = $("a:not(.note-ref)", cap);
+            cap.insertBefore(note, link);
+            cap.insertBefore(document.createTextNode(" "), link ? link : note);
           }
           note.textContent = `Kalshi prices as of ${stamp(data.at)}.`;
         });

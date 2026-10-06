@@ -210,3 +210,22 @@ def test_attach_market_prices_never_fails_the_build(monkeypatch):
     assert schedule.attach_market_prices({}, _ratings(), datetime.datetime.now(UTC), fetch=boom) is None
     monkeypatch.setenv("KALSHI_PRICES", "0")
     assert schedule.attach_market_prices({}, _ratings(), datetime.datetime.now(UTC), fetch=lambda: pytest.fail("skipped")) is None
+
+
+def test_market_scorecard_splits_forge_and_elo_and_needs_enough_series():
+    market = {"p": 0.5, "at": "2026-10-04T07:00Z"}
+    entries = [
+        {**_pred("a", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market)},
+        {**_pred("b", "2026-10-04T08:00Z", 0.4), "winner": 1, "market": dict(market), "method": "elo"},
+        {**_pred("c", "2026-10-04T08:00Z", 0.8), "winner": 1},  # no price
+        {**_pred("d", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": {"p": 0.5, "at": "2026-10-04T09:00Z"}},  # priced after the start
+        {**_pred("e", "2026-10-04T08:00Z", 0.8), "market": dict(market)},  # not played
+    ]
+    forge, elo, total = schedule.market_scorecard(entries, min_n=2)
+    assert (forge["series"], elo["series"], total["series"]) == (1, 1, 2)
+    assert forge["ours_loss"] == pytest.approx(-math.log(0.8))
+    assert forge["market_loss"] == pytest.approx(math.log(2))
+    assert (forge["ours_pct"], forge["market_pct"], elo["ours_pct"]) == (100, 50, 0)
+    assert forge["diff"] is None and total["diff"] is not None
+    assert total["diff"][0] == pytest.approx((-math.log(0.8) - math.log(0.4)) / 2 - math.log(2))
+    assert schedule.market_scorecard([])[2]["ours_loss"] is None

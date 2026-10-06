@@ -162,3 +162,42 @@ def test_combined_weights_find_the_informative_forecast():
     w = evaluate_markets.combined_weights(frame, "noise", "market", n_resamples=50)
     assert w["market"][1] < 1 < w["market"][2]
     assert w["ours"][1] < 0 < w["ours"][2]
+
+
+def test_bets_take_the_value_side_with_profit_after_fees_and_clv():
+    frame = pd.DataFrame(
+        [
+            # Ours 70%, team1 costs 60¢ and closed at 66%: +10 edge, +6 CLV, won.
+            {
+                "p_series": 0.7,
+                "cost1": 0.60,
+                "cost2": 0.42,
+                "won1": True,
+                "market_close": 0.66,
+            },
+            # Ours 30% for team1 = 70% for team2 at 62¢, closing 1 - 0.40 = 60%: lost.
+            {
+                "p_series": 0.3,
+                "cost1": 0.40,
+                "cost2": 0.62,
+                "won1": True,
+                "market_close": 0.40,
+            },
+            # No edge either way; no closing price.
+            {
+                "p_series": 0.5,
+                "cost1": 0.52,
+                "cost2": 0.52,
+                "won1": False,
+                "market_close": np.nan,
+            },
+        ]
+    )
+    profits = evaluate_markets.bet_profits(frame, 0.07, edge=0.05)
+    assert profits == pytest.approx(
+        [1 / 0.60 - 1 - markets.fee(0.60, 1), -1 - markets.fee(0.62, 1)]
+    )
+    assert evaluate_markets.bet_clv(frame, edge=0.05) == pytest.approx([0.06, -0.02])
+    # Back our pick bets every priced match, the third without a close.
+    assert len(evaluate_markets.bet_profits(frame, 0.07)) == 3
+    assert len(evaluate_markets.bet_clv(frame)) == 2
