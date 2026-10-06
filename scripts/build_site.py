@@ -279,7 +279,7 @@ PREDICTIONS = {
         "Two teams from the same major league (LCK, LPL, LEC, LCS) are called by FORGE. Teams from different leagues are called by Elo alone, on a curve fit to international games, as in FORGE's head to head. Two teams from any other league are called by their Elo.",
         "A match's call is refreshed at every daily update until it starts, then frozen. Matches that had already been played when the log began carry a call rebuilt from the ratings as they stood the day before, marked with this note. They use only earlier games, but the forecast weights were fit on data that includes them, so trust the calls saved before the match more.",
         "Log loss scores the one-game chance against every game played: a coin flip scores 0.693, and lower is better. It punishes a confident miss more than a timid one.",
-        "Kalshi is a prediction market. Its figures are the market's chance of each team taking the series: the middle of the best bid and offer, read at each daily update and kept from the last one before the match (so up to a day old), and left out when the quote is too thin. The caret over the bar marks it, and the figures link to the match on Kalshi. On about 2,000 past series the market's last price before the start beat our calls; a day out, FORGE was level with it in the major leagues.",
+        "Kalshi is a prediction market. Its figures are the market's chance of each team taking the series: the middle of the best bid and offer, read about every hour and kept from the last reading before the match, and left out when the quote is too thin. The caret over the bar marks it, and the figures link to the match on Kalshi. On about 2,000 past series the market's last price before the start beat our calls; a day out, FORGE was level with it in the major leagues.",
     ],
     "caveats": "The schedule comes from Leaguepedia. Matches with a team Oracle's Elixir doesn't cover can't be rated and aren't shown. Calls ignore side selection, roster changes since a team's last game, and new patches. Times are in your time zone.",
 }
@@ -794,27 +794,25 @@ def update_predictions(states):
 
 
 def write_kalshi_alert(log, coverage, team_slugs, path=None):
-    """Pick today's alerts (`alerts.select`), record them in the log and write the
-    issue to `path`. Runs only on fresh prices (this build's fetch worked) and
-    unless KALSHI_ALERTS=0. A stale file from an earlier build is always removed,
-    so a day without alerts posts nothing. Returns the alerts."""
+    """Record this build's alerts in the log and write the day's issue to `path`
+    (`alerts.update`). Runs only on fresh prices (this build's fetch worked) and
+    unless KALSHI_ALERTS=0. A stale file from an earlier run is always removed,
+    so a day without alerts posts nothing. Returns the issue dict or None."""
     path = path or KALSHI_ALERT
     if os.path.exists(path):
         os.remove(path)
     if os.environ.get("KALSHI_ALERTS", "1") == "0" or not coverage or not coverage.get("priced"):
-        return []
+        return None
     now = datetime.datetime.strptime(coverage["at"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=datetime.timezone.utc)
-    chosen = alerts.select(log, now)
-    if not chosen:
-        return []
-    alerts.record(chosen, now)
+    alert = alerts.update(log, now, coverage.get("data_through"), _slugify, team_slugs)
     schedule.save_log(log, PREDICTIONS_LOG)
-    title, body = alerts.issue(chosen, log, now, coverage.get("data_through"), _slugify, team_slugs)
+    if alert is None:
+        return None
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
-        json.dump({"title": title, "body": body, "day": alerts.day_key(now)}, f, ensure_ascii=False)
-    print(f"Kalshi alert: {len(chosen)} match(es) written to {path}")
-    return chosen
+        json.dump(alert, f, ensure_ascii=False)
+    print(f"Kalshi alert: {alert['new']} new match(es); issue written to {path}")
+    return alert
 
 
 def render_sunset(last_update):
@@ -1205,7 +1203,10 @@ def main():
     predictions = predictions_view(prediction_log, set(pages), datetime.datetime.now(datetime.timezone.utc))
     render_predictions(predictions, coverage, last_update)
     with open(os.path.join(OUTPUT_DIR, "predictions.json"), "w") as f:
-        json.dump({"matches": [e for e in prediction_log.values() if e.get("matched")]}, f, ensure_ascii=False, separators=(",", ":"))
+        json.dump(markets.published_log(prediction_log), f, ensure_ascii=False, separators=(",", ":"))
+    # The hourly price job (scripts/update_prices.py) replaces this between builds.
+    with open(os.path.join(OUTPUT_DIR, "kalshi.json"), "w") as f:
+        json.dump(markets.prices_file(prediction_log, datetime.datetime.now(datetime.timezone.utc)), f, separators=(",", ":"))
     render_index(
         forge_rows,
         team_elo_rows,

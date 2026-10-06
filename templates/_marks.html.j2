@@ -52,7 +52,7 @@
   <tbody class="fx-day" data-day="{{ day.day }}">
     <tr class="fx-day-row"><th scope="rowgroup" colspan="{{ 7 + (2 if results else 3) + (1 if by else 0) }}">{{ day.label }}</th></tr>
     {% for r in day.rows %}
-    <tr class="fx" data-start="{{ r.start }}" data-league="{{ r.league }}" data-teams="{{ r.name1 }}|{{ r.name2 }}"{% if r.winner %} data-winner="{{ r.winner }}"{% endif %}>
+    <tr class="fx" data-match="{{ r.id }}" data-start="{{ r.start }}" data-league="{{ r.league }}" data-teams="{{ r.name1 }}|{{ r.name2 }}"{% if r.winner %} data-winner="{{ r.winner }}"{% endif %}>
       <td class="fx-time"><time datetime="{{ r.start | replace('Z', ':00Z') }}">{{ r.time }}</time><span class="fx-meta">{{ league(r.league, show_code=False) }}</span></td>
       <td class="wide-only" title="{{ r.event }}">{{ league(r.league) }}</td>
       {% for side in [1, 2] %}

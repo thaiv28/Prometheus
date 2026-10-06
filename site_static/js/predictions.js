@@ -58,6 +58,64 @@
     });
   });
 
+  // ---- Kalshi prices refreshed between builds ---------------------------------
+  // An hourly job rewrites kalshi.json; apply it over the prices in the page
+  // (the caret on the bar, the Kalshi pair and link, the tooltips), and say in
+  // the upcoming register's caption when the prices were read.
+  const stampFormat = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const stamp = (iso) => stampFormat.format(new Date(iso.replace("Z", ":00Z")));
+  fetch("kalshi.json", { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      if (!data || !data.matches) return;
+      $$("tr.fx[data-match]").forEach((tr) => {
+        const m = data.matches[tr.dataset.match];
+        if (!m) return;
+        const bar = $(".fx-bar", tr);
+        if (bar) {
+          let caret = $(".fx-mkt", bar);
+          if (!caret) {
+            caret = document.createElement("span");
+            caret.className = "fx-mkt";
+            bar.appendChild(caret);
+          }
+          caret.style.setProperty("--m", m.p1);
+          const col = bar.parentElement;
+          col.title = `${col.title.split("; Kalshi")[0]}; Kalshi ${m.p1}–${m.p2}, ${stamp(m.at)}`;
+        }
+        const cell = $(".fx-market", tr);
+        if (cell) {
+          const pair = `${m.p1}–${m.p2}`;
+          cell.textContent = "";
+          if (m.url) {
+            const a = document.createElement("a");
+            a.href = m.url;
+            a.textContent = pair;
+            a.setAttribute("aria-label", `Kalshi’s market: ${pair}`);
+            cell.appendChild(a);
+          } else {
+            cell.textContent = pair;
+          }
+          cell.title = `As of ${stamp(m.at)}${m.url ? "; opens the match on Kalshi" : ""}`;
+        }
+      });
+      tables
+        .filter((t) => !t.classList.contains("register--results"))
+        .forEach((t) => {
+          const cap = $("figcaption", t.closest("figure") || document.createElement("div"));
+          if (!cap) return;
+          let note = $(".kalshi-asof", cap);
+          if (!note) {
+            note = document.createElement("span");
+            note.className = "kalshi-asof";
+            cap.appendChild(document.createTextNode(" "));
+            cap.appendChild(note);
+          }
+          note.textContent = `Kalshi prices as of ${stamp(data.at)}.`;
+        });
+    })
+    .catch(() => {});
+
   // ---- Filters (Predictions page) -------------------------------------------
   const line = $(".filter-line");
   if (!line) return;
