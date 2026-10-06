@@ -288,6 +288,9 @@ PREDICTIONS = {
 # within this many days.
 HOME_FIXTURES = 10
 HOME_FIXTURE_DAYS = 4
+# The Predictions page lists results from this many days back; older ones are on
+# a page per month (results/YYYY-MM.html).
+RECENT_RESULT_DAYS = 3
 # The day's Kalshi alert (title and body of a GitHub issue), written only when
 # there is one; the publish workflow posts it. Never published to the site.
 KALSHI_ALERT = os.environ.get("KALSHI_ALERT", os.path.join(ROOT_DIR, "data", "kalshi_alert.json"))
@@ -743,15 +746,19 @@ def predictions_view(log, team_slugs, now):
     upcoming = sorted((e for e in entries if e["start"] > now_s), key=lambda e: (e["start"], e["match_id"]))
     past = sorted((e for e in entries if e["start"] <= now_s), key=lambda e: (e["start"], e["match_id"]), reverse=True)
     up_rows = [fixture_row(e, team_slugs) for e in upcoming]
+    recent_from = (now - datetime.timedelta(days=RECENT_RESULT_DAYS)).strftime("%Y-%m-%dT%H:%MZ")
+    recent = [e for e in past if e["start"] >= recent_from]
     horizon = (now + datetime.timedelta(days=HOME_FIXTURE_DAYS)).strftime("%Y-%m-%dT%H:%MZ")
     home = [fixture_row(e, team_slugs) for e in upcoming if schedule.is_major(e) and e["start"] <= horizon][:HOME_FIXTURES]
     leagues = {e["league"] for e in entries}
     majors = env.globals["major_leagues"]
     return {
         "upcoming": _by_day(up_rows),
-        "past": _by_day([fixture_row(e, team_slugs) for e in past]),
+        "past": _by_day([fixture_row(e, team_slugs) for e in recent]),
         "upcoming_count": len(up_rows),
         "past_count": len(past),
+        "recent_days": RECENT_RESULT_DAYS,
+        "months": result_months(past, team_slugs),
         "scorecard": schedule.scorecard(entries),
         "vs_market": schedule.market_scorecard(entries),
         "edges": edge_groups(schedule.edge_record(entries), entries),
@@ -766,6 +773,48 @@ def predictions_view(log, team_slugs, now):
         "since": min((e["start"][:10] for e in entries), default=None),
         "saved_since": min((e["start"][:10] for e in entries if not e.get("reconstructed")), default=None),
     }
+
+
+def result_months(past, team_slugs):
+    """The results pages, newest month first: key ('2026-09'), label
+    ('September 2026'), count and the fixture rows by day (team links from
+    `results/`)."""
+    months = {}
+    for e in past:  # newest first
+        months.setdefault(e["start"][:7], []).append(e)
+    out = []
+    for key, entries in months.items():
+        first = datetime.date.fromisoformat(key + "-01")
+        out.append(
+            {
+                "key": key,
+                "label": f"{first.strftime('%B')} {first.year}",
+                "count": len(entries),
+                "days": _by_day([fixture_row(e, team_slugs) for e in entries]),
+            }
+        )
+    return out
+
+
+def render_results(view, last_update):
+    """One results page per month, with links to the months either side."""
+    folder = os.path.join(OUTPUT_DIR, "results")
+    os.makedirs(folder, exist_ok=True)
+    months = view["months"]
+    template = env.get_template("results.html.j2")
+    for i, month in enumerate(months):
+        _write(
+            os.path.join(folder, f"{month['key']}.html"),
+            template.render(
+                page_key="predictions",
+                root_path="../",
+                view=view,
+                month=month,
+                newer=months[i - 1] if i > 0 else None,
+                older=months[i + 1] if i + 1 < len(months) else None,
+                last_update=last_update,
+            ),
+        )
 
 
 def edge_groups(rows, entries, path=None):
@@ -1257,6 +1306,7 @@ def main():
     write_kalshi_alert(prediction_log, coverage, set(pages))
     predictions = predictions_view(prediction_log, set(pages), datetime.datetime.now(datetime.timezone.utc))
     render_predictions(predictions, coverage, last_update)
+    render_results(predictions, last_update)
     with open(os.path.join(OUTPUT_DIR, "predictions.json"), "w") as f:
         json.dump(markets.published_log(prediction_log), f, ensure_ascii=False, separators=(",", ":"))
     # The hourly price job (scripts/update_prices.py) replaces this between builds.

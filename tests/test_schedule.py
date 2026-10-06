@@ -216,9 +216,11 @@ def test_attach_market_prices_never_fails_the_build(monkeypatch):
 
 def test_market_scorecard_splits_forge_and_elo_and_needs_enough_series():
     market = {"p": 0.5, "at": "2026-10-04T07:00Z"}
+    early = {"market_12h": {"p": 0.5}}
     entries = [
-        {**_pred("a", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market)},
-        {**_pred("b", "2026-10-04T08:00Z", 0.4), "winner": 1, "market": dict(market), "method": "elo"},
+        {**_pred("a", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market), **early},
+        {**_pred("b", "2026-10-04T08:00Z", 0.4), "winner": 1, "market": dict(market), "method": "elo", **early},
+        {**_pred("f", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market)},  # no 12-hour price
         {**_pred("c", "2026-10-04T08:00Z", 0.8), "winner": 1},  # no price
         {**_pred("d", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": {"p": 0.5, "at": "2026-10-04T09:00Z"}},  # priced after the start
         {**_pred("e", "2026-10-04T08:00Z", 0.8), "market": dict(market)},  # not played
@@ -255,3 +257,6 @@ def test_edge_record_bets_the_side_with_the_edge_and_scores_return_and_clv():
     assert five["roi_ci"] is not None and rows[("FORGE", 0.10)]["bets"] == 0
     assert rows[("Elo", 0.0)]["bets"] == 1 and rows[("Elo", 0.03)]["bets"] == 0
     assert rows[("Elo", 0.0)]["roi_ci"] is None  # under min_n
+    # Every match, backing our pick: here the same sides as the value bets.
+    assert (rows[("FORGE", None)]["bets"], rows[("FORGE", None)]["won"]) == (2, 1)
+    assert rows[("Elo", None)]["bets"] == 1
