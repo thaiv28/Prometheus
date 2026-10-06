@@ -103,8 +103,8 @@
               </thead>
               <tbody>
                 {% for row in vs %}
-                <tr{% if loop.last %} class="record-total"{% endif %}>
-                  <th scope="row">{{ row.label }}</th>
+                <tr{% if row.label == 'All' %} class="record-total"{% endif %}>
+                  <th scope="row">{{ row.label }}{% if row.label == 'All' %}<a class="note-ref" href="#note-3" aria-label="Includes rebuilt calls: note 3">3</a>{% endif %}</th>
                   <td class="num">{{ row.series }}</td>
                   {% if row.series %}
                   <td class="num phone-hide">{{ row.ours_pct | round | int }}<span class="of"> %</span></td>
@@ -125,8 +125,54 @@
             </table>
           </div>
         </figure>
+        {% set bt = (view.edges[0].sources | selectattr('name', 'equalto', 'backtest') | list) %}
+        <figure class="register-figure" aria-labelledby="edges-cap">
+          <figcaption id="edges-cap" class="table-caption">Table IV. $1 on our side 12 hours before the start, where our chance beat Kalshi’s price by more than the edge. Return is after the 7% fee; CLV is the closing price minus the price paid.{% if bt %} Backtest: calls rebuilt for {{ bt[0].from | longdate }} – {{ bt[0].to | longdate }}.{% endif %}<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
+          <div class="table-scroll">
+            <table class="register register--record register--market register--edges">
+              <thead>
+                <tr>
+                  <th scope="col" class="edges-calls">Calls</th>
+                  <th scope="col">Source</th>
+                  <th scope="col" class="num">Edge</th>
+                  <th scope="col" class="num">Bets</th>
+                  <th scope="col" class="num phone-hide">Won</th>
+                  <th scope="col" class="num">Return <span class="ci">(95%)</span></th>
+                  <th scope="col" class="num">CLV <span class="ci">(95%)</span></th>
+                  <th scope="col" class="num phone-hide">Beat close</th>
+                </tr>
+              </thead>
+              {% for group in view.edges %}
+              <tbody>
+                {% set n = group.sources | sum(attribute='rows', start=[]) | length %}
+                {% for src in group.sources %}
+                {% set outer = loop %}
+                {% for row in src.rows %}
+                <tr{% if src.name == 'backtest' %} class="edges-backtest"{% endif %}>
+                  {% if outer.first and loop.first %}<th scope="rowgroup" rowspan="{{ n }}" class="edges-calls">{{ group.label }}</th>{% endif %}
+                  {% if loop.first %}<th scope="rowgroup" rowspan="{{ src.rows | length }}" class="edges-source"><span class="edges-method">{{ group.label }}, </span>{% if src.name == 'backtest' %}Backtest{% elif src.since %}Since {{ src.since | shortdate }}{% else %}Log{% endif %}</th>{% endif %}
+                  <td class="num">&gt; {{ (100 * row.edge) | round | int }}</td>
+                  <td class="num">{{ row.bets }}</td>
+                  <td class="num phone-hide">{{ row.won }}</td>
+                  {% if row.bets %}
+                  <td class="num value">{{ '%+.1f' | format(100 * row.roi) }}<span class="of"> %</span>{% if row.roi_ci %} <span class="ci">({{ '%+.1f' | format(100 * row.roi_ci[0]) }} to {{ '%+.1f' | format(100 * row.roi_ci[1]) }})</span>{% endif %}</td>
+                  <td class="num">{% if row.clv is not none %}{{ '%+.1f' | format(100 * row.clv) }}{% if row.clv_ci %} <span class="ci">({{ '%+.1f' | format(100 * row.clv_ci[0]) }} to {{ '%+.1f' | format(100 * row.clv_ci[1]) }})</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</td>
+                  <td class="num phone-hide">{% if row.beat is not none %}{{ (100 * row.beat) | round | int }}<span class="of"> %</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+                  {% else %}
+                  <td class="num"><span class="muted">—</span></td>
+                  <td class="num"><span class="muted">—</span></td>
+                  <td class="num phone-hide"><span class="muted">—</span></td>
+                  {% endif %}
+                </tr>
+                {% endfor %}
+                {% endfor %}
+              </tbody>
+              {% endfor %}
+            </table>
+          </div>
+        </figure>
         {% set al = view.alerts %}
-        <p class="section-prose record-note">{% if vs[2].series < view.market_min %}Too few series for an interval yet ({{ view.market_min }} needed). {% endif %}<strong>Alerts:</strong> {% if al.settled %}{{ al.settled }} settled, {{ al.won }} won{% if al.clv is not none %}; closing line value {{ '%+.1f' | format(100 * al.clv) }} points, {{ (100 * al.beat) | round | int }}% beat the close{% endif %}; {{ '%+.1f' | format(100 * al.roi) }}% after fees{% if al.interval %} ({{ '%+.1f' | format(100 * al.interval[0]) }}% to {{ '%+.1f' | format(100 * al.interval[1]) }}%){% else %}, too few for an interval{% endif %}.{% else %}none settled yet.{% endif %}</p>
+        <p class="section-prose record-note">{% if vs[2].series < view.market_min or vs[3].series < view.market_min %}Intervals from {{ view.market_min }} series or bets. {% endif %}<strong>Alerts:</strong> {% if al.settled %}{{ al.settled }} settled, {{ al.won }} won{% if al.clv is not none %}; closing line value {{ '%+.1f' | format(100 * al.clv) }} points, {{ (100 * al.beat) | round | int }}% beat the close{% endif %}; {{ '%+.1f' | format(100 * al.roi) }}% after fees{% if al.interval %} ({{ '%+.1f' | format(100 * al.interval[0]) }}% to {{ '%+.1f' | format(100 * al.interval[1]) }}%){% else %}, too few for an interval{% endif %}.{% else %}none settled yet.{% endif %}</p>
       </section>
 
       <section class="fixtures-block" aria-labelledby="past-heading">
@@ -135,7 +181,7 @@
           <a class="more" href="predictions.json">Every call as data</a>
         </div>
         <figure class="register-figure register-figure--main" aria-labelledby="past-cap">
-          <figcaption id="past-cap" class="table-caption">Table IV. Every call and its result, newest first. <span class="count" data-count-for="past" aria-live="polite"></span></figcaption>
+          <figcaption id="past-cap" class="table-caption">Table V. Every call and its result, newest first. <span class="count" data-count-for="past" aria-live="polite"></span></figcaption>
           {% if view.past %}
           <div class="table-scroll">{{ fixtures(view.past, results=True, id='past') }}</div>
           {% endif %}

@@ -388,8 +388,11 @@ def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
         started = pred["start"] <= now_s
         if not started:
             entry = {**pred, "predicted": now_s, "data_through": data_through, "reconstructed": False}
-            if old is not None and "market" in old and pred.get("matched"):
-                entry["market"] = old["market"]  # until a newer price replaces it
+            if old is not None and pred.get("matched"):
+                # Until a newer price replaces them.
+                for key in ("market", "market_12h"):
+                    if key in old:
+                        entry[key] = old[key]
         elif old is not None and old.get("matched"):
             entry = old
         else:
@@ -541,8 +544,10 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
     """Our series calls against Kalshi's, on settled matches priced before the start.
 
     `market.p` is the last price read before the start (prices stop updating
-    once a match begins). Returns rows for "FORGE", "Elo" (same-league and
-    cross-league Elo calls) and "All": series, how often each favourite won (a
+    once a match begins; for matches before the hourly reads, the last hourly
+    quote from Kalshi's price history). Returns rows for "FORGE", "Elo"
+    (same-league and cross-league Elo calls), "All" and "Saved calls" (all,
+    without calls rebuilt after the match): series, how often each favourite won (a
     50-50 call counts as half), each side's mean log loss per series, and
     `diff` (ours minus Kalshi's, with a 95% paired-bootstrap interval; below 0
     means we beat the market) once a row has `min_n` series, else None.
@@ -561,12 +566,13 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
         if e.get("matched")
         and e.get("winner") in (1, 2)
         and (e.get("market") or {}).get("p") is not None
-        and e["market"]["at"] < e["start"]
+        and e["market"]["at"] <= e["start"]
     ]
     groups = [
         ("FORGE", lambda e: e.get("method") == "forge"),
         ("Elo", lambda e: e.get("method") != "forge"),
         ("All", lambda e: True),
+        ("Saved calls", lambda e: not e.get("reconstructed")),
     ]
     rows = []
     for label, keep in groups:
@@ -594,4 +600,81 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
                 ),
             }
         )
+    return rows
+
+
+# The edges, in chance points, the page scores paper bets above.
+BET_EDGES = (0.0, 0.03, 0.05, 0.10)
+
+
+def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
+    """Paper bets on settled matches: $1 on our side `markets.BET_LEAD` before the
+    start, where our chance beats what a contract cost then (`market_12h`'s ask)
+    by more than each edge.
+
+    The side is the one with the larger edge. Each bet scores its profit after
+    Kalshi's fee at `rate` and its CLV: the last price before the start for that
+    team (`market.p`) minus the price paid. Returns rows for "FORGE" and "Elo",
+    each edge in turn: bets, won, mean return per dollar and mean CLV, each with a
+    95% bootstrap interval once there are `min_n` bets (else None), and the share
+    of bets beating the close.
+    """
+    from prometheus.evaluation import paired_bootstrap
+
+    bets = []
+    for e in entries:
+        early, close = e.get("market_12h"), e.get("market") or {}
+        if not e.get("matched") or e.get("winner") not in (1, 2) or not early:
+            continue
+        if early.get("ours") is None:
+            continue
+        options = []
+        for side in (1, 2):
+            cost = early.get(f"ask{side}")
+            if cost is None or not 0 < cost < 1:
+                continue
+            ours = early["ours"] if side == 1 else 1 - early["ours"]
+            options.append((ours - cost, side, cost))
+        if not options:
+            continue
+        edge, side, cost = max(options)
+        won = e["winner"] == side
+        shut = close.get("p")
+        if shut is not None and side == 2:
+            shut = 1 - shut
+        bets.append(
+            {
+                "forge": e.get("method") == "forge",
+                "edge": edge,
+                "won": won,
+                "profit": (1 / cost - 1 if won else -1) - markets.fee(cost, 1, rate),
+                "clv": None if shut is None else shut - cost,
+            }
+        )
+
+    def interval(values):
+        if len(values) < min_n:
+            return None
+        _, lo, hi = paired_bootstrap(values, [0.0] * len(values))
+        return float(lo), float(hi)
+
+    rows = []
+    for label, forge in (("FORGE", True), ("Elo", False)):
+        for edge in edges:
+            sel = [b for b in bets if b["forge"] == forge and b["edge"] > edge]
+            profits = [b["profit"] for b in sel]
+            clvs = [b["clv"] for b in sel if b["clv"] is not None]
+            rows.append(
+                {
+                    "label": label,
+                    "edge": edge,
+                    "bets": len(sel),
+                    "won": sum(b["won"] for b in sel),
+                    "roi": sum(profits) / len(profits) if profits else None,
+                    "roi_ci": interval(profits),
+                    "clv": sum(clvs) / len(clvs) if clvs else None,
+                    "clv_ci": interval(clvs),
+                    "beat": sum(c > 0 for c in clvs) / len(clvs) if clvs else None,
+                }
+            )
     return rows

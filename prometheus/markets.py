@@ -33,6 +33,9 @@ MAX_SPREAD = 0.10
 # Kalshi's start time and Leaguepedia's can disagree (a moved match, a day-only
 # start); a market matches a logged match between the same teams this close.
 MATCH_WINDOW = datetime.timedelta(hours=18)
+# The paper bets on the Predictions page buy at the last price read at least this
+# long before the start, as the backtest's betting section does.
+BET_LEAD = datetime.timedelta(hours=12)
 EASTERN = ZoneInfo("America/New_York")
 
 # "If T1 wins the LCK 2026: T1 vs. Gen.G League of Legends match originally
@@ -287,7 +290,9 @@ def attach_prices(log, markets, match_team, now):
     `MATCH_WINDOW`. The entry gets `market`: {"p": team1's chance, "spread",
     "ask1"/"ask2" (what a contract on each team costs now, `buy_costs`), "at"
     (when the price was read), "ticker"}. A match without a usable quote keeps
-    the price it had. Started matches are left alone, so the last price before
+    the price it had. While the start is at least `BET_LEAD` away, the read is
+    also kept as `market_12h` (with our call as `ours`), the price the page's
+    paper bets buy at. Started matches are left alone, so the last price before
     the start stays. Returns the number of matches priced.
     """
     now_s = now.strftime("%Y-%m-%dT%H:%MZ")
@@ -326,5 +331,83 @@ def attach_prices(log, markets, match_team, now):
             "at": now_s,
             "ticker": row["event_ticker"],
         }
+        if start - now >= BET_LEAD:
+            entry["market_12h"] = {
+                "p": round(p, 4),
+                "ask1": ask1,
+                "ask2": ask2,
+                "at": now_s,
+                "ours": entry.get("p_series"),
+            }
         priced += 1
+    return priced
+
+
+def backfill_prices(log, rows, match_team, price_at, now, bet_at=None):
+    """Give started matches without a price the market's last price before their
+    start, from Kalshi's price history, in place.
+
+    `rows` are settled series events (`events`); `price_at(row, team1, start)`
+    returns (team1's chance, spread, when it was read: a datetime before `start`)
+    or None. Matching is as in `attach_prices`. The entry gets the same `market`
+    a live read would have left, plus `"backfilled": True`. With `bet_at(row,
+    team1, start)` (returning (team1's chance, ask1, ask2, when) `BET_LEAD`
+    before the start, or None), a match without `market_12h` gets that too,
+    with our call as `ours`. Returns the number of matches given either.
+    """
+    now_s = now.strftime("%Y-%m-%dT%H:%MZ")
+    by_pair = {}
+    for row in rows:
+        if row["map"] is not None:
+            continue
+        ours = (match_team(row["team1"]), match_team(row["team2"]))
+        if None not in ours:
+            by_pair.setdefault(frozenset(ours), []).append((row, ours))
+    priced = 0
+    for entry in log.values():
+        if not entry.get("matched") or entry["start"] > now_s:
+            continue
+        if entry.get("market") and (bet_at is None or entry.get("market_12h")):
+            continue
+        start = _parse_start(entry["start"])
+        near = [
+            (abs(row["start"] - start), row, ours)
+            for row, ours in by_pair.get(
+                frozenset((entry["ours1"], entry["ours2"])), []
+            )
+            if abs(row["start"] - start) <= MATCH_WINDOW
+        ]
+        if not near:
+            continue
+        _, row, ours = min(near, key=lambda x: x[0])
+        team1 = row["team1"] if ours[0] == entry["ours1"] else row["team2"]
+        done = False
+        quote = None if entry.get("market") else price_at(row, team1, start)
+        if quote is not None:
+            p, spread, at = quote
+            entry["market"] = {
+                "p": round(p, 4),
+                "spread": round(spread, 4),
+                "at": at.strftime("%Y-%m-%dT%H:%MZ"),
+                "ticker": row["event_ticker"],
+                "backfilled": True,
+            }
+            done = True
+        early = (
+            None
+            if bet_at is None or entry.get("market_12h")
+            else bet_at(row, team1, start)
+        )
+        if early is not None:
+            p, ask1, ask2, at = early
+            entry["market_12h"] = {
+                "p": round(p, 4),
+                "ask1": ask1,
+                "ask2": ask2,
+                "at": at.strftime("%Y-%m-%dT%H:%MZ"),
+                "ours": entry.get("p_series"),
+                "backfilled": True,
+            }
+            done = True
+        priced += done
     return priced

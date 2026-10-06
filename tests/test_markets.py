@@ -94,3 +94,67 @@ def test_open_markets_parse_without_a_result():
     assert (
         markets.parse_market(_open("Cupid", "Cupid", "Fuego", 0.6, 0.62)) is None
     )  # not settled
+
+
+def test_backfill_prices_prices_started_unpriced_matches_once():
+    book = markets.events(
+        [
+            _open("Fuego", "Fuego", "Cupid", 0.3, 0.32),
+            _open("Cupid", "Fuego", "Cupid", 0.68, 0.7),
+        ],
+        settled=False,
+    )
+    calls = []
+
+    def price_at(row, team1, start):
+        calls.append((row["event_ticker"], team1, start))
+        return 0.31 if team1 == "Fuego" else 0.69, 0.02, start - datetime.timedelta(hours=1)
+
+    later = datetime.datetime(2026, 10, 7, 3, 0, tzinfo=UTC)
+    log = {
+        "m": _entry(),  # Cupid first: oriented to the log's team1
+        "priced": {**_entry(), "match_id": "priced", "market": {"p": 0.5}},
+        "future": {**_entry(start="2026-10-08T20:00Z"), "match_id": "future"},
+    }
+    assert markets.backfill_prices(log, book, lambda n: n, price_at, later) == 1
+    assert calls == [("KXLOLGAME-E1", "Cupid", datetime.datetime(2026, 10, 6, 20, tzinfo=UTC))]
+    assert log["m"]["market"] == {
+        "p": 0.69,
+        "spread": 0.02,
+        "at": "2026-10-06T19:00Z",
+        "ticker": "KXLOLGAME-E1",
+        "backfilled": True,
+    }
+    assert log["priced"]["market"] == {"p": 0.5} and "market" not in log["future"]
+    # A match with no quote before its start stays unpriced.
+    log = {"m": _entry()}
+    assert markets.backfill_prices(log, book, lambda n: n, lambda *a: None, later) == 0
+
+
+def test_attach_prices_keeps_the_last_read_twelve_hours_out_for_paper_bets():
+    book = [_open("Cupid", "Cupid", "Fuego", 0.6, 0.62)]
+    log = {"m": {**_entry(), "p_series": 0.7}}  # starts 20:00
+    markets.attach_prices(log, book, lambda n: n, NOW)  # 03:00, 17 hours out
+    assert log["m"]["market_12h"] == {
+        "p": pytest.approx(0.61), "ask1": 0.62, "ask2": pytest.approx(0.4),
+        "at": "2026-10-06T03:00Z", "ours": 0.7,
+    }
+    late = [_open("Cupid", "Cupid", "Fuego", 0.7, 0.72)]
+    markets.attach_prices(log, late, lambda n: n, NOW + datetime.timedelta(hours=10))  # 7 hours out
+    assert log["m"]["market"]["p"] == pytest.approx(0.71)
+    assert log["m"]["market_12h"]["at"] == "2026-10-06T03:00Z"  # kept
+
+
+def test_backfill_prices_adds_the_twelve_hour_price_to_priced_matches():
+    book = markets.events([_open("Cupid", "Cupid", "Fuego", 0.6, 0.62)], settled=False)
+    later = datetime.datetime(2026, 10, 7, 3, 0, tzinfo=UTC)
+    log = {"m": {**_entry(), "p_series": 0.7, "market": {"p": 0.6}}}
+
+    def bet_at(row, team1, start):
+        return 0.58, 0.6, 0.44, start - markets.BET_LEAD
+
+    assert markets.backfill_prices(log, book, lambda n: n, lambda *a: pytest.fail("priced"), later, bet_at) == 1
+    assert log["m"]["market"] == {"p": 0.6}
+    assert log["m"]["market_12h"] == {
+        "p": 0.58, "ask1": 0.6, "ask2": 0.44, "at": "2026-10-06T08:00Z", "ours": 0.7, "backfilled": True,
+    }

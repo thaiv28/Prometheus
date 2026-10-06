@@ -201,3 +201,32 @@ def test_bets_take_the_value_side_with_profit_after_fees_and_clv():
     # Back our pick bets every priced match, the third without a close.
     assert len(evaluate_markets.bet_profits(frame, 0.07)) == 3
     assert len(evaluate_markets.bet_clv(frame)) == 2
+
+
+def test_backfill_last_quote_takes_the_last_tight_quote_by_the_start():
+    import sys
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import backfill_market_prices as backfill
+
+    candles = [
+        _candle(1000, 0.40, 0.42),
+        _candle(2000, 0.10, 0.90),  # too wide
+        _candle(3000, 0.50, 0.52),  # after the start
+    ]
+    assert backfill.last_quote(candles, 2500) == pytest.approx((0.41, 0.02, 1000))
+    assert backfill.last_quote(candles, 500) is None
+
+
+def test_bet_summary_splits_forge_from_elo_on_timed_matches():
+    row = {"p_series": 0.7, "cost1": 0.60, "cost2": 0.42, "won1": True, "market_close": 0.66, "timed": True,
+           "start": pd.Timestamp("2026-05-01", tz="UTC")}
+    frame = pd.DataFrame(
+        [{**row, "method": "forge"}, {**row, "method": "elo-cross"}, {**row, "method": "forge", "timed": False}]
+    )
+    out = evaluate_markets.bet_summary(frame)
+    rows = {(r["label"], r["edge"]): r for r in out["rows"]}
+    assert rows[("FORGE", 0.05)]["bets"] == 1 and rows[("Elo", 0.05)]["bets"] == 1
+    assert rows[("FORGE", 0.05)]["clv"] == pytest.approx(0.06) and rows[("FORGE", 0.10)]["bets"] == 0
+    assert rows[("FORGE", 0.05)]["roi_ci"] is None  # under 30 bets
+    assert out["from"] == out["to"] == "2026-05-01"
