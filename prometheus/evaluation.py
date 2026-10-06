@@ -121,6 +121,45 @@ def elo_as_of(timeline, offsets, cutoff):
     return last["elo"] + moved.fillna(0)
 
 
+def cross_league_games(games, international, majors):
+    """Games between teams from two different home leagues, in any league or event.
+
+    A team's home league in a season is the non-international league it played
+    most that season (a cup, promotion series or EMEA Masters doesn't change it).
+    Homes come from the whole season, so this only chooses which games to score;
+    it never feeds a forecast.
+
+    Args:
+        games: One row per game: gameid, year, league, teamid, opponent_teamid.
+        international: League names of international events.
+        majors: League names of the major leagues.
+    Returns:
+        The cross-league rows with home, opponent_home and kind ("major v major",
+        "major v other" or "other v other").
+    """
+    sides = pd.concat(
+        [
+            games[["year", "league", "teamid"]],
+            games[["year", "league", "opponent_teamid"]].rename(columns={"opponent_teamid": "teamid"}),
+        ]
+    )
+    sides = sides[~sides["league"].isin(international)]
+    counts = sides.groupby(["teamid", "year", "league"]).size().rename("n").reset_index()
+    # Most games first, then league name, so ties resolve the same way every run.
+    counts = counts.sort_values(["n", "league"], ascending=[False, True])
+    home = counts.drop_duplicates(["teamid", "year"]).set_index(["teamid", "year"])["league"]
+    out = games.assign(
+        home=home.reindex(pd.MultiIndex.from_arrays([games["teamid"], games["year"]])).to_numpy(),
+        opponent_home=home.reindex(
+            pd.MultiIndex.from_arrays([games["opponent_teamid"], games["year"]])
+        ).to_numpy(),
+    )
+    out = out[out["home"].notna() & out["opponent_home"].notna() & (out["home"] != out["opponent_home"])]
+    n_major = out["home"].isin(majors).astype(int) + out["opponent_home"].isin(majors).astype(int)
+    kinds = np.array(["other v other", "major v other", "major v major"])
+    return out.assign(kind=kinds[n_major.to_numpy()]).reset_index(drop=True)
+
+
 def spearman_brown(r, factor):
     """Reliability of a measure `factor` times as long, from reliability `r`."""
     return factor * r / (1 + (factor - 1) * r)

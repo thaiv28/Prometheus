@@ -1,0 +1,101 @@
+/* Team and player pages: the contents list and the game log. */
+
+/* ---- On this page ---------------------------------------------------- */
+/* Set like a book's contents: name, dot leader, a figure. The margin copy stays in
+   view while the page scrolls; the section on screen is marked as current. */
+.entry-contents { margin: 0 0 30px; }
+.entry-contents ol { list-style: none; margin: 0; padding: 0; }
+.entry-contents li + li { margin-top: 4px; }
+.entry-contents a {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.entry-contents a::after { content: ""; order: 1; flex: 1; border-bottom: var(--hair) dotted var(--hairline); transform: translateY(-0.25em); }
+.entry-contents .toc-figure { order: 2; color: var(--ink-3); font-variant-numeric: lining-nums tabular-nums; }
+.entry-contents a:hover { color: var(--spot); }
+.entry-contents a:focus-visible { outline: 2px solid var(--spot); outline-offset: 2px; }
+.entry-contents a[aria-current] .toc-name {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--spot);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.3em;
+}
+.entry-contents--inline { display: none; }
+
+.spread-main > section { scroll-margin-top: 20px; }
+
+/* ---- Game log -------------------------------------------------------- */
+.log-years { margin: -4px 0 12px; display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; font-variant-numeric: lining-nums tabular-nums; }
+.log-years-label { font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--ink-3); }
+.log-years a { color: var(--ink-2); }
+.log-years a:hover { color: var(--spot); }
+
+.log-figure { margin-bottom: 12px; }
+.register--log td { padding-left: 8px; padding-right: 8px; }
+.register--log th { padding-left: 8px; padding-right: 8px; }
+/* Series and years divide the log, so there is no every-fifth-row rule. */
+.register.register--log tbody tr:nth-child(5n):not(:last-child) td { border-bottom: 0; }
+.register--log tr.log-series td { border-top: var(--hair) solid var(--hairline-soft); }
+.register--log tr.log-year + tr.log-series td { border-top: 0; }
+.register--log tr.log-year th {
+  padding: 18px 8px 5px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+  border-top: 0;
+  border-bottom: var(--hair) solid var(--rule);
+  background: none;
+  scroll-margin-top: 16px;
+}
+.register--log tbody tr.log-year:first-child th { padding-top: 8px; }
+.register--log tr.log-year:hover th { background: none; }
+.log-year-rec { margin-left: 0.9em; font-weight: 400; font-variant-caps: normal; letter-spacing: 0; font-size: var(--fs-caption); color: var(--ink-3); }
+
+.register.register--log td.team { width: auto; max-width: 13rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.register.register--log td.log-team { max-width: 10rem; }
+/* Phones set a team link as a block (register.css); here the name stays on the mark's line. */
+.register.register--log td.team a { display: inline; }
+.log-vs { font-style: italic; color: var(--ink-3); }
+.register--log .league-mark { margin-right: 0.3em; }
+.log-w { font-weight: 600; color: var(--ink); }
+.log-l { color: var(--ink-3); }
+.log-score { color: var(--ink-2); }
+.register--log .log-date { color: var(--ink-2); }
+.register--log .log-call i { color: var(--ink-2); }
+.register--log .log-mkt a { color: var(--ink-2); }
+.register--log .log-mkt a:hover { color: var(--spot); }
+
+/* A game under its series: caption size, indented, quieter. */
+.register--log tr.log-game td { font-size: var(--fs-caption); height: 1.5rem; padding-top: 2px; padding-bottom: 2px; color: var(--ink-2); }
+.register--log .log-gameno { padding-left: 1.4em; color: var(--ink-3); text-align: left; }
+.register--log .log-side { font-style: italic; color: var(--ink-3); }
+.register--log .log-champ { color: var(--ink-2); }
+
+.register--log td.log-roster { width: 100%; }
+.log-five { font-size: var(--fs-caption); color: var(--ink-2); }
+.log-five > * + *::before { content: "·"; margin: 0 0.4em; color: var(--hairline); }
+.log-five a { color: var(--ink-2); }
+.log-five a:hover { color: var(--spot); }
+
+.log-more { margin: 0 0 44px; }
+
+@media (max-width: 1000px) {
+  .entry-contents--margin { display: none; }
+  .entry-contents--inline { display: block; margin: -12px 0 32px; }
+  .entry-contents--inline .margin-head { display: none; }
+  .entry-contents--inline ol { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+  .entry-contents--inline li + li { margin-top: 0; }
+  .entry-contents--inline a::after { content: none; }
+  .entry-contents--inline .toc-figure { order: 0; }
+}
+@media (max-width: 480px) {
+  .register--log .log-len { display: none; }
+}

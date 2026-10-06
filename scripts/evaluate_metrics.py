@@ -13,6 +13,10 @@ Test sets:
 - International: Worlds, MSI, EWC, First Stand, ... games between teams from two
   different major leagues, predicted from domestic play. This is the only direct
   test of cross-region strength.
+- Cross-league, every league: games at any event (EMEA Masters, cups, promotion,
+  international) between teams whose home leagues differ, the home being the
+  league a team played most that season. Scored with Elo (live) only, as the site
+  forecasts these games; it is the benchmark for league offsets below the majors.
 
 Every forecast is scored on exactly the same games (both teams need 5+ games that
 season before the month starts), and each is compared with "win % so far this
@@ -36,6 +40,7 @@ from sqlalchemy import text
 from prometheus import form
 from prometheus.elo import calculate_game_length_elo_change, compute_elo_records, load_elo_games
 from prometheus.evaluation import (
+    cross_league_games,
     elo_as_of,
     game_losses,
     out_of_year_probabilities,
@@ -97,6 +102,48 @@ def load_games():
     games = pd.read_sql(stmt, get_engine(), parse_dates=["date"])
     games["won"] = games["won"].astype(int)
     return games
+
+
+def load_cross_league():
+    """Every cross-league game (see `cross_league_games`) with each side's pre-game Elo."""
+    stmt = """
+    SELECT m1.gameid, m1.year, m1.league, m1.teamid, m2.teamid AS opponent_teamid,
+           m1.result AS won, e1.pre_match_elo - e2.pre_match_elo AS elo_live
+    FROM matches m1
+    JOIN matches m2 ON m2.gameid = m1.gameid AND m1.teamid < m2.teamid
+    JOIN game_length_elo e1 ON e1.gameid = m1.gameid AND e1.teamid = m1.teamid
+    JOIN game_length_elo e2 ON e2.gameid = m2.gameid AND e2.teamid = m2.teamid
+    """
+    games = pd.read_sql(stmt, get_engine())
+    games["won"] = games["won"].astype(int)
+    return cross_league_games(games, INTERNATIONAL_LEAGUES, MAJORS)
+
+
+def summarize_cross_league(games):
+    """Elo (live) on every cross-league game, by which leagues met."""
+    losses = game_losses(out_of_year_probabilities(games, "elo_live"), games["won"])
+    lines = [
+        f"\n### Cross-league, every league: {len(games):,} games, {games['year'].min()}–{games['year'].max()}\n",
+        "Elo (live) on games between teams from two home leagues at any event; "
+        "the home is the league a team played most that season.\n",
+        "| Teams | Games | Accuracy | Brier | Log loss |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    international = games["league"].isin(INTERNATIONAL_LEAGUES)
+    for label, mask in (
+        ("All", pd.Series(True, index=games.index)),
+        ("Major v major", games["kind"] == "major v major"),
+        ("Major v other", games["kind"] == "major v other"),
+        ("Other v other", games["kind"] == "other v other"),
+        ("At an international event", international),
+        ("At any other event (EMEA Masters, cups, promotion)", ~international),
+    ):
+        l = losses[mask.to_numpy()]
+        lines.append(
+            f"| {label} | {len(l):,} | {l['accuracy'].mean():.1%} | {l['brier'].mean():.4f} "
+            f"| {l['log_loss'].mean():.4f} |"
+        )
+    return "\n".join(lines) + "\n"
 
 
 def load_results():
@@ -433,6 +480,7 @@ def main():
     report = (
         f"## Metric backtest ({datetime.date.today().isoformat()})\n"
         + summarize(frame, score(frame))
+        + summarize_cross_league(load_cross_league())
         + format_weights(weights)
     )
     print(report)

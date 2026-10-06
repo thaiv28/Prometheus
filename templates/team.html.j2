@@ -1,8 +1,15 @@
 {% extends 'base.html.j2' %}
 {% from '_marks.html.j2' import league, ordinal %}
+{% from '_entry.html.j2' import contents, game_log, game_log_note %}
 {% block title %}{{ teamname }} · Prometheus{% endblock %}
-{% block description %}{{ teamname }}: GLORY and FORGE by season, and Elo history.{% endblock %}
+{% block description %}{{ teamname }}: Elo history, GLORY and FORGE by season, rosters and every game.{% endblock %}
 {% block canonical_path %}teams/{{ slug }}.html{% endblock %}
+{% set toc = [] %}
+{% if elo_series %}{% set _ = toc.append(('elo', 'Elo', elo_summary.last.elo | round | int)) %}{% endif %}
+{% if series %}{% set _ = toc.append(('seasons', 'Season by season', series | length)) %}{% endif %}
+{% if roster %}{% set _ = toc.append(('roster', 'Roster', none)) %}{% endif %}
+{% if games %}{% set _ = toc.append(('games', 'Games', '{:,}'.format(games.games))) %}{% endif %}
+{% block head_extra %}<link rel="stylesheet" href="../{{ asset('css/entry.css') }}" />{% endblock %}
 {% block content %}
   <header class="entry-head">
     <h1>{{ teamname }}</h1>
@@ -21,13 +28,35 @@
       {%- endif %}
     </p>
   </header>
+  {{ contents(toc, 'inline') }}
 
   <div class="spread">
     <div class="spread-main">
+      {% if elo_series %}
+      <section class="elo" id="elo" aria-labelledby="elo-heading">
+        <div class="block-head">
+          <h2 id="elo-heading">Elo after every game</h2>
+          <a class="more" href="../game_length_elo.html?search={{ teamname | urlencode }}">See in Elo rankings</a>
+        </div>
+        <figure class="elo-figure" data-league="{{ current_league or (leagues[0] if leagues else '') }}" aria-labelledby="elo-fig-cap">
+          <figcaption id="elo-fig-cap" class="figure-caption">Elo from {{ elo_summary.first.date | longdate }} to {{ elo_summary.last.date | longdate }}. The dashed line marks 1500, where the first teams started.</figcaption>
+          <div class="elo-plot" id="elo-plot" tabindex="0" role="img"
+               aria-label="{{ teamname }} Elo over {{ elo_summary.games }} games: started {{ elo_summary.first.elo | round | int }}, peak {{ elo_summary.peak.elo | round | int }} on {{ elo_summary.peak.date }}, low {{ elo_summary.low.elo | round | int }} on {{ elo_summary.low.date }}, latest {{ elo_summary.last.elo | round | int }}. Use the left and right arrow keys to read individual games."></div>
+          <p class="elo-readout" id="elo-readout" aria-live="polite"></p>
+          <dl class="elo-stats">
+            <div><dt>Games</dt><dd>{{ '{:,}'.format(elo_summary.games) }}</dd></div>
+            <div><dt>Peak</dt><dd>{{ elo_summary.peak.elo | round | int }} <span class="muted">{{ elo_summary.peak.date | longdate }}</span></dd></div>
+            <div><dt>Low</dt><dd>{{ elo_summary.low.elo | round | int }} <span class="muted">{{ elo_summary.low.date | longdate }}</span></dd></div>
+            <div><dt>Latest</dt><dd>{{ elo_summary.last.elo | round | int }} <span class="muted">{{ elo_summary.last.date | longdate }}</span></dd></div>
+          </dl>
+        </figure>
+      </section>
+      {% endif %}
+
       {% if series %}
       {% set ns = namespace(top=100) %}
       {% for s in series %}{% if s.glory is not none and s.glory > ns.top %}{% set ns.top = s.glory %}{% endif %}{% endfor %}
-      <section class="seasons" aria-labelledby="seasons-heading">
+      <section class="seasons" id="seasons" aria-labelledby="seasons-heading">
         <div class="block-head">
           <h2 id="seasons-heading">Season by season</h2>
         </div>
@@ -80,7 +109,7 @@
       {% if roster %}
       {% set roles = {'top': 'Top', 'jng': 'Jungle', 'mid': 'Mid', 'bot': 'Bot', 'sup': 'Support'} %}
       {% macro player_name(p) %}{% if p.slug %}<a href="../players/{{ p.slug }}.html">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}{% endmacro %}
-      <section class="rosters" aria-labelledby="roster-heading">
+      <section class="rosters" id="roster" aria-labelledby="roster-heading">
         <div class="block-head">
           <h2 id="roster-heading">{{ 'Roster' if roster.last.active else 'Last roster' }}</h2>
         </div>
@@ -138,35 +167,18 @@
       </section>
       {% endif %}
 
-      {% if elo_series %}
-      <section class="elo" aria-labelledby="elo-heading">
-        <div class="block-head">
-          <h2 id="elo-heading">Elo after every game</h2>
-          <a class="more" href="../game_length_elo.html?search={{ teamname | urlencode }}">See in Elo rankings</a>
-        </div>
-        <figure class="elo-figure" data-league="{{ current_league or (leagues[0] if leagues else '') }}" aria-labelledby="elo-fig-cap">
-          <figcaption id="elo-fig-cap" class="figure-caption">Elo from {{ elo_summary.first.date | longdate }} to {{ elo_summary.last.date | longdate }}. The dashed line marks 1500, where the first teams started.</figcaption>
-          <div class="elo-plot" id="elo-plot" tabindex="0" role="img"
-               aria-label="{{ teamname }} Elo over {{ elo_summary.games }} games: started {{ elo_summary.first.elo | round | int }}, peak {{ elo_summary.peak.elo | round | int }} on {{ elo_summary.peak.date }}, low {{ elo_summary.low.elo | round | int }} on {{ elo_summary.low.date }}, latest {{ elo_summary.last.elo | round | int }}. Use the left and right arrow keys to read individual games."></div>
-          <p class="elo-readout" id="elo-readout" aria-live="polite"></p>
-          <dl class="elo-stats">
-            <div><dt>Games</dt><dd>{{ '{:,}'.format(elo_summary.games) }}</dd></div>
-            <div><dt>Peak</dt><dd>{{ elo_summary.peak.elo | round | int }} <span class="muted">{{ elo_summary.peak.date | longdate }}</span></dd></div>
-            <div><dt>Low</dt><dd>{{ elo_summary.low.elo | round | int }} <span class="muted">{{ elo_summary.low.date | longdate }}</span></dd></div>
-            <div><dt>Latest</dt><dd>{{ elo_summary.last.elo | round | int }} <span class="muted">{{ elo_summary.last.date | longdate }}</span></dd></div>
-          </dl>
-        </figure>
-      </section>
-      {% endif %}
+      {% if games %}{{ game_log(games, 'team', teamname, 5) }}{% endif %}
     </div>
 
     <aside class="margin notes" aria-labelledby="entry-notes-heading">
+      {{ contents(toc, 'margin') }}
       <h2 id="entry-notes-heading" class="margin-head">Key terms</h2>
       <ol class="notes-list">
         <li><span class="note-mark" aria-hidden="true">1</span><a href="../glory.html">GLORY</a> scores how well a team played: the stats that won games that year, adjusted for opponents, roughly 0 to 100.</li>
         <li><span class="note-mark" aria-hidden="true">2</span>Seasons with fewer than 5 games get a score but no rank (Unranked).</li>
         <li><span class="note-mark" aria-hidden="true">3</span><a href="../forge.html">FORGE</a> is the forecast: Elo plus recent Form, at the end of each season.</li>
         <li><span class="note-mark" aria-hidden="true">4</span><a href="../game_length_elo.html">Elo</a> is the average of the five starters' player ratings and moves most after short, decisive games. Compare ratings within a region.</li>
+        {% if games %}{{ game_log_note(false, 5) }}{% endif %}
       </ol>
       {% if series %}<p class="margin-note"><a href="../glory.html?search={{ teamname | urlencode }}">Show {{ teamname }} in GLORY rankings</a></p>{% endif %}
     </aside>
@@ -176,4 +188,5 @@
 {% endblock %}
 {% block scripts %}
   <script src="../{{ asset('js/team.js') }}" defer></script>
+  <script src="../{{ asset('js/entry.js') }}" defer></script>
 {% endblock %}

@@ -105,6 +105,12 @@ def compute_elo_records(
     the team's league (last game there within `active_days`), or `starting_elo` plus
     the offset when there are none.
 
+    A team's home league is the non-international league it has played most this
+    calendar year, with last year's home counting as one game, so a cup, promotion
+    series or EMEA Masters doesn't relabel it. Its main roster is the starters of its
+    last game in its home league or at an international event, so an academy lineup
+    fielded under the team's name at a cup doesn't stand in for the team.
+
     Args:
         games: One row per game with columns gameid, teamid, opponent_teamid,
             gamelength, result (from `teamid`'s perspective) and, optionally, league
@@ -121,9 +127,10 @@ def compute_elo_records(
             every game (teams without a roster are left out).
     Returns:
         (records, offsets). `records` has two rows per game (one per team): gameid,
-        teamid, pre_match_elo, post_match_elo, elo_change, home_league (the last
-        domestic league the team played in, None if it has only played international
-        events) and league_offset (that league's offset after the game). `offsets` has
+        teamid, pre_match_elo, post_match_elo, elo_change, home_league (see above;
+        None if it has only played international events), league_offset (that
+        league's offset after the game) and main_elo (the team's rating with its main
+        roster after the game, the rating to forecast its next match with). `offsets` has
         gameid, date (when `games` has one), league and league_offset after every
         game that moved an offset. With `player_records`, a third frame has gameid,
         teamid, playerid, pre_match_elo, post_match_elo (offset included), home_league
@@ -139,7 +146,9 @@ def compute_elo_records(
     last_seen = {}  # player -> (date, league) of the last game
     members = defaultdict(set)  # league -> players whose last game was there
     home = {}
+    season_counts = {}  # (team, year) -> {league: games}
     last_roster = {}
+    main_roster = {}
     league_offset = defaultdict(float)
 
     def league_average(league, date):
@@ -166,7 +175,14 @@ def compute_elo_records(
         sides = []
         for team in (row.teamid, row.opponent_teamid):
             if domestic:
-                home[team] = league
+                year = date.year if date is not None else None
+                if (team, year) not in season_counts:
+                    season_counts[(team, year)] = {home[team]: 1} if team in home else {}
+                counts = season_counts[(team, year)]
+                counts[league] = counts.get(league, 0) + 1
+                # Strictly more games, so a tie keeps the current home.
+                if counts[league] > counts.get(home.get(team), 0):
+                    home[team] = league
             team_league = home.get(team)
             roster = rosters.get((row.gameid, team)) or last_roster.get(team) or (("team", team),)
             last_roster[team] = roster
@@ -218,6 +234,8 @@ def compute_elo_records(
 
         for side, before in zip(sides, pre):
             team, team_league, roster = side
+            if not domestic or team_league is None or league == team_league or team not in main_roster:
+                main_roster[team] = roster
             for player in roster:
                 if player in last_seen:
                     members[last_seen[player][1]].discard(player)
@@ -231,6 +249,12 @@ def compute_elo_records(
                         (row.gameid, team, player, player_pre[player], own[player] + offset_now,
                          team_league, offset_now)
                     )
+            main = main_roster[team]
+            # Each player's own rating plus the offset of the league they sit in now.
+            main_elo = sum(
+                own[p] + (league_offset[player_league[p]] if player_league[p] is not None else 0.0)
+                for p in main
+            ) / len(main)
             elo_records.append(
                 {
                     "gameid": row.gameid,
@@ -240,6 +264,7 @@ def compute_elo_records(
                     "elo_change": after - before,
                     "home_league": team_league,
                     "league_offset": league_offset[team_league] if team_league is not None else 0.0,
+                    "main_elo": main_elo,
                 }
             )
 
@@ -253,6 +278,7 @@ def compute_elo_records(
             "elo_change",
             "home_league",
             "league_offset",
+            "main_elo",
         ],
     )
     offsets = pd.DataFrame(
@@ -344,33 +370,25 @@ def get_latest_elos(method: str, date: datetime.date | None = None) -> pd.DataFr
               this date are considered when computing latest Elo.
     Returns:
         DataFrame with columns: teamname, league, year, elo, latest_date.
-        `league` is the team's most recent home league, so a team whose last game was
-        at Worlds is still listed under its region. `elo` includes every change to the
-        team's league offset since its last game (for example from an international
-        event it did not attend).
+        `league` is the team's home league after its last game (see
+        `compute_elo_records`), so a team whose last game was at Worlds or a cup is
+        still listed under its region. `elo` is its main roster's rating after that game
+        (`main_elo`) plus every change to the league's offset since (for example from
+        an international event it did not attend).
     """
     table = _elo_table(method)
     offsets_table = _offsets_table(method)
-    international = ", ".join(repr(l) for l in INTERNATIONAL_LEAGUES)
     stmt = f"""
     WITH ranked AS (
         SELECT e.teamid, m.teamname, m.league, CAST(strftime('%Y', m.date) AS INT) AS year,
-               e.post_match_elo AS elo, e.home_league, e.league_offset,
+               COALESCE(e.main_elo, e.post_match_elo) AS elo, e.home_league, e.league_offset,
                m.date AS latest_date,
                ROW_NUMBER() OVER (
                    PARTITION BY e.teamid ORDER BY m.date DESC, m.gameid DESC
-               ) AS rn,
-               ROW_NUMBER() OVER (
-                   PARTITION BY e.teamid, m.league IN ({international})
-                   ORDER BY m.date DESC, m.gameid DESC
-               ) AS league_rn
+               ) AS rn
         FROM {table} e
         JOIN matches m ON e.gameid = m.gameid AND e.teamid = m.teamid
         WHERE (:date IS NULL OR DATE(m.date) <= :date)
-    ),
-    home AS (
-        SELECT teamid, league FROM ranked
-        WHERE league_rn = 1 AND league NOT IN ({international})
     ),
     current_offset AS (
         SELECT league, league_offset FROM (
@@ -381,10 +399,9 @@ def get_latest_elos(method: str, date: datetime.date | None = None) -> pd.DataFr
         )
         WHERE rn = 1
     )
-    SELECT r.teamname, COALESCE(h.league, r.league) AS league, r.year,
+    SELECT r.teamname, COALESCE(r.home_league, r.league) AS league, r.year,
            r.elo + COALESCE(c.league_offset - r.league_offset, 0) AS elo, r.latest_date
     FROM ranked r
-    LEFT JOIN home h ON h.teamid = r.teamid
     LEFT JOIN current_offset c ON c.league = r.home_league
     WHERE r.rn = 1
     ORDER BY elo DESC
@@ -411,7 +428,7 @@ def get_season_elos(method: str) -> pd.DataFrame:
     stmt = f"""
     SELECT e.teamid, m.teamname, m.league, CAST(strftime('%Y', m.date) AS INT) AS year,
            m.date AS latest_date, m.gameid,
-           e.post_match_elo AS elo, e.home_league, e.league_offset
+           COALESCE(e.main_elo, e.post_match_elo) AS elo, e.home_league, e.league_offset
     FROM {table} e
     JOIN matches m ON e.gameid = m.gameid AND e.teamid = m.teamid
     ORDER BY m.date, m.gameid

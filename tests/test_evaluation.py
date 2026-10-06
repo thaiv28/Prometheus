@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 from prometheus.evaluation import (
+    cross_league_games,
     elo_as_of,
     fit_win_curve,
     game_losses,
@@ -122,3 +123,30 @@ def test_spearman_brown_and_games_for_reliability():
     # A half of 10 games at 0.5 means 10 games reach 0.5.
     assert games_for_reliability(0.5, 10) == pytest.approx(10.0)
     assert games_for_reliability(0.0, 10) == np.inf
+
+
+def test_cross_league_games_uses_most_played_league_as_home():
+    games = pd.DataFrame(
+        [
+            # A plays LCK most; one KeSPA Cup game doesn't make it a cup team.
+            ("g1", 2026, "LCK", "A", "B"),
+            ("g2", 2026, "LCK", "A", "B"),
+            ("g3", 2026, "KeSPA Cup", "A", "C"),
+            ("g4", 2026, "LCKC", "C", "D"),
+            ("g5", 2026, "LCKC", "C", "D"),
+            # Worlds doesn't count toward a home; E and A meet across leagues.
+            ("g6", 2026, "Worlds", "A", "E"),
+            ("g7", 2026, "LEC", "E", "F"),
+            ("g8", 2026, "EM", "G", "H"),
+            ("g9", 2026, "LFL", "G", "I"),
+            ("g10", 2026, "LFL", "G", "I"),
+            ("g11", 2026, "PRM", "H", "J"),
+            ("g12", 2026, "PRM", "H", "J"),
+        ],
+        columns=["gameid", "year", "league", "teamid", "opponent_teamid"],
+    )
+    out = cross_league_games(games, ["Worlds"], ["LCK", "LEC"]).set_index("gameid")
+    assert sorted(out.index) == ["g3", "g6", "g8"]
+    assert out.loc["g3", ["home", "opponent_home", "kind"]].tolist() == ["LCK", "LCKC", "major v other"]
+    assert out.loc["g6", "kind"] == "major v major"
+    assert out.loc["g8", ["home", "opponent_home", "kind"]].tolist() == ["LFL", "PRM", "other v other"]

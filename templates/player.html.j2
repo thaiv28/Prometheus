@@ -1,12 +1,18 @@
 {% extends 'base.html.j2' %}
 {% from '_marks.html.j2' import league, ordinal, signed %}
+{% from '_entry.html.j2' import contents, game_log, game_log_note %}
 {% set roles = {'top': 'Top', 'jng': 'Jungle', 'mid': 'Mid', 'bot': 'Bot', 'sup': 'Support'} %}
 {% set role_plural = {'top': 'top laners', 'jng': 'junglers', 'mid': 'mid laners', 'bot': 'bot laners', 'sup': 'supports'} %}
 {% set ranked = (aura_seasons or []) | selectattr('role_rank') | list %}
 {% set best = (ranked | sort(attribute='aura', reverse=True) | list | first) if ranked else none %}
 {% block title %}{{ playername }} · Player Elo · Prometheus{% endblock %}
-{% block description %}{{ playername }} ({{ roles.get(position, position) }}, {{ teamname }}): player Elo after every game{{ ', AURA by season' if aura_seasons }} and career by team.{% endblock %}
+{% block description %}{{ playername }} ({{ roles.get(position, position) }}, {{ teamname }}): player Elo after every game{{ ', AURA by season' if aura_seasons }}, career by team and every game.{% endblock %}
 {% block canonical_path %}players/{{ slug }}.html{% endblock %}
+{% set toc = [('elo', 'Elo', current_elo)] %}
+{% if aura_seasons %}{% set _ = toc.append(('aura', 'AURA by season', aura_seasons | length)) %}{% endif %}
+{% set _ = toc.append(('career', 'Career', stints | length)) %}
+{% if games %}{% set _ = toc.append(('games', 'Games', '{:,}'.format(games.games))) %}{% endif %}
+{% block head_extra %}<link rel="stylesheet" href="../{{ asset('css/entry.css') }}" />{% endblock %}
 {% block content %}
   <header class="entry-head">
     <h1>{{ playername }}</h1>
@@ -22,10 +28,11 @@
       {%- if best %} Best AURA season {{ best.year }}, {{ signed(best.aura, 1) }} a game, {{ ordinal(best.role_rank) }} of {{ best.role_count }} major-league {{ role_plural.get(best.position, best.position) }} that year.{% endif %}
     </p>
   </header>
+  {{ contents(toc, 'inline') }}
 
   <div class="spread">
     <div class="spread-main">
-      <section class="elo" aria-labelledby="elo-heading">
+      <section class="elo" id="elo" aria-labelledby="elo-heading">
         <div class="block-head">
           <h2 id="elo-heading">Elo after every game</h2>
           <a class="more" href="../player_elo.html?search={{ playername | urlencode }}">See in player Elo rankings</a>
@@ -45,7 +52,7 @@
       </section>
 
       {% if aura_seasons %}
-      <section class="seasons" aria-labelledby="aura-heading">
+      <section class="seasons" id="aura" aria-labelledby="aura-heading">
         <div class="block-head">
           <h2 id="aura-heading">AURA by season</h2>
           <a class="more" href="../aura.html?search={{ playername | urlencode }}">See in AURA rankings</a>
@@ -84,7 +91,7 @@
       </section>
       {% endif %}
 
-      <section class="career" aria-labelledby="career-heading">
+      <section class="career" id="career" aria-labelledby="career-heading">
         <div class="block-head">
           <h2 id="career-heading">Career</h2>
         </div>
@@ -120,15 +127,19 @@
           </div>
         </figure>
       </section>
+
+      {% if games %}{{ game_log(games, 'player', playername, 5 if aura_seasons else 4) }}{% endif %}
     </div>
 
     <aside class="margin notes" aria-labelledby="entry-notes-heading">
+      {{ contents(toc, 'margin') }}
       <h2 id="entry-notes-heading" class="margin-head">Key terms</h2>
       <ol class="notes-list">
         <li><span class="note-mark" aria-hidden="true">1</span><a href="../player_elo.html">Player Elo</a> moves with every game the player starts: all five starters move by the team’s Elo change, and the rating follows the player to a new team.</li>
         <li><span class="note-mark" aria-hidden="true">2</span>Teammates move together, so this is a record of how the player’s teams did, not credit within a team.</li>
         <li><span class="note-mark" aria-hidden="true">3</span><a href="../game_length_elo.html">Team Elo</a> is the average of its five starters. Compare ratings within a region.</li>
         {% if aura_seasons %}<li><span class="note-mark" aria-hidden="true">4</span><a href="../aura.html">AURA</a> is the player’s own share: how far ahead of the lane opponent they were at 15 minutes, plus how much more than their teammates they gained by 25. Seasons with fewer than 20 games are Unranked.</li>{% endif %}
+        {% if games %}{{ game_log_note(true, 5 if aura_seasons else 4) }}{% endif %}
       </ol>
       <p class="margin-note"><a href="../teams/{{ team_slug }}.html">{{ teamname }}’s team page</a></p>
     </aside>
@@ -138,4 +149,5 @@
 {% endblock %}
 {% block scripts %}
   <script src="../{{ asset('js/team.js') }}" defer></script>
+  <script src="../{{ asset('js/entry.js') }}" defer></script>
 {% endblock %}
