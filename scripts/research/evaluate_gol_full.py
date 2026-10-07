@@ -3,9 +3,11 @@
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import shutil
+from pathlib import Path
 
+import audit_snapshots as audit
+import evaluate_gol_objectives as original
 import numpy as np
 import pandas as pd
 from scipy.special import expit, logit
@@ -20,9 +22,6 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-
-import audit_snapshots as audit
-import evaluate_gol_objectives as original
 
 VARIANTS = {
     "constant_prior": [],
@@ -488,7 +487,7 @@ The primary 15-minute objective comparison {verdict} on this retrospective cohor
 
 ## Data and fixed protocol
 
-{manifest['games']} verified games / {manifest['rows']} checkpoint rows, selected LCK/LCS/LEC/Worlds events in 2022–2025. LPL and 2026 excluded. Train 2022–2023 / calibrate 2024 / test 2025 is primary. Train 2022 / calibrate 2023 / test 2024 is a secondary temporal stability check. Same games for every variant within a fold/minute; separate models at 10/15/20m, no pooling correlated checkpoints as independent games. Explicit series cannot cross partitions. Logistic C=1, training-only scaling, separate-year sigmoid C=1e6; fixed before scoring, no search or post-score recalibration. Constant baseline uses prior calibration-year blue win rate. 2,000 series-cluster bootstrap draws, seed 42, conditional on fitted models and this selected population.
+{manifest["games"]} verified games / {manifest["rows"]} checkpoint rows, selected LCK/LCS/LEC/Worlds events in 2022–2025. LPL and 2026 excluded. Train 2022–2023 / calibrate 2024 / test 2025 is primary. Train 2022 / calibrate 2023 / test 2024 is a secondary temporal stability check. Same games for every variant within a fold/minute; separate models at 10/15/20m, no pooling correlated checkpoints as independent games. Explicit series cannot cross partitions. Logistic C=1, training-only scaling, separate-year sigmoid C=1e6; fixed before scoring, no search or post-score recalibration. Constant baseline uses prior calibration-year blue win rate. 2,000 series-cluster bootstrap draws, seed 42, conditional on fitted models and this selected population.
 
 Primary endpoint: calibrated 2025 15m all-objectives vs gold+Elo log loss. All other metrics, comparisons, subgroups and stress tests are descriptive/secondary; no multiple-testing-based model selection. 2025/2026 outcomes were viewed in earlier research, so these periods are not untouched prospective holdouts.
 
@@ -498,13 +497,13 @@ Scoreboard-objectives uses gold/Elo/tower/elemental-dragon gaps. All-objectives 
 
 Lower log loss/Brier/ECE is better; higher AUC/accuracy is better. Brier skill compares with the past-year constant prior. AUC measures ranking, not calibration or profit.
 
-{table(main[['minute','variant','train_games','calibration_games','n','series','log_loss','brier','roc_auc','accuracy','balanced_accuracy','mcc','brier_skill_prior','ece10']])}
+{table(main[["minute", "variant", "train_games", "calibration_games", "n", "series", "log_loss", "brier", "roc_auc", "accuracy", "balanced_accuracy", "mcc", "brier_skill_prior", "ece10"]])}
 
 ## Paired improvements and uncertainty
 
 Deltas are added-minus-reference: negative is better for loss/Brier, positive for accuracy. Resampling whole series keeps maps correlated. These intervals do not include model-training uncertainty or unobserved selection/patch shifts.
 
-{table(paired[(paired.year.eq(2025)) & paired.metric.eq('log_loss')][['minute','variant','reference','n','series','delta','low','high']])}
+{table(paired[(paired.year.eq(2025)) & paired.metric.eq("log_loss")][["minute", "variant", "reference", "n", "series", "delta", "low", "high"]])}
 
 Absolute log-loss/Brier/accuracy intervals and paired Brier/accuracy intervals are in metrics.csv and paired.csv. All individual predictions and model parameters are exported for inspection.
 
@@ -512,11 +511,11 @@ Absolute log-loss/Brier/accuracy intervals and paired Brier/accuracy intervals a
 
 Diagnostic calibration slope ideal=1, intercept ideal=0; they are estimated on evaluation outcomes only for diagnosis and never applied to predictions. A slope below 1 suggests overly extreme scores. Positive bias means blue win probabilities exceed blue win frequency. ECE depends on bins and sample size; it is not a guaranteed pointwise error bound.
 
-{table(calibration[['minute','variant','raw_log_loss','log_loss','raw_brier','brier','ece5','ece10','ece15','calibration_bias','diagnostic_calibration_intercept','diagnostic_calibration_slope','sharpness_std']])}
+{table(calibration[["minute", "variant", "raw_log_loss", "log_loss", "raw_brier", "brier", "ece5", "ece10", "ece15", "calibration_bias", "diagnostic_calibration_intercept", "diagnostic_calibration_slope", "sharpness_std"]])}
 
 ## Temporal stability
 
-{table(annual[['year','minute','variant','n','log_loss','raw_log_loss','brier','accuracy','ece10']])}
+{table(annual[["year", "minute", "variant", "n", "log_loss", "raw_log_loss", "brier", "accuracy", "ece10"]])}
 
 Expanding chronological training-prefix learning curves use RAW predictions on the earlier calibration year, never fitting a calibrator to those curve scores. See learning_curves.csv. They are not tuning runs against 2025.
 
@@ -524,13 +523,13 @@ Expanding chronological training-prefix learning curves use RAW predictions on t
 
 Small slices can move substantially with a few games; per-league point estimates are descriptive. Additional gold-state and Elo-versus-gold-disagreement slices are in subgroups.csv.
 
-{table(frames['subgroups'].query("year==2025 and category=='league'")[['minute','variant','value','n','log_loss','brier','roc_auc','accuracy','ece10']])}
+{table(frames["subgroups"].query("year==2025 and category=='league'")[["minute", "variant", "value", "n", "log_loss", "brier", "roc_auc", "accuracy", "ece10"]])}
 
 ## Confidence versus actual wins
 
 Favourite confidence bins use the team the model favours; observed is how often that team wins. Intervals resample series within each bin, conditional on bin membership. Very small bins are weak evidence.
 
-{table(frames['confidence'].query("year==2025 and minute==15 and variant=='all_objectives'")[['bin','n','series','predicted','observed','gap','low','high']])}
+{table(frames["confidence"].query("year==2025 and minute==15 and variant=='all_objectives'")[["bin", "n", "series", "predicted", "observed", "gap", "low", "high"]])}
 
 Reliability bins for BLUE probabilities at every checkpoint/model are in reliability.csv; confidence.csv contains all favourite bins. Metrics include counts, wrong calls and accuracy above 80%/90% confidence, mean confidence gap, precision/recall and average precision (blue-positive).
 
@@ -538,13 +537,13 @@ Reliability bins for BLUE probabilities at every checkpoint/model are in reliabi
 
 The original 1,031-game experiment stays frozen. This check applies those exact saved weights/calibrators to newly acquired 2025 series, excluding every series in its original scored predictions. No refitting. This is a small retrospective extension, not a pristine new season; it complements the full-corpus refit.
 
-{table(frames['frozen_confirmation'])}
+{table(frames["frozen_confirmation"])}
 
 ## Broadcast input robustness
 
 Hypothetical rounding/error scenarios use the SAME fitted models and current checkpoint state. These are not measured OCR errors or full latency simulations; no missing objective is imputed zero. Delay can change gold/objectives and market quotes, which this static dataset cannot fully quantify.
 
-{table(frames['stress'].query("year==2025 and variant=='all_objectives'")[['minute','scenario','mean_probability_shift','p95_probability_shift','max_probability_shift','log_loss_delta']])}
+{table(frames["stress"].query("year==2025 and variant=='all_objectives'")[["minute", "scenario", "mean_probability_shift", "p95_probability_shift", "max_probability_shift", "log_loss_delta"]])}
 
 Probability shifts are fractions (0.01 = 1 percentage point). Coefficients and conditional odds ratios are in coefficients.csv; correlated gold/objectives mean negative conditional coefficients do not prove an objective is harmful. No isolated objective attribution is claimed.
 
@@ -556,7 +555,7 @@ Profitability, ROI, market-relative incremental information and executable edge 
 
 ## Reproduction
 
-Run `.venv/bin/python scripts/evaluate_gol_full.py`. First run freezes exact inputs, numeric parameters, predictions, source/helper hashes, diagnostics and plots under data/gol_full_evaluation/. Same-directory reruns are refused. Original experiment is never overwritten. Inspect diagnostics.png for calibration and the paired loss comparison. No published metric, DB or site changes.
+Run `.venv/bin/python scripts/research/evaluate_gol_full.py`. First run freezes exact inputs, numeric parameters, predictions, source/helper hashes, diagnostics and plots under data/gol_full_evaluation/. Same-directory reruns are refused. Original experiment is never overwritten. Inspect diagnostics.png for calibration and the paired loss comparison. No published metric, DB or site changes.
 """
 
 
@@ -617,7 +616,7 @@ def main():
         "--artifacts", type=Path, default=Path("data/gol_full_evaluation")
     )
     parser.add_argument(
-        "--out", type=Path, default=Path("docs/gol_full_evaluation_report.md")
+        "--out", type=Path, default=Path("docs/research/gol_full_evaluation_report.md")
     )
     args = parser.parse_args()
     if (args.artifacts / "manifest.json").exists():
@@ -644,9 +643,9 @@ def main():
         args.samples,
         args.dataset.parent / "manifest.json",
         Path(__file__),
-        Path("scripts/evaluate_gol_objectives.py"),
-        Path("scripts/evaluate_champions.py"),
-        Path("scripts/audit_snapshots.py"),
+        Path("scripts/research/evaluate_gol_objectives.py"),
+        Path("scripts/research/evaluate_champions.py"),
+        Path("scripts/research/audit_snapshots.py"),
         Path("data/gol_objectives/fitted_models.json"),
         Path("data/gol_objectives/predictions.csv"),
     ]

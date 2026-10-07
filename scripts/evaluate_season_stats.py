@@ -84,7 +84,10 @@ def _by_half(frame, value):
 
 def glory_stats(games, record):
     """GLORY variants, win % and Luck per team-season, on all games and each half."""
-    out = {name: [] for name in ("glory", "glory_raw", "glory_elo", "glorb", "win_pct", "luck")}
+    out = {
+        name: []
+        for name in ("glory", "glory_raw", "glory_elo", "glorb", "win_pct", "luck")
+    }
     for year, raw in games.items():
         pipeline = fit_glory_pipeline(raw, GLORY_FEATURES)
         scaler = pipeline.steps[0][1]
@@ -102,18 +105,28 @@ def glory_stats(games, record):
             expected=np.clip(pipeline.predict(raw[GLORY_FEATURES]), 0, 1),
         )
         out["glorb"].append(_by_half(frame, lambda d: _glorb(scaler, d)))
-        out["win_pct"].append(_by_half(frame, lambda d: d.groupby(KEY)["result"].mean()))
+        out["win_pct"].append(
+            _by_half(frame, lambda d: d.groupby(KEY)["result"].mean())
+        )
         # Luck uses the season's calibration of earned win % for every subset.
-        season = frame.groupby(KEY).agg(win=("result", "mean"), raw=("expected", "mean"), n=("result", "size"))
+        season = frame.groupby(KEY).agg(
+            win=("result", "mean"), raw=("expected", "mean"), n=("result", "size")
+        )
         intercept, slope = calibrate_earned(season["win"], season["raw"], season["n"])
-        luck = lambda d: d.groupby(KEY)["result"].mean() - (intercept + slope * d.groupby(KEY)["expected"].mean())
+        luck = lambda d: (
+            d.groupby(KEY)["result"].mean()
+            - (intercept + slope * d.groupby(KEY)["expected"].mean())
+        )
         out["luck"].append(_by_half(frame, luck))
     return {name: pd.concat(parts) for name, parts in out.items()}
 
 
 def _glorb(scaler, games):
     averages = _averages(games)
-    return pd.Series(scaler.transform(averages[GLORY_FEATURES]).sum(axis=1), index=averages.set_index(KEY).index)
+    return pd.Series(
+        scaler.transform(averages[GLORY_FEATURES]).sum(axis=1),
+        index=averages.set_index(KEY).index,
+    )
 
 
 def _averages(games):
@@ -122,7 +135,9 @@ def _averages(games):
 
 def _predict(pipeline, games):
     averages = _averages(games)
-    return pd.Series(pipeline.predict(averages[GLORY_FEATURES]), index=averages.set_index(KEY).index)
+    return pd.Series(
+        pipeline.predict(averages[GLORY_FEATURES]), index=averages.set_index(KEY).index
+    )
 
 
 def record_stats(season_games):
@@ -133,7 +148,11 @@ def record_stats(season_games):
         info = _team_seasons(season).set_index("teamid")
         major = info["league"].isin(MAJORS)
         cols = {}
-        for label, sub in (("full", season), ("h0", season[season["half"] == 0]), ("h1", season[season["half"] == 1])):
+        for label, sub in (
+            ("full", season),
+            ("h0", season[season["half"] == 0]),
+            ("h1", season[season["half"] == 1]),
+        ):
             rating = fit_record(sub).reindex(info.index)
             cols[label] = rating - rating[major].mean()
             if label != "full":
@@ -169,7 +188,11 @@ def reliability(table):
 
 def other_half(table, win_pct):
     """Correlation of a stat on one half with win % on the other half (both directions)."""
-    t = pd.concat([table[["h0", "h1", "n0", "n1"]], win_pct[["h0", "h1"]].add_prefix("win_")], axis=1, join="inner")
+    t = pd.concat(
+        [table[["h0", "h1", "n0", "n1"]], win_pct[["h0", "h1"]].add_prefix("win_")],
+        axis=1,
+        join="inner",
+    )
     t = t.dropna(subset=["h0", "h1", "win_h0", "win_h1"])
     t = t[(t["n0"] >= MIN_HALF_GAMES) & (t["n1"] >= MIN_HALF_GAMES)]
     years = t.index.get_level_values("year")
@@ -179,7 +202,9 @@ def other_half(table, win_pct):
 
 def fit_with(table, target):
     """Correlation of a stat's full-season value with a target, over shared team-seasons."""
-    joined = pd.concat([table["full"].rename("stat"), target.rename("target")], axis=1, join="inner").dropna()
+    joined = pd.concat(
+        [table["full"].rename("stat"), target.rename("target")], axis=1, join="inner"
+    ).dropna()
     years = joined.index.get_level_values("year")
     return _centre(joined["stat"], years).corr(_centre(joined["target"], years))
 
@@ -200,7 +225,9 @@ def report(tables):
         full = table.loc[table.index.intersection(qualified)]
         with_win = "—" if key == "win_pct" else f"{fit_with(full, win_pct):.2f}"
         with_record = "—" if key == "record" else f"{fit_with(full, record):.2f}"
-        games_50 = "never" if not np.isfinite(rel["games_50"]) else f"{rel['games_50']:.0f}"
+        games_50 = (
+            "never" if not np.isfinite(rel["games_50"]) else f"{rel['games_50']:.0f}"
+        )
         lines.append(
             f"| {label} | {rel['r_half']:.2f} ({rel['r_half_lo']:.2f} to {rel['r_half_hi']:.2f}) "
             f"| {rel['full']:.2f} | {games_50} | {other_half(table, tables['win_pct']):.2f} | {with_win} | {with_record} |"
@@ -231,7 +258,9 @@ def main():
     print("Scoring halves...")
     tables = glory_stats(games, record_full)
     tables["record"] = record_stats(season_games)
-    text = f"## Season-stat report ({datetime.date.today().isoformat()})\n\n" + report(tables)
+    text = f"## Season-stat report ({datetime.date.today().isoformat()})\n\n" + report(
+        tables
+    )
     print(text)
     if args.out:
         with open(args.out, "w") as f:

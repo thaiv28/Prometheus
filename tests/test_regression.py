@@ -1,8 +1,7 @@
 import pandas as pd
-from unittest.mock import patch
 from sklearn.pipeline import Pipeline
 
-from prometheus.regression import _fit_glory_model
+from prometheus.regression import fit_glory_pipeline
 
 # Mock DataFrame to simulate database output
 MOCK_DF = pd.DataFrame(
@@ -18,12 +17,9 @@ MOCK_DF = pd.DataFrame(
 FEATURES = MOCK_DF.columns.tolist()
 
 
-@patch("prometheus.regression.get_matches_frame", return_value=MOCK_DF.copy())
-def test_fit_glory_model_basic(mock_get_matches_frame):
-    pipeline, X_test, y_test = _fit_glory_model(
-        FEATURES, leagues="LCK", years=2022, test_split=True
-    )
+def test_fit_glory_pipeline():
+    features = [c for c in FEATURES if c != "result"]
+    pipeline = fit_glory_pipeline(MOCK_DF, features)
 
     assert isinstance(pipeline, Pipeline)
-    assert X_test.shape[0] == y_test.shape[0]
-    assert hasattr(pipeline.named_steps["regressor"], "coef_")
+    assert pipeline.named_steps["regressor"].coef_.shape == (len(features),)

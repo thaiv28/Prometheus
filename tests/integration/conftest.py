@@ -1,5 +1,5 @@
 import pytest
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, Float
+from sqlalchemy import Column, Float, Integer, MetaData, String, Table, create_engine
 
 
 @pytest.fixture

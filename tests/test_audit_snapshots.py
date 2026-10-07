@@ -7,7 +7,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-PATH = Path(__file__).resolve().parents[1] / "scripts" / "audit_snapshots.py"
+PATH = (
+    Path(__file__).resolve().parents[1] / "scripts" / "research" / "audit_snapshots.py"
+)
 spec = importlib.util.spec_from_file_location("audit_snapshots", PATH)
 audit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit)

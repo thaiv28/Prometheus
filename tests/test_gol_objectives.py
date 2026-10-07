@@ -1,14 +1,14 @@
 """Locked partitions, no future fitting, paired series resampling, cohort gates."""
 
-from pathlib import Path
-import sys
 import json
+import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
+sys.path.insert(0, str(Path(__file__).parents[1] / "scripts" / "research"))
 import evaluate_gol_objectives as exp
 
 

@@ -9,15 +9,17 @@ frozen, and the price 12 hours before (`market_12h`, what the page's paper
 bets buy at). Entries get `backfilled`. A one-off: run it on the log, then put
 the log back where CI keeps it.
 
-    uv run python scripts/backfill_market_prices.py --log data/predictions.json [--refresh] [--dry-run]
+    uv run python scripts/oneoff/backfill_market_prices.py --log data/predictions.json [--refresh] [--dry-run]
 """
 
 import argparse
 import datetime
+import sys
 import time
 from pathlib import Path
 
-from evaluate_markets import (
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from evaluate_markets import (  # noqa: E402
     CACHE,
     _ts,
     cached_candles,
@@ -25,7 +27,7 @@ from evaluate_markets import (
     fetch_markets,
     historical_cutoff,
 )
-from update_prices import team_matcher
+from update_prices import team_matcher  # noqa: E402
 
 from prometheus import markets, schedule
 

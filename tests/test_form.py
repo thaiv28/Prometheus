@@ -8,7 +8,9 @@ from prometheus import form
 def _games(rows):
     """rows: (date, year, league, teamid, gpm). One stat, each row its own game."""
     df = pd.DataFrame(rows, columns=["date", "year", "league", "teamid", "gpm"])
-    return df.assign(gameid=[f"g{i}" for i in range(len(df))], teamname=df["teamid"], result=1)
+    return df.assign(
+        gameid=[f"g{i}" for i in range(len(df))], teamname=df["teamid"], result=1
+    )
 
 
 def test_states_start_average_shrink_and_decay():
@@ -29,22 +31,29 @@ def test_states_start_average_shrink_and_decay():
 def test_new_season_carries_part_of_the_weight():
     rows = [(f"2024-01-{d:02d}", 2024, "LCK", "A", 2000.0) for d in range(1, 11)]
     rows += [("2025-01-01", 2025, "LCK", "A", 2000.0)]
-    states = form.form_states(_games(rows), ["gpm"], half_life=1e9, carry=0.5, prior_games=5)
+    states = form.form_states(
+        _games(rows), ["gpm"], half_life=1e9, carry=0.5, prior_games=5
+    )
     assert states["form_games"].iloc[-1] == pytest.approx(5.0)
 
 
 def test_home_league_ignores_international_events():
-    rows = [("2024-01-01", 2024, "LCK", "A", 1.0), ("2024-05-01", 2024, "MSI", "A", 1.0)]
+    rows = [
+        ("2024-01-01", 2024, "LCK", "A", 1.0),
+        ("2024-05-01", 2024, "MSI", "A", 1.0),
+    ]
     states = form.form_states(_games(rows), ["gpm"])
     assert states["home"].tolist() == ["LCK", "LCK"]
 
 
 def test_league_relative_subtracts_the_league_average_so_far():
-    states = pd.DataFrame({
-        "home": ["LCK", "LCK", "LCS", "LCK"],
-        "year": 2024,
-        "date": ["2024-01-01", "2024-01-01", "2024-01-01", "2024-01-02"],
-    })
+    states = pd.DataFrame(
+        {
+            "home": ["LCK", "LCK", "LCS", "LCK"],
+            "year": 2024,
+            "date": ["2024-01-01", "2024-01-01", "2024-01-01", "2024-01-02"],
+        }
+    )
     rel = form.league_relative(states, np.array([2.0, 0.0, 5.0, 4.0]))
     # Day 1 LCK mean is 1; day 2 LCK mean over all three LCK states is 2.
     assert rel.tolist() == pytest.approx([1.0, -1.0, 0.0, 2.0])
@@ -57,8 +66,14 @@ def test_opponent_adjust_uses_earlier_seasons():
         for g in range(200):
             rows.append((f"{year}-03-01", year, "LCK", f"t{g}", 0.0))
     games = _games(rows)
-    elos = pd.DataFrame({"gameid": games["gameid"], "teamid": games["teamid"],
-                         "elo": rng.normal(1500, 100, len(games)), "opp_elo": rng.normal(1500, 100, len(games))})
+    elos = pd.DataFrame(
+        {
+            "gameid": games["gameid"],
+            "teamid": games["teamid"],
+            "elo": rng.normal(1500, 100, len(games)),
+            "opp_elo": rng.normal(1500, 100, len(games)),
+        }
+    )
     games["gpm"] = 2000 - 2.0 * elos["opp_elo"] + 1.0 * elos["elo"]
     adjusted = form.opponent_adjust(games, ["gpm"], elos)
     # The opponent term is removed: what is left depends on the team's own Elo only.
@@ -68,7 +83,10 @@ def test_opponent_adjust_uses_earlier_seasons():
 
 def test_home_league_is_the_most_played_this_season():
     rows = [(f"2024-01-{d:02d}", 2024, "LPL", "A", 1.0) for d in range(1, 6)]
-    rows += [("2024-12-01", 2024, "DCup", "A", 1.0), ("2025-01-01", 2025, "MSI", "A", 1.0)]
+    rows += [
+        ("2024-12-01", 2024, "DCup", "A", 1.0),
+        ("2025-01-01", 2025, "MSI", "A", 1.0),
+    ]
     states = form.form_states(_games(rows), ["gpm"])
     # A winter cup does not move it; before its first 2025 domestic game it keeps LPL.
     assert states["home"].tolist() == ["LPL"] * 7

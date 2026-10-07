@@ -9,12 +9,12 @@ build_site.py: Generates static HTML site for Prometheus rankings.
 - Outputs to output/ folder
 """
 
-import json
-import os
-import re
 import datetime
 import functools
 import hashlib
+import json
+import os
+import re
 import shutil
 from pathlib import Path
 
@@ -23,7 +23,6 @@ import pandas as pd
 from jinja2 import Environment, FileSystemLoader
 
 from prometheus import alerts, aura, gamelog, markets, schedule
-from prometheus.evaluation import paired_bootstrap
 from prometheus.elo import (
     get_elo_history,
     get_latest_elos,
@@ -31,7 +30,7 @@ from prometheus.elo import (
     get_player_history,
     get_season_elos,
 )
-from prometheus.form import form_states, load_form_games, opponent_adjust
+from prometheus.evaluation import paired_bootstrap
 from prometheus.forge import (
     CROSS_REGION_ELO_WEIGHT,
     ELO_WEIGHT,
@@ -39,6 +38,8 @@ from prometheus.forge import (
     forge_ratings,
     team_forms,
 )
+from prometheus.form import form_states, load_form_games, opponent_adjust
+from prometheus.player_tables import PlayerTables
 from prometheus.ranking import get_glory_ranking, load_glory_games
 from prometheus.season import get_luck, get_record, load_season_games
 from prometheus.types import ALL_MAJOR_LEAGUES, INTERNATIONAL_LEAGUES
@@ -259,12 +260,20 @@ SECTIONS = [
     },
     {"name": "Players", "metrics": list(PLAYER_METRICS.values())},
 ]
-SUNSET = [*FOLDED, *(m for m in [*METRICS.values(), *FORECASTS.values()] if m.get("sunset"))]
+SUNSET = [
+    *FOLDED,
+    *(m for m in [*METRICS.values(), *FORECASTS.values()] if m.get("sunset")),
+]
 NAV = [
     {
         "name": s["name"],
         "links": [
-            {"key": m["key"], "name": m["name"], "title": m.get("title", m["name"]), "question": m["question"]}
+            {
+                "key": m["key"],
+                "name": m["name"],
+                "title": m.get("title", m["name"]),
+                "question": m["question"],
+            }
             for m in s["metrics"]
         ],
     }
@@ -294,13 +303,19 @@ HOME_FIXTURE_DAYS = 4
 RECENT_RESULT_DAYS = 3
 # The day's Kalshi alert (title and body of a GitHub issue), written only when
 # there is one; the publish workflow posts it. Never published to the site.
-KALSHI_ALERT = os.environ.get("KALSHI_ALERT", os.path.join(ROOT_DIR, "data", "kalshi_alert.json"))
+KALSHI_ALERT = os.environ.get(
+    "KALSHI_ALERT", os.path.join(ROOT_DIR, "data", "kalshi_alert.json")
+)
 # The prediction log; CI restores it from and saves it to the data backup bucket.
-PREDICTIONS_LOG = os.environ.get("PREDICTIONS_LOG", os.path.join(ROOT_DIR, "data", "predictions.json"))
+PREDICTIONS_LOG = os.environ.get(
+    "PREDICTIONS_LOG", os.path.join(ROOT_DIR, "data", "predictions.json")
+)
 # Kalshi's last price before each settled series (scripts/export_market_prices.py);
 # CI restores it from the data-backup bucket. Missing is fine: logs then show only
 # the prices saved in the prediction log.
-MARKET_PRICES = os.environ.get("MARKET_PRICES", os.path.join(ROOT_DIR, "data", "market_prices.json"))
+MARKET_PRICES = os.environ.get(
+    "MARKET_PRICES", os.path.join(ROOT_DIR, "data", "market_prices.json")
+)
 # Team and player pages embed this many of their newest series; the rest load on request.
 GAME_LOG_SERIES = 20
 
@@ -335,7 +350,9 @@ env.filters["longdate"] = _longdate
 env.filters["shortdate"] = lambda v: _longdate(v).rsplit(" ", 1)[0]  # '2 Sep'
 # Elo series embedded in team and player pages as [date, elo] pairs, about half the
 # size of {date, elo} objects across ~7,000 pages.
-env.filters["compact_series"] = lambda series: [[d["date"], round(d["elo"])] for d in series]
+env.filters["compact_series"] = lambda series: [
+    [d["date"], round(d["elo"])] for d in series
+]
 
 
 def _slugify(name: str) -> str:
@@ -378,7 +395,14 @@ def copy_static():
     shutil.copy2(Path(STATIC_SRC) / "favicon.svg", Path(OUTPUT_DIR) / "favicon.svg")
 
 
-def _rankings(games, minimum_matches, z_scores, baseline=False, opponent_adjusted=False, record=None):
+def _rankings(
+    games,
+    minimum_matches,
+    z_scores,
+    baseline=False,
+    opponent_adjusted=False,
+    record=None,
+):
     return get_glory_ranking(
         year=sorted(games),
         league=ALL_MAJOR_LEAGUES,
@@ -427,7 +451,15 @@ def _rating_bar(values):
     return lambda v: round(float((v - lo) / (hi - lo) * 100), 1)
 
 
-def render_index(forge_rows, team_elo_rows, player_rows, entry_counts, forge_config, last_update, fixtures=None):
+def render_index(
+    forge_rows,
+    team_elo_rows,
+    player_rows,
+    entry_counts,
+    forge_config,
+    last_update,
+    fixtures=None,
+):
     """Home: FORGE's head to head and top teams, then the top of team and player Elo.
 
     Each `*_rows` argument holds the register's "now" rows (every current team or
@@ -462,7 +494,7 @@ def render_index(forge_rows, team_elo_rows, player_rows, entry_counts, forge_con
     )
 
 
-def render_rankings_page(metric, rows, config, filters, last_update):
+def render_rankings_page(metric, rows, config, filters):
     _write(
         os.path.join(OUTPUT_DIR, f"{metric['key']}.html"),
         env.get_template("rankings.html.j2").render(
@@ -472,7 +504,6 @@ def render_rankings_page(metric, rows, config, filters, last_update):
             rows=rows,
             config=config,
             filters=filters,
-            last_update=last_update,
         ),
     )
 
@@ -480,11 +511,34 @@ def render_rankings_page(metric, rows, config, filters, last_update):
 METRIC_COLUMNS = [
     {"key": "rank", "label": "Rank", "type": "rank"},
     {"key": "teamname", "label": "Team", "type": "team"},
-    {"key": "score", "label": "Score", "type": "number", "digits": 2, "bar": True, "note": 1},
-    {"key": "era_score", "label": "Era Z", "type": "number", "digits": 2, "signed": True,
-     "hint": "Standard deviations above the average major-league team that year", "phoneHide": True, "note": 2},
-    {"key": "league_score", "label": "League Z", "type": "number", "digits": 2, "signed": True,
-     "hint": "Standard deviations above the average team in its league that year", "wideOnly": True, "note": 2},
+    {
+        "key": "score",
+        "label": "Score",
+        "type": "number",
+        "digits": 2,
+        "bar": True,
+        "note": 1,
+    },
+    {
+        "key": "era_score",
+        "label": "Era Z",
+        "type": "number",
+        "digits": 2,
+        "signed": True,
+        "hint": "Standard deviations above the average major-league team that year",
+        "phoneHide": True,
+        "note": 2,
+    },
+    {
+        "key": "league_score",
+        "label": "League Z",
+        "type": "number",
+        "digits": 2,
+        "signed": True,
+        "hint": "Standard deviations above the average team in its league that year",
+        "wideOnly": True,
+        "note": 2,
+    },
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
     {"key": "year", "label": "Year", "type": "text", "wideOnly": True},
 ]
@@ -492,10 +546,30 @@ METRIC_COLUMNS = [
 RECORD_COLUMNS = [
     {"key": "rank", "label": "Rank", "type": "rank"},
     {"key": "teamname", "label": "Team", "type": "team"},
-    {"key": "record", "label": "Record", "type": "number", "digits": 1, "bar": True, "note": 1,
-     "hint": "Chance to beat the average major-league team that year"},
-    {"key": "win_pct", "label": "Win %", "type": "number", "digits": 1, "phoneHide": True},
-    {"key": "games", "label": "Games", "type": "number", "digits": 0, "wideOnly": True, "note": 2},
+    {
+        "key": "record",
+        "label": "Record",
+        "type": "number",
+        "digits": 1,
+        "bar": True,
+        "note": 1,
+        "hint": "Chance to beat the average major-league team that year",
+    },
+    {
+        "key": "win_pct",
+        "label": "Win %",
+        "type": "number",
+        "digits": 1,
+        "phoneHide": True,
+    },
+    {
+        "key": "games",
+        "label": "Games",
+        "type": "number",
+        "digits": 0,
+        "wideOnly": True,
+        "note": 2,
+    },
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
     {"key": "year", "label": "Year", "type": "text", "wideOnly": True},
 ]
@@ -503,11 +577,31 @@ RECORD_COLUMNS = [
 LUCK_COLUMNS = [
     {"key": "rank", "label": "Rank", "type": "rank"},
     {"key": "teamname", "label": "Team", "type": "team"},
-    {"key": "luck_wins", "label": "Luck", "type": "number", "digits": 1, "signed": True, "note": 1,
-     "hint": "Wins above what the team's play earned"},
-    {"key": "win_pct", "label": "Win %", "type": "number", "digits": 1, "phoneHide": True},
-    {"key": "expected", "label": "Earned", "type": "number", "digits": 1, "phoneHide": True, "note": 2,
-     "hint": "The win % the team's stats were worth"},
+    {
+        "key": "luck_wins",
+        "label": "Luck",
+        "type": "number",
+        "digits": 1,
+        "signed": True,
+        "note": 1,
+        "hint": "Wins above what the team's play earned",
+    },
+    {
+        "key": "win_pct",
+        "label": "Win %",
+        "type": "number",
+        "digits": 1,
+        "phoneHide": True,
+    },
+    {
+        "key": "expected",
+        "label": "Earned",
+        "type": "number",
+        "digits": 1,
+        "phoneHide": True,
+        "note": 2,
+        "hint": "The win % the team's stats were worth",
+    },
     {"key": "games", "label": "Games", "type": "number", "digits": 0, "wideOnly": True},
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
     {"key": "year", "label": "Year", "type": "text", "wideOnly": True},
@@ -516,11 +610,31 @@ LUCK_COLUMNS = [
 FORGE_COLUMNS = [
     {"key": "rank", "label": "Rank", "type": "rank"},
     {"key": "teamname", "label": "Team", "type": "team"},
-    {"key": "forge", "label": "Rating", "type": "number", "digits": 0, "bar": True, "note": 1},
-    {"key": "form", "label": "Form", "type": "number", "digits": 0, "signed": True, "phoneHide": True,
-     "hint": "Elo points above or below its league's average, from recent play"},
-    {"key": "elo", "label": "Elo", "type": "number", "digits": 0, "wideOnly": True,
-     "hint": "Elo now, or at the end of the season shown"},
+    {
+        "key": "forge",
+        "label": "Rating",
+        "type": "number",
+        "digits": 0,
+        "bar": True,
+        "note": 1,
+    },
+    {
+        "key": "form",
+        "label": "Form",
+        "type": "number",
+        "digits": 0,
+        "signed": True,
+        "phoneHide": True,
+        "hint": "Elo points above or below its league's average, from recent play",
+    },
+    {
+        "key": "elo",
+        "label": "Elo",
+        "type": "number",
+        "digits": 0,
+        "wideOnly": True,
+        "hint": "Elo now, or at the end of the season shown",
+    },
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
     {"key": "year", "label": "Season", "type": "text", "wideOnly": True, "note": 4},
 ]
@@ -528,7 +642,15 @@ FORGE_COLUMNS = [
 FORM_COLUMNS = [
     {"key": "rank", "label": "Rank", "type": "rank"},
     {"key": "teamname", "label": "Team", "type": "team"},
-    {"key": "form", "label": "Form", "type": "number", "digits": 0, "signed": True, "bar": True, "note": 1},
+    {
+        "key": "form",
+        "label": "Form",
+        "type": "number",
+        "digits": 0,
+        "signed": True,
+        "bar": True,
+        "note": 1,
+    },
     {"key": "league", "label": "League", "type": "league", "wideOnly": True, "note": 3},
     {"key": "year", "label": "Season", "type": "text", "wideOnly": True, "note": 4},
     {"key": "latest_date", "label": "Last game", "type": "date", "wideOnly": True},
@@ -537,7 +659,14 @@ FORM_COLUMNS = [
 ELO_COLUMNS = [
     {"key": "rank", "label": "Rank", "type": "rank"},
     {"key": "teamname", "label": "Team", "type": "team"},
-    {"key": "elo", "label": "Elo", "type": "number", "digits": 0, "bar": True, "note": 1},
+    {
+        "key": "elo",
+        "label": "Elo",
+        "type": "number",
+        "digits": 0,
+        "bar": True,
+        "note": 1,
+    },
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
     {"key": "year", "label": "Season", "type": "text", "wideOnly": True, "note": 3},
     {"key": "latest_date", "label": "Last game", "type": "date", "wideOnly": True},
@@ -547,7 +676,14 @@ ELO_COLUMNS = [
 PLAYER_ELO_COLUMNS = [
     {"key": "rank", "label": "Rank", "type": "rank"},
     {"key": "playername", "label": "Player", "type": "player"},
-    {"key": "elo", "label": "Elo", "type": "number", "digits": 0, "bar": True, "note": 1},
+    {
+        "key": "elo",
+        "label": "Elo",
+        "type": "number",
+        "digits": 0,
+        "bar": True,
+        "note": 1,
+    },
     {"key": "position", "label": "Role", "type": "role", "phoneHide": True},
     {"key": "teamname", "label": "Team", "type": "teamref", "wideOnly": True},
     {"key": "league", "label": "League", "type": "league", "wideOnly": True},
@@ -558,14 +694,43 @@ PLAYER_ELO_COLUMNS = [
 AURA_COLUMNS = [
     {"key": "rank", "label": "Rank", "type": "rank"},
     {"key": "playername", "label": "Player", "type": "player"},
-    {"key": "aura", "label": "AURA", "type": "number", "digits": 1, "signed": True, "bar": True, "note": 1,
-     "hint": "Win-chance points per game, against an even lane"},
-    {"key": "role_z", "label": "Role Z", "type": "number", "digits": 2, "signed": True, "phoneHide": True, "note": 2,
-     "hint": "Standard deviations above the average player-season in the same role that year"},
+    {
+        "key": "aura",
+        "label": "AURA",
+        "type": "number",
+        "digits": 1,
+        "signed": True,
+        "bar": True,
+        "note": 1,
+        "hint": "Win-chance points per game, against an even lane",
+    },
+    {
+        "key": "role_z",
+        "label": "Role Z",
+        "type": "number",
+        "digits": 2,
+        "signed": True,
+        "phoneHide": True,
+        "note": 2,
+        "hint": "Standard deviations above the average player-season in the same role that year",
+    },
     {"key": "position", "label": "Role", "type": "role", "phoneHide": True},
     # The team carries its league mark instead of a League column, so the register fits beside the margin.
-    {"key": "teamname", "label": "Team", "type": "teamref", "mark": True, "wideOnly": True},
-    {"key": "games", "label": "Games", "type": "number", "digits": 0, "wideOnly": True, "note": 4},
+    {
+        "key": "teamname",
+        "label": "Team",
+        "type": "teamref",
+        "mark": True,
+        "wideOnly": True,
+    },
+    {
+        "key": "games",
+        "label": "Games",
+        "type": "number",
+        "digits": 0,
+        "wideOnly": True,
+        "note": 4,
+    },
     {"key": "year", "label": "Year", "type": "text", "wideOnly": True},
 ]
 
@@ -576,13 +741,29 @@ def aura_rows_and_seasons(seasons, slugs):
     `seasons` is `aura.season_aura` output; `slugs` maps playerid to page slug.
     Returns (rows, {slug: [season, ...] newest first}).
     """
-    listed = seasons[seasons["playerid"].isin(slugs.index)].assign(slug=lambda d: d["playerid"].map(slugs))
-    listed = listed.assign(aura=listed["aura"].round(2), role_z=listed["role_z"].round(2))
+    listed = seasons[seasons["playerid"].isin(slugs.index)].assign(
+        slug=lambda d: d["playerid"].map(slugs)
+    )
+    listed = listed.assign(
+        aura=listed["aura"].round(2), role_z=listed["role_z"].round(2)
+    )
     qualified = listed[listed["qualified"]]
-    cols = ["slug", "playername", "position", "teamname", "league", "year", "games", "aura", "role_z"]
+    cols = [
+        "slug",
+        "playername",
+        "position",
+        "teamname",
+        "league",
+        "year",
+        "games",
+        "aura",
+        "role_z",
+    ]
     rows = qualified[cols].to_dict(orient="records")
     by_player = {}
-    for r in listed.sort_values(["year", "games"], ascending=[False, False]).itertuples():
+    for r in listed.sort_values(
+        ["year", "games"], ascending=[False, False]
+    ).itertuples():
         by_player.setdefault(r.slug, []).append(
             {
                 "year": int(r.year),
@@ -599,7 +780,15 @@ def aura_rows_and_seasons(seasons, slugs):
     return rows, by_player
 
 
-def _team_pages(glory_df, forge_seasons, forge_now, elo_history, latest_elos, glory_qualified, rosters=None):
+def _team_pages(
+    glory_df,
+    forge_seasons,
+    forge_now,
+    elo_history,
+    latest_elos,
+    glory_qualified,
+    rosters=None,
+):
     """Return {slug: context} for every team with GLORY data or Elo history.
 
     Each season carries GLORY (every team-season with a game) and FORGE at the
@@ -608,9 +797,16 @@ def _team_pages(glory_df, forge_seasons, forge_now, elo_history, latest_elos, gl
 
     # Rank of each qualified team-season within its year, for team pages.
     q = glory_qualified[["teamname", "year", "score"]].copy()
-    q["year_rank"] = q.groupby("year")["score"].rank(ascending=False, method="min").astype(int)
+    q["year_rank"] = (
+        q.groupby("year")["score"].rank(ascending=False, method="min").astype(int)
+    )
     q["field"] = q.groupby("year")["score"].transform("size").astype(int)
-    year_rank = {(t, int(y)): (int(r), int(f)) for t, y, r, f in q[["teamname", "year", "year_rank", "field"]].itertuples(index=False)}
+    year_rank = {
+        (t, int(y)): (int(r), int(f))
+        for t, y, r, f in q[["teamname", "year", "year_rank", "field"]].itertuples(
+            index=False
+        )
+    }
 
     key = ["teamname", "year"]
     seasons = (
@@ -638,7 +834,9 @@ def _team_pages(glory_df, forge_seasons, forge_now, elo_history, latest_elos, gl
                         "year": year,
                         "league": row.league,
                         "glory": value(row.glory, 2),
-                        "forge": None if pd.isna(row.forge) else round(float(row.forge)),
+                        "forge": None
+                        if pd.isna(row.forge)
+                        else round(float(row.forge)),
                         "year_rank": year_rank.get((team, year), (None, None))[0],
                         "field": year_rank.get((team, year), (None, None))[1],
                     }
@@ -647,7 +845,9 @@ def _team_pages(glory_df, forge_seasons, forge_now, elo_history, latest_elos, gl
         if team in elo_by_team:
             elo_series = [
                 {"date": str(d)[:10], "elo": round(float(v), 1)}
-                for d, v in zip(elo_by_team[team]["date"], elo_by_team[team]["post_match_elo"])
+                for d, v in zip(
+                    elo_by_team[team]["date"], elo_by_team[team]["post_match_elo"]
+                )
             ]
         current = latest.loc[team] if team in latest.index else None
         if isinstance(current, pd.DataFrame):  # duplicate team names across ids
@@ -656,8 +856,13 @@ def _team_pages(glory_df, forge_seasons, forge_now, elo_history, latest_elos, gl
         if elo_series:
             peak = max(elo_series, key=lambda d: d["elo"])
             low = min(elo_series, key=lambda d: d["elo"])
-            elo_summary = {"games": len(elo_series), "peak": peak, "low": low,
-                           "first": elo_series[0], "last": elo_series[-1]}
+            elo_summary = {
+                "games": len(elo_series),
+                "peak": peak,
+                "low": low,
+                "first": elo_series[0],
+                "last": elo_series[-1],
+            }
         ranked = [s for s in series if s["glory"] is not None]
         best = max(ranked, key=lambda s: s["glory"]) if ranked else None
         leagues = sorted({s["league"] for s in series})
@@ -669,7 +874,9 @@ def _team_pages(glory_df, forge_seasons, forge_now, elo_history, latest_elos, gl
             "elo_summary": elo_summary,
             "best": best,
             "current_elo": None if current is None else round(float(current["elo"])),
-            "current_forge": round(float(forge_current[team])) if team in forge_current.index else None,
+            "current_forge": round(float(forge_current[team]))
+            if team in forge_current.index
+            else None,
             "current_league": None if current is None else current["league"],
             "leagues": leagues or ([current["league"]] if current is not None else []),
             "roster": (rosters or {}).get(team),
@@ -715,7 +922,9 @@ def fixture_row(entry, team_slugs):
         row["mkt1"], row["mkt2"] = _pct_pair(market["p"])
         at = datetime.datetime.strptime(market["at"], "%Y-%m-%dT%H:%MZ")
         row["mkt_at"] = f"{at.day} {at.strftime('%b')} {at.strftime('%H:%M')} UTC"
-        row["mkt_url"] = markets.event_url(market["ticker"]) if market.get("ticker") else None
+        row["mkt_url"] = (
+            markets.event_url(market["ticker"]) if market.get("ticker") else None
+        )
     for side in (1, 2):
         name = schedule.display_name(entry, side)
         slug = _slugify(entry[f"ours{side}"]) if entry.get(f"ours{side}") else None
@@ -723,8 +932,16 @@ def fixture_row(entry, team_slugs):
         row[f"slug{side}"] = slug if slug in team_slugs else None
     if row["winner"] in (1, 2):
         s1, s2 = entry.get("score1"), entry.get("score2")
-        row["score"] = f"{s1}–{s2}" if s1 is not None and s2 is not None else ("W–L" if row["winner"] == 1 else "L–W")
-        row["call"] = "even" if row["fav"] == 0 else ("right" if row["fav"] == row["winner"] else "missed")
+        row["score"] = (
+            f"{s1}–{s2}"
+            if s1 is not None and s2 is not None
+            else ("W–L" if row["winner"] == 1 else "L–W")
+        )
+        row["call"] = (
+            "even"
+            if row["fav"] == 0
+            else ("right" if row["fav"] == row["winner"] else "missed")
+        )
     return row
 
 
@@ -734,7 +951,9 @@ def _by_day(rows):
     for r in rows:
         if not days or days[-1][0] != r["day"]:
             d = datetime.date.fromisoformat(r["day"])
-            days.append((r["day"], f"{d.strftime('%A')} {d.day} {d.strftime('%B')}", []))
+            days.append(
+                (r["day"], f"{d.strftime('%A')} {d.day} {d.strftime('%B')}", [])
+            )
         days[-1][2].append(r)
     return [{"day": d, "label": label, "rows": rs} for d, label, rs in days]
 
@@ -748,13 +967,28 @@ def predictions_view(log, team_slugs, now):
     """
     now_s = now.strftime("%Y-%m-%dT%H:%MZ")
     entries = [e for e in log.values() if e.get("matched")]
-    upcoming = sorted((e for e in entries if e["start"] > now_s), key=lambda e: (e["start"], e["match_id"]))
-    past = sorted((e for e in entries if e["start"] <= now_s), key=lambda e: (e["start"], e["match_id"]), reverse=True)
+    upcoming = sorted(
+        (e for e in entries if e["start"] > now_s),
+        key=lambda e: (e["start"], e["match_id"]),
+    )
+    past = sorted(
+        (e for e in entries if e["start"] <= now_s),
+        key=lambda e: (e["start"], e["match_id"]),
+        reverse=True,
+    )
     up_rows = [fixture_row(e, team_slugs) for e in upcoming]
-    recent_from = (now - datetime.timedelta(days=RECENT_RESULT_DAYS)).strftime("%Y-%m-%dT%H:%MZ")
+    recent_from = (now - datetime.timedelta(days=RECENT_RESULT_DAYS)).strftime(
+        "%Y-%m-%dT%H:%MZ"
+    )
     recent = [e for e in past if e["start"] >= recent_from]
-    horizon = (now + datetime.timedelta(days=HOME_FIXTURE_DAYS)).strftime("%Y-%m-%dT%H:%MZ")
-    home = [fixture_row(e, team_slugs) for e in upcoming if schedule.is_major(e) and e["start"] <= horizon][:HOME_FIXTURES]
+    horizon = (now + datetime.timedelta(days=HOME_FIXTURE_DAYS)).strftime(
+        "%Y-%m-%dT%H:%MZ"
+    )
+    home = [
+        fixture_row(e, team_slugs)
+        for e in upcoming
+        if schedule.is_major(e) and e["start"] <= horizon
+    ][:HOME_FIXTURES]
     leagues = {e["league"] for e in entries}
     majors = env.globals["major_leagues"]
     return {
@@ -775,9 +1009,14 @@ def predictions_view(log, team_slugs, now):
         "leagues": [l for l in majors if l in leagues]
         + [l for l in INTERNATIONAL_LEAGUES if l in leagues]
         + sorted(leagues - set(majors) - set(INTERNATIONAL_LEAGUES)),
-        "major_set": [l for l in [*majors, *INTERNATIONAL_LEAGUES] if l in leagues or l in majors],
+        "major_set": [
+            l for l in [*majors, *INTERNATIONAL_LEAGUES] if l in leagues or l in majors
+        ],
         "since": min((e["start"][:10] for e in entries), default=None),
-        "saved_since": min((e["start"][:10] for e in entries if not e.get("reconstructed")), default=None),
+        "saved_since": min(
+            (e["start"][:10] for e in entries if not e.get("reconstructed")),
+            default=None,
+        ),
     }
 
 
@@ -802,7 +1041,7 @@ def result_months(past, team_slugs):
     return out
 
 
-def render_results(view, last_update):
+def render_results(view):
     """One results page per month, with links to the months either side."""
     folder = os.path.join(OUTPUT_DIR, "results")
     os.makedirs(folder, exist_ok=True)
@@ -818,7 +1057,6 @@ def render_results(view, last_update):
                 month=month,
                 newer=months[i - 1] if i > 0 else None,
                 older=months[i + 1] if i + 1 < len(months) else None,
-                last_update=last_update,
             ),
         )
 
@@ -829,7 +1067,12 @@ def method_groups(rows):
     groups = []
     for label in ("FORGE", "Other"):
         sources = [
-            {"name": source, "rows": [r for r in rows if r["label"] == label and r["source"] == source]}
+            {
+                "name": source,
+                "rows": [
+                    r for r in rows if r["label"] == label and r["source"] == source
+                ],
+            }
             for name, source in schedule.BET_GROUPS
             if name == label
         ]
@@ -871,7 +1114,7 @@ def alert_record(entries):
     }
 
 
-def render_predictions(view, coverage, last_update):
+def render_predictions(view, coverage):
     _write(
         os.path.join(OUTPUT_DIR, "predictions.html"),
         env.get_template("predictions.html.j2").render(
@@ -880,7 +1123,6 @@ def render_predictions(view, coverage, last_update):
             metric=PREDICTIONS,
             view=view,
             coverage=coverage,
-            last_update=last_update,
         ),
     )
 
@@ -896,9 +1138,11 @@ def update_predictions(states):
         return schedule.load_log(PREDICTIONS_LOG), None
     try:
         log, coverage = schedule.build_predictions(states, PREDICTIONS_LOG)
-        print(f"Predictions: {coverage['matched']} of {coverage['matches']} scheduled matches rated; "
-              f"{len(coverage['unmatched'])} team names not matched; "
-              f"{coverage.get('priced') if coverage.get('priced') is not None else 'no'} priced by Kalshi")
+        print(
+            f"Predictions: {coverage['matched']} of {coverage['matches']} scheduled matches rated; "
+            f"{len(coverage['unmatched'])} team names not matched; "
+            f"{coverage.get('priced') if coverage.get('priced') is not None else 'no'} priced by Kalshi"
+        )
         return log, coverage
     except Exception as e:  # network, rate limit, schema change: never block the build
         print(f"Predictions: schedule not updated ({e}); using the saved log.")
@@ -913,9 +1157,15 @@ def write_kalshi_alert(log, coverage, team_slugs, path=None):
     path = path or KALSHI_ALERT
     if os.path.exists(path):
         os.remove(path)
-    if os.environ.get("KALSHI_ALERTS", "1") == "0" or not coverage or not coverage.get("priced"):
+    if (
+        os.environ.get("KALSHI_ALERTS", "1") == "0"
+        or not coverage
+        or not coverage.get("priced")
+    ):
         return None
-    now = datetime.datetime.strptime(coverage["at"], "%Y-%m-%dT%H:%MZ").replace(tzinfo=datetime.timezone.utc)
+    now = datetime.datetime.strptime(coverage["at"], "%Y-%m-%dT%H:%MZ").replace(
+        tzinfo=datetime.timezone.utc
+    )
     alert = alerts.update(log, now, coverage.get("data_through"), _slugify, team_slugs)
     schedule.save_log(log, PREDICTIONS_LOG)
     if alert is None:
@@ -927,30 +1177,30 @@ def write_kalshi_alert(log, coverage, team_slugs, path=None):
     return alert
 
 
-def render_sunset(last_update):
+def render_sunset():
     _write(
         os.path.join(OUTPUT_DIR, "sunset.html"),
         env.get_template("sunset.html.j2").render(
-            page_key="sunset", root_path="", metrics=SUNSET, last_update=last_update
+            page_key="sunset", root_path="", metrics=SUNSET
         ),
     )
 
 
-def render_redirect(key, target, title, last_update):
+def render_redirect(key, target, title):
     """A retired page that sends visitors (and search engines) to its replacement."""
     _write(
         os.path.join(OUTPUT_DIR, f"{key}.html"),
         env.get_template("redirect.html.j2").render(
-            page_key=key, root_path="", target=target, title=title, last_update=last_update
+            page_key=key, root_path="", target=target, title=title
         ),
     )
 
 
-def render_404(last_update):
+def render_404():
     # CloudFront serves 404.html for any missing path, so links must be root-absolute.
     _write(
         os.path.join(OUTPUT_DIR, "404.html"),
-        env.get_template("404.html.j2").render(page_key="404", root_path="/", last_update=last_update),
+        env.get_template("404.html.j2").render(page_key="404", root_path="/"),
     )
 
 
@@ -961,7 +1211,9 @@ def _player_slugs(players):
     slug = base.where(~shared, base + "-" + players["teamname"].map(_slugify))
     order = players.assign(slug=slug).sort_values("playerid")
     order["n"] = order.groupby("slug").cumcount()
-    order.loc[order["n"] > 0, "slug"] = order["slug"] + "-" + (order["n"] + 1).astype(str)
+    order.loc[order["n"] > 0, "slug"] = (
+        order["slug"] + "-" + (order["n"] + 1).astype(str)
+    )
     return order["slug"].reindex(players.index)
 
 
@@ -994,8 +1246,18 @@ def player_pages_and_rows(history, latest, seasons):
         if is_now:
             df["active"] = pd.to_datetime(df["latest_date"]) >= newest - ACTIVE_WINDOW
             df["year"] = pd.to_datetime(df["latest_date"]).dt.year
-        cols = ["slug", "playername", "position", "teamname", "league", "elo", "year",
-                "latest_date", "now", "active"]
+        cols = [
+            "slug",
+            "playername",
+            "position",
+            "teamname",
+            "league",
+            "elo",
+            "year",
+            "latest_date",
+            "now",
+            "active",
+        ]
         return df[cols].to_dict(orient="records")
 
     season_rows = seasons[
@@ -1006,30 +1268,61 @@ def player_pages_and_rows(history, latest, seasons):
     register = rows(listed, True) + rows(season_rows, False)
 
     pages = {}
+    infos = listed.drop_duplicates("playerid").set_index("playerid")
     listed_history = history[history["playerid"].isin(slugs.index)]
+    # A stint is a run of consecutive games for one team. History is in date order,
+    # so group each player's games together (keeping their order) before marking runs.
+    by_player = listed_history.sort_values("playerid", kind="stable")
+    by_player["stint"] = (
+        (by_player["playerid"] != by_player["playerid"].shift())
+        | (by_player["teamid"] != by_player["teamid"].shift())
+    ).cumsum()
+    # Each stint's last game (not "last" aggregation, which skips nulls).
+    stint_rows = (
+        by_player.drop_duplicates("stint", keep="last")
+        .set_index("stint")[
+            ["playerid", "teamname", "home_league", "league", "date", "elo"]
+        ]
+        .rename(columns={"date": "last"})
+    )
+    stint_rows["first"] = by_player.drop_duplicates("stint").set_index("stint")["date"]
+    stint_rows["games"] = by_player.groupby("stint").size()
+    # The stint's most common role, ties to the first alphabetically (as Series.mode).
+    roles = by_player.groupby(["stint", "position"]).size().rename("n").reset_index()
+    roles = roles.sort_values(
+        ["stint", "n", "position"], ascending=[True, False, True], kind="stable"
+    )
+    stint_rows["position"] = roles.drop_duplicates("stint").set_index("stint")[
+        "position"
+    ]
+    stints_by_player = {}
+    for r in stint_rows.itertuples():
+        stints_by_player.setdefault(r.playerid, []).append(
+            {
+                "teamname": r.teamname,
+                "team_slug": _slugify(r.teamname),
+                "league": r.home_league or r.league,
+                "position": r.position,
+                "first": r.first[:10],
+                "last": r.last[:10],
+                "games": int(r.games),
+                "elo": round(float(r.elo)),
+            }
+        )
     for pid, games in listed_history.groupby("playerid", sort=False):
-        info = listed.loc[listed["playerid"] == pid].iloc[0]
-        series = [{"date": d[:10], "elo": round(float(e), 1)} for d, e in zip(games["date"], games["elo"])]
+        info = infos.loc[pid]
+        series = [
+            {"date": d[:10], "elo": round(float(e), 1)}
+            for d, e in zip(games["date"], games["elo"])
+        ]
         peak = max(series, key=lambda d: d["elo"])
         low = min(series, key=lambda d: d["elo"])
-        # A stint is a run of consecutive games for one team.
-        stint_id = (games["teamid"] != games["teamid"].shift()).cumsum()
-        stints = []
-        for _, stint in games.groupby(stint_id, sort=False):
-            last = stint.iloc[-1]
-            stints.append(
-                {
-                    "teamname": last["teamname"],
-                    "team_slug": _slugify(last["teamname"]),
-                    "league": last["home_league"] or last["league"],
-                    "position": stint["position"].mode().iloc[0],
-                    "first": stint["date"].iloc[0][:10],
-                    "last": last["date"][:10],
-                    "games": len(stint),
-                    "elo": round(float(last["elo"])),
-                }
-            )
-        names = [n for n in dict.fromkeys(games["playername"][::-1]) if n != info["playername"]]
+        stints = stints_by_player[pid]
+        names = [
+            n
+            for n in dict.fromkeys(games["playername"][::-1])
+            if n != info["playername"]
+        ]
         pages[info["slug"]] = {
             "playername": info["playername"],
             "slug": info["slug"],
@@ -1038,10 +1331,18 @@ def player_pages_and_rows(history, latest, seasons):
             "team_slug": _slugify(info["teamname"]),
             "home_league": info["league"],
             "current_elo": round(float(info["elo"])),
-            "active": bool(pd.to_datetime(info["latest_date"]) >= newest - ACTIVE_WINDOW),
+            "active": bool(
+                pd.to_datetime(info["latest_date"]) >= newest - ACTIVE_WINDOW
+            ),
             "aliases": names,
             "elo_series": series,
-            "elo_summary": {"games": len(series), "peak": peak, "low": low, "first": series[0], "last": series[-1]},
+            "elo_summary": {
+                "games": len(series),
+                "peak": peak,
+                "low": low,
+                "first": series[0],
+                "last": series[-1],
+            },
             "stints": stints[::-1],
         }
     return register, pages, listed
@@ -1070,50 +1371,85 @@ def team_rosters(history, player_slugs, player_elos):
     newest = pd.to_datetime(history["date"]).max()
     rosters = {}
 
-    last_game = history.drop_duplicates("teamname", keep="last")[["teamname", "gameid", "date"]]
-    last = history.merge(last_game, on=["teamname", "gameid", "date"])
-    for team, rows in last.groupby("teamname", sort=False):
-        rows = rows.sort_values("position", key=lambda p: p.map(role_rank))
-        rosters[team] = {
-            "last": {
-                "date": rows["date"].iloc[0][:10],
-                "active": bool(pd.to_datetime(rows["date"].iloc[0]) >= newest - ACTIVE_WINDOW),
-                "players": [
-                    {"name": r.playername, "slug": player_slugs.get(r.playerid), "role": r.position,
-                     "elo": None if pd.isna(player_elos.get(r.playerid)) else round(float(player_elos.get(r.playerid)))}
-                    for r in rows.itertuples()
-                ],
-            },
-            "seasons": [],
-        }
+    def elo_of(pid):
+        elo = player_elos.get(pid)
+        return None if pd.isna(elo) else round(float(elo))
 
+    last_game = history.drop_duplicates("teamname", keep="last")[
+        ["teamname", "gameid", "date"]
+    ]
+    last = history.merge(last_game, on=["teamname", "gameid", "date"])
+    # Teams in order of first appearance, each lineup in role order.
+    last = last.assign(
+        team_order=last.groupby("teamname", sort=False).ngroup(),
+        role_order=last["position"].map(role_rank),
+    ).sort_values(["team_order", "role_order"], kind="stable")
+    for r in last.itertuples(index=False):
+        roster = rosters.get(r.teamname)
+        if roster is None:
+            roster = rosters[r.teamname] = {
+                "last": {
+                    "date": r.date[:10],
+                    "active": bool(pd.to_datetime(r.date) >= newest - ACTIVE_WINDOW),
+                    "players": [],
+                },
+                "seasons": [],
+            }
+        roster["last"]["players"].append(
+            {
+                "name": r.playername,
+                "slug": player_slugs.get(r.playerid),
+                "role": r.position,
+                "elo": elo_of(r.playerid),
+            }
+        )
+
+    group = ["teamname", "year", "position"]
     counts = (
-        history.groupby(["teamname", "year", "position", "playerid"])
+        history.groupby(group + ["playerid"])
         .agg(games=("gameid", "size"), name=("playername", "last"))
         .reset_index()
-        .sort_values(["teamname", "year", "position", "games"], ascending=[True, False, True, False], kind="mergesort")
+        .sort_values(
+            ["teamname", "year", "position", "games"],
+            ascending=[True, False, True, False],
+            kind="mergesort",
+        )
     )
-    for (team, year), season in counts.groupby(["teamname", "year"], sort=False):
-        roles = []
-        for role in ROLE_ORDER:
-            players = season[season["position"] == role]
-            listed = [
-                {"name": r.name, "slug": player_slugs.get(r.playerid), "games": int(r.games)}
-                for r in players.itertuples()
-            ]
-            roles.append({"role": role, "players": listed[: 1 + ROSTER_EXTRAS], "more": max(0, len(listed) - 1 - ROSTER_EXTRAS)})
-        rosters[team]["seasons"].append({"year": int(year), "roles": roles})
+    counts["more"] = (
+        counts.groupby(group)["games"].transform("size") - 1 - ROSTER_EXTRAS
+    )
+    counts["rank"] = counts.groupby(group).cumcount()
+    seasons = {}
+    for r in counts[counts["rank"] <= ROSTER_EXTRAS].itertuples(index=False):
+        roles = seasons.get((r.teamname, r.year))
+        if roles is None:
+            roles = seasons[(r.teamname, r.year)] = {
+                role: {"role": role, "players": [], "more": 0} for role in ROLE_ORDER
+            }
+        if r.position in roles:
+            roles[r.position]["players"].append(
+                {
+                    "name": r.name,
+                    "slug": player_slugs.get(r.playerid),
+                    "games": int(r.games),
+                }
+            )
+            roles[r.position]["more"] = max(0, int(r.more))
+    for (team, year), roles in seasons.items():
+        rosters[team]["seasons"].append(
+            {"year": int(year), "roles": list(roles.values())}
+        )
     for roster in rosters.values():
         roster["seasons"].sort(key=lambda s: s["year"], reverse=True)
     return rosters
 
 
-def render_player_pages(pages, last_update):
+def render_player_pages(pages):
     template = env.get_template("player.html.j2")
     for page in pages.values():
         _write(
             os.path.join(OUTPUT_DIR, "players", f"{page['slug']}.html"),
-            template.render(page_key="player", root_path="../", last_update=last_update, **page),
+            template.render(page_key="player", root_path="../", **page),
         )
 
 
@@ -1121,7 +1457,14 @@ def write_player_index(listed):
     """players.json for the header search: name, slug, role, team, league, last game."""
     majors = set(env.globals["major_leagues"])
     players = [
-        {"n": r.playername, "s": r.slug, "r": r.position, "t": r.teamname, "l": r.league, "d": r.latest_date}
+        {
+            "n": r.playername,
+            "s": r.slug,
+            "r": r.position,
+            "t": r.teamname,
+            "l": r.league,
+            "d": r.latest_date,
+        }
         for r in listed.sort_values("latest_date", ascending=False).itertuples()
     ]
     players.sort(key=lambda p: p["l"] not in majors)
@@ -1140,7 +1483,9 @@ def write_team_index(pages):
             "n": p["teamname"],
             "s": p["slug"],
             "l": p["current_league"] or (p["leagues"][-1] if p["leagues"] else ""),
-            "d": p["elo_summary"]["last"]["date"] if p["elo_summary"] else str(p["series"][-1]["year"]),
+            "d": p["elo_summary"]["last"]["date"]
+            if p["elo_summary"]
+            else str(p["series"][-1]["year"]),
         }
         for p in pages.values()
     ]
@@ -1160,12 +1505,23 @@ def game_log_context(kind, log, slug):
     if not series:
         return None
     people = "players" if kind == "team" else "teams"
-    data = {"kind": kind, people: log[people], "series": series[:GAME_LOG_SERIES], "years": gamelog.year_records(series)}
+    data = {
+        "kind": kind,
+        people: log[people],
+        "series": series[:GAME_LOG_SERIES],
+        "years": gamelog.year_records(series),
+    }
     if len(series) > GAME_LOG_SERIES:
         path = os.path.join(OUTPUT_DIR, "games", f"{kind}s", f"{slug}.json")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:
-            f.write(json.dumps({people: log[people], "series": series}, ensure_ascii=False, separators=(",", ":")))
+            f.write(
+                json.dumps(
+                    {people: log[people], "series": series},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+            )
         data["src"] = f"../games/{kind}s/{slug}.json"
     return {
         "data": data,
@@ -1177,49 +1533,73 @@ def game_log_context(kind, log, slug):
     }
 
 
-def add_game_logs(team_pages, player_pages, states, prediction_log, player_slugs, aura_games):
+def add_game_logs(
+    team_pages,
+    player_pages,
+    states,
+    prediction_log,
+    player_slugs,
+    aura_games,
+    tables=None,
+):
     """Attach a game log to every team and player page (as `games`).
 
     `player_slugs` maps playerid to page slug; `aura_games` is `aura.get_aura`
     output, whose major-league games give the per-game AURA on player logs.
+    `tables` is the build's shared `PlayerTables`.
     """
     shutil.rmtree(os.path.join(OUTPUT_DIR, "games"), ignore_errors=True)
     games = gamelog.add_series(gamelog.add_calls(gamelog.load_team_games(), states))
-    players = gamelog.load_player_games()
+    players = gamelog.load_player_games(tables)
     prices = gamelog.load_prices(MARKET_PRICES, prediction_log)
     heads = gamelog.series_heads(games, gamelog.PriceBook(prices))
     teams = gamelog.team_logs(games, players, heads, player_slugs)
     for page in team_pages.values():
         log = teams.get(page["teamname"])
         page["games"] = game_log_context("team", log, page["slug"]) if log else None
-    majors = aura_games[aura_games["league"].isin(env.globals["major_leagues"])].dropna(subset=["aura"])
-    aura_by_game = dict(zip(zip(majors["gameid"], majors["playerid"]), majors["aura"] * aura.POINTS))
-    for slug, log in gamelog.player_logs(games, players, heads, player_slugs, aura_by_game).items():
+    majors = aura_games[aura_games["league"].isin(env.globals["major_leagues"])].dropna(
+        subset=["aura"]
+    )
+    aura_by_game = dict(
+        zip(zip(majors["gameid"], majors["playerid"]), majors["aura"] * aura.POINTS)
+    )
+    for slug, log in gamelog.player_logs(
+        games, players, heads, player_slugs, aura_by_game
+    ).items():
         if slug in player_pages:
             player_pages[slug]["games"] = game_log_context("player", log, slug)
     priced = sum(1 for log in teams.values() for s in log["series"] if "k" in s)
-    print(f"Game logs: {len(heads):,} team-series, {priced:,} with a Kalshi price ({len(prices):,} prices on file)")
+    print(
+        f"Game logs: {len(heads):,} team-series, {priced:,} with a Kalshi price ({len(prices):,} prices on file)"
+    )
 
 
-def render_team_pages(pages, last_update):
+def render_team_pages(pages):
     template = env.get_template("team.html.j2")
     for page in pages.values():
         _write(
             os.path.join(OUTPUT_DIR, "teams", f"{page['slug']}.html"),
-            template.render(page_key="team", root_path="../", last_update=last_update, **page),
+            template.render(page_key="team", root_path="../", **page),
         )
 
 
-def _season_page(key, df, columns, value_key, last_update, domain=None):
-    config = {"valueKey": value_key, "columns": columns, "defaultSort": value_key, "kind": "season"}
+def _season_page(key, df, columns, value_key, domain=None):
+    config = {
+        "valueKey": value_key,
+        "columns": columns,
+        "defaultSort": value_key,
+        "kind": "season",
+    }
     if domain is not None:
         config["domain"] = domain
     render_rankings_page(
         METRICS[key],
         _records(df),
         config,
-        {"years": sorted(int(y) for y in df["year"].unique()), "leagues": sorted(df["league"].unique())},
-        last_update,
+        {
+            "years": sorted(int(y) for y in df["year"].unique()),
+            "leagues": sorted(df["league"].unique()),
+        },
     )
 
 
@@ -1242,14 +1622,32 @@ def forge_register(forms_now, forms_seasons, latest_elos, season_elos, majors):
     now = forge_ratings(domestic(forms_now), latest_elos)
     now = now[_active(now)].reset_index(drop=True)
     seasons = forge_ratings(domestic(forms_seasons), season_elos)
-    rows = _forecast_records(now.drop(columns="slope"), seasons.drop(columns="slope"), ("forge", "elo", "form"))
-    slopes = pd.concat([now, seasons]).drop_duplicates("league").set_index("league")["slope"]
-    config = {"valueKey": "forge", "columns": FORGE_COLUMNS, "defaultSort": "forge", "kind": "rating",
-              "leagueScales": True, "majorLeagues": list(majors),
-              "weights": {"elo": ELO_WEIGHT, "crossRegionElo": CROSS_REGION_ELO_WEIGHT,
-                          "leagues": {l: float(slopes[l]) for l in sorted(slopes.index)}}}
-    filters = {"years": sorted(int(y) for y in seasons["year"].unique()),
-               "leagues": [l for l in majors if l in slopes.index] + sorted(set(slopes.index) - set(majors))}
+    rows = _forecast_records(
+        now.drop(columns="slope"),
+        seasons.drop(columns="slope"),
+        ("forge", "elo", "form"),
+    )
+    slopes = (
+        pd.concat([now, seasons]).drop_duplicates("league").set_index("league")["slope"]
+    )
+    config = {
+        "valueKey": "forge",
+        "columns": FORGE_COLUMNS,
+        "defaultSort": "forge",
+        "kind": "rating",
+        "leagueScales": True,
+        "majorLeagues": list(majors),
+        "weights": {
+            "elo": ELO_WEIGHT,
+            "crossRegionElo": CROSS_REGION_ELO_WEIGHT,
+            "leagues": {l: float(slopes[l]) for l in sorted(slopes.index)},
+        },
+    }
+    filters = {
+        "years": sorted(int(y) for y in seasons["year"].unique()),
+        "leagues": [l for l in majors if l in slopes.index]
+        + sorted(set(slopes.index) - set(majors)),
+    }
     return now, seasons, rows, config, filters
 
 
@@ -1264,36 +1662,45 @@ def main():
     games = load_glory_games()
     record_all = get_record(load_season_games())
     glory_df = _rankings(games, 5, True, opponent_adjusted="record", record=record_all)
-    glory_all = _rankings(games, 1, False, opponent_adjusted="record", record=record_all)
+    glory_all = _rankings(
+        games, 1, False, opponent_adjusted="record", record=record_all
+    )
     glory_unadjusted_df = _rankings(games, 5, True)
     glorb_df = _rankings(games, 5, True, baseline=True)
 
     # Record covers the same team-seasons as GLORY (5+ major-league games), with
     # GLORY's league; its win % and games count every game of the season.
-    record_df = glory_df[["teamname", "year", "league"]].merge(
-        record_all.sort_values("games").drop_duplicates(["teamname", "year"], keep="last")[
-            ["teamname", "year", "record", "win_pct", "games"]
-        ],
-        on=["teamname", "year"],
-    ).assign(win_pct=lambda d: (d["win_pct"] * 100).round(1), record=lambda d: d["record"].round(1))
+    record_df = (
+        glory_df[["teamname", "year", "league"]]
+        .merge(
+            record_all.sort_values("games").drop_duplicates(
+                ["teamname", "year"], keep="last"
+            )[["teamname", "year", "record", "win_pct", "games"]],
+            on=["teamname", "year"],
+        )
+        .assign(
+            win_pct=lambda d: (d["win_pct"] * 100).round(1),
+            record=lambda d: d["record"].round(1),
+        )
+    )
     luck_df = get_luck(games, minimum_matches=5).assign(
         win_pct=lambda d: (d["win_pct"] * 100).round(1),
         expected=lambda d: (d["expected"] * 100).round(1),
         luck_wins=lambda d: d["luck_wins"].round(1),
     )[["teamname", "year", "league", "luck_wins", "win_pct", "expected", "games"]]
 
-    render_404(last_update)
-    render_sunset(last_update)
-    render_redirect("glory_plus", "glory.html", "GLORY+ is now part of GLORY", last_update)
+    render_404()
+    render_sunset()
+    render_redirect("glory_plus", "glory.html", "GLORY+ is now part of GLORY")
     # GlorELO+ was renamed FORGE; keep its old address working.
-    render_redirect("glorelo_plus", "forge.html", "GlorELO+ is now FORGE", last_update)
+    render_redirect("glorelo_plus", "forge.html", "GlorELO+ is now FORGE")
 
-    _season_page("glory", glory_df, METRIC_COLUMNS, "score", last_update)
-    _season_page("record", record_df, RECORD_COLUMNS, "record", last_update)
+    _season_page("glory", glory_df, METRIC_COLUMNS, "score")
+    _season_page("record", record_df, RECORD_COLUMNS, "record")
     reach = float(np.ceil(luck_df["luck_wins"].abs().max() / 5) * 5)
-    _season_page("luck", luck_df, LUCK_COLUMNS, "luck_wins", last_update, domain=[-reach, reach])
-    _season_page("glory_unadjusted", glory_unadjusted_df, METRIC_COLUMNS, "score", last_update)
-    _season_page("glorb", glorb_df, METRIC_COLUMNS, "score", last_update)
+    _season_page("luck", luck_df, LUCK_COLUMNS, "luck_wins", domain=[-reach, reach])
+    _season_page("glory_unadjusted", glory_unadjusted_df, METRIC_COLUMNS, "score")
+    _season_page("glorb", glorb_df, METRIC_COLUMNS, "score")
 
     # ---- Forecasts -------------------------------------------------------
     # Forecast pages open on "now" rows (current ratings) and also carry one row per
@@ -1305,66 +1712,109 @@ def main():
     # the default view shows only the active ones.
     leagues = set(latest_elos["league"]) | set(season_elos["league"])
     league_order = [l for l in majors if l in leagues] + sorted(leagues - set(majors))
-    team_elo_rows = _forecast_records(latest_elos.assign(active=_active(latest_elos)), season_elos, ("elo",))
+    team_elo_rows = _forecast_records(
+        latest_elos.assign(active=_active(latest_elos)), season_elos, ("elo",)
+    )
     render_rankings_page(
         cfg,
         team_elo_rows,
-        {"valueKey": "elo", "columns": ELO_COLUMNS, "defaultSort": "elo", "kind": "rating"},
-        {"years": sorted(int(y) for y in season_elos["year"].unique()), "leagues": league_order},
-        last_update,
+        {
+            "valueKey": "elo",
+            "columns": ELO_COLUMNS,
+            "defaultSort": "elo",
+            "kind": "rating",
+        },
+        {
+            "years": sorted(int(y) for y in season_elos["year"].unique()),
+            "leagues": league_order,
+        },
     )
 
     # Form for every team in every league, as of now and at the end of each season.
     states = form_states(opponent_adjust(load_form_games()))
     forms_now, forms_seasons = team_forms(states)
     prediction_log, coverage = update_predictions(states)
-    form_now = forms_now.rename(columns={"home": "league"}).assign(form=lambda d: FORM_POINTS * d["form"])
-    form_seasons = forms_seasons.rename(columns={"home": "league"}).assign(form=lambda d: FORM_POINTS * d["form"])
+    form_now = forms_now.rename(columns={"home": "league"}).assign(
+        form=lambda d: FORM_POINTS * d["form"]
+    )
+    form_seasons = forms_seasons.rename(columns={"home": "league"}).assign(
+        form=lambda d: FORM_POINTS * d["form"]
+    )
     form_leagues = set(form_now["league"]) | set(form_seasons["league"])
     render_rankings_page(
         FORECASTS["form"],
-        _forecast_records(form_now.assign(active=_active(form_now)), form_seasons, ("form",)),
-        {"valueKey": "form", "columns": FORM_COLUMNS, "defaultSort": "form", "kind": "rating"},
-        {"years": sorted(int(y) for y in form_seasons["year"].unique()),
-         "leagues": [l for l in majors if l in form_leagues] + sorted(form_leagues - set(majors))},
-        last_update,
+        _forecast_records(
+            form_now.assign(active=_active(form_now)), form_seasons, ("form",)
+        ),
+        {
+            "valueKey": "form",
+            "columns": FORM_COLUMNS,
+            "defaultSort": "form",
+            "kind": "rating",
+        },
+        {
+            "years": sorted(int(y) for y in form_seasons["year"].unique()),
+            "leagues": [l for l in majors if l in form_leagues]
+            + sorted(form_leagues - set(majors)),
+        },
     )
 
     forge, forge_seasons, forge_rows, forge_config, forge_filters = forge_register(
         forms_now, forms_seasons, latest_elos, season_elos, majors
     )
-    render_rankings_page(FORECASTS["forge"], forge_rows, forge_config, forge_filters, last_update)
+    render_rankings_page(FORECASTS["forge"], forge_rows, forge_config, forge_filters)
 
     # ---- Players ---------------------------------------------------------
-    player_history = get_player_history(cfg["method"])
+    # One read of the player tables for player Elo, AURA and the game logs.
+    player_tables = PlayerTables(cfg["method"], aura.STATS, aura.MINUTES)
+    player_history = get_player_history(cfg["method"], player_tables)
     player_latest, player_seasons = get_player_elos(cfg["method"], player_history)
-    player_rows, player_pages, listed_players = player_pages_and_rows(player_history, player_latest, player_seasons)
+    player_rows, player_pages, listed_players = player_pages_and_rows(
+        player_history, player_latest, player_seasons
+    )
     player_leagues = {r["league"] for r in player_rows}
     render_rankings_page(
         PLAYER_METRICS["player_elo"],
         player_rows,
-        {"valueKey": "elo", "columns": PLAYER_ELO_COLUMNS, "defaultSort": "elo", "kind": "rating", "entity": "player"},
-        {"years": sorted({int(r["year"]) for r in player_rows if not r["now"]}),
-         "leagues": [l for l in majors if l in player_leagues] + sorted(player_leagues - set(majors))},
-        last_update,
+        {
+            "valueKey": "elo",
+            "columns": PLAYER_ELO_COLUMNS,
+            "defaultSort": "elo",
+            "kind": "rating",
+            "entity": "player",
+        },
+        {
+            "years": sorted({int(r["year"]) for r in player_rows if not r["now"]}),
+            "leagues": [l for l in majors if l in player_leagues]
+            + sorted(player_leagues - set(majors)),
+        },
     )
 
     # AURA per player-season (major leagues), on its own page and on player pages.
-    aura_games = aura.get_aura()
+    aura_games = aura.get_aura(tables=player_tables)
     aura_seasons = aura.season_aura(aura_games, majors)
-    aura_rows, aura_by_player = aura_rows_and_seasons(aura_seasons, listed_players.set_index("playerid")["slug"])
+    aura_rows, aura_by_player = aura_rows_and_seasons(
+        aura_seasons, listed_players.set_index("playerid")["slug"]
+    )
     for slug, page in player_pages.items():
         page["aura_seasons"] = aura_by_player.get(slug, [])
     reach = float(np.ceil(max(abs(r["aura"]) for r in aura_rows) / 5) * 5)
     render_rankings_page(
         PLAYER_METRICS["aura"],
         aura_rows,
-        {"valueKey": "aura", "columns": AURA_COLUMNS, "defaultSort": "aura", "kind": "season", "entity": "player",
-         "domain": [-reach, reach]},
-        {"years": sorted({int(r["year"]) for r in aura_rows}),
-         "leagues": [l for l in majors if any(r["league"] == l for r in aura_rows)],
-         "roles": ROLE_ORDER},
-        last_update,
+        {
+            "valueKey": "aura",
+            "columns": AURA_COLUMNS,
+            "defaultSort": "aura",
+            "kind": "season",
+            "entity": "player",
+            "domain": [-reach, reach],
+        },
+        {
+            "years": sorted({int(r["year"]) for r in aura_rows}),
+            "leagues": [l for l in majors if any(r["league"] == l for r in aura_rows)],
+            "roles": ROLE_ORDER,
+        },
     )
 
     # ---- Index and team pages -----------------------------------------------
@@ -1374,36 +1824,66 @@ def main():
         listed_players.set_index("playerid")["slug"].to_dict(),
         player_latest.set_index("playerid")["elo"].to_dict(),
     )
-    pages = _team_pages(glory_all, forge_seasons, forge, elo_history, latest_elos, glory_df, rosters)
+    pages = _team_pages(
+        glory_all, forge_seasons, forge, elo_history, latest_elos, glory_df, rosters
+    )
     write_kalshi_alert(prediction_log, coverage, set(pages))
-    predictions = predictions_view(prediction_log, set(pages), datetime.datetime.now(datetime.timezone.utc))
-    render_predictions(predictions, coverage, last_update)
-    render_results(predictions, last_update)
+    predictions = predictions_view(
+        prediction_log, set(pages), datetime.datetime.now(datetime.timezone.utc)
+    )
+    render_predictions(predictions, coverage)
+    render_results(predictions)
     with open(os.path.join(OUTPUT_DIR, "predictions.json"), "w") as f:
-        f.write(json.dumps(markets.published_log(prediction_log), ensure_ascii=False, separators=(",", ":")))
+        f.write(
+            json.dumps(
+                markets.published_log(prediction_log),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        )
     # The hourly price job (scripts/update_prices.py) replaces this between builds.
     with open(os.path.join(OUTPUT_DIR, "kalshi.json"), "w") as f:
-        f.write(json.dumps(markets.prices_file(prediction_log, datetime.datetime.now(datetime.timezone.utc)), separators=(",", ":")))
+        f.write(
+            json.dumps(
+                markets.prices_file(
+                    prediction_log, datetime.datetime.now(datetime.timezone.utc)
+                ),
+                separators=(",", ":"),
+            )
+        )
     render_index(
         [r for r in forge_rows if r["league"] in majors],
         team_elo_rows,
         player_rows,
-        {"glory": len(glory_df), "forge": len(forge),
-         "game_length_elo": len(latest_elos), "player_elo": sum(r["now"] and r["active"] for r in player_rows),
-         "aura": len(aura_rows)},
+        {
+            "glory": len(glory_df),
+            "forge": len(forge),
+            "game_length_elo": len(latest_elos),
+            "player_elo": sum(r["now"] and r["active"] for r in player_rows),
+            "aura": len(aura_rows),
+        },
         forge_config,
         last_update,
         fixtures=predictions["home"],
     )
-    add_game_logs(pages, player_pages, states, prediction_log,
-                  listed_players.set_index("playerid")["slug"].to_dict(), aura_games)
-    render_team_pages(pages, last_update)
+    add_game_logs(
+        pages,
+        player_pages,
+        states,
+        prediction_log,
+        listed_players.set_index("playerid")["slug"].to_dict(),
+        aura_games,
+        player_tables,
+    )
+    render_team_pages(pages)
     write_team_index(pages)
 
-    render_player_pages(player_pages, last_update)
+    render_player_pages(player_pages)
     write_player_index(listed_players)
 
-    print(f"Static site generated in {OUTPUT_DIR}/ ({len(pages)} team pages, {len(player_pages)} player pages)")
+    print(
+        f"Static site generated in {OUTPUT_DIR}/ ({len(pages)} team pages, {len(player_pages)} player pages)"
+    )
 
 
 if __name__ == "__main__":

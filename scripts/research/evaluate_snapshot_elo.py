@@ -1,6 +1,6 @@
 """Pre-match Elo ablation for in-game models; development 2023–2025 only.
 
-Run: .venv/bin/python scripts/evaluate_snapshot_elo.py
+Run: .venv/bin/python scripts/research/evaluate_snapshot_elo.py
 """
 
 import argparse
@@ -8,10 +8,10 @@ import hashlib
 import json
 from pathlib import Path
 
+import evaluate_champions as champions
 import numpy as np
 import pandas as pd
 
-import evaluate_champions as champions
 from prometheus import elo
 from prometheus.utils import get_engine
 
@@ -269,7 +269,9 @@ def report(pooled, annual, coverage, audit):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
-    parser.add_argument("--out", type=Path, default=Path("docs/snapshot_elo_report.md"))
+    parser.add_argument(
+        "--out", type=Path, default=Path("docs/research/snapshot_elo_report.md")
+    )
     parser.add_argument("--artifacts", type=Path, default=Path("data/snapshot_elo"))
     args = parser.parse_args()
     ratings, audit = load_ratings()

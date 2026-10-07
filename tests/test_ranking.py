@@ -67,10 +67,18 @@ def test_record_adjustment_removes_full_season_opponent_effect():
     for g in range(200):
         a, b = rng.choice(teams, 2, replace=False)
         for team, opp in ((a, b), (b, a)):
-            rows.append({"gameid": f"g{g}", "teamid": team, "year": 2024,
-                         "gpm": 1800 + 60 * rating[team] - 40 * rating[opp]})
+            rows.append(
+                {
+                    "gameid": f"g{g}",
+                    "teamid": team,
+                    "year": 2024,
+                    "gpm": 1800 + 60 * rating[team] - 40 * rating[opp],
+                }
+            )
     games = pd.DataFrame(rows)
-    record = pd.DataFrame({"teamid": teams, "year": 2024, "rating": [rating[t] for t in teams]})
+    record = pd.DataFrame(
+        {"teamid": teams, "year": 2024, "rating": [rating[t] for t in teams]}
+    )
 
     adjusted = adjust_for_opponent_record(games, ["gpm"], record)
 
@@ -88,11 +96,30 @@ def test_glory_skips_a_season_with_no_qualified_team():
     rng = np.random.default_rng(2)
 
     def season(year, teams, games_each):
-        rows = [{"gameid": f"{year}-{t}-{g}", "teamid": t, "teamname": t, "year": year, "league": "LCS",
-                 "gpm": rng.normal(1800, 50), "result": int(rng.integers(0, 2))}
-                for t in teams for g in range(games_each)]
+        rows = [
+            {
+                "gameid": f"{year}-{t}-{g}",
+                "teamid": t,
+                "teamname": t,
+                "year": year,
+                "league": "LCS",
+                "gpm": rng.normal(1800, 50),
+                "result": int(rng.integers(0, 2)),
+            }
+            for t in teams
+            for g in range(games_each)
+        ]
         return pd.DataFrame(rows)
 
-    games = {2026: season(2026, ["A", "B", "C", "D"], 6), 2027: season(2027, ["A", "B"], 2)}
-    ranking = get_glory_ranking(features=["gpm"], year=[2026, 2027], league="LCS", minimum_matches=5, games=games)
+    games = {
+        2026: season(2026, ["A", "B", "C", "D"], 6),
+        2027: season(2027, ["A", "B"], 2),
+    }
+    ranking = get_glory_ranking(
+        features=["gpm"],
+        year=[2026, 2027],
+        league="LCS",
+        minimum_matches=5,
+        games=games,
+    )
     assert set(ranking["year"]) == {2026} and len(ranking) == 4

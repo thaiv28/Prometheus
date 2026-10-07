@@ -1,12 +1,12 @@
 """Matched-C feature ablation and game-aligned paired comparisons."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "research"))
 import evaluate_elo_champions as ablation
 from test_champion_interactions import games
 

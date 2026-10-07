@@ -84,7 +84,11 @@ ROSTER_LABELS = {
 def ece(p, won, bins=10):
     """Expected calibration error over equal-width probability bins."""
     idx = np.minimum((p * bins).astype(int), bins - 1)
-    return sum((idx == b).mean() * abs(p[idx == b].mean() - won[idx == b].mean()) for b in range(bins) if (idx == b).any())
+    return sum(
+        (idx == b).mean() * abs(p[idx == b].mean() - won[idx == b].mean())
+        for b in range(bins)
+        if (idx == b).any()
+    )
 
 
 def calibration(players):
@@ -113,19 +117,27 @@ def calibration(players):
             }
         )
         if minute == aura.MINUTE:
-            frame = pd.DataFrame({"p": p, "won": won, "bin": np.minimum((p * 10).astype(int), 9)})
-            bins = frame.groupby("bin").agg(games=("p", "size"), predicted=("p", "mean"), actual=("won", "mean"))
+            frame = pd.DataFrame(
+                {"p": p, "won": won, "bin": np.minimum((p * 10).astype(int), 9)}
+            )
+            bins = frame.groupby("bin").agg(
+                games=("p", "size"), predicted=("p", "mean"), actual=("won", "mean")
+            )
     return pd.DataFrame(rows), bins
 
 
 def all_scores(players):
     """Every player-game (all leagues) with every score to compare."""
-    frame = players[KEY + ["gameid", "teamid", "teamname", "league", "date", "result"]].copy()
+    frame = players[
+        KEY + ["gameid", "teamid", "teamname", "league", "date", "result"]
+    ].copy()
     for minute in aura.MINUTES:
         frame[f"aura{minute}"] = aura.snapshot_scores(players, minute)
     frame["aura"] = aura.get_aura(players)["aura"]
     gold = players["gold_15"]
-    frame["gold15"] = gold / gold.groupby([players["year"], players["position"]]).transform("std")
+    frame["gold15"] = gold / gold.groupby(
+        [players["year"], players["position"]]
+    ).transform("std")
     frame["win"] = players["result"].astype(float)
     return frame
 
@@ -192,8 +204,14 @@ def roster_table(frame, glory=None, score=CHOSEN):
     team's games in this half. Team AURA: the team's own five-lane sum in the other
     half. GLORY and win %: the other half's values. Rows are (teamname, year, half).
     """
-    games = frame.groupby(["teamname", "year", "half"]).agg(n=("gameid", "nunique"), win=("win", "mean"))
-    team_games = frame.groupby(["gameid", "teamid", "teamname", "year", "half"])[score].sum().reset_index()
+    games = frame.groupby(["teamname", "year", "half"]).agg(
+        n=("gameid", "nunique"), win=("win", "mean")
+    )
+    team_games = (
+        frame.groupby(["gameid", "teamid", "teamname", "year", "half"])[score]
+        .sum()
+        .reset_index()
+    )
     team_aura = team_games.groupby(["teamname", "year", "half"])[score].mean()
     player = frame.groupby(KEY + ["half"])[score].agg(["sum", "size"])
     player = _shrunk(player["sum"], player["size"])
@@ -202,7 +220,9 @@ def roster_table(frame, glory=None, score=CHOSEN):
         this = frame[frame["half"] == h]
         other = pd.Series(player.xs(1 - h, level="half"), name="other")
         starters = this.join(other, on=KEY)["other"].fillna(0.0)
-        roster = starters.groupby([this["gameid"], this["teamname"], this["year"]]).sum()
+        roster = starters.groupby(
+            [this["gameid"], this["teamname"], this["year"]]
+        ).sum()
         roster = roster.groupby(level=["teamname", "year"]).mean()
         part = pd.DataFrame(
             {
@@ -244,7 +264,11 @@ def roster_bootstrap(table, a, b, n_resamples=2000, seed=0):
         pick = rng.integers(0, len(keys), len(keys))
         sample = table.iloc[np.concatenate([groups[keys[i]] for i in pick])]
         diffs.append(_roster_r(sample, a) - _roster_r(sample, b))
-    return _roster_r(table, a) - _roster_r(table, b), np.percentile(diffs, 2.5), np.percentile(diffs, 97.5)
+    return (
+        _roster_r(table, a) - _roster_r(table, b),
+        np.percentile(diffs, 2.5),
+        np.percentile(diffs, 97.5),
+    )
 
 
 def so_far(players):
@@ -253,13 +277,25 @@ def so_far(players):
     The shrunk mean of their last `RECENT_GAMES` games, every league; `prior_games`
     counts their earlier games.
     """
-    players = players.sort_values(["date", "gameid", "teamid", "position"]).reset_index(drop=True)
+    players = players.sort_values(["date", "gameid", "teamid", "position"]).reset_index(
+        drop=True
+    )
     recent = lambda s: s.rolling(RECENT_GAMES, min_periods=1).sum()
     for score in (CHOSEN, "gold15"):
-        total = players[score].fillna(0.0).groupby(players["playerid"]).transform(recent)
-        count = players[score].notna().astype(float).groupby(players["playerid"]).transform(recent)
+        total = (
+            players[score].fillna(0.0).groupby(players["playerid"]).transform(recent)
+        )
+        count = (
+            players[score]
+            .notna()
+            .astype(float)
+            .groupby(players["playerid"])
+            .transform(recent)
+        )
         players[f"{score}_post"] = _shrunk(total, count)
-        players[f"{score}_pre"] = players[f"{score}_post"].groupby(players["playerid"]).shift().fillna(0.0)
+        players[f"{score}_pre"] = (
+            players[f"{score}_post"].groupby(players["playerid"]).shift().fillna(0.0)
+        )
     players["prior_games"] = players.groupby("playerid").cumcount()
     return players
 
@@ -269,9 +305,15 @@ def pregame_gap_r(players, leagues=None):
     players = so_far(players)
     if leagues is not None:
         players = players[players["league"].isin(leagues)]
-    team = players.groupby(["gameid", "side"]).agg(pre=(f"{CHOSEN}_pre", "sum"), won=("win", "first")).unstack("side")
+    team = (
+        players.groupby(["gameid", "side"])
+        .agg(pre=(f"{CHOSEN}_pre", "sum"), won=("win", "first"))
+        .unstack("side")
+    )
     team = team.dropna()
-    return (team[("pre", "Blue")] - team[("pre", "Red")]).corr(team[("won", "Blue")]), len(team)
+    return (team[("pre", "Blue")] - team[("pre", "Red")]).corr(
+        team[("won", "Blue")]
+    ), len(team)
 
 
 def substitutions(players, elos):
@@ -286,8 +328,15 @@ def substitutions(players, elos):
     """
     players = so_far(players)
 
-    lineups = players.pivot_table(index=["gameid", "teamid"], columns="position", values="playerid", aggfunc="first")
-    order = players.drop_duplicates(["gameid", "teamid"])[["gameid", "teamid", "date", "result"]]
+    lineups = players.pivot_table(
+        index=["gameid", "teamid"],
+        columns="position",
+        values="playerid",
+        aggfunc="first",
+    )
+    order = players.drop_duplicates(["gameid", "teamid"])[
+        ["gameid", "teamid", "date", "result"]
+    ]
     order = order.join(lineups, on=["gameid", "teamid"]).reset_index(drop=True)
     prev = order.groupby("teamid")[["gameid", *aura.ROLES]].shift()
     changed = pd.DataFrame({r: order[r] != prev[r] for r in aura.ROLES})
@@ -297,7 +346,11 @@ def substitutions(players, elos):
     pre = players.set_index(["gameid", "teamid", "position"])
     for i in np.flatnonzero(one.to_numpy()):
         role = aura.ROLES[int(np.argmax(changed.iloc[i].to_numpy()))]
-        g, team, outgoing = order.at[i, "gameid"], order.at[i, "teamid"], prev.at[i, role]
+        g, team, outgoing = (
+            order.at[i, "gameid"],
+            order.at[i, "teamid"],
+            prev.at[i, role],
+        )
         new = pre.loc[(g, team, role)]
         old = post.loc[(prev.at[i, "gameid"], outgoing)]
         rows.append(
@@ -320,7 +373,10 @@ def substitutions(players, elos):
 
 def _sub_rows(subs, label):
     out = []
-    for name, col in (("AURA so far", "aura_diff"), ("Lane gold gap so far", "gold_diff")):
+    for name, col in (
+        ("AURA so far", "aura_diff"),
+        ("Lane gold gap so far", "gold_diff"),
+    ):
         r = subs[col].corr(subs["surprise"])
         lo, hi = correlation_interval(r, len(subs))
         thirds = pd.qcut(subs[col], 3, labels=False, duplicates="drop")
@@ -342,12 +398,16 @@ def held_out(players):
     frame["win"] = players["result"].astype(float)
     frame["aura"] = aura.get_aura(players, earlier_only=True)["aura"]
     frame["aura15"] = aura.snapshot_scores(players, aura.MINUTE, earlier_only=True)
-    frame = frame[frame["league"].isin(MAJORS) & (frame["year"] >= HELD_OUT_FROM)].dropna(subset=["aura", "aura15"])
+    frame = frame[
+        frame["league"].isin(MAJORS) & (frame["year"] >= HELD_OUT_FROM)
+    ].dropna(subset=["aura", "aura15"])
     frame = frame.assign(half=half_of(frame["gameid"]))
     names = ["aura", "aura15"]
     halves, pairs = split_halves(frame, names), season_pairs(frame, names)
     stay, moved = pairs[~pairs["moved"]], pairs[pairs["moved"]]
-    roster = roster_table(frame, score="aura")[["teamname", "year", "half", "win", "roster"]].rename(columns={"roster": "aura"})
+    roster = roster_table(frame, score="aura")[
+        ["teamname", "year", "half", "win", "roster"]
+    ].rename(columns={"roster": "aura"})
     roster["aura15"] = roster_table(frame, score="aura15")["roster"].to_numpy()
     rows = {
         n: {
@@ -360,11 +420,21 @@ def held_out(players):
         for n in names
     }
     diffs = {
-        "split": paired_correlation_bootstrap((halves["aura_0"], halves["aura_1"]), (halves["aura15_0"], halves["aura15_1"])),
-        "moved": paired_correlation_bootstrap((moved["aura"], moved["aura_next"]), (moved["aura15"], moved["aura15_next"])),
+        "split": paired_correlation_bootstrap(
+            (halves["aura_0"], halves["aura_1"]),
+            (halves["aura15_0"], halves["aura15_1"]),
+        ),
+        "moved": paired_correlation_bootstrap(
+            (moved["aura"], moved["aura_next"]), (moved["aura15"], moved["aura15_next"])
+        ),
         "roster": roster_bootstrap(roster, "aura", "aura15"),
     }
-    sizes = (len(halves), len(stay), len(moved), roster[["teamname", "year"]].drop_duplicates().shape[0])
+    sizes = (
+        len(halves),
+        len(stay),
+        len(moved),
+        roster[["teamname", "year"]].drop_duplicates().shape[0],
+    )
     return rows, diffs, sizes
 
 
@@ -385,7 +455,9 @@ def held_out_section(result):
     ]
     for n, label in (("aura", LABELS["aura"]), ("aura15", "AURA at 15 min only")):
         r = rows[n]
-        lines.append(f"| {label} | {r['split']:.3f} | {r['mates']:.3f} | {r['stay']:.3f} | {r['moved']:.3f} | {r['roster']:.3f} |")
+        lines.append(
+            f"| {label} | {r['split']:.3f} | {r['mates']:.3f} | {r['stay']:.3f} | {r['moved']:.3f} | {r['roster']:.3f} |"
+        )
     lines += [
         "",
         f"AURA minus 15 min only: split-half {fmt(diffs['split'])}; new team {fmt(diffs['moved'])}; roster "
@@ -453,7 +525,17 @@ def substitution_section(subs, reference=None):
     return lines
 
 
-def report(cal, bins, frame, weights, weight_year, roster=None, subs=None, reference=None, held=None):
+def report(
+    cal,
+    bins,
+    frame,
+    weights,
+    weight_year,
+    roster=None,
+    subs=None,
+    reference=None,
+    held=None,
+):
     lines = [
         "### Calibration",
         "",
@@ -467,9 +549,17 @@ def report(cal, bins, frame, weights, weight_year, roster=None, subs=None, refer
         lines.append(
             f"| {r.minute} min | {r.games:,} | {r.log_loss:.4f} | {r.blue_ll:.4f} | {r.brier:.4f} | {r.auc:.3f} | {r.ece:.4f} |"
         )
-    lines += ["", f"At {aura.MINUTE} minutes, by predicted chance:", "", "| Predicted | Games | Mean predicted | Actual |", "|---|---:|---:|---:|"]
+    lines += [
+        "",
+        f"At {aura.MINUTE} minutes, by predicted chance:",
+        "",
+        "| Predicted | Games | Mean predicted | Actual |",
+        "|---|---:|---:|---:|",
+    ]
     for b, r in bins.iterrows():
-        lines.append(f"| {b * 10}–{b * 10 + 10}% | {int(r.games):,} | {r.predicted:.3f} | {r.actual:.3f} |")
+        lines.append(
+            f"| {b * 10}–{b * 10 + 10}% | {int(r.games):,} | {r.predicted:.3f} | {r.actual:.3f} |"
+        )
 
     halves = split_halves(frame)
     pairs = season_pairs(frame)
@@ -493,7 +583,7 @@ def report(cal, bins, frame, weights, weight_year, roster=None, subs=None, refer
     lines += [
         "",
         f"{len(halves):,} player-seasons with {MIN_HALF_GAMES}+ games in each half; {len(stay):,} same-team and "
-        f"{len(moved):,} new-team pairs of consecutive seasons with {MIN_SEASON_GAMES}+ games (\"team\" is the team "
+        f'{len(moved):,} new-team pairs of consecutive seasons with {MIN_SEASON_GAMES}+ games ("team" is the team '
         "name the player played most for that year).",
         "",
         f"{LABELS[CHOSEN]} against the others (paired bootstrap, 95% interval):",
@@ -505,7 +595,8 @@ def report(cal, bins, frame, weights, weight_year, roster=None, subs=None, refer
         if s == CHOSEN:
             continue
         d_half = paired_correlation_bootstrap(
-            (halves[f"{CHOSEN}_0"], halves[f"{CHOSEN}_1"]), (halves[f"{s}_0"], halves[f"{s}_1"])
+            (halves[f"{CHOSEN}_0"], halves[f"{CHOSEN}_1"]),
+            (halves[f"{s}_0"], halves[f"{s}_1"]),
         )
         d_move = paired_correlation_bootstrap(
             (moved[CHOSEN], moved[CHOSEN + "_next"]), (moved[s], moved[s + "_next"])
@@ -551,11 +642,16 @@ def main():
     print("Roster test...")
     glory = None
     try:
-        from evaluate_season_stats import glory_stats  # scripts/ is on the path when run as a script
+        from evaluate_season_stats import (
+            glory_stats,
+        )  # scripts/ is on the path when run as a script
+
         from prometheus.ranking import load_glory_games
         from prometheus.season import get_record, load_season_games
 
-        glory = glory_stats(load_glory_games(), get_record(load_season_games()))["glory"]
+        glory = glory_stats(load_glory_games(), get_record(load_season_games()))[
+            "glory"
+        ]
     except ImportError:
         print("GLORY halves unavailable; roster test without GLORY.")
     roster = roster_table(frame, glory)
@@ -568,7 +664,17 @@ def main():
     counts = games["year"].value_counts()
     weight_year = int(counts[counts >= 1000].index.max())  # the newest full year
     _, weights = aura.fit_aura_weights(games[games["year"] == weight_year])
-    text = f"## AURA report ({datetime.date.today().isoformat()})\n\n" + report(cal, bins, frame, weights, weight_year, roster, subs, (r_all, n_all, r_major), held)
+    text = f"## AURA report ({datetime.date.today().isoformat()})\n\n" + report(
+        cal,
+        bins,
+        frame,
+        weights,
+        weight_year,
+        roster,
+        subs,
+        (r_all, n_all, r_major),
+        held,
+    )
     print(text)
     if args.out:
         with open(args.out, "w") as f:

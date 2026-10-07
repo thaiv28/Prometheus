@@ -1,14 +1,15 @@
 """Pre-match rating orientation, metadata checks and temporal isolation."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "research"))
 import evaluate_snapshot_elo as experiment
+
 from prometheus import elo
 
 

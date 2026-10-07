@@ -1,15 +1,15 @@
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 
-from prometheus.regression import fit_glory_pipeline
+from prometheus.elo import get_pregame_elos
 from prometheus.matches import (
     get_available_years,
     get_matches_frame,
     team_season_averages,
 )
-from prometheus.elo import get_pregame_elos
+from prometheus.regression import fit_glory_pipeline
 from prometheus.season import get_record, load_season_games
-from prometheus.types import GLORY_FEATURES, ALL_MAJOR_LEAGUES, ScoreCols
+from prometheus.types import ALL_MAJOR_LEAGUES, GLORY_FEATURES, ScoreCols
 
 
 def get_glory_ranking(

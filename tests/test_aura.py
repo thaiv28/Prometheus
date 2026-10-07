@@ -17,8 +17,13 @@ def _players(n_games=400, seed=0, short_every=None):
         for side, sign, won in (("Blue", 1, blue_won), ("Red", -1, 1 - blue_won)):
             for r in aura.ROLES:
                 row = {
-                    "gameid": f"g{g}", "teamid": f"{side}{g % 7}", "position": r, "playerid": f"{side}{g % 7}{r}",
-                    "year": 2024, "side": side, "result": won,
+                    "gameid": f"g{g}",
+                    "teamid": f"{side}{g % 7}",
+                    "position": r,
+                    "playerid": f"{side}{g % 7}{r}",
+                    "year": 2024,
+                    "side": side,
+                    "result": won,
                 }
                 for m in aura.MINUTES:
                     ended = short_every and g % short_every == 0 and m == 25
@@ -33,8 +38,12 @@ def test_game_frame_is_one_blue_row_per_game():
     games = aura.game_frame(players, 15)
     assert len(games) == 20
     assert list(games.columns[2:]) == aura.lane_columns()
-    blue_top = players[(players["side"] == "Blue") & (players["position"] == "top")].set_index("gameid")
-    assert games["top_gold"].to_numpy() == pytest.approx(blue_top.loc[games.index, "gold_15"].to_numpy())
+    blue_top = players[
+        (players["side"] == "Blue") & (players["position"] == "top")
+    ].set_index("gameid")
+    assert games["top_gold"].to_numpy() == pytest.approx(
+        blue_top.loc[games.index, "gold_15"].to_numpy()
+    )
     # Games that ended before 25 minutes drop out of that snapshot only.
     assert len(aura.game_frame(players, 25)) == 16
 
@@ -45,10 +54,17 @@ def test_player_shares_add_up_to_the_team_and_cancel_by_lane():
     intercept, weights = aura.fit_aura_weights(games)
     players["aura"] = aura.player_scores(players, weights)
     blue = players[players["side"] == "Blue"].groupby("gameid")["aura"].sum()
-    logit = np.log(aura.win_probability(games, intercept, weights) / (1 - aura.win_probability(games, intercept, weights)))
-    assert (blue.loc[games.index] + intercept).to_numpy() == pytest.approx(logit, abs=1e-9)
+    logit = np.log(
+        aura.win_probability(games, intercept, weights)
+        / (1 - aura.win_probability(games, intercept, weights))
+    )
+    assert (blue.loc[games.index] + intercept).to_numpy() == pytest.approx(
+        logit, abs=1e-9
+    )
     # Each lane is zero-sum: a player's AURA is minus their lane opponent's.
-    assert players.groupby(["gameid", "position"])["aura"].sum().abs().max() == pytest.approx(0, abs=1e-9)
+    assert players.groupby(["gameid", "position"])[
+        "aura"
+    ].sum().abs().max() == pytest.approx(0, abs=1e-9)
 
 
 def test_weights_find_the_stat_that_wins():
@@ -60,8 +76,12 @@ def test_weights_find_the_stat_that_wins():
 
 
 def _two_years():
-    players = pd.concat([_players(300, seed=1).assign(year=2023), _players(300, seed=2, short_every=10)])
-    return players.assign(gameid=players["gameid"] + players["year"].astype(str)).reset_index(drop=True)
+    players = pd.concat(
+        [_players(300, seed=1).assign(year=2023), _players(300, seed=2, short_every=10)]
+    )
+    return players.assign(
+        gameid=players["gameid"] + players["year"].astype(str)
+    ).reset_index(drop=True)
 
 
 def test_snapshot_scores_fit_each_year_and_leave_short_games_blank():
@@ -84,7 +104,11 @@ def test_team_centred_change_sums_to_zero_and_keeps_the_team_total():
     scored = aura.get_aura(players)
     by_team = scored.groupby(["gameid", "teamid"])
     assert by_team["aura_late"].sum().abs().max() == pytest.approx(0, abs=1e-9)
-    early = aura.snapshot_scores(players).groupby([players["gameid"], players["teamid"]]).sum()
+    early = (
+        aura.snapshot_scores(players)
+        .groupby([players["gameid"], players["teamid"]])
+        .sum()
+    )
     assert by_team["aura"].sum().to_numpy() == pytest.approx(early.to_numpy())
     # Games that ended before 25 minutes still get a change from the 20-minute snapshot.
     assert scored["aura"].notna().all()
@@ -106,20 +130,49 @@ def test_half_of_is_stable_and_splits():
 def test_paired_correlation_bootstrap():
     rng = np.random.default_rng(0)
     x = rng.normal(size=500)
-    strong, weak = x + rng.normal(scale=0.3, size=500), x + rng.normal(scale=3, size=500)
+    strong, weak = (
+        x + rng.normal(scale=0.3, size=500),
+        x + rng.normal(scale=3, size=500),
+    )
     diff, lo, hi = paired_correlation_bootstrap((x, strong), (x, weak))
     assert diff > 0 and lo > 0 and hi > lo
 
 
 def test_season_aura_points_ranks_and_minimum():
     rows = []
-    for pid, team, n, value in (("a", "T1", 25, 0.2), ("b", "GEN", 25, -0.1), ("c", "DK", 5, 0.4)):
+    for pid, team, n, value in (
+        ("a", "T1", 25, 0.2),
+        ("b", "GEN", 25, -0.1),
+        ("c", "DK", 5, 0.4),
+    ):
         for g in range(n):
-            rows.append({"playerid": pid, "playername": pid.upper(), "year": 2025, "position": "mid", "teamname": team,
-                         "league": "LCK", "gameid": f"{pid}{g}", "aura": value})
-    rows.append({"playerid": "a", "playername": "A", "year": 2025, "position": "mid", "teamname": "T1",
-                 "league": "LDL", "gameid": "x", "aura": 9.0})  # not a listed league
-    seasons = aura.season_aura(pd.DataFrame(rows), ["LCK"], min_games=20).set_index("playerid")
+            rows.append(
+                {
+                    "playerid": pid,
+                    "playername": pid.upper(),
+                    "year": 2025,
+                    "position": "mid",
+                    "teamname": team,
+                    "league": "LCK",
+                    "gameid": f"{pid}{g}",
+                    "aura": value,
+                }
+            )
+    rows.append(
+        {
+            "playerid": "a",
+            "playername": "A",
+            "year": 2025,
+            "position": "mid",
+            "teamname": "T1",
+            "league": "LDL",
+            "gameid": "x",
+            "aura": 9.0,
+        }
+    )  # not a listed league
+    seasons = aura.season_aura(pd.DataFrame(rows), ["LCK"], min_games=20).set_index(
+        "playerid"
+    )
     assert seasons.loc["a", "games"] == 25
     assert seasons.loc["a", "aura"] == pytest.approx(0.2 * aura.POINTS)
     assert seasons.loc["a", "role_rank"] == 1 and seasons.loc["a", "role_count"] == 2

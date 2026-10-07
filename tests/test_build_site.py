@@ -17,7 +17,9 @@ from prometheus.schedule import series_probability
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
-_spec = importlib.util.spec_from_file_location("build_site", ROOT / "scripts" / "build_site.py")
+_spec = importlib.util.spec_from_file_location(
+    "build_site", ROOT / "scripts" / "build_site.py"
+)
 build_site = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(build_site)
 
@@ -51,25 +53,86 @@ def _player_frames():
     def games(pid, name, team, teamid, league, dates, role="mid", start=1500.0):
         for i, d in enumerate(dates):
             rows.append(
-                {"gameid": f"{pid}-{d}", "playerid": pid, "playername": name, "position": role,
-                 "teamid": teamid, "teamname": team, "league": league, "home_league": league,
-                 "date": d, "year": int(d[:4]), "elo": start + i, "league_offset": 0.0}
+                {
+                    "gameid": f"{pid}-{d}",
+                    "playerid": pid,
+                    "playername": name,
+                    "position": role,
+                    "teamid": teamid,
+                    "teamname": team,
+                    "league": league,
+                    "home_league": league,
+                    "date": d,
+                    "year": int(d[:4]),
+                    "elo": start + i,
+                    "league_offset": 0.0,
+                }
             )
 
     may = [f"2018-05-{d:02d}" for d in range(1, 13)]
     games("lck", "Veteran", "Old Team", "t-old", "LCK", may)
-    games("lck", "Vet", "New Team", "t-new", "LCK", ["2018-08-01", "2018-08-02"], start=1600)
-    games("now", "Rookie", "Academy", "t-aca", "LCKC", ["2026-09-01", "2026-09-02"], role="sup")
+    games(
+        "lck",
+        "Vet",
+        "New Team",
+        "t-new",
+        "LCK",
+        ["2018-08-01", "2018-08-02"],
+        start=1600,
+    )
+    games(
+        "now",
+        "Rookie",
+        "Academy",
+        "t-aca",
+        "LCKC",
+        ["2026-09-01", "2026-09-02"],
+        role="sup",
+    )
     games("old", "Gone", "Minor", "t-min", "LCKC", ["2016-01-01"])
     history = pd.DataFrame(rows)
-    latest = history.groupby("playerid").tail(1).assign(
-        latest_date=lambda d: d["date"], games=lambda d: d["playerid"].map(history["playerid"].value_counts())
-    )[["playerid", "playername", "position", "teamname", "teamid", "league", "elo", "latest_date", "games"]]
+    latest = (
+        history.groupby("playerid")
+        .tail(1)
+        .assign(
+            latest_date=lambda d: d["date"],
+            games=lambda d: d["playerid"].map(history["playerid"].value_counts()),
+        )[
+            [
+                "playerid",
+                "playername",
+                "position",
+                "teamname",
+                "teamid",
+                "league",
+                "elo",
+                "latest_date",
+                "games",
+            ]
+        ]
+    )
     seasons = (
-        history.groupby(["playerid", "year"]).tail(1)
+        history.groupby(["playerid", "year"])
+        .tail(1)
         .assign(latest_date=lambda d: d["date"])
-        .merge(history.groupby(["playerid", "year"]).size().rename("games").reset_index(), on=["playerid", "year"])
-    )[["playerid", "year", "playername", "position", "teamname", "teamid", "league", "elo", "latest_date", "games"]]
+        .merge(
+            history.groupby(["playerid", "year"]).size().rename("games").reset_index(),
+            on=["playerid", "year"],
+        )
+    )[
+        [
+            "playerid",
+            "year",
+            "playername",
+            "position",
+            "teamname",
+            "teamid",
+            "league",
+            "elo",
+            "latest_date",
+            "games",
+        ]
+    ]
     return history, latest.reset_index(drop=True), seasons
 
 
@@ -83,10 +146,15 @@ def test_player_listing_rows_and_pages():
     assert set(now) == {"Vet", "Rookie"}
     assert now["Rookie"]["active"] and not now["Vet"]["active"]
     # Season rows: major-league player-seasons with 10+ games only.
-    assert [(r["playername"], r["year"]) for r in rows if not r["now"]] == [("Vet", 2018)]
+    assert [(r["playername"], r["year"]) for r in rows if not r["now"]] == [
+        ("Vet", 2018)
+    ]
 
     vet = pages["vet"]
-    assert [s["teamname"] for s in vet["stints"]] == ["New Team", "Old Team"]  # newest first
+    assert [s["teamname"] for s in vet["stints"]] == [
+        "New Team",
+        "Old Team",
+    ]  # newest first
     assert [s["games"] for s in vet["stints"]] == [2, 12]
     assert vet["aliases"] == ["Veteran"]
     assert vet["elo_summary"]["games"] == 14
@@ -103,17 +171,34 @@ def _roster_history():
         if g == 3:
             lineup[2] = "mid9"  # new mid in 2026
         for role, pid in zip(roles, lineup):
-            rows.append({"gameid": f"g{g}", "date": date, "year": int(date[:4]), "teamname": "T1",
-                         "position": role, "playerid": pid, "playername": pid.upper()})
+            rows.append(
+                {
+                    "gameid": f"g{g}",
+                    "date": date,
+                    "year": int(date[:4]),
+                    "teamname": "T1",
+                    "position": role,
+                    "playerid": pid,
+                    "playername": pid.upper(),
+                }
+            )
     return pd.DataFrame(rows)
 
 
 def test_team_rosters_last_lineup_and_seasons():
-    rosters = build_site.team_rosters(_roster_history(), {"mid9": "mid9-page"}, {"mid9": 1712.4})
+    rosters = build_site.team_rosters(
+        _roster_history(), {"mid9": "mid9-page"}, {"mid9": 1712.4}
+    )
     t1 = rosters["T1"]
     assert t1["last"]["date"] == "2026-02-01"
     assert t1["last"]["active"]
-    assert [p["role"] for p in t1["last"]["players"]] == ["top", "jng", "mid", "bot", "sup"]
+    assert [p["role"] for p in t1["last"]["players"]] == [
+        "top",
+        "jng",
+        "mid",
+        "bot",
+        "sup",
+    ]
     mid = t1["last"]["players"][2]
     assert (mid["name"], mid["slug"], mid["elo"]) == ("MID9", "mid9-page", 1712)
     assert t1["last"]["players"][0]["slug"] is None  # no page, no link
@@ -121,13 +206,26 @@ def test_team_rosters_last_lineup_and_seasons():
     assert [s["year"] for s in t1["seasons"]] == [2026, 2025]
     jungle_2025 = t1["seasons"][1]["roles"][1]
     assert jungle_2025["role"] == "jng"
-    assert [(p["name"], p["games"]) for p in jungle_2025["players"]] == [("JNG1", 2), ("JNG2", 1)]
+    assert [(p["name"], p["games"]) for p in jungle_2025["players"]] == [
+        ("JNG1", 2),
+        ("JNG2", 1),
+    ]
     assert jungle_2025["more"] == 0
 
 
 def test_team_rosters_cap_extra_players():
-    rows = [{"gameid": f"g{i}", "date": f"2025-01-{i + 1:02d}", "year": 2025, "teamname": "X",
-             "position": "top", "playerid": f"p{i}", "playername": f"P{i}"} for i in range(6)]
+    rows = [
+        {
+            "gameid": f"g{i}",
+            "date": f"2025-01-{i + 1:02d}",
+            "year": 2025,
+            "teamname": "X",
+            "position": "top",
+            "playerid": f"p{i}",
+            "playername": f"P{i}",
+        }
+        for i in range(6)
+    ]
     rosters = build_site.team_rosters(pd.DataFrame(rows), {}, {})
     top = rosters["X"]["seasons"][0]["roles"][0]
     assert len(top["players"]) == 1 + build_site.ROSTER_EXTRAS
@@ -143,7 +241,7 @@ def test_player_page_renders_stints_and_links():
     history, latest, seasons = _player_frames()
     _, pages, _ = build_site.player_pages_and_rows(history, latest, seasons)
     html = build_site.env.get_template("player.html.j2").render(
-        page_key="player", root_path="../", last_update="today", **pages["vet"]
+        page_key="player", root_path="../", **pages["vet"]
     )
     assert "<h1>Vet</h1>" in html
     assert 'href="../teams/new-team.html"' in html
@@ -171,38 +269,72 @@ def _aura_seasons():
 
 
 def test_aura_rows_only_list_qualified_seasons_of_listed_players():
-    rows, by_player = build_site.aura_rows_and_seasons(_aura_seasons(), pd.Series({"p1": "mid"}))
-    assert [(r["slug"], r["year"], r["aura"]) for r in rows] == [("mid", 2024, 4.12), ("mid", 2025, 6.6)]
+    rows, by_player = build_site.aura_rows_and_seasons(
+        _aura_seasons(), pd.Series({"p1": "mid"})
+    )
+    assert [(r["slug"], r["year"], r["aura"]) for r in rows] == [
+        ("mid", 2024, 4.12),
+        ("mid", 2025, 6.6),
+    ]
     assert list(by_player) == ["mid"]  # p2 has no page
     seasons = by_player["mid"]
-    assert [(s["year"], s["position"]) for s in seasons] == [(2025, "mid"), (2025, "top"), (2024, "mid")]
+    assert [(s["year"], s["position"]) for s in seasons] == [
+        (2025, "mid"),
+        (2025, "top"),
+        (2024, "mid"),
+    ]
     assert seasons[1]["role_rank"] is None and seasons[0]["role_rank"] == 1
 
 
 def test_player_page_renders_aura_by_season():
     history, latest, seasons = _player_frames()
     _, pages, _ = build_site.player_pages_and_rows(history, latest, seasons)
-    _, by_player = build_site.aura_rows_and_seasons(_aura_seasons(), pd.Series({"p1": "vet"}))
+    _, by_player = build_site.aura_rows_and_seasons(
+        _aura_seasons(), pd.Series({"p1": "vet"})
+    )
     html = build_site.env.get_template("player.html.j2").render(
-        page_key="player", root_path="../", last_update="today", **pages["vet"], aura_seasons=by_player["vet"]
+        page_key="player",
+        root_path="../",
+        **pages["vet"],
+        aura_seasons=by_player["vet"],
     )
     assert '<h2 id="aura-heading">AURA by season</h2>' in html
-    assert "Best AURA season 2025, +6.6 a game, 1st of 31 major-league mid laners that year." in html
+    assert (
+        "Best AURA season 2025, +6.6 a game, 1st of 31 major-league mid laners that year."
+        in html
+    )
     assert "Unranked" in html and "−0.8" in html
     plain = build_site.env.get_template("player.html.j2").render(
-        page_key="player", root_path="../", last_update="today", **pages["vet"]
+        page_key="player", root_path="../", **pages["vet"]
     )
     assert "AURA by season" not in plain and "Best AURA" not in plain
 
 
 def test_team_page_renders_rosters_with_player_links():
-    roster = build_site.team_rosters(_roster_history(), {"mid9": "mid9-page"}, {"mid9": 1712.4})["T1"]
+    roster = build_site.team_rosters(
+        _roster_history(), {"mid9": "mid9-page"}, {"mid9": 1712.4}
+    )["T1"]
     series = [{"date": "2026-02-01", "elo": 1600.0}]
     html = build_site.env.get_template("team.html.j2").render(
-        page_key="team", root_path="../", last_update="today", teamname="T1", slug="t1",
-        series=[], elo_series=series, best=None, current_elo=1600, current_forge=None,
-        current_league="LCK", leagues=["LCK"], roster=roster,
-        elo_summary={"games": 1, "peak": series[0], "low": series[0], "first": series[0], "last": series[0]},
+        page_key="team",
+        root_path="../",
+        teamname="T1",
+        slug="t1",
+        series=[],
+        elo_series=series,
+        best=None,
+        current_elo=1600,
+        current_forge=None,
+        current_league="LCK",
+        leagues=["LCK"],
+        roster=roster,
+        elo_summary={
+            "games": 1,
+            "peak": series[0],
+            "low": series[0],
+            "first": series[0],
+            "last": series[0],
+        },
     )
     assert '<h2 id="roster-heading">Roster</h2>' in html
     assert '<a href="../players/mid9-page.html">MID9</a>' in html
@@ -225,39 +357,81 @@ def test_player_index_puts_major_leagues_first(tmp_path, monkeypatch):
     build_site.write_player_index(listed)
     index = json.loads((tmp_path / "players.json").read_text())
     assert [p["n"] for p in index] == ["Pro", "Amateur"]
-    assert index[0] == {"n": "Pro", "s": "pro", "r": "top", "t": "B", "l": "LCK", "d": "2026-01-01"}
+    assert index[0] == {
+        "n": "Pro",
+        "s": "pro",
+        "r": "top",
+        "t": "B",
+        "l": "LCK",
+        "d": "2026-01-01",
+    }
 
 
 def test_header_menus_list_live_stats_with_their_questions():
     menus = {g["name"]: [l["key"] for l in g["links"]] for g in build_site.NAV}
-    assert menus == {"Teams": ["glory", "forge", "game_length_elo"], "Players": ["player_elo", "aura"]}
+    assert menus == {
+        "Teams": ["glory", "forge", "game_length_elo"],
+        "Players": ["player_elo", "aura"],
+    }
     assert all(l["question"].endswith("?") for g in build_site.NAV for l in g["links"])
     sunset = {m["key"] for m in build_site.SUNSET}
-    assert "form" in sunset and not sunset & {k for keys in menus.values() for k in keys}
+    assert "form" in sunset and not sunset & {
+        k for keys in menus.values() for k in keys
+    }
 
 
 def test_header_marks_the_menu_that_leads_to_the_page():
     html = build_site.env.get_template("sunset.html.j2").render(
-        page_key="form", root_path="", metrics=build_site.SUNSET, last_update="today"
+        page_key="form", root_path="", metrics=build_site.SUNSET
     )
-    assert '<summary data-current>Teams</summary>' in html
-    assert '<summary>Players</summary>' in html
+    assert "<summary data-current>Teams</summary>" in html
+    assert "<summary>Players</summary>" in html
     assert 'href="sunset.html"' in html
 
 
 def _log():
     """A prediction log: one LCK match tomorrow, one Worlds match next week, one
     reconstructed EM result, and one unmatched match."""
+
     def entry(mid, start, league, p, **extra):
-        return {"match_id": mid, "start": start, "team1": f"{mid}-a", "team2": f"{mid}-b (Team)",
-                "ours1": "T1", "ours2": None if extra.pop("unmatched", False) else "Gen.G",
-                "best_of": 3, "league": league, "home1": "LCK", "home2": "LCK", "event": "Cup", "matched": True,
-                "p_game": p, "p_series": schedule_series(p), "method": "forge", **extra}
+        return {
+            "match_id": mid,
+            "start": start,
+            "team1": f"{mid}-a",
+            "team2": f"{mid}-b (Team)",
+            "ours1": "T1",
+            "ours2": None if extra.pop("unmatched", False) else "Gen.G",
+            "best_of": 3,
+            "league": league,
+            "home1": "LCK",
+            "home2": "LCK",
+            "event": "Cup",
+            "matched": True,
+            "p_game": p,
+            "p_series": schedule_series(p),
+            "method": "forge",
+            **extra,
+        }
+
     return {
         "soon": entry("soon", "2026-10-04T08:00Z", "LCK", 0.6),
         "later": entry("later", "2026-10-12T08:00Z", "Worlds", 0.4),
-        "past": entry("past", "2026-09-20T08:00Z", "EM", 0.7, winner=2, score1=1, score2=2, reconstructed=True),
-        "nope": {"match_id": "nope", "start": "2026-10-04T09:00Z", "matched": False, "league": "EM"},
+        "past": entry(
+            "past",
+            "2026-09-20T08:00Z",
+            "EM",
+            0.7,
+            winner=2,
+            score1=1,
+            score2=2,
+            reconstructed=True,
+        ),
+        "nope": {
+            "match_id": "nope",
+            "start": "2026-10-04T09:00Z",
+            "matched": False,
+            "league": "EM",
+        },
     }
 
 
@@ -269,8 +443,12 @@ def test_predictions_view_splits_upcoming_past_and_home():
     now = datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.timezone.utc)
     view = build_site.predictions_view(_log(), {"t1"}, now)
     assert [r["id"] for d in view["upcoming"] for r in d["rows"]] == ["soon", "later"]
-    assert view["past"] == []  # 13 days old: on its month's page, not in the recent results
-    assert [(m["key"], m["label"], m["count"]) for m in view["months"]] == [("2026-09", "September 2026", 1)]
+    assert (
+        view["past"] == []
+    )  # 13 days old: on its month's page, not in the recent results
+    assert [(m["key"], m["label"], m["count"]) for m in view["months"]] == [
+        ("2026-09", "September 2026", 1)
+    ]
     # Home: major and international matches within four days only.
     assert [r["id"] for d in view["home"] for r in d["rows"]] == ["soon"]
     soon = view["upcoming"][0]["rows"][0]
@@ -280,7 +458,9 @@ def test_predictions_view_splits_upcoming_past_and_home():
     past = view["months"][0]["days"][0]["rows"][0]
     assert past["call"] == "missed" and past["score"] == "1–2" and past["reconstructed"]
     assert view["scorecard"][1]["series"] == 1 and view["scorecard"][0]["series"] == 0
-    assert [(g["label"], [s["name"] for s in g["sources"]]) for g in view["vs_market"]] == [
+    assert [
+        (g["label"], [s["name"] for s in g["sources"]]) for g in view["vs_market"]
+    ] == [
         ("FORGE", ["saved", "backtest"]),
         ("Other", ["saved", "backtest"]),
     ]
@@ -295,17 +475,34 @@ def test_fixture_row_names_fall_back_to_leaguepedia_without_disambiguation():
 
 
 def test_fixture_row_and_register_carry_the_market_price():
-    entry = {**_log()["soon"], "market": {"p": 0.634, "spread": 0.02, "at": "2026-10-03T02:30Z", "ticker": "K"}}
+    entry = {
+        **_log()["soon"],
+        "market": {
+            "p": 0.634,
+            "spread": 0.02,
+            "at": "2026-10-03T02:30Z",
+            "ticker": "K",
+        },
+    }
     row = build_site.fixture_row(entry, set())
     assert (row["mkt1"], row["mkt2"], row["mkt_at"]) == (63, 37, "3 Oct 02:30 UTC")
     entry["market"]["ticker"] = "KXLOLGAME-26OCT041600T1GEN"
     row = build_site.fixture_row(entry, set())
-    assert row["mkt_url"] == "https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct041600t1gen"
+    assert (
+        row["mkt_url"]
+        == "https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct041600t1gen"
+    )
     html = build_site.env.from_string(
         "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days) }}{{ fixtures(days, results=True) }}"
     ).render(days=[{"day": row["day"], "label": "Sunday 4 October", "rows": [row]}])
-    assert html.count('class="fx-mkt" style="--m: 63"') == 2  # the caret on both registers
-    assert ">63–37</a>" in html and 'href="https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct041600t1gen"' in html
+    assert (
+        html.count('class="fx-mkt" style="--m: 63"') == 2
+    )  # the caret on both registers
+    assert (
+        ">63–37</a>" in html
+        and 'href="https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct041600t1gen"'
+        in html
+    )
     assert ">Kalshi<" in html and 'colspan="11"' in html
     plain = build_site.fixture_row(_log()["soon"], set())
     assert "mkt1" not in plain
@@ -313,18 +510,20 @@ def test_fixture_row_and_register_carry_the_market_price():
 
 def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
     monkeypatch.setattr(build_site, "OUTPUT_DIR", str(tmp_path))
-    view = build_site.predictions_view(_log(), {"t1"}, datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.timezone.utc))
-    build_site.render_predictions(view, {"matches": 4, "matched": 3, "unmatched": []}, "October 3, 2026")
+    view = build_site.predictions_view(
+        _log(), {"t1"}, datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.timezone.utc)
+    )
+    build_site.render_predictions(view, {"matches": 4, "matched": 3, "unmatched": []})
     html = (tmp_path / "predictions.html").read_text()
     assert 'aria-current="page">Predictions' in html
     assert 'data-start="2026-10-04T08:00Z"' in html and "Sunday 4 October" in html
     assert 'href="results/2026-09.html">September 2026' in html
     assert "3 of 4 scheduled matches" in html
-    build_site.render_results(view, "October 3, 2026")
+    build_site.render_results(view)
     month = (tmp_path / "results" / "2026-09.html").read_text()
     assert "Missed" in month and 'href="#note-3"' in month and 'id="note-3"' in month
     assert 'href="../teams/' not in month or "../teams/t1.html" in month
-    assert '../css/' in month and "All leagues" in month
+    assert "../css/" in month and "All leagues" in month
     assert 'data-select="LCK,LPL,LEC,LCS,Worlds' in html
     # The home page's compact table: no method column, no results.
     home = build_site.env.from_string(
@@ -336,25 +535,52 @@ def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
 def test_method_groups_split_saved_calls_from_the_backtest():
     rows = [{"label": l, "source": src, "edge": 0.05} for l, src in schedule.BET_GROUPS]
     forge, elo = build_site.method_groups(rows)
-    assert forge["label"] == "FORGE" and [s["name"] for s in forge["sources"]] == ["saved", "backtest"]
+    assert forge["label"] == "FORGE" and [s["name"] for s in forge["sources"]] == [
+        "saved",
+        "backtest",
+    ]
     assert all(len(s["rows"]) == 1 for g in (forge, elo) for s in g["sources"])
     entries = [
-        {"start": "2026-01-14T08:00Z", "reconstructed": True, "market_12h": {"p": 0.5}, "winner": 1},
-        {"start": "2026-10-03T08:00Z", "reconstructed": True, "market_12h": {"p": 0.5}, "winner": 2},
+        {
+            "start": "2026-01-14T08:00Z",
+            "reconstructed": True,
+            "market_12h": {"p": 0.5},
+            "winner": 1,
+        },
+        {
+            "start": "2026-10-03T08:00Z",
+            "reconstructed": True,
+            "market_12h": {"p": 0.5},
+            "winner": 2,
+        },
         {"start": "2026-10-05T08:00Z", "market_12h": {"p": 0.5}, "winner": 1},  # saved
-        {"start": "2026-10-04T08:00Z", "reconstructed": True, "market_12h": {"p": 0.5}},  # no result
+        {
+            "start": "2026-10-04T08:00Z",
+            "reconstructed": True,
+            "market_12h": {"p": 0.5},
+        },  # no result
     ]
     assert build_site.backtest_span(entries) == ("2026-01-14", "2026-10-03")
     assert build_site.backtest_span([]) is None
 
 
 def test_results_register_shows_the_kalshi_closing_line():
-    entry = {**_log()["past"], "market": {"p": 0.634, "spread": 0.02, "at": "2026-09-20T07:00Z", "ticker": "KXLOLGAME-26SEP20T1GEN"}}
+    entry = {
+        **_log()["past"],
+        "market": {
+            "p": 0.634,
+            "spread": 0.02,
+            "at": "2026-09-20T07:00Z",
+            "ticker": "KXLOLGAME-26SEP20T1GEN",
+        },
+    }
     days = build_site._by_day([build_site.fixture_row(entry, set())])
     html = build_site.env.from_string(
         "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days, results=True) }}"
     ).render(days=days)
-    assert ">Close<" in html and "63–37</a>" in html and "kxlolgame-26sep20t1gen" in html
+    assert (
+        ">Close<" in html and "63–37</a>" in html and "kxlolgame-26sep20t1gen" in html
+    )
     assert 'colspan="10"' in html
     plain = build_site.env.from_string(
         "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days, results=True) }}"
@@ -362,11 +588,19 @@ def test_results_register_shows_the_kalshi_closing_line():
     assert "No Kalshi market" in plain
 
 
-
 def _game_log(n_series):
     series = [
-        {"d": f"2026-01-{i + 1:02d}", "l": "LCK", "o": "B", "w": 1, "x": 0, "p": 55, "de": 4.0, "e": 1504,
-         "g": [{"r": 1, "t": 1800, "s": "B", "p": 55, "de": 4.0, "ro": [0]}]}
+        {
+            "d": f"2026-01-{i + 1:02d}",
+            "l": "LCK",
+            "o": "B",
+            "w": 1,
+            "x": 0,
+            "p": 55,
+            "de": 4.0,
+            "e": 1504,
+            "g": [{"r": 1, "t": 1800, "s": "B", "p": 55, "de": 4.0, "ro": [0]}],
+        }
         for i in range(n_series)
     ][::-1]
     return {"players": [["Mid", "mid"]], "series": series}
@@ -376,17 +610,26 @@ def test_game_log_context_embeds_the_newest_and_writes_the_rest(tmp_path, monkey
     monkeypatch.setattr(build_site, "OUTPUT_DIR", str(tmp_path))
     monkeypatch.setattr(build_site, "GAME_LOG_SERIES", 2)
     games = build_site.game_log_context("team", _game_log(3), "t1")
-    assert (games["series"], games["games"], games["shown"], games["since"]) == (3, 3, 2, "2026")
+    assert (games["series"], games["games"], games["shown"], games["since"]) == (
+        3,
+        3,
+        2,
+        "2026",
+    )
     assert [s["d"] for s in games["data"]["series"]] == ["2026-01-03", "2026-01-02"]
     assert games["data"]["src"] == "../games/teams/t1.json"
     assert games["data"]["years"] == [["2026", 3, 0, 3, 0]]
     full = json.loads((tmp_path / "games" / "teams" / "t1.json").read_text())
     assert len(full["series"]) == 3 and full["players"] == [["Mid", "mid"]]
 
-    short = build_site.game_log_context("player", {"teams": ["T1"], "series": _game_log(1)["series"]}, "mid")
+    short = build_site.game_log_context(
+        "player", {"teams": ["T1"], "series": _game_log(1)["series"]}, "mid"
+    )
     assert "src" not in short["data"] and short["data"]["teams"] == ["T1"]
     assert not (tmp_path / "games" / "players").exists()
-    assert build_site.game_log_context("team", {"players": [], "series": []}, "x") is None
+    assert (
+        build_site.game_log_context("team", {"players": [], "series": []}, "x") is None
+    )
 
 
 def test_team_page_orders_sections_and_lists_contents(tmp_path, monkeypatch):
@@ -394,38 +637,91 @@ def test_team_page_orders_sections_and_lists_contents(tmp_path, monkeypatch):
     roster = build_site.team_rosters(_roster_history(), {}, {})["T1"]
     series = [{"date": "2026-02-01", "elo": 1600.0}]
     html = build_site.env.get_template("team.html.j2").render(
-        page_key="team", root_path="../", last_update="today", teamname="T1", slug="t1",
-        series=[{"year": 2026, "league": "LCK", "glory": 60.0, "forge": 1600, "year_rank": 1, "field": 10}],
-        elo_series=series, best=None, current_elo=1600, current_forge=None,
-        current_league="LCK", leagues=["LCK"], roster=roster,
-        elo_summary={"games": 1, "peak": series[0], "low": series[0], "first": series[0], "last": series[0]},
+        page_key="team",
+        root_path="../",
+        teamname="T1",
+        slug="t1",
+        series=[
+            {
+                "year": 2026,
+                "league": "LCK",
+                "glory": 60.0,
+                "forge": 1600,
+                "year_rank": 1,
+                "field": 10,
+            }
+        ],
+        elo_series=series,
+        best=None,
+        current_elo=1600,
+        current_forge=None,
+        current_league="LCK",
+        leagues=["LCK"],
+        roster=roster,
+        elo_summary={
+            "games": 1,
+            "peak": series[0],
+            "low": series[0],
+            "first": series[0],
+            "last": series[0],
+        },
         games=build_site.game_log_context("team", _game_log(1), "t1"),
     )
-    order = [html.index(f'<section class="{c}" id="{i}"') for c, i in
-             [("elo", "elo"), ("seasons", "seasons"), ("rosters", "roster"), ("games", "games")]]
+    order = [
+        html.index(f'<section class="{c}" id="{i}"')
+        for c, i in [
+            ("elo", "elo"),
+            ("seasons", "seasons"),
+            ("rosters", "roster"),
+            ("games", "games"),
+        ]
+    ]
     assert order == sorted(order)
     assert html.count('class="entry-contents') == 2  # margin and inline copies
-    assert '<a href="#games"><span class="toc-name">Games</span><span class="toc-figure">1</span></a>' in html
-    assert 'id="games-data">{' in html and "games-all" not in html  # everything is embedded
+    assert (
+        '<a href="#games"><span class="toc-name">Games</span><span class="toc-figure">1</span></a>'
+        in html
+    )
+    assert (
+        'id="games-data">{' in html and "games-all" not in html
+    )  # everything is embedded
     assert "entry.js" in html and "css/entry.css" in html
 
 
 def test_forge_register_lists_every_league_on_its_own_scale():
     from prometheus import forge
 
-    forms = pd.DataFrame({
-        "teamname": ["A", "B", "C", "D"], "home": ["LCK", "LFL", "LFL", "Worlds"], "year": 2026,
-        "form": [0.5, 0.5, -0.5, 0.2], "latest_date": pd.Timestamp("2026-09-01"),
-    })
-    elos = pd.DataFrame({"teamname": ["A", "B", "C", "D"], "elo": [1700.0, 1500.0, 1450.0, 1400.0], "year": 2026})
-    now, seasons, rows, config, filters = build_site.forge_register(forms, forms, elos.drop(columns="year"), elos, ["LCK", "LPL"])
+    forms = pd.DataFrame(
+        {
+            "teamname": ["A", "B", "C", "D"],
+            "home": ["LCK", "LFL", "LFL", "Worlds"],
+            "year": 2026,
+            "form": [0.5, 0.5, -0.5, 0.2],
+            "latest_date": pd.Timestamp("2026-09-01"),
+        }
+    )
+    elos = pd.DataFrame(
+        {
+            "teamname": ["A", "B", "C", "D"],
+            "elo": [1700.0, 1500.0, 1450.0, 1400.0],
+            "year": 2026,
+        }
+    )
+    now, seasons, rows, config, filters = build_site.forge_register(
+        forms, forms, elos.drop(columns="year"), elos, ["LCK", "LPL"]
+    )
     # A team rated only at an international event has no league scale.
     assert {r["teamname"] for r in rows} == {"A", "B", "C"}
     assert filters["leagues"] == ["LCK", "LFL"]
     slopes = config["weights"]["leagues"]
-    assert slopes == {"LCK": forge.ELO_WEIGHT, "LFL": forge.OTHER_LEAGUE_FORGE_ELO_WEIGHT}
+    assert slopes == {
+        "LCK": forge.ELO_WEIGHT,
+        "LFL": forge.OTHER_LEAGUE_FORGE_ELO_WEIGHT,
+    }
     # The LFL pair's odds from the page's rating gap and slope are its blend's odds.
     b, c = (next(r for r in rows if r["now"] and r["teamname"] == t) for t in "BC")
     p = 1 / (1 + math.exp(-slopes["LFL"] * (b["forge"] - c["forge"])))
-    assert p == pytest.approx(float(forge.other_league_forge_probability(50.0, forge.FORM_POINTS)), abs=1e-3)
+    assert p == pytest.approx(
+        float(forge.other_league_forge_probability(50.0, forge.FORM_POINTS)), abs=1e-3
+    )
     assert config["leagueScales"] and config["majorLeagues"] == ["LCK", "LPL"]

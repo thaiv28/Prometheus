@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from prometheus.matches import get_matches_frame, get_available_years
+from prometheus.matches import get_available_years, get_matches_frame
 from prometheus.types import ALL_MAJOR_LEAGUES
 
 

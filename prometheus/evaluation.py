@@ -116,7 +116,9 @@ def elo_as_of(timeline, offsets, cutoff):
     """
     last = timeline[timeline["date"] < cutoff].drop_duplicates("teamname", keep="last")
     last = last.set_index("teamname")
-    current = offsets[offsets["date"] < cutoff].groupby("league")["league_offset"].last()
+    current = (
+        offsets[offsets["date"] < cutoff].groupby("league")["league_offset"].last()
+    )
     moved = last["home_league"].map(current) - last["league_offset"]
     return last["elo"] + moved.fillna(0)
 
@@ -138,16 +140,24 @@ def season_homes(games, international):
     sides = pd.concat(
         [
             games[["year", "league", "teamid"]],
-            games[["year", "league", "opponent_teamid"]].rename(columns={"opponent_teamid": "teamid"}),
+            games[["year", "league", "opponent_teamid"]].rename(
+                columns={"opponent_teamid": "teamid"}
+            ),
         ]
     )
     sides = sides[~sides["league"].isin(international)]
-    counts = sides.groupby(["teamid", "year", "league"]).size().rename("n").reset_index()
+    counts = (
+        sides.groupby(["teamid", "year", "league"]).size().rename("n").reset_index()
+    )
     # Most games first, then league name, so ties resolve the same way every run.
     counts = counts.sort_values(["n", "league"], ascending=[False, True])
-    home = counts.drop_duplicates(["teamid", "year"]).set_index(["teamid", "year"])["league"]
+    home = counts.drop_duplicates(["teamid", "year"]).set_index(["teamid", "year"])[
+        "league"
+    ]
     return games.assign(
-        home=home.reindex(pd.MultiIndex.from_arrays([games["teamid"], games["year"]])).to_numpy(),
+        home=home.reindex(
+            pd.MultiIndex.from_arrays([games["teamid"], games["year"]])
+        ).to_numpy(),
         opponent_home=home.reindex(
             pd.MultiIndex.from_arrays([games["opponent_teamid"], games["year"]])
         ).to_numpy(),
@@ -167,8 +177,14 @@ def cross_league_games(games, international, majors):
         "major v other" or "other v other").
     """
     out = season_homes(games, international)
-    out = out[out["home"].notna() & out["opponent_home"].notna() & (out["home"] != out["opponent_home"])]
-    n_major = out["home"].isin(majors).astype(int) + out["opponent_home"].isin(majors).astype(int)
+    out = out[
+        out["home"].notna()
+        & out["opponent_home"].notna()
+        & (out["home"] != out["opponent_home"])
+    ]
+    n_major = out["home"].isin(majors).astype(int) + out["opponent_home"].isin(
+        majors
+    ).astype(int)
     kinds = np.array(["other v other", "major v other", "major v major"])
     return out.assign(kind=kinds[n_major.to_numpy()]).reset_index(drop=True)
 
@@ -180,7 +196,11 @@ def other_league_games(games, international, majors):
     Args and the games' columns are as for `cross_league_games`.
     """
     out = season_homes(games, international)
-    keep = (out["home"] == out["league"]) & (out["opponent_home"] == out["league"]) & ~out["league"].isin(majors)
+    keep = (
+        (out["home"] == out["league"])
+        & (out["opponent_home"] == out["league"])
+        & ~out["league"].isin(majors)
+    )
     return out[keep].reset_index(drop=True)
 
 
@@ -214,7 +234,11 @@ def shrunk_league_slopes(gap, won, leagues):
     Returns:
         (pooled slope, {league: shrunk slope}).
     """
-    gap, won, leagues = np.asarray(gap, float), np.asarray(won, float), np.asarray(leagues)
+    gap, won, leagues = (
+        np.asarray(gap, float),
+        np.asarray(won, float),
+        np.asarray(leagues),
+    )
     pooled, _ = _slope_and_se(gap, won)
     fits = {}
     for league in np.unique(leagues):
@@ -231,7 +255,8 @@ def shrunk_league_slopes(gap, won, leagues):
     scale = np.sum(weights) - np.sum(weights**2) / np.sum(weights)
     spread = max((q - (len(slopes) - 1)) / scale, 0.0) if scale > 0 else 0.0
     return pooled, {
-        league: pooled + spread / (spread + se**2) * (slope - pooled) for league, (slope, se) in fits.items()
+        league: pooled + spread / (spread + se**2) * (slope - pooled)
+        for league, (slope, se) in fits.items()
     }
 
 
@@ -248,7 +273,9 @@ def out_of_year_league_probabilities(frame, diff_col="elo_live", league_col="lea
     for year in frame["year"].unique():
         test = (frame["year"] == year).to_numpy()
         train = frame[~test] if (~test).any() else frame
-        pooled, slopes = shrunk_league_slopes(train[diff_col], train["won"], train[league_col])
+        pooled, slopes = shrunk_league_slopes(
+            train[diff_col], train["won"], train[league_col]
+        )
         slope = frame.loc[test, league_col].map(slopes).fillna(pooled).to_numpy()
         probs[test] = 1 / (1 + np.exp(-slope * frame.loc[test, diff_col].to_numpy()))
     return probs
@@ -282,7 +309,9 @@ def correlation_interval(r, n, z=1.96):
 
 def half_of(gameids):
     """0 or 1 for each game, from a hash of its id (stable across runs)."""
-    return gameids.map(lambda g: int(hashlib.md5(str(g).encode()).hexdigest()[:8], 16) % 2)
+    return gameids.map(
+        lambda g: int(hashlib.md5(str(g).encode()).hexdigest()[:8], 16) % 2
+    )
 
 
 def paired_correlation_bootstrap(pairs_a, pairs_b, n_resamples=2000, seed=0):
@@ -299,4 +328,8 @@ def paired_correlation_bootstrap(pairs_a, pairs_b, n_resamples=2000, seed=0):
     for _ in range(n_resamples):
         i = rng.integers(0, len(xa), len(xa))
         diffs.append(corr(xa[i], ya[i]) - corr(xb[i], yb[i]))
-    return corr(xa, ya) - corr(xb, yb), np.percentile(diffs, 2.5), np.percentile(diffs, 97.5)
+    return (
+        corr(xa, ya) - corr(xb, yb),
+        np.percentile(diffs, 2.5),
+        np.percentile(diffs, 97.5),
+    )

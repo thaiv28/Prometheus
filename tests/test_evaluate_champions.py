@@ -1,16 +1,16 @@
 """Champion encoding, rarity fallback and future-data isolation."""
 
 import importlib.util
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts" / "research"))
 spec = importlib.util.spec_from_file_location(
-    "evaluate_champions", ROOT / "scripts" / "evaluate_champions.py"
+    "evaluate_champions", ROOT / "scripts" / "research" / "evaluate_champions.py"
 )
 champions = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(champions)

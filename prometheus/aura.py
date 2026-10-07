@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
-from prometheus.utils import get_engine
+from prometheus.player_tables import PlayerTables
 
 MINUTES = (10, 15, 20, 25)
 MINUTE = 15
@@ -47,25 +47,40 @@ ROLES = ("top", "jng", "mid", "bot", "sup")
 C = 1.0
 
 
-def load_aura_games(minutes=MINUTES):
+def load_aura_games(minutes=MINUTES, tables=None):
     """One row per starter per game, with lane gaps `<stat>_<minute>` (own minus lane opponent).
 
     Only team-games with all five starters' snapshots are kept. A gap is NULL when
     the game ended before that minute. `playerid` comes from `match_players`, the
-    same id player Elo uses.
+    same id player Elo uses. `tables` is a `PlayerTables` holding these gaps (read
+    when None).
     """
-    gaps = ", ".join(f"p.{s}at{m} - p.opp_{s}at{m} AS {s}_{m}" for m in minutes for s in STATS)
-    stmt = f"""
-    SELECT p.gameid, p.teamid, p.position, mp.playerid, mp.playername, p.champion,
-           m.date, m.year, m.league, m.teamname, m.side, m.result, {gaps}
-    FROM player_stats p
-    JOIN match_players mp ON mp.gameid = p.gameid AND mp.teamid = p.teamid AND mp.position = p.position
-    JOIN matches m ON m.gameid = p.gameid AND m.teamid = p.teamid
-    """
-    # Sorting here is much faster than ORDER BY over this join.
+    if tables is None:
+        tables = PlayerTables(stats=STATS, minutes=minutes)
+    gaps = [f"{s}_{m}" for m in minutes for s in STATS]
+    cols = [
+        "gameid",
+        "teamid",
+        "position",
+        "playerid",
+        "playername",
+        "champion",
+        "date",
+        "year",
+        "league",
+        "teamname",
+        "side",
+        "result",
+        *gaps,
+    ]
+    players = tables.stats.merge(
+        tables.roster, on=["gameid", "teamid", "position"]
+    ).merge(tables.matches, on=["gameid", "teamid"])[cols]
     keys = ["date", "gameid", "teamid", "position"]
-    players = pd.read_sql(stmt, get_engine()).sort_values(keys, ignore_index=True)
-    full = players.groupby(["gameid", "teamid"])["position"].transform("size") == len(ROLES)
+    players = players.sort_values(keys, ignore_index=True)
+    full = players.groupby(["gameid", "teamid"])["position"].transform("size") == len(
+        ROLES
+    )
     players = players[full]
     both = players.groupby("gameid")["teamid"].transform("nunique") == 2
     return players[both].reset_index(drop=True)
@@ -82,9 +97,15 @@ def game_frame(players, minute=MINUTE):
     Games that ended before `minute` are left out.
     """
     blue = players[players["side"] == "Blue"]
-    wide = blue.pivot(index="gameid", columns="position", values=[f"{s}_{minute}" for s in STATS])
+    wide = blue.pivot(
+        index="gameid", columns="position", values=[f"{s}_{minute}" for s in STATS]
+    )
     wide.columns = [f"{role}_{col.rsplit('_', 1)[0]}" for col, role in wide.columns]
-    info = blue.groupby("gameid")[["year", "result"]].first().rename(columns={"result": "won"})
+    info = (
+        blue.groupby("gameid")[["year", "result"]]
+        .first()
+        .rename(columns={"result": "won"})
+    )
     games = info.join(wide[lane_columns()], how="inner").dropna()
     games["won"] = games["won"].astype(int)
     return games
@@ -102,14 +123,17 @@ def fit_aura_weights(games):
     scale[scale == 0] = 1.0
     model = LogisticRegression(C=C, max_iter=2000).fit(x / scale, games["won"])
     coef = model.coef_[0] / scale
-    weights = {r: coef[i * len(STATS) : (i + 1) * len(STATS)] for i, r in enumerate(ROLES)}
+    weights = {
+        r: coef[i * len(STATS) : (i + 1) * len(STATS)] for i, r in enumerate(ROLES)
+    }
     return float(model.intercept_[0]), weights
 
 
 def win_probability(games, intercept, weights):
     """Blue's chance of winning each `game_frame` row."""
     logit = intercept + sum(
-        games[[f"{r}_{s}" for s in STATS]].to_numpy(dtype=float) @ weights[r] for r in ROLES
+        games[[f"{r}_{s}" for s in STATS]].to_numpy(dtype=float) @ weights[r]
+        for r in ROLES
     )
     return 1 / (1 + np.exp(-logit))
 
@@ -127,7 +151,11 @@ def player_scores(players, weights, minute=MINUTE):
 def _weights_by_year(games, earlier_only=False):
     """(year, weights) for each year: fit on that year, or on every earlier year."""
     for year in sorted(games["year"].unique()):
-        train = games[games["year"] < year] if earlier_only else games[games["year"] == year]
+        train = (
+            games[games["year"] < year]
+            if earlier_only
+            else games[games["year"] == year]
+        )
         if earlier_only and len(train) < MIN_TRAIN_GAMES:
             continue
         yield year, fit_aura_weights(train)[1]
@@ -148,14 +176,15 @@ def team_centred(change, players):
     return change - (team - change) / (len(ROLES) - 1)
 
 
-def get_aura(players=None, earlier_only=False):
+def get_aura(players=None, earlier_only=False, tables=None):
     """Every player-game with its AURA: the 15-minute term plus `LATE_WEIGHT` of the team-centred change.
 
-    Returns `players` (read when None) with `aura` and `aura_late` (the
-    team-centred change; 0 when the game ended before every late snapshot).
+    Returns `players` (read when None, from `tables` if given) with `aura` and
+    `aura_late` (the team-centred change; 0 when the game ended before every late
+    snapshot).
     """
     if players is None:
-        players = load_aura_games()
+        players = load_aura_games(tables=tables)
     players = players.copy()
     early = snapshot_scores(players, MINUTE, earlier_only)
     late = pd.Series(np.nan, index=players.index)
@@ -189,7 +218,9 @@ def season_aura(scored, leagues, min_games=SEASON_GAMES):
 
     def most(col):
         """The value of `col` with the most games in each player-season."""
-        counts = games.groupby(key + [col]).size().reset_index(name="n").sort_values("n")
+        counts = (
+            games.groupby(key + [col]).size().reset_index(name="n").sort_values("n")
+        )
         return counts.drop_duplicates(key, keep="last").set_index(key)[col]
 
     seasons = games.groupby(key).agg(
@@ -202,7 +233,9 @@ def season_aura(scored, leagues, min_games=SEASON_GAMES):
     seasons["qualified"] = seasons["games"] >= min_games
     q = seasons[seasons["qualified"]]
     by = q.groupby(["year", "position"])["aura"]
-    seasons.loc[q.index, "role_z"] = (q["aura"] - by.transform("mean")) / by.transform("std")
+    seasons.loc[q.index, "role_z"] = (q["aura"] - by.transform("mean")) / by.transform(
+        "std"
+    )
     seasons.loc[q.index, "role_rank"] = by.rank(ascending=False, method="min")
     seasons.loc[q.index, "role_count"] = by.transform("size")
     return seasons

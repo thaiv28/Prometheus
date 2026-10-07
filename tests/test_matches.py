@@ -1,14 +1,10 @@
-import pytest
 import pandas as pd
-from unittest.mock import patch
-from sqlalchemy import Table, MetaData, Column, String, Float
+import pytest
 
-from prometheus.matches import get_team_averages_frame
+from prometheus.matches import team_season_averages
 
 
-@patch("prometheus.matches.get_matches_frame")
-def test_get_team_averages_frame_team_averages(mock_retrieve):
-    # Create a mock DataFrame to be returned by _retrieve_dataframe_from_table
+def test_team_season_averages():
     data = {
         "gameid": [
             "g1",
@@ -138,19 +134,7 @@ def test_get_team_averages_frame_team_averages(mock_retrieve):
         ],
     }
     df = pd.DataFrame(data)
-    # stat_table.columns.keys() must match df columns
-    metadata = MetaData()
-    stat_table = Table(
-        "match_glory_stats",
-        metadata,
-        Column("gameid", String, primary_key=True),
-        Column("teamid", String),
-        Column("teamname", String),
-        Column("feature1", Float),
-        Column("feature2", Float),
-    )
-    mock_retrieve.return_value = df
-    result = get_team_averages_frame("match_glory_stats")
+    result = team_season_averages(df)
     # Should average feature1 and feature2 by teamname and year
     # For 2022: A: (1.0+3.0+2.5+1.0)/4=1.625, (10.0+30.0+12.0+10.0)/4=15.5
     #           B: (2.0+4.0+3.5+2.0)/4=2.875, (20.0+40.0+22.0+20.0)/4=25.5

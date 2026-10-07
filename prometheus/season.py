@@ -54,7 +54,7 @@ def load_season_games(years=None, before=None):
            m1.gamelength, m1.result
     FROM matches m1
         JOIN matches m2 ON m1.gameid = m2.gameid AND m1.teamid < m2.teamid
-    WHERE {' AND '.join(conditions)}
+    WHERE {" AND ".join(conditions)}
     ORDER BY m1.date, m1.gameid
     """
     return pd.read_sql(text(stmt), get_engine(), params=params)
@@ -73,7 +73,9 @@ def _team_seasons(games):
     ).sort_values("date", kind="mergesort")
     key = ["teamid", "year"]
     seasons = rows.groupby(key).agg(
-        teamname=("teamname", "last"), games=("result", "size"), win_pct=("result", "mean")
+        teamname=("teamname", "last"),
+        games=("result", "size"),
+        win_pct=("result", "mean"),
     )
     domestic = rows[~rows["league"].isin(INTERNATIONAL_LEAGUES)]
     home = domestic.groupby(key)["league"].agg(lambda l: l.value_counts().index[0])
@@ -97,14 +99,24 @@ def fit_record(games, prior_sd=RECORD_PRIOR_SD):
     x = sparse.csr_matrix(
         (
             np.r_[np.ones(n), -np.ones(n)],
-            (np.r_[rows, rows], np.r_[teams.get_indexer(games["teamid"]), teams.get_indexer(games["opp_teamid"])]),
+            (
+                np.r_[rows, rows],
+                np.r_[
+                    teams.get_indexer(games["teamid"]),
+                    teams.get_indexer(games["opp_teamid"]),
+                ],
+            ),
         ),
         shape=(n, len(teams)),
     )
     score = winner_score(games["gamelength"].to_numpy(dtype=float))
     soft = np.where(games["result"].to_numpy() == 1, score, 1 - score)
     model = LogisticRegression(C=prior_sd**2, fit_intercept=False, max_iter=1000)
-    model.fit(sparse.vstack([x, x]), np.r_[np.ones(n), np.zeros(n)], sample_weight=np.r_[soft, 1 - soft])
+    model.fit(
+        sparse.vstack([x, x]),
+        np.r_[np.ones(n), np.zeros(n)],
+        sample_weight=np.r_[soft, 1 - soft],
+    )
     return pd.Series(model.coef_[0], index=teams)
 
 
@@ -127,7 +139,9 @@ def get_record(games=None, minimum_matches=0, leagues=None):
         info = _team_seasons(season).set_index("teamid")
         info["rating"] = fit_record(season)
         major = info["league"].isin(MAJORS)
-        centre = info.loc[major, "rating"].mean() if major.any() else info["rating"].mean()
+        centre = (
+            info.loc[major, "rating"].mean() if major.any() else info["rating"].mean()
+        )
         info["rating"] -= centre
         out.append(info.reset_index())
     df = pd.concat(out, ignore_index=True)
@@ -162,10 +176,16 @@ def get_luck(games, features=GLORY_FEATURES, minimum_matches=0):
         )
         season = (
             played.groupby(["teamname", "year", "league"])
-            .agg(games=("result", "size"), win_pct=("result", "mean"), raw=("expected", "mean"))
+            .agg(
+                games=("result", "size"),
+                win_pct=("result", "mean"),
+                raw=("expected", "mean"),
+            )
             .reset_index()
         )
-        intercept, slope = calibrate_earned(season["win_pct"], season["raw"], season["games"])
+        intercept, slope = calibrate_earned(
+            season["win_pct"], season["raw"], season["games"]
+        )
         season["expected"] = np.clip(intercept + slope * season["raw"], 0, 1)
         out.append(season.drop(columns="raw"))
     df = pd.concat(out, ignore_index=True)

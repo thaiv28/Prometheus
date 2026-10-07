@@ -77,7 +77,7 @@ All sampled game identities, validation results and source hashes are available 
 
 ## Reproduction and next decision
 
-Run `.venv/bin/python scripts/audit_gol_coverage.py` to reprocess cached listings/pages without network. Add `--fetch` to fetch only missing public pages (20 listings, at most 60 games / 120 game pages, plus robots.txt; serial requests at least one second apart). Stop on 401/403/429; no retries or bypass. Preserve manifest/sample JSON, raw HTML and hashes. No DB writes or model fitting.
+Run `.venv/bin/python scripts/research/audit_gol_coverage.py` to reprocess cached listings/pages without network. Add `--fetch` to fetch only missing public pages (20 listings, at most 60 games / 120 game pages, plus robots.txt; serial requests at least one second apart). Stop on 401/403/429; no retries or bypass. Preserve manifest/sample JSON, raw HTML and hashes. No DB writes or model fitting.
 
 Next expand reliable event strata to additional splits and all map numbers, and investigate explicit parser/matching failures before collecting a training corpus. Do not drop poorly covered regions silently. Use chronological same-game gold+Elo versus gold+Elo+objectives comparisons only after acquisition passes a separate dataset-quality gate. 2026 has already been viewed and is excluded here.
 

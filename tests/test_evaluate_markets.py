@@ -206,7 +206,7 @@ def test_bets_take_the_value_side_with_profit_after_fees_and_clv():
 def test_backfill_last_quote_takes_the_last_tight_quote_by_the_start():
     import sys
 
-    sys.path.insert(0, str(ROOT / "scripts"))
+    sys.path.insert(0, str(ROOT / "scripts" / "oneoff"))
     import backfill_market_prices as backfill
 
     candles = [
@@ -216,7 +216,6 @@ def test_backfill_last_quote_takes_the_last_tight_quote_by_the_start():
     ]
     assert backfill.last_quote(candles, 2500) == pytest.approx((0.41, 0.02, 1000))
     assert backfill.last_quote(candles, 500) is None
-
 
 
 def _logged(
@@ -299,9 +298,10 @@ def test_saved_table_scores_ours_against_the_market_with_intervals_from_min_n():
     )
     ours = -np.log(0.7)
     market = -np.log(0.6)
-    assert f"{ours:.4f} | {market:.4f} | {ours - market:+.4f}" in rows[
-        "FORGE (same major league)"
-    ]
+    assert (
+        f"{ours:.4f} | {market:.4f} | {ours - market:+.4f}"
+        in rows["FORGE (same major league)"]
+    )
     # The early table pairs our call when the price was read with that price.
     early = evaluate_markets.saved_table(
         frame, "ours_early", "market_early", "backfilled_early", min_n=10

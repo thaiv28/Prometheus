@@ -4,14 +4,14 @@ import pytest
 
 from prometheus.evaluation import (
     cross_league_games,
-    other_league_games,
-    out_of_year_league_probabilities,
-    shrunk_league_slopes,
     elo_as_of,
     fit_win_curve,
     game_losses,
+    other_league_games,
+    out_of_year_league_probabilities,
     out_of_year_probabilities,
     paired_bootstrap,
+    shrunk_league_slopes,
 )
 
 
@@ -93,7 +93,12 @@ def test_elo_as_of_adds_league_offset_moves_since_last_game():
     timeline = pd.DataFrame(
         {
             "teamname": ["A", "B", "A", "C"],
-            "date": [d("2024-01-01"), d("2024-01-01"), d("2024-02-01"), d("2024-03-01")],
+            "date": [
+                d("2024-01-01"),
+                d("2024-01-01"),
+                d("2024-02-01"),
+                d("2024-03-01"),
+            ],
             "elo": [1510.0, 1490.0, 1520.0, 1600.0],
             "home_league": ["LCK", "LCS", "LCK", None],
             "league_offset": [0.0, 0.0, 2.0, 0.0],
@@ -101,7 +106,12 @@ def test_elo_as_of_adds_league_offset_moves_since_last_game():
     )
     offsets = pd.DataFrame(
         {
-            "date": [d("2024-01-15"), d("2024-01-15"), d("2024-02-15"), d("2024-04-01")],
+            "date": [
+                d("2024-01-15"),
+                d("2024-01-15"),
+                d("2024-02-15"),
+                d("2024-04-01"),
+            ],
             "league": ["LCK", "LCS", "LCK", "LCK"],
             "league_offset": [2.0, -2.0, 5.0, 9.0],
         }
@@ -154,9 +164,17 @@ def test_cross_league_games_uses_most_played_league_as_home():
     games = _league_mix()
     out = cross_league_games(games, ["Worlds"], ["LCK", "LEC"]).set_index("gameid")
     assert sorted(out.index) == ["g3", "g6", "g8"]
-    assert out.loc["g3", ["home", "opponent_home", "kind"]].tolist() == ["LCK", "LCKC", "major v other"]
+    assert out.loc["g3", ["home", "opponent_home", "kind"]].tolist() == [
+        "LCK",
+        "LCKC",
+        "major v other",
+    ]
     assert out.loc["g6", "kind"] == "major v major"
-    assert out.loc["g8", ["home", "opponent_home", "kind"]].tolist() == ["LFL", "PRM", "other v other"]
+    assert out.loc["g8", ["home", "opponent_home", "kind"]].tolist() == [
+        "LFL",
+        "PRM",
+        "other v other",
+    ]
 
 
 def test_other_league_games_keep_only_games_inside_one_minor_league():
@@ -179,10 +197,14 @@ def test_league_slopes_shrink_small_leagues_toward_the_pool():
             _league_games(rng, "steep", 0.014, 20000),
             _league_games(rng, "tiny", 0.030, 40),
             # The gap sorts every result: its slope is unbounded, so it gets none of its own.
-            pd.DataFrame({"league": "sweep", "elo_live": [100.0, 200.0, -50.0], "won": [1, 1, 0]}),
+            pd.DataFrame(
+                {"league": "sweep", "elo_live": [100.0, 200.0, -50.0], "won": [1, 1, 0]}
+            ),
         ]
     )
-    pooled, slopes = shrunk_league_slopes(games["elo_live"], games["won"], games["league"])
+    pooled, slopes = shrunk_league_slopes(
+        games["elo_live"], games["won"], games["league"]
+    )
     # Big leagues keep their own slope; the tiny one ends near the pooled slope.
     assert slopes["flat"] == pytest.approx(0.006, rel=0.15)
     assert slopes["steep"] == pytest.approx(0.014, rel=0.15)
@@ -201,5 +223,9 @@ def test_league_probabilities_use_other_years_only():
     assert np.isfinite(p).all() and ((p > 0) & (p < 1)).all()
     # A league first seen in the scored year falls back to the pooled curve of the others.
     new = games["league"] == "new"
-    pooled, _ = shrunk_league_slopes(games.loc[~new, "elo_live"], games.loc[~new, "won"], games.loc[~new, "league"])
-    assert p[new.to_numpy()] == pytest.approx(1 / (1 + np.exp(-pooled * games.loc[new, "elo_live"].to_numpy())))
+    pooled, _ = shrunk_league_slopes(
+        games.loc[~new, "elo_live"], games.loc[~new, "won"], games.loc[~new, "league"]
+    )
+    assert p[new.to_numpy()] == pytest.approx(
+        1 / (1 + np.exp(-pooled * games.loc[new, "elo_live"].to_numpy()))
+    )

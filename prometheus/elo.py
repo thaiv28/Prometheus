@@ -1,11 +1,12 @@
-from collections import defaultdict
 import datetime
+from collections import defaultdict
 
 import pandas as pd
 from sqlalchemy import text
 
-from prometheus.utils import get_engine
+from prometheus.player_tables import PlayerTables
 from prometheus.types import INTERNATIONAL_LEAGUES
+from prometheus.utils import get_engine
 
 ELO_METHODS = ("game_length",)
 STARTING_ELO = 1500
@@ -43,13 +44,17 @@ def expected_score(elo: float, opponent_elo: float) -> float:
     return 1 / (1 + 10 ** ((opponent_elo - elo) / 400))
 
 
-def winner_score(game_length, upper_bound=1.0, lower_bound=0.65, center=30 * 60, steepness=3):
+def winner_score(
+    game_length, upper_bound=1.0, lower_bound=0.65, center=30 * 60, steepness=3
+):
     """The winner's "actual score" for a game of `game_length` seconds.
 
     Ranges from `lower_bound` (very long games) to `upper_bound` (very short games);
     the loser gets 1 minus it. Works on scalars and arrays.
     """
-    return lower_bound + (upper_bound - lower_bound) / (1 + (game_length / center) ** steepness)
+    return lower_bound + (upper_bound - lower_bound) / (
+        1 + (game_length / center) ** steepness
+    )
 
 
 def calculate_game_length_elo_change(
@@ -138,7 +143,11 @@ def compute_elo_records(
     """
     has_league = "league" in games.columns
     leagues = games["league"] if has_league else [None] * len(games)
-    dates = pd.to_datetime(games["date"]) if "date" in games.columns else [None] * len(games)
+    dates = (
+        pd.to_datetime(games["date"])
+        if "date" in games.columns
+        else [None] * len(games)
+    )
     rosters = rosters or {}
     window = pd.Timedelta(days=active_days)
     own = {}  # player -> rating, relative to the offset of the league in `player_league`
@@ -153,14 +162,19 @@ def compute_elo_records(
 
     def league_average(league, date):
         recent = [
-            own[p] for p in members[league]
-            if date is None or last_seen[p][0] is None or last_seen[p][0] >= date - window
+            own[p]
+            for p in members[league]
+            if date is None
+            or last_seen[p][0] is None
+            or last_seen[p][0] >= date - window
         ]
         return sum(recent) / len(recent) if recent else starting_elo
 
     def seat(player, league, date):
         if player not in own:
-            own[player] = league_average(league, date) if league is not None else starting_elo
+            own[player] = (
+                league_average(league, date) if league is not None else starting_elo
+            )
             player_league[player] = league
         elif player_league[player] != league:
             # Moving league (a transfer, promotion, a cup) keeps the player's rating.
@@ -177,14 +191,20 @@ def compute_elo_records(
             if domestic:
                 year = date.year if date is not None else None
                 if (team, year) not in season_counts:
-                    season_counts[(team, year)] = {home[team]: 1} if team in home else {}
+                    season_counts[(team, year)] = (
+                        {home[team]: 1} if team in home else {}
+                    )
                 counts = season_counts[(team, year)]
                 counts[league] = counts.get(league, 0) + 1
                 # Strictly more games, so a tie keeps the current home.
                 if counts[league] > counts.get(home.get(team), 0):
                     home[team] = league
             team_league = home.get(team)
-            roster = rosters.get((row.gameid, team)) or last_roster.get(team) or (("team", team),)
+            roster = (
+                rosters.get((row.gameid, team))
+                or last_roster.get(team)
+                or (("team", team),)
+            )
             last_roster[team] = roster
             for player in roster:
                 seat(player, team_league, date)
@@ -198,7 +218,8 @@ def compute_elo_records(
         pre = [rating(side) for side in sides]
         if player_records:
             player_pre = {
-                p: own[p] + (league_offset[team_league] if team_league is not None else 0.0)
+                p: own[p]
+                + (league_offset[team_league] if team_league is not None else 0.0)
                 for _, team_league, roster in sides
                 for p in roster
             }
@@ -234,7 +255,12 @@ def compute_elo_records(
 
         for side, before in zip(sides, pre):
             team, team_league, roster = side
-            if not domestic or team_league is None or league == team_league or team not in main_roster:
+            if (
+                not domestic
+                or team_league is None
+                or league == team_league
+                or team not in main_roster
+            ):
                 main_roster[team] = roster
             for player in roster:
                 if player in last_seen:
@@ -246,13 +272,25 @@ def compute_elo_records(
             if player_records and roster != (("team", team),):
                 for player in roster:
                     player_rows.append(
-                        (row.gameid, team, player, player_pre[player], own[player] + offset_now,
-                         team_league, offset_now)
+                        (
+                            row.gameid,
+                            team,
+                            player,
+                            player_pre[player],
+                            own[player] + offset_now,
+                            team_league,
+                            offset_now,
+                        )
                     )
             main = main_roster[team]
             # Each player's own rating plus the offset of the league they sit in now.
             main_elo = sum(
-                own[p] + (league_offset[player_league[p]] if player_league[p] is not None else 0.0)
+                own[p]
+                + (
+                    league_offset[player_league[p]]
+                    if player_league[p] is not None
+                    else 0.0
+                )
                 for p in main
             ) / len(main)
             elo_records.append(
@@ -263,7 +301,9 @@ def compute_elo_records(
                     "post_match_elo": after,
                     "elo_change": after - before,
                     "home_league": team_league,
-                    "league_offset": league_offset[team_league] if team_league is not None else 0.0,
+                    "league_offset": league_offset[team_league]
+                    if team_league is not None
+                    else 0.0,
                     "main_elo": main_elo,
                 }
             )
@@ -287,8 +327,15 @@ def compute_elo_records(
     if player_records:
         players = pd.DataFrame(
             player_rows,
-            columns=["gameid", "teamid", "playerid", "pre_match_elo", "post_match_elo",
-                     "home_league", "league_offset"],
+            columns=[
+                "gameid",
+                "teamid",
+                "playerid",
+                "pre_match_elo",
+                "post_match_elo",
+                "home_league",
+                "league_offset",
+            ],
         )
         return records, offsets, players
     return records, offsets
@@ -308,7 +355,9 @@ def load_elo_games() -> pd.DataFrame:
 
 def load_rosters() -> dict:
     """Each team's starters in every game: {(gameid, teamid): (playerid, ...)}."""
-    players = pd.read_sql("SELECT gameid, teamid, playerid FROM match_players", get_engine())
+    players = pd.read_sql(
+        "SELECT gameid, teamid, playerid FROM match_players", get_engine()
+    )
     return players.groupby(["gameid", "teamid"])["playerid"].apply(tuple).to_dict()
 
 
@@ -327,7 +376,11 @@ def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO) -> None:
     engine = get_engine()
     games = load_elo_games()
     elo_df, offsets_df, players_df = compute_elo_records(
-        games, elo_func, starting_elo=starting_elo, rosters=load_rosters(), player_records=True
+        games,
+        elo_func,
+        starting_elo=starting_elo,
+        rosters=load_rosters(),
+        player_records=True,
     )
 
     # Clear rather than drop so the schema from 001_create_tables.sql is preserved.
@@ -442,9 +495,14 @@ def get_season_elos(method: str) -> pd.DataFrame:
         lambda leagues: leagues.value_counts().index[0]
     )
     last = last.join(season_league.rename("season_league"), on=["teamid", "year"])
-    last["league"] = last["season_league"].fillna(last["home_league"]).fillna(last["league"])
+    last["league"] = (
+        last["season_league"].fillna(last["home_league"]).fillna(last["league"])
+    )
 
-    last = last.join(_season_end_offsets(method, sorted(last["year"].unique())), on=["home_league", "year"])
+    last = last.join(
+        _season_end_offsets(method, sorted(last["year"].unique())),
+        on=["home_league", "year"],
+    )
     last["elo"] = last["elo"] + (
         last["season_end_offset"] - last["league_offset"]
     ).fillna(0)
@@ -467,7 +525,10 @@ def _season_end_offsets(method: str, years: list[int]) -> pd.Series:
     offsets["year"] = offsets["date"].str[:4].astype(int)
     by_season = offsets.groupby(["league", "year"])["league_offset"].last()
     return (
-        by_season.unstack("year").reindex(columns=years).ffill(axis=1).stack()
+        by_season.unstack("year")
+        .reindex(columns=years)
+        .ffill(axis=1)
+        .stack()
         .rename("season_end_offset")
     )
 
@@ -481,24 +542,42 @@ def _current_offsets(method: str) -> pd.Series:
     return offsets.groupby("league")["league_offset"].last()
 
 
-def get_player_history(method: str) -> pd.DataFrame:
+def get_player_history(method: str, tables: PlayerTables | None = None) -> pd.DataFrame:
     """Every rostered player's Elo after each game, oldest first.
+
+    `tables` is a `PlayerTables` for `method` (read when None).
 
     Returns:
         DataFrame with gameid, playerid, playername, position, teamid, teamname, league (of
         the game), home_league, date, year (calendar), elo (after the game) and
         league_offset (home league's offset after the game).
     """
-    stmt = f"""
-    SELECT pe.gameid, pe.playerid, mp.playername, mp.position, pe.teamid, m.teamname, m.league,
-           pe.home_league, m.date, pe.post_match_elo AS elo, pe.league_offset
-    FROM {_players_table(method)} pe
-    JOIN match_players mp
-        ON mp.gameid = pe.gameid AND mp.teamid = pe.teamid AND mp.playerid = pe.playerid
-    JOIN matches m ON m.gameid = pe.gameid AND m.teamid = pe.teamid
-    ORDER BY m.date, m.gameid
-    """
-    history = pd.read_sql(stmt, get_engine())
+    if tables is None:
+        tables = PlayerTables(method)
+    cols = [
+        "gameid",
+        "playerid",
+        "playername",
+        "position",
+        "teamid",
+        "teamname",
+        "league",
+        "home_league",
+        "date",
+        "elo",
+        "league_offset",
+    ]
+    history = (
+        # Roster order within a game, as the SQL join gave it.
+        tables.roster.merge(
+            tables.elo.drop(columns="elo_pre"), on=["gameid", "teamid", "playerid"]
+        )
+        .merge(
+            tables.matches[["gameid", "teamid", "teamname", "league", "date"]],
+            on=["gameid", "teamid"],
+        )
+        .sort_values(["date", "gameid"], kind="stable", ignore_index=True)[cols]
+    )
     history["year"] = history["date"].str[:4].astype(int)
     return history
 
@@ -506,11 +585,15 @@ def get_player_history(method: str) -> pd.DataFrame:
 def _most_common(frame: pd.DataFrame, keys: list[str], col: str) -> pd.Series:
     """The most frequent `col` value per `keys` group (vectorised value_counts)."""
     counts = frame.groupby(keys + [col]).size().rename("n").reset_index()
-    counts = counts.sort_values("n", ascending=False, kind="mergesort").drop_duplicates(keys)
+    counts = counts.sort_values("n", ascending=False, kind="mergesort").drop_duplicates(
+        keys
+    )
     return counts.set_index(keys)[col]
 
 
-def get_player_elos(method: str, history: pd.DataFrame | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+def get_player_elos(
+    method: str, history: pd.DataFrame | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Players' current ratings and their ratings at the end of each calendar year.
 
     Like `get_latest_elos` and `get_season_elos` for teams: a rating is the player's
@@ -528,29 +611,66 @@ def get_player_elos(method: str, history: pd.DataFrame | None = None) -> tuple[p
 
     def summarise(group_cols):
         last = history.groupby(group_cols).tail(1).set_index(group_cols)
-        out = last[["playername", "teamname", "teamid", "home_league", "league", "elo", "league_offset"]].copy()
+        out = last[
+            [
+                "playername",
+                "teamname",
+                "teamid",
+                "home_league",
+                "league",
+                "elo",
+                "league_offset",
+            ]
+        ].copy()
         out["latest_date"] = last["date"].str[:10]
         out["games"] = history.groupby(group_cols).size()
         out["position"] = _most_common(history, group_cols, "position")
         return out
 
     latest = summarise(["playerid"])
-    moved = latest["home_league"].map(_current_offsets(method)) - latest["league_offset"]
+    moved = (
+        latest["home_league"].map(_current_offsets(method)) - latest["league_offset"]
+    )
     latest["elo"] = latest["elo"] + moved.fillna(0)
     latest["league"] = latest["home_league"].fillna(latest["league"])
 
     seasons = summarise(["playerid", "year"]).reset_index()
     domestic = history[~history["league"].isin(INTERNATIONAL_LEAGUES)]
     season_league = _most_common(domestic, ["playerid", "year"], "league")
-    seasons = seasons.join(season_league.rename("season_league"), on=["playerid", "year"])
-    seasons = seasons.join(_season_end_offsets(method, sorted(seasons["year"].unique())), on=["home_league", "year"])
-    seasons["elo"] = seasons["elo"] + (seasons["season_end_offset"] - seasons["league_offset"]).fillna(0)
-    seasons["league"] = seasons["season_league"].fillna(seasons["home_league"]).fillna(seasons["league"])
+    seasons = seasons.join(
+        season_league.rename("season_league"), on=["playerid", "year"]
+    )
+    seasons = seasons.join(
+        _season_end_offsets(method, sorted(seasons["year"].unique())),
+        on=["home_league", "year"],
+    )
+    seasons["elo"] = seasons["elo"] + (
+        seasons["season_end_offset"] - seasons["league_offset"]
+    ).fillna(0)
+    seasons["league"] = (
+        seasons["season_league"]
+        .fillna(seasons["home_league"])
+        .fillna(seasons["league"])
+    )
 
-    cols = ["playerid", "playername", "position", "teamname", "teamid", "league", "elo", "latest_date", "games"]
+    cols = [
+        "playerid",
+        "playername",
+        "position",
+        "teamname",
+        "teamid",
+        "league",
+        "elo",
+        "latest_date",
+        "games",
+    ]
     return (
-        latest.reset_index()[cols].sort_values("elo", ascending=False).reset_index(drop=True),
-        seasons[cols[:1] + ["year"] + cols[1:]].sort_values("elo", ascending=False).reset_index(drop=True),
+        latest.reset_index()[cols]
+        .sort_values("elo", ascending=False)
+        .reset_index(drop=True),
+        seasons[cols[:1] + ["year"] + cols[1:]]
+        .sort_values("elo", ascending=False)
+        .reset_index(drop=True),
     )
 
 

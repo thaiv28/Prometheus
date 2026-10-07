@@ -1,13 +1,13 @@
 """Explicit map discovery, request stops, and training export causality."""
 
-from pathlib import Path
 import sys
 import urllib.error
+from pathlib import Path
 
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
+sys.path.insert(0, str(Path(__file__).parents[1] / "scripts" / "research"))
 import collect_gol_training as collect
 from test_gol_pilot import html
 
@@ -109,8 +109,8 @@ def test_partial_order_reaches_multiple_strata():
 
 
 def test_run_preserves_partial_maps_then_resumes_from_cache(tmp_path, monkeypatch):
-    from types import SimpleNamespace
     import json
+    from types import SimpleNamespace
 
     monkeypatch.setattr(collect, "seed_cache", lambda path: None)
     monkeypatch.setattr(
@@ -199,8 +199,8 @@ def test_run_preserves_partial_maps_then_resumes_from_cache(tmp_path, monkeypatc
 def test_transport_failure_stops_and_exports_instead_of_spending_budget(
     tmp_path, monkeypatch, network_error
 ):
-    from types import SimpleNamespace
     import json
+    from types import SimpleNamespace
 
     monkeypatch.setattr(collect, "seed_cache", lambda path: None)
     monkeypatch.setattr(

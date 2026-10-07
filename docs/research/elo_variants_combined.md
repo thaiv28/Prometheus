@@ -1,6 +1,6 @@
 # Elo margin variants: combined / learned margins and update settings
 
-Script: `scripts/elo_variants_combined.py` (harness `scripts/elo_variants.py`). Runtime 7.2 min.
+Script: `scripts/research/elo_variants_combined.py` (harness `scripts/research/elo_variants.py`). Runtime 7.2 min.
 
 ## Protocol
 

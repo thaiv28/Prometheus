@@ -156,10 +156,17 @@ def test_stable_rosters_match_team_elo():
             "result": [1, 0, 1],
         }
     )
-    rosters = {(g, t): _five(t) for g, t, o in zip(games.gameid, games.teamid, games.opponent_teamid)}
-    rosters.update({(g, o): _five(o) for g, o in zip(games.gameid, games.opponent_teamid)})
+    rosters = {
+        (g, t): _five(t)
+        for g, t, o in zip(games.gameid, games.teamid, games.opponent_teamid)
+    }
+    rosters.update(
+        {(g, o): _five(o) for g, o in zip(games.gameid, games.opponent_teamid)}
+    )
     team, _ = compute_elo_records(games, calculate_game_length_elo_change)
-    player, _ = compute_elo_records(games, calculate_game_length_elo_change, rosters=rosters)
+    player, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
     pd.testing.assert_frame_equal(team, player)
 
 
@@ -176,17 +183,24 @@ def test_transfer_carries_the_players_rating():
     )
     b_after = ("a0",) + _five("b")[1:]
     rosters = {
-        ("g1", "A"): _five("a"), ("g1", "B"): _five("b"),
-        ("g2", "A"): _five("a"), ("g2", "B"): _five("b"),
-        ("g3", "A"): ("x0",) + _five("a")[1:], ("g3", "B"): b_after,
+        ("g1", "A"): _five("a"),
+        ("g1", "B"): _five("b"),
+        ("g2", "A"): _five("a"),
+        ("g2", "B"): _five("b"),
+        ("g3", "A"): ("x0",) + _five("a")[1:],
+        ("g3", "B"): b_after,
     }
-    df, _ = compute_elo_records(games, calculate_game_length_elo_change, rosters=rosters)
+    df, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
     gain = _row(df, "g2", "A").post_match_elo - 1500
     # B swaps one 1500 - gain player for a 1500 + gain one: up by 2 * gain / 5.
     b_before = _row(df, "g2", "B").post_match_elo
     assert _row(df, "g3", "B").pre_match_elo == pytest.approx(b_before + 2 * gain / 5)
     # A loses a0; the newcomer x0 starts at the average of the 10 active players (1500).
-    assert _row(df, "g3", "A").pre_match_elo == pytest.approx((4 * (1500 + gain) + 1500) / 5)
+    assert _row(df, "g3", "A").pre_match_elo == pytest.approx(
+        (4 * (1500 + gain) + 1500) / 5
+    )
 
 
 def test_new_player_ignores_long_inactive_players():
@@ -203,13 +217,20 @@ def test_new_player_ignores_long_inactive_players():
         }
     )
     rosters = {
-        ("g1", "A"): _five("a"), ("g1", "B"): _five("b"),
-        ("g2", "E"): ("a0", *_five("e")[1:]), ("g2", "F"): _five("f"),
-        ("g3", "C"): _five("c"), ("g3", "D"): _five("d"),
+        ("g1", "A"): _five("a"),
+        ("g1", "B"): _five("b"),
+        ("g2", "E"): ("a0", *_five("e")[1:]),
+        ("g2", "F"): _five("f"),
+        ("g3", "C"): _five("c"),
+        ("g3", "D"): _five("d"),
     }
-    df, _ = compute_elo_records(games, calculate_game_length_elo_change, rosters=rosters)
+    df, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
     # Only E's and F's ten players played within a year of the debut.
-    active = (_row(df, "g2", "E").post_match_elo + _row(df, "g2", "F").post_match_elo) / 2
+    active = (
+        _row(df, "g2", "E").post_match_elo + _row(df, "g2", "F").post_match_elo
+    ) / 2
     assert active != pytest.approx(1500)
     assert _row(df, "g3", "C").pre_match_elo == pytest.approx(active)
     assert _row(df, "g3", "D").pre_match_elo == pytest.approx(active)
@@ -228,8 +249,10 @@ def test_player_records_average_to_the_team_rating():
         }
     )
     rosters = {
-        ("g1", "A"): _five("a"), ("g1", "B"): _five("b"),
-        ("g2", "A"): ("b0",) + _five("a")[1:], ("g2", "C"): _five("c"),
+        ("g1", "A"): _five("a"),
+        ("g1", "B"): _five("b"),
+        ("g2", "A"): ("b0",) + _five("a")[1:],
+        ("g2", "C"): _five("c"),
     }
     teams, _, players = compute_elo_records(
         games, calculate_game_length_elo_change, rosters=rosters, player_records=True
@@ -241,7 +264,9 @@ def test_player_records_average_to_the_team_rating():
         assert group["post_match_elo"].mean() == pytest.approx(team.post_match_elo)
     # b0 lost g1 with B, then carried that rating into A's lineup.
     b0 = players[players["playerid"] == "b0"].set_index("gameid")
-    assert b0.loc["g2", "pre_match_elo"] == pytest.approx(b0.loc["g1", "post_match_elo"])
+    assert b0.loc["g2", "pre_match_elo"] == pytest.approx(
+        b0.loc["g1", "post_match_elo"]
+    )
 
 
 def test_a_cup_keeps_the_home_league_and_main_roster():
@@ -255,22 +280,34 @@ def test_a_cup_keeps_the_home_league_and_main_roster():
             "gamelength": [1800] * 5,
             "result": [1, 1, 0, 1, 1],
             "league": ["LCK", "LCK", "KeSPA Cup", "KeSPA Cup", "LCK"],
-            "date": ["2024-06-01", "2024-06-02", "2024-12-01", "2024-12-02", "2025-01-10"],
+            "date": [
+                "2024-06-01",
+                "2024-06-02",
+                "2024-12-01",
+                "2024-12-02",
+                "2025-01-10",
+            ],
         }
     )
     rosters = {(g, t): _five(t) for g, t in zip(games.gameid, games.teamid)}
     rosters.update({(g, "B"): _five("B") for g in games.gameid})
     rosters.update({(g, "C"): _five("C") for g in games.gameid})
     rosters[("g3", "A")] = _five("a")  # academy lineup under A's name
-    df, _ = compute_elo_records(games, calculate_game_length_elo_change, rosters=rosters)
+    df, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
 
     # Two LCK games outweigh the cup, so A's home stays LCK through it and into 2025.
     assert [_row(df, g, "A").home_league for g in games.gameid] == ["LCK"] * 5
     # The academy game rates the academy lineup but leaves A's main rating alone.
-    assert _row(df, "g3", "A").pre_match_elo != pytest.approx(_row(df, "g2", "A").post_match_elo)
+    assert _row(df, "g3", "A").pre_match_elo != pytest.approx(
+        _row(df, "g2", "A").post_match_elo
+    )
     assert _row(df, "g3", "A").main_elo == pytest.approx(_row(df, "g2", "A").main_elo)
     # The main roster's cup game counts.
-    assert _row(df, "g4", "A").main_elo == pytest.approx(_row(df, "g4", "A").post_match_elo)
+    assert _row(df, "g4", "A").main_elo == pytest.approx(
+        _row(df, "g4", "A").post_match_elo
+    )
 
 
 def test_home_league_moves_to_the_most_played_league():
@@ -287,4 +324,9 @@ def test_home_league_moves_to_the_most_played_league():
     )
     df, _ = compute_elo_records(games, calculate_game_length_elo_change)
     # A tie (one game each) keeps LCKC; the second LCK game moves A to the LCK.
-    assert [_row(df, g, "A").home_league for g in games.gameid] == ["LCKC", "LCKC", "LCK", "LCK"]
+    assert [_row(df, g, "A").home_league for g in games.gameid] == [
+        "LCKC",
+        "LCKC",
+        "LCK",
+        "LCK",
+    ]

@@ -1,6 +1,6 @@
 """Isolate champion additions to stats+Elo at matched C=0.1 on 2023–2025.
 
-Run: .venv/bin/python scripts/evaluate_elo_champions.py
+Run: .venv/bin/python scripts/research/evaluate_elo_champions.py
 """
 
 import argparse
@@ -80,7 +80,9 @@ def report(pooled, annual, coverage, audit):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
-    parser.add_argument("--out", type=Path, default=Path("docs/elo_champion_report.md"))
+    parser.add_argument(
+        "--out", type=Path, default=Path("docs/research/elo_champion_report.md")
+    )
     parser.add_argument("--artifacts", type=Path, default=Path("data/elo_champions"))
     args = parser.parse_args()
     ratings, audit = experiment.load_ratings()

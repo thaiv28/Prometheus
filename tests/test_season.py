@@ -31,7 +31,9 @@ def test_record_ranks_by_schedule_adjusted_results():
 
 
 def test_record_counts_fast_wins_more_than_slow_ones():
-    fast = season.fit_record(_games([("A", "B", 1, 900)] * 3 + [("B", "A", 1, 900)] * 3))
+    fast = season.fit_record(
+        _games([("A", "B", 1, 900)] * 3 + [("B", "A", 1, 900)] * 3)
+    )
     slow_wins_for_a = season.fit_record(
         _games([("A", "B", 1, 3000)] * 3 + [("B", "A", 1, 900)] * 3)
     )
@@ -47,7 +49,9 @@ def test_luck_is_actual_minus_earned_win_pct():
     skill = {t: rng.normal(0, 0.5) for t in teams}
     gpm = rng.normal(0, 1, n) + np.array([skill[t] for t in team])
     result = (gpm + rng.normal(0, 1, n) > 0).astype(int)
-    games = pd.DataFrame({"teamname": team, "year": 2024, "league": "LCK", "gpm": gpm, "result": result})
+    games = pd.DataFrame(
+        {"teamname": team, "year": 2024, "league": "LCK", "gpm": gpm, "result": result}
+    )
     # "T0" also wins every game it was predicted to lose by a little.
     lucky = (games["teamname"] == "T0") & games["gpm"].between(-0.5, 0)
     games.loc[lucky, "result"] = 1
@@ -57,6 +61,8 @@ def test_luck_is_actual_minus_earned_win_pct():
     assert luck["luck"].idxmax() == "T0"
     row = luck.loc["T0"]
     assert row["luck"] == pytest.approx((row["win_pct"] - row["expected"]) * 100)
-    assert row["luck_wins"] == pytest.approx((row["win_pct"] - row["expected"]) * row["games"])
+    assert row["luck_wins"] == pytest.approx(
+        (row["win_pct"] - row["expected"]) * row["games"]
+    )
     # Calibrated: across the league, luck averages out (weighted by games).
     assert np.average(luck["luck"], weights=luck["games"]) == pytest.approx(0, abs=1e-6)

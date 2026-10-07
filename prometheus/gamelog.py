@@ -28,7 +28,9 @@ from prometheus.forge import (
     other_league_forge_probability,
     other_league_weight,
 )
-from prometheus.form import league_relative, load_weights as load_form_weights, scores
+from prometheus.form import league_relative, scores
+from prometheus.form import load_weights as load_form_weights
+from prometheus.player_tables import PlayerTables
 from prometheus.schedule import series_probability
 from prometheus.types import ALL_MAJOR_LEAGUES
 from prometheus.utils import get_engine
@@ -63,23 +65,18 @@ def load_team_games():
     return games
 
 
-def load_player_games():
-    """Every player-game: role, name, champion (when Oracle's Elixir has it) and player Elo before and after."""
-    # Three plain reads merged here: SQLite has no index for these joins.
-    engine = get_engine()
-    players = pd.read_sql(
-        "SELECT gameid, teamid, position, playerid, playername FROM match_players",
-        engine,
-    )
-    champions = pd.read_sql(
-        "SELECT gameid, teamid, position, champion FROM player_stats", engine
-    )
-    elos = pd.read_sql(
-        "SELECT gameid, teamid, playerid, pre_match_elo AS elo_pre, post_match_elo AS elo FROM game_length_player_elo",
-        engine,
-    )
-    return players.merge(
-        champions, on=["gameid", "teamid", "position"], how="left"
+def load_player_games(tables=None):
+    """Every player-game: role, name, champion (when Oracle's Elixir has it) and player Elo before and after.
+
+    `tables` is a `PlayerTables` for game-length Elo (read when None).
+    """
+    if tables is None:
+        tables = PlayerTables("game_length")
+    elos = tables.elo[["gameid", "teamid", "playerid", "elo_pre", "elo"]]
+    return tables.roster.merge(
+        tables.stats[["gameid", "teamid", "position", "champion"]],
+        on=["gameid", "teamid", "position"],
+        how="left",
     ).merge(elos, on=["gameid", "teamid", "playerid"], how="left")
 
 
@@ -102,8 +99,9 @@ def add_calls(games, states, form_weights=None):
     f, of = form.reindex(own).to_numpy(), form.reindex(opp).to_numpy()
     h, oh = home.reindex(own).to_numpy(), home.reindex(opp).to_numpy()
 
-    e, oe = games["elo_pre"].to_numpy(dtype=float), games["opp_elo_pre"].to_numpy(
-        dtype=float
+    e, oe = (
+        games["elo_pre"].to_numpy(dtype=float),
+        games["opp_elo_pre"].to_numpy(dtype=float),
     )
     h, oh = pd.Series(h).fillna("").to_numpy(), pd.Series(oh).fillna("").to_numpy()
     cross = (h != "") & (oh != "") & (h != oh)
