@@ -16,6 +16,10 @@ UTC = datetime.timezone.utc
 def test_fold_and_strip_disambiguation():
     assert schedule.fold("Barça eSports") == "barca esports"
     assert schedule.fold("Movistar KOI Fénix!") == "movistar koi fenix"
+    # Letters with no accent to strip: LØS and Sørby are "los" and "sorby", not "ls".
+    assert schedule.fold("LØS") == "los"
+    assert schedule.fold("Sørby eSport") == "sorby esport"
+    assert schedule.fold("Orzeł Barcząca") == "orzel barczaca"
     assert schedule.strip_disambiguation("LYON (2024 American Team)") == "LYON"
     assert schedule.strip_disambiguation("Gen.G") == "Gen.G"
 

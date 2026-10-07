@@ -71,6 +71,22 @@ MARKET_ALIASES = {
     "PCIFIC": "PCIFIC Esports",
     "Senshi Esports Club": "Senshi eSports",
     "MVK Academy": "MVK Esports Academy",
+    # Found from who each team's matched opponent played that day (2026-10-06).
+    "Team Orange Gaming": "TeamOrangeGaming",
+    "Orzel Barczaca Esports": "Barcząca Esports by Yumisu",
+    "Los Heretics": "Team Heretics Academy",
+    "Los Heretics (OLD)": "Team Heretics Academy",
+    "Orbit Anonymo": "Anonymo Esports",
+    "The Ruddy Sack": "Ruddy Corporation",
+    "devils.one x KMT": "devils.one inStreamly",
+    "GIANTX PRIDE": "GIANTX iTero",
+    "EDward Gaming Youth Team": "EDG Youth Team",
+    "LEO": "Lund Esports Organization",
+    "OTF": "Only The Family",
+    "Croatian Flair x RLX": "RLX Esports",
+    "AG.AL": "Anyone's Legend",
+    "MIBR.LOS": "LØS",
+    "Saigon Dino": "1TAP Dino",
 }
 
 
