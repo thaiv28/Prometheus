@@ -85,7 +85,7 @@ def test_get_glory_minimum_matches_integration(mock_get_engine, inmemory_engine)
     mock_get_engine.return_value = inmemory_engine
 
     with pytest.raises(ValueError):
-        five_min_df = get_glory_ranking(
+        get_glory_ranking(
             league="LPL",
             year=2022,
             features=["gpm", "dragon_per_10"],

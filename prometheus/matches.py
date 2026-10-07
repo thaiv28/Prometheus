@@ -6,8 +6,6 @@ from enum import Enum
 
 from prometheus import utils
 
-from . import DB_PATH
-
 
 def get_team_averages_frame(stat_table_name, minimum_matches=0, filters=None):
     """

@@ -87,7 +87,3 @@ def _evaluate_model(pipeline, X_test, y_test):
     plt.title("Predicted Win Score (Red=Loss, Blue=Win)")
     plt.tight_layout()
     plt.show()
-
-
-if __name__ == "__main__":
-    model, X_test, y_test = _fit_glory_model(leagues="LPL", years=2018, evaluate=True)

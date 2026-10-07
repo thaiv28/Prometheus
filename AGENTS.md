@@ -80,7 +80,7 @@ Use a port other than 8000 for `http.server` if another worktree is serving.
 | `prometheus/season.py` | Season stats built on results: Record (Bradley-Terry on game-length-weighted results, every league) and Luck (wins above earned) |
 | `prometheus/form.py` | Form (Predictive GLORY): opponent-adjusted, recency-weighted per-team stat states before every game, league-relative scores; weights in `form_weights.json` |
 | `prometheus/forge.py` | FORGE: Elo + Form within a league, Elo alone between leagues; ratings and head-to-head win probability; weights in `forge_weights.json` |
-| `prometheus/elo.py` | Game-length-weighted Elo: bootstrap and query helpers (WIP) |
+| `prometheus/elo.py` | Game-length-weighted Elo: bootstrap and query helpers (team and player Elo, used by FORGE, Form, rankings, predictions and the site) |
 | `prometheus/schedule.py`, `team_aliases.json` | Predictions: the match schedule from Leaguepedia's Cargo API, team-name matching, game and series odds (FORGE / Elo), the prediction log (`data/predictions.json`, kept in S3 by CI) and its scorecard |
 | `prometheus/aura.py`, `scripts/evaluate_aura.py` | AURA, the player season stat: each player's share of a 15-minute win-probability model by lane plus a quarter of their team-centred gain to 25 minutes; `season_aura` gives the site's player-seasons; report in `docs/aura_report.md` |
 | `prometheus/gamelog.py`, `scripts/export_market_prices.py` | Game logs on team and player pages: series grouped from games, each game's pre-game call (FORGE or Elo), Kalshi's price per series (`data/market_prices.json`, exported from the market benchmark, plus the prediction log), compact JSON written by `build_site.add_game_logs` |
@@ -98,7 +98,6 @@ Use a port other than 8000 for `http.server` if another worktree is serving.
 | `templates/*.html.j2` | Jinja2 templates: `base` (shell, with the Teams and Players menus), `index`, `rankings` (every metric page, driven by a column config), `predictions`, `team`, `player`, `sunset`, `redirect`, `404`, the `_marks` macros (league mark, signed number, ordinal, the fixture register), and the `_entry` macros (team and player pages' "On this page" list and game log) |
 | `site_static/{css,js,fonts}` | Hand-written CSS (`tokens.css` holds all colors and the `@font-face` rules, including league inks), vanilla JS (`names.js` for name folding, slugs and search ranking shared by the others and unit-tested under Node, `rankings.js` for filtering, sorting and the distribution figure, `team.js` for the SVG Elo chart on team and player pages, `entry.js` for their game log and current-section marking (with `entry.css`), `forecast.js` for the FORGE head-to-head box, `search.js` for the header team and player search, `nav.js` for the header's Teams and Players menus, `predictions.js` for local times and filters on the fixture registers), and the self-hosted Source Serif 4 font (OFL), all copied verbatim into `output/` |
 | `PRODUCT.md`, `.impeccable/surfaces/` | Product record and visual direction contract used by the impeccable design skill. Read them before UI work. |
-| `notebooks/` | Exploratory modeling. Not imported by the package. |
 | `tests/` | `test_*.py` unit tests (mocked; `test_build_site.py` for the site builder), `integration/` (in-memory SQLite), `e2e/` (real DB), `js/` (Node tests for `names.js`, run by `test_js.py`) |
 
 ## Conventions
@@ -116,7 +115,7 @@ Use a port other than 8000 for `http.server` if another worktree is serving.
 - **Forecast weights** live in `prometheus/form_weights.json`, `forge_weights.json` and `league_curves.json` (Elo's win-curve slope per non-major league) (package data), read by `form.py` and `forge.py`. After a metric or data change, rerun `evaluate_metrics.py --write-weights` and commit both. CI runs `--check-weights` and warns when a blend weight moves more than 10%.
 - `gamelength` is stored in **seconds**.
 - League names are normalized at ingest (`002_add_matches.py`): NA LCS / LTA N → `LCS`, EU LCS → `LEC`.
-- Formatting: `black`. Linting: `pylint`. Both are listed as (non-dev) dependencies.
+- Formatting: `black`. Linting: `pylint`. Both are in the `dev` dependency group with `pytest` (`uv sync` installs it; the hourly prices job uses `--no-dev`).
 - Frontend: no build step and no framework. Design tokens are in `site_static/css/tokens.css`, and league color comes only from `[data-league]`. Charts are hand-drawn SVG; there are no third-party scripts. JS that writes HTML must escape values with `esc()` in `rankings.js`.
 - Visual direction is "The Almanac": the site is set like a printed sabermetrics annual, with booktabs registers, margin notes and small printed figures on paper. See `DESIGN.md`, `.impeccable/surfaces/` and `docs/steering/ui.md` before changing the look.
 
@@ -125,7 +124,6 @@ Use a port other than 8000 for `http.server` if another worktree is serving.
 - `get_glory_ranking()` reads and fits one model **per year** on every call. Reading the games is the slow part, so `build_site.py` loads them once with `load_glory_games()` and passes `games=` to its calls (GLORY qualified/all, unadjusted GLORY, GLORB, Luck), and fits Record once and passes it as `record=`. A build takes about 65 seconds: about 3 for the Form pass over every team-game, about 15 for AURA (every player-game and four snapshot fits per year), about 20 for the game logs, and most of the rest writing about 7,000 pages and their game-log files.
 - International events (Worlds, MSI, ...) are ingested as their own leagues (`INTERNATIONAL_LEAGUES` in `types.py`). They are the only games linking regional Elo pools. A new cross-region event (an invitational, a new international cup) must be added there, or it becomes its teams' home league: their FORGE calls turn into Elo calls and leave the FORGE page and the Kalshi alerts (this happened with `DCGI` and `WSCI` until 2026-10-06). Oracle's Elixir leaves `split` empty for them, so don't reintroduce a blanket `dropna` over `split` in `002_add_matches.py`.
 - `setup_db.sh` **deletes** `db/prometheus.db` before rebuilding.
-- Several modules end in `if __name__ == "__main__":` scratch blocks. They aren't real entry points.
 - `scripts/004_bootstrap_elo.py` clears and refills `game_length_elo`, so it's safe to rerun.
 - Leaguepedia rate-limits anonymous API calls after a few in a row and stays shut for minutes. Put a bot password in a gitignored `.env` (`LEAGUEPEDIA_USER=Name@bot`, `LEAGUEPEDIA_PASSWORD=...`) and local builds log in for a higher limit. Don't loop on it while developing: cache a fetched schedule (`fetch_schedule(...).to_pickle(...)`) and pass it as `schedule=` to `build_predictions`, or build with `PREDICTIONS_FETCH=0`.
 

@@ -1,4 +1,3 @@
-from enum import Enum
 from rich.table import Table
 from rich.console import Console
 from sqlalchemy import create_engine

@@ -217,3 +217,99 @@ def test_backfill_last_quote_takes_the_last_tight_quote_by_the_start():
     assert backfill.last_quote(candles, 2500) == pytest.approx((0.41, 0.02, 1000))
     assert backfill.last_quote(candles, 500) is None
 
+
+
+def _logged(
+    p,
+    winner,
+    close,
+    early=None,
+    method="forge",
+    home="LCK",
+    reconstructed=False,
+    backfilled=False,
+):
+    entry = {
+        "start": "2026-10-05T08:00Z",
+        "matched": True,
+        "reconstructed": reconstructed,
+        "method": method,
+        "home1": home,
+        "home2": home,
+        "p_series": p,
+        "winner": winner,
+        "market": {"p": close, "at": "2026-10-05T07:00Z"},
+    }
+    if backfilled:
+        entry["market"]["backfilled"] = True
+    if early is not None:
+        entry["market_12h"] = {
+            "p": early,
+            "at": "2026-10-04T19:00Z",
+            "ours": p - 0.05,
+            "backfilled": backfilled,
+        }
+    return entry
+
+
+def test_saved_calls_keeps_settled_saved_calls_priced_before_the_start():
+    late = _logged(0.6, 1, 0.5)
+    late["market"]["at"] = "2026-10-05T09:00Z"
+    log = [
+        _logged(0.6, 1, 0.55, early=0.5, backfilled=True),
+        _logged(0.3, 2, 0.4, method="elo-cross", home="LEC"),
+        _logged(0.7, 1, 0.6, home="LFL"),
+        _logged(0.6, 1, 0.5, reconstructed=True),  # rebuilt, not saved
+        _logged(0.6, None, 0.5),  # not settled
+        {**_logged(0.6, 1, 0.5), "market": None},  # no price
+        late,  # priced after the start
+    ]
+    frame = evaluate_markets.saved_calls(log)
+    assert len(frame) == 3
+    first = frame.iloc[0]
+    assert first["won1"] and first["major"] and first["backfilled_close"]
+    assert first["ours_early"] == pytest.approx(0.55)
+    assert first["market_early"] == 0.5 and first["backfilled_early"]
+    assert np.isnan(frame.iloc[1]["market_early"])
+    assert not frame.iloc[2]["major"]
+    sizes = {label: len(part) for label, part in evaluate_markets.saved_slices(frame)}
+    assert sizes == {
+        "All": 3,
+        "FORGE (same major league)": 1,
+        "FORGE (same other league)": 1,
+        "Other": 1,
+    }
+
+
+def test_saved_table_scores_ours_against_the_market_with_intervals_from_min_n():
+    log = [_logged(0.7, 1, 0.6, early=0.55)] * 6 + [
+        _logged(0.4, 2, 0.5, method="elo", home="LFL")
+    ] * 6
+    frame = evaluate_markets.saved_calls(log)
+    lines = evaluate_markets.saved_table(
+        frame, "p_series", "market_close", "backfilled_close", min_n=10
+    )
+    rows = {line.split(" | ")[0].lstrip("| "): line for line in lines[2:]}
+    # All 12 get an interval; each half of 6 doesn't.
+    assert rows["All"].count("to") == 2
+    assert " | 12 | 0 | " in rows["All"]
+    assert rows["FORGE (same major league)"].count("to") == 0
+    assert rows["FORGE (same other league)"].startswith(
+        "| FORGE (same other league) | 0 |"
+    )
+    ours = -np.log(0.7)
+    market = -np.log(0.6)
+    assert f"{ours:.4f} | {market:.4f} | {ours - market:+.4f}" in rows[
+        "FORGE (same major league)"
+    ]
+    # The early table pairs our call when the price was read with that price.
+    early = evaluate_markets.saved_table(
+        frame, "ours_early", "market_early", "backfilled_early", min_n=10
+    )
+    assert " | 6 | " in early[2]  # only the six with a 12-hour price
+
+
+def test_saved_section_handles_an_empty_log():
+    lines = evaluate_markets.saved_section(evaluate_markets.saved_calls([]))
+    assert lines[0] == "## Saved calls"
+    assert "No settled saved calls with a price yet." in lines

@@ -223,3 +223,20 @@ def test_settled_alerts_score_clv_against_the_last_price_for_the_side():
     assert [b["won"] for b in bets] == [True, False]
     assert alerts.clv_summary(bets) == pytest.approx((-0.02, 0.0))
     assert alerts.clv_summary([]) == (None, None)
+
+
+def test_minor_league_forge_edges_are_paper_alerts_never_posted():
+    log = {
+        "minor": _entry("minor", home1="LDL", home2="LDL"),  # +7, LDL FORGE
+        "minor_elo": _entry("minor_elo", method="elo", home1="LDL", home2="LDL"),
+    }
+    assert alerts.update(log, NOW, "5 Oct", lambda t: None, set()) is None
+    assert log["minor"]["paper_alert"]["edge"] == pytest.approx(0.07)
+    assert "alert" not in log["minor"]
+    assert "paper_alert" not in log["minor_elo"]
+    assert [a["entry"]["match_id"] for a in alerts.select(log, NOW)] == []
+
+    log["minor"]["winner"] = 1
+    assert alerts.paper_record(log) == (0, 0, 0.0, 0)
+    settled, won, staked, _ = alerts.paper_record(log, key="paper_alert")
+    assert (settled, won, staked) == (1, 1, 1.0)

@@ -10,7 +10,6 @@ from prometheus.matches import (
 from prometheus.elo import get_pregame_elos
 from prometheus.season import get_record, load_season_games
 from prometheus.types import GLORY_FEATURES, ALL_MAJOR_LEAGUES, ScoreCols
-from prometheus import utils
 
 
 def get_glory_ranking(
@@ -274,10 +273,3 @@ def _filter_leagues(df, leagues):
     if not isinstance(leagues, (list, tuple, set)):
         leagues = [leagues]
     return df[df["league"].isin(leagues)]
-
-
-if __name__ == "__main__":
-    df = get_glory_ranking(
-        year=2018, league=["LPL", "LCK", "EU LCS", "NA LCS"], baseline=True
-    )
-    print(df)

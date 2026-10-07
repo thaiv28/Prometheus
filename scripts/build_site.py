@@ -13,6 +13,7 @@ import json
 import os
 import re
 import datetime
+import functools
 import hashlib
 import shutil
 from pathlib import Path
@@ -353,6 +354,7 @@ def _write(path, html):
         f.write(html)
 
 
+@functools.lru_cache(maxsize=None)
 def _asset_url(path: str) -> str:
     """'css/base.css' -> 'css/base.css?v=<content hash>'.
 
@@ -920,7 +922,7 @@ def write_kalshi_alert(log, coverage, team_slugs, path=None):
         return None
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
-        json.dump(alert, f, ensure_ascii=False)
+        f.write(json.dumps(alert, ensure_ascii=False))
     print(f"Kalshi alert: {alert['new']} new match(es); issue written to {path}")
     return alert
 
@@ -1124,7 +1126,7 @@ def write_player_index(listed):
     ]
     players.sort(key=lambda p: p["l"] not in majors)
     with open(os.path.join(OUTPUT_DIR, "players.json"), "w") as f:
-        json.dump(players, f, ensure_ascii=False, separators=(",", ":"))
+        f.write(json.dumps(players, ensure_ascii=False, separators=(",", ":")))
 
 
 def write_team_index(pages):
@@ -1146,7 +1148,7 @@ def write_team_index(pages):
     teams.sort(key=lambda t: t["d"], reverse=True)
     teams.sort(key=lambda t: t["l"] not in majors)
     with open(os.path.join(OUTPUT_DIR, "teams.json"), "w") as f:
-        json.dump(teams, f, ensure_ascii=False, separators=(",", ":"))
+        f.write(json.dumps(teams, ensure_ascii=False, separators=(",", ":")))
 
 
 def game_log_context(kind, log, slug):
@@ -1163,7 +1165,7 @@ def game_log_context(kind, log, slug):
         path = os.path.join(OUTPUT_DIR, "games", f"{kind}s", f"{slug}.json")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:
-            json.dump({people: log[people], "series": series}, f, ensure_ascii=False, separators=(",", ":"))
+            f.write(json.dumps({people: log[people], "series": series}, ensure_ascii=False, separators=(",", ":")))
         data["src"] = f"../games/{kind}s/{slug}.json"
     return {
         "data": data,
@@ -1378,10 +1380,10 @@ def main():
     render_predictions(predictions, coverage, last_update)
     render_results(predictions, last_update)
     with open(os.path.join(OUTPUT_DIR, "predictions.json"), "w") as f:
-        json.dump(markets.published_log(prediction_log), f, ensure_ascii=False, separators=(",", ":"))
+        f.write(json.dumps(markets.published_log(prediction_log), ensure_ascii=False, separators=(",", ":")))
     # The hourly price job (scripts/update_prices.py) replaces this between builds.
     with open(os.path.join(OUTPUT_DIR, "kalshi.json"), "w") as f:
-        json.dump(markets.prices_file(prediction_log, datetime.datetime.now(datetime.timezone.utc)), f, separators=(",", ":"))
+        f.write(json.dumps(markets.prices_file(prediction_log, datetime.datetime.now(datetime.timezone.utc)), separators=(",", ":")))
     render_index(
         [r for r in forge_rows if r["league"] in majors],
         team_elo_rows,
