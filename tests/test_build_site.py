@@ -4,11 +4,13 @@ templates and the search index. No database: frames are built by hand."""
 import datetime
 import importlib.util
 import json
+import math
 import sys
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from prometheus import schedule
 from prometheus.schedule import series_probability
@@ -406,3 +408,24 @@ def test_team_page_orders_sections_and_lists_contents(tmp_path, monkeypatch):
     assert '<a href="#games"><span class="toc-name">Games</span><span class="toc-figure">1</span></a>' in html
     assert 'id="games-data">{' in html and "games-all" not in html  # everything is embedded
     assert "entry.js" in html and "css/entry.css" in html
+
+
+def test_forge_register_lists_every_league_on_its_own_scale():
+    from prometheus import forge
+
+    forms = pd.DataFrame({
+        "teamname": ["A", "B", "C", "D"], "home": ["LCK", "LFL", "LFL", "Worlds"], "year": 2026,
+        "form": [0.5, 0.5, -0.5, 0.2], "latest_date": pd.Timestamp("2026-09-01"),
+    })
+    elos = pd.DataFrame({"teamname": ["A", "B", "C", "D"], "elo": [1700.0, 1500.0, 1450.0, 1400.0], "year": 2026})
+    now, seasons, rows, config, filters = build_site.forge_register(forms, forms, elos.drop(columns="year"), elos, ["LCK", "LPL"])
+    # A team rated only at an international event has no league scale.
+    assert {r["teamname"] for r in rows} == {"A", "B", "C"}
+    assert filters["leagues"] == ["LCK", "LFL"]
+    slopes = config["weights"]["leagues"]
+    assert slopes == {"LCK": forge.ELO_WEIGHT, "LFL": forge.OTHER_LEAGUE_FORGE_ELO_WEIGHT}
+    # The LFL pair's odds from the page's rating gap and slope are its blend's odds.
+    b, c = (next(r for r in rows if r["now"] and r["teamname"] == t) for t in "BC")
+    p = 1 / (1 + math.exp(-slopes["LFL"] * (b["forge"] - c["forge"])))
+    assert p == pytest.approx(float(forge.other_league_forge_probability(50.0, forge.FORM_POINTS)), abs=1e-3)
+    assert config["leagueScales"] and config["majorLeagues"] == ["LCK", "LPL"]

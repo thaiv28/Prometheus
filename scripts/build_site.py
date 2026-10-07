@@ -175,12 +175,12 @@ FORECASTS = {
         "question": "Who wins if two teams play today?",
         "description": "Who would win a game today. Each team's Elo plus its Form, the recent play that Elo misses, weighted by what best predicted past games.",
         "how_to_read": [
-            "Rating: Elo plus Form, both in Elo points. Form is how much better than its own league a team has played lately, from its recent gold and objective stats, each game adjusted for the opponent's Elo. Recent games count most: a game's weight halves every 20 games.",
+            "Rating: Elo plus Form, both in Elo points, on the team's league's own scale; the four majors share one. Form is how much better than its own league a team has played lately, from its recent gold and objective stats, each game adjusted for the opponent's Elo. Recent games count most: a game's weight halves every 20 games.",
             "Head to head turns two ratings into a chance to win one game. Between teams from different leagues it uses Elo alone, because Form only compares a team with its own league. It ignores side; blue side wins about 54% of games.",
-            "Tested on every major-league game since 2014, using only earlier games each time: it picks the winner 64.7% of the time within a league, and its odds are more accurate than Elo's alone.",
-            "The table opens on current ratings for teams that have played in the last six months. Pick a season to see ratings at the end of that year.",
+            "Tested on every major-league game since 2014, using only earlier games each time: it picks the winner 64.8% of the time within a league, and its odds are more accurate than Elo's alone.",
+            "The table opens on major-league teams that have played in the last six months. Pick a league to see its teams, or a season for ratings at the end of that year.",
         ],
-        "caveats": "Only LCK, LPL, LEC and LCS teams. Regions meet only at international events, so a league that rarely plays abroad is measured loosely. Odds are for one game, not a series.",
+        "caveats": "Ratings compare only within one league's scale. Regions meet only at international events, so a league that rarely plays abroad is measured loosely. Odds are for one game, not a series.",
         "lede_note": 3,
         "matchup": True,
     },
@@ -1229,6 +1229,30 @@ def _active(df):
     return played >= played.max() - ACTIVE_WINDOW
 
 
+def forge_register(forms_now, forms_seasons, latest_elos, season_elos, majors):
+    """FORGE for every team with Form, each on its home league's scale: now (active
+    teams, current Elo) and at the end of each season (that year's season-end Elo).
+
+    Returns (now, seasons, rows, page config, filters). The config carries each
+    league's slope (log-odds per point of FORGE gap) for the head to head.
+    """
+    # A team whose only games one year were at an international event has no
+    # league scale, so it is left out.
+    domestic = lambda forms: forms[~forms["home"].isin(INTERNATIONAL_LEAGUES)]
+    now = forge_ratings(domestic(forms_now), latest_elos)
+    now = now[_active(now)].reset_index(drop=True)
+    seasons = forge_ratings(domestic(forms_seasons), season_elos)
+    rows = _forecast_records(now.drop(columns="slope"), seasons.drop(columns="slope"), ("forge", "elo", "form"))
+    slopes = pd.concat([now, seasons]).drop_duplicates("league").set_index("league")["slope"]
+    config = {"valueKey": "forge", "columns": FORGE_COLUMNS, "defaultSort": "forge", "kind": "rating",
+              "leagueScales": True, "majorLeagues": list(majors),
+              "weights": {"elo": ELO_WEIGHT, "crossRegionElo": CROSS_REGION_ELO_WEIGHT,
+                          "leagues": {l: float(slopes[l]) for l in sorted(slopes.index)}}}
+    filters = {"years": sorted(int(y) for y in seasons["year"].unique()),
+               "leagues": [l for l in majors if l in slopes.index] + sorted(set(slopes.index) - set(majors))}
+    return now, seasons, rows, config, filters
+
+
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     copy_static()
@@ -1306,21 +1330,10 @@ def main():
         last_update,
     )
 
-    # FORGE for major-league teams: now (active teams, current Elo) and at the end
-    # of each season (that year's season-end Elo).
-    forge = forge_ratings(forms_now[forms_now["home"].isin(majors)], latest_elos)
-    forge = forge[_active(forge)].reset_index(drop=True)
-    forge_seasons = forge_ratings(forms_seasons[forms_seasons["home"].isin(majors)], season_elos)
-    forge_rows = _forecast_records(forge, forge_seasons, ("forge", "elo", "form"))
-    forge_config = {"valueKey": "forge", "columns": FORGE_COLUMNS, "defaultSort": "forge", "kind": "rating",
-                    "weights": {"elo": ELO_WEIGHT, "crossRegionElo": CROSS_REGION_ELO_WEIGHT}}
-    render_rankings_page(
-        FORECASTS["forge"],
-        forge_rows,
-        forge_config,
-        {"years": sorted(int(y) for y in forge_seasons["year"].unique()), "leagues": sorted(forge_seasons["league"].unique())},
-        last_update,
+    forge, forge_seasons, forge_rows, forge_config, forge_filters = forge_register(
+        forms_now, forms_seasons, latest_elos, season_elos, majors
     )
+    render_rankings_page(FORECASTS["forge"], forge_rows, forge_config, forge_filters, last_update)
 
     # ---- Players ---------------------------------------------------------
     player_history = get_player_history(cfg["method"])
@@ -1372,7 +1385,7 @@ def main():
     with open(os.path.join(OUTPUT_DIR, "kalshi.json"), "w") as f:
         f.write(json.dumps(markets.prices_file(prediction_log, datetime.datetime.now(datetime.timezone.utc)), separators=(",", ":")))
     render_index(
-        forge_rows,
+        [r for r in forge_rows if r["league"] in majors],
         team_elo_rows,
         player_rows,
         {"glory": len(glory_df), "forge": len(forge),
