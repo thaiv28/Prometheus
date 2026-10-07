@@ -2,6 +2,7 @@
 
 import datetime
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -13,13 +14,16 @@ pytestmark = pytest.mark.e2e
 
 @pytest.fixture(scope="module")
 def days():
-    """Every game day, the day after each, and one before any game."""
+    """A day before any game, then game days and days after a game day, spread
+    evenly over the data (a fixed number, so the full DB in CI stays quick: each
+    old per-day query takes about a second there)."""
     dates = pd.read_sql(
         "SELECT DISTINCT DATE(date) AS day FROM matches", utils.get_engine()
     )
     game_days = sorted(datetime.date.fromisoformat(d) for d in dates["day"])
-    after = [d + datetime.timedelta(days=1) for d in game_days]
-    return [game_days[0] - datetime.timedelta(days=30), *game_days[::5], *after[::7]]
+    picks = [game_days[i] for i in np.linspace(0, len(game_days) - 1, 8, dtype=int)]
+    after = [d + datetime.timedelta(days=1) for d in picks[1::2]]
+    return [game_days[0] - datetime.timedelta(days=30), *picks, *after]
 
 
 def _by_team(frame):
