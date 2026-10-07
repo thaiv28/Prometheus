@@ -4,7 +4,7 @@ Prometheus is served at **https://prometheus.thaiv.dev** from AWS, through the `
 
 ## Infrastructure (owned by project-platform-infrastructure)
 
-- Stack `ThaivPrometheusProject` (`us-west-2`): a private, versioned S3 bucket behind CloudFront with origin path `/current`, the shared `*.thaiv.dev` wildcard certificate, Route 53 A/AAAA aliases, and `/404.html` served for missing paths (status 404).
+- Stack `ThaivPrometheusProject` (`us-west-2`): a private, versioned S3 bucket behind CloudFront with origin path `/current`, the shared `*.thaiv.dev` wildcard certificate, Route 53 A/AAAA aliases, `/404.html` served for missing paths (status 404), and lifecycle rules (since 2026-10-07, infra PR #14): `releases/` expires after 14 days, noncurrent versions after 30, incomplete multipart uploads after 1.
 - Deploy access: the shared GitHub OIDC role from `ThaivProjectPlatform` (any `thaiv28/*` repo on `main`), granted this bucket and distribution through the managed policy `thaiv-prometheus-static-deployment`.
 - Infrastructure changes are made in that repo and deployed with its **Deploy Prometheus Infrastructure** workflow (`diff`, then `deploy`). That workflow only touches this stack.
 
@@ -68,7 +68,7 @@ The Actions cache (about 225 MB an entry; GitHub keeps 10 GB a repo and evicts e
 ## Notes
 
 - **Rolling back.** Within 7 days (the artifact's retention), re-run the `deploy` job of the earlier run (Actions → that run → Re-run jobs → `deploy`, or `gh run rerun <run id> --job <deploy job id>`): it uploads the differences between that run's site and the manifest, then invalidates. Older than that, revert the commit and let the publish rebuild (today's data, the old code), or restore objects from S3 versions (the bucket is versioned) and then delete `deploy/manifest.json` so the next deploy uploads everything. Do the same after any change to `current/` made outside `deploy_site.py`, including re-running a deploy from before 2026-10-07 (it used `releases/`).
-- `releases/` is no longer written. The old releases (about 290 MB each since 2026-10-06) stay until deleted: `aws s3 rm s3://$DEPLOYMENT_BUCKET/releases/ --recursive` (versioning keeps them as noncurrent versions until a lifecycle rule expires them). The infrastructure stack still needs lifecycle rules for noncurrent versions and incomplete multipart uploads (see Future work).
+- `releases/` is no longer written. The old releases (about 290 MB each since 2026-10-06; 7.4 GB in the bucket on 6 Oct) expire under the lifecycle rule 14 days after they were written, and their noncurrent versions 30 days after that; no manual delete is needed. S3-version rollback therefore reaches back 30 days.
 - GitHub disables scheduled workflows after 60 days without repository activity. If the daily rebuild stops, re-enable it under Actions.
 - The old GitHub Pages site (`thaiv28.github.io/Prometheus`) should be turned off once the AWS site is live.
 
