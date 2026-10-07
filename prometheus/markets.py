@@ -188,8 +188,9 @@ def book_at(candles, ts):
     for c in candles:
         if c["end_period_ts"] > ts:
             break
-        bid, ask = _dollars(c.get("yes_bid"), "close"), _dollars(
-            c.get("yes_ask"), "close"
+        bid, ask = (
+            _dollars(c.get("yes_bid"), "close"),
+            _dollars(c.get("yes_ask"), "close"),
         )
         if mid(bid, ask)[0] is not None:
             best = (bid, ask)
@@ -265,7 +266,11 @@ def buy_costs(row, team1):
 # the book. Resting (maker) orders pay a share of that only on series whose fee
 # type includes maker fees; the LoL series (`quadratic`) charge makers nothing.
 TAKER_RATE = 0.07
-MAKER_SHARE = {"quadratic": 0.0, "quadratic_with_maker_fees": 0.25, "quadratic_with_combo_maker_fees": 0.5}
+MAKER_SHARE = {
+    "quadratic": 0.0,
+    "quadratic_with_maker_fees": 0.25,
+    "quadratic_with_combo_maker_fees": 0.5,
+}
 
 
 def fee_rates(series):

@@ -28,10 +28,11 @@ from prometheus.forge import (
     other_league_forge_probability,
     other_league_weight,
 )
-from prometheus.form import league_relative, load_weights as load_form_weights, scores
+from prometheus.form import league_relative, scores
+from prometheus.form import load_weights as load_form_weights
+from prometheus.player_tables import PlayerTables
 from prometheus.schedule import series_probability
 from prometheus.types import ALL_MAJOR_LEAGUES
-from prometheus.player_tables import PlayerTables
 from prometheus.utils import get_engine
 
 MAJORS = {l.value for l in ALL_MAJOR_LEAGUES}
@@ -98,8 +99,9 @@ def add_calls(games, states, form_weights=None):
     f, of = form.reindex(own).to_numpy(), form.reindex(opp).to_numpy()
     h, oh = home.reindex(own).to_numpy(), home.reindex(opp).to_numpy()
 
-    e, oe = games["elo_pre"].to_numpy(dtype=float), games["opp_elo_pre"].to_numpy(
-        dtype=float
+    e, oe = (
+        games["elo_pre"].to_numpy(dtype=float),
+        games["opp_elo_pre"].to_numpy(dtype=float),
     )
     h, oh = pd.Series(h).fillna("").to_numpy(), pd.Series(oh).fillna("").to_numpy()
     cross = (h != "") & (oh != "") & (h != oh)

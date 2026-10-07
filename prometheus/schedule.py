@@ -20,8 +20,8 @@ marked as such.
 import datetime
 import http.cookiejar
 import json
-import os
 import math
+import os
 import re
 import time
 import unicodedata
@@ -97,7 +97,9 @@ ALIASES_PATH = Path(__file__).with_name("team_aliases.json")
 
 
 # Letters that Unicode doesn't split into a base letter and an accent.
-_PLAIN_LETTERS = str.maketrans({"ø": "o", "æ": "ae", "œ": "oe", "ß": "ss", "đ": "d", "ł": "l", "þ": "th"})
+_PLAIN_LETTERS = str.maketrans(
+    {"ø": "o", "æ": "ae", "œ": "oe", "ß": "ss", "đ": "d", "ł": "l", "þ": "th"}
+)
 
 
 def fold(name):
@@ -143,17 +145,29 @@ def _client():
     global _opener
     if _opener is not None:
         return _opener
-    _opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+    _opener = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+    )
     _opener.addheaders = [("User-Agent", USER_AGENT)]
     user, password = credentials()
     if user and password:
-        token_url = API_URL + "?" + urllib.parse.urlencode(
-            {"action": "query", "meta": "tokens", "type": "login", "format": "json"}
+        token_url = (
+            API_URL
+            + "?"
+            + urllib.parse.urlencode(
+                {"action": "query", "meta": "tokens", "type": "login", "format": "json"}
+            )
         )
         with _opener.open(token_url, timeout=30) as response:
             token = json.load(response)["query"]["tokens"]["logintoken"]
         body = urllib.parse.urlencode(
-            {"action": "login", "lgname": user, "lgpassword": password, "lgtoken": token, "format": "json"}
+            {
+                "action": "login",
+                "lgname": user,
+                "lgpassword": password,
+                "lgtoken": token,
+                "format": "json",
+            }
         ).encode()
         with _opener.open(API_URL, data=body, timeout=30) as response:
             result = json.load(response).get("login", {}).get("result")
@@ -171,7 +185,9 @@ def _get(params, sleep=time.sleep):
             return [row["title"] for row in data["cargoquery"]]
         code = data.get("error", {}).get("code")
         if code != "ratelimited" or wait is None:
-            raise RuntimeError(f"Leaguepedia refused the schedule query: {data.get('error')}")
+            raise RuntimeError(
+                f"Leaguepedia refused the schedule query: {data.get('error')}"
+            )
         sleep(wait)
 
 
@@ -213,8 +229,19 @@ def fetch_schedule(start, end, sleep=time.sleep):
 
 def parse_schedule(rows):
     """Cargo rows -> tidy schedule frame (see `fetch_schedule`)."""
-    cols = ["match_id", "start", "team1", "team2", "best_of", "winner", "score1", "score2",
-            "event", "event_league", "overview_page"]
+    cols = [
+        "match_id",
+        "start",
+        "team1",
+        "team2",
+        "best_of",
+        "winner",
+        "score1",
+        "score2",
+        "event",
+        "event_league",
+        "overview_page",
+    ]
     df = pd.DataFrame(rows).reindex(columns=cols)
     if df.empty:
         return df
@@ -246,7 +273,9 @@ class TeamMatcher:
         for name in order:
             self.folded.setdefault(fold(name), name)
         if aliases is None:
-            aliases = json.loads(ALIASES_PATH.read_text()) if ALIASES_PATH.exists() else {}
+            aliases = (
+                json.loads(ALIASES_PATH.read_text()) if ALIASES_PATH.exists() else {}
+            )
         self.aliases = {fold(k): v for k, v in aliases.items()}
 
     def __call__(self, name):
@@ -257,7 +286,9 @@ class TeamMatcher:
                 return self.aliases[key]
         if name in self.names:
             return name
-        return self.folded.get(fold(name)) or self.folded.get(fold(strip_disambiguation(name)))
+        return self.folded.get(fold(name)) or self.folded.get(
+            fold(strip_disambiguation(name))
+        )
 
 
 # ---------------------------------------------------------------- probabilities
@@ -278,7 +309,9 @@ def team_ratings(forms_now, elos):
     the same moment). Teams without Form get FORGE = Elo.
     """
     elos = elos.sort_values("latest_date", ascending=False).drop_duplicates("teamname")
-    forms = forms_now.sort_values("latest_date", ascending=False).drop_duplicates("teamname")
+    forms = forms_now.sort_values("latest_date", ascending=False).drop_duplicates(
+        "teamname"
+    )
     df = elos[["teamname", "league", "elo", "latest_date"]].merge(
         forms[["teamname", "form"]], on="teamname", how="left"
     )
@@ -291,11 +324,15 @@ def team_ratings(forms_now, elos):
 def game_probability(a, b):
     """(chance team `a` wins one game, method) for two `team_ratings` rows."""
     if a["league"] != b["league"]:
-        return 1 / (1 + math.exp(-CROSS_REGION_ELO_WEIGHT * (a["elo"] - b["elo"]))), "elo-cross"
+        return 1 / (
+            1 + math.exp(-CROSS_REGION_ELO_WEIGHT * (a["elo"] - b["elo"]))
+        ), "elo-cross"
     if a["league"] in MAJORS:
         return 1 / (1 + math.exp(-ELO_WEIGHT * (a["forge"] - b["forge"]))), "forge"
     if a["has_form"] and b["has_form"]:
-        return float(other_league_forge_probability(a["elo"] - b["elo"], a["form"] - b["form"])), "forge"
+        return float(
+            other_league_forge_probability(a["elo"] - b["elo"], a["form"] - b["form"])
+        ), "forge"
     weight = other_league_weight(a["league"])
     return 1 / (1 + math.exp(-weight * (a["elo"] - b["elo"]))), "elo"
 
@@ -352,7 +389,11 @@ def predict(schedule, ratings, match_team):
         }
         if rec["matched"]:
             p, method = game_probability(*rated)
-            rec.update(p_game=round(p, 4), p_series=round(series_probability(p, rec["best_of"]), 4), method=method)
+            rec.update(
+                p_game=round(p, 4),
+                p_series=round(series_probability(p, rec["best_of"]), 4),
+                method=method,
+            )
         out.append(rec)
     return out
 
@@ -403,7 +444,12 @@ def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
         old = log.get(mid)
         started = pred["start"] <= now_s
         if not started:
-            entry = {**pred, "predicted": now_s, "data_through": data_through, "reconstructed": False}
+            entry = {
+                **pred,
+                "predicted": now_s,
+                "data_through": data_through,
+                "reconstructed": False,
+            }
             if old is not None and pred.get("matched"):
                 # Until a newer price replaces them.
                 for key in ("market", "market_12h"):
@@ -414,7 +460,9 @@ def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
         else:
             entry = reconstruct(row) if reconstruct else {**pred, "matched": False}
             entry = {**entry, "reconstructed": True}
-        entry = {k: v for k, v in entry.items() if k not in ("winner", "score1", "score2")}
+        entry = {
+            k: v for k, v in entry.items() if k not in ("winner", "score1", "score2")
+        }
         entry.update(_result(row))
         log[mid] = entry
     return log
@@ -432,10 +480,20 @@ def current_ratings(states):
 def ratings_before(states, day):
     """`team_ratings` from games before `day` (a date): what we knew the day before."""
     forms_now, _ = team_forms(states[pd.to_datetime(states["date"]).dt.date < day])
-    return team_ratings(forms_now, get_latest_elos("game_length", day - datetime.timedelta(days=1)))
+    return team_ratings(
+        forms_now, get_latest_elos("game_length", day - datetime.timedelta(days=1))
+    )
 
 
-def build_predictions(states, log_path, days_back=3, days_ahead=7, backfill_days=30, now=None, schedule=None):
+def build_predictions(
+    states,
+    log_path,
+    days_back=3,
+    days_ahead=7,
+    backfill_days=30,
+    now=None,
+    schedule=None,
+):
     """Fetch the schedule around today, predict it, update and save the log.
 
     `states` is `form.form_states(...)` for every game. A new log is backfilled
@@ -446,7 +504,10 @@ def build_predictions(states, log_path, days_back=3, days_ahead=7, backfill_days
     log = load_log(log_path)
     back = days_back if log else backfill_days
     if schedule is None:
-        schedule = fetch_schedule((now - datetime.timedelta(days=back)).date(), (now + datetime.timedelta(days=days_ahead + 1)).date())
+        schedule = fetch_schedule(
+            (now - datetime.timedelta(days=back)).date(),
+            (now + datetime.timedelta(days=days_ahead + 1)).date(),
+        )
 
     ratings = current_ratings(states)
     match_team = TeamMatcher(ratings.reset_index())
@@ -460,12 +521,23 @@ def build_predictions(states, log_path, days_back=3, days_ahead=7, backfill_days
         if day not in cache:
             cache[day] = ratings_before(states, day)
         rec = predict(pd.DataFrame([row]), cache[day], match_team)[0]
-        return {**rec, "predicted": None, "data_through": str(day - datetime.timedelta(days=1))}
+        return {
+            **rec,
+            "predicted": None,
+            "data_through": str(day - datetime.timedelta(days=1)),
+        }
 
     update_log(log, schedule, predictions, now, data_through, reconstruct)
     priced = attach_market_prices(log, ratings, now)
     save_log(log, log_path)
-    unmatched = sorted({p[f"team{i}"] for p in predictions for i in (1, 2) if p[f"ours{i}"] is None and p[f"team{i}"] not in ("TBD", None)})
+    unmatched = sorted(
+        {
+            p[f"team{i}"]
+            for p in predictions
+            for i in (1, 2)
+            if p[f"ours{i}"] is None and p[f"team{i}"] not in ("TBD", None)
+        }
+    )
     return log, {
         "matches": len(predictions),
         "matched": sum(p["matched"] for p in predictions),
@@ -486,7 +558,9 @@ def attach_market_prices(log, ratings, now, fetch=None):
     try:
         open_markets = (fetch or markets.fetch_open_markets)()
         aliases = json.loads(ALIASES_PATH.read_text()) if ALIASES_PATH.exists() else {}
-        match_team = TeamMatcher(ratings.reset_index(), {**aliases, **markets.MARKET_ALIASES})
+        match_team = TeamMatcher(
+            ratings.reset_index(), {**aliases, **markets.MARKET_ALIASES}
+        )
         return markets.attach_prices(log, open_markets, match_team, now)
     except Exception as e:  # network, rate limit, schema change
         print(f"Predictions: Kalshi prices not updated ({e}).")
@@ -499,7 +573,10 @@ def is_major(entry):
     promotion series between two challengers)."""
     if entry["league"] in INTERNATIONAL_LEAGUES:
         return True
-    return entry["league"] in MAJORS and entry["league"] in (entry.get("home1"), entry.get("home2"))
+    return entry["league"] in MAJORS and entry["league"] in (
+        entry.get("home1"),
+        entry.get("home2"),
+    )
 
 
 def display_name(entry, side):

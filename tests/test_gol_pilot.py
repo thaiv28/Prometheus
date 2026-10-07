@@ -1,7 +1,7 @@
 """Synthetic gol.gg HTML: side attribution, validation and causal checkpoints."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pandas as pd
 import pytest

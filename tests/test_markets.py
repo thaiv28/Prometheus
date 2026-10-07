@@ -10,8 +10,13 @@ UTC = datetime.timezone.utc
 def test_fee_rates_follow_the_series_fee_type():
     # LoL series charge takers only (Kalshi's general table); sports series with
     # maker fees charge resting orders a quarter of the taker rate.
-    assert markets.fee_rates({"fee_type": "quadratic", "fee_multiplier": 1}) == (0.07, 0.0)
-    taker, maker = markets.fee_rates({"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 0.5})
+    assert markets.fee_rates({"fee_type": "quadratic", "fee_multiplier": 1}) == (
+        0.07,
+        0.0,
+    )
+    taker, maker = markets.fee_rates(
+        {"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 0.5}
+    )
     assert taker == pytest.approx(0.035) and maker == pytest.approx(0.00875)
     with pytest.raises(ValueError):
         markets.fee_rates({"fee_type": "flat", "fee_multiplier": 1})
@@ -124,7 +129,11 @@ def test_backfill_prices_prices_started_unpriced_matches_once():
 
     def price_at(row, team1, start):
         calls.append((row["event_ticker"], team1, start))
-        return 0.31 if team1 == "Fuego" else 0.69, 0.02, start - datetime.timedelta(hours=1)
+        return (
+            0.31 if team1 == "Fuego" else 0.69,
+            0.02,
+            start - datetime.timedelta(hours=1),
+        )
 
     later = datetime.datetime(2026, 10, 7, 3, 0, tzinfo=UTC)
     log = {
@@ -133,7 +142,9 @@ def test_backfill_prices_prices_started_unpriced_matches_once():
         "future": {**_entry(start="2026-10-08T20:00Z"), "match_id": "future"},
     }
     assert markets.backfill_prices(log, book, lambda n: n, price_at, later) == 1
-    assert calls == [("KXLOLGAME-E1", "Cupid", datetime.datetime(2026, 10, 6, 20, tzinfo=UTC))]
+    assert calls == [
+        ("KXLOLGAME-E1", "Cupid", datetime.datetime(2026, 10, 6, 20, tzinfo=UTC))
+    ]
     assert log["m"]["market"] == {
         "p": 0.69,
         "spread": 0.02,
@@ -152,11 +163,16 @@ def test_attach_prices_keeps_the_last_read_twelve_hours_out_for_paper_bets():
     log = {"m": {**_entry(), "p_series": 0.7}}  # starts 20:00
     markets.attach_prices(log, book, lambda n: n, NOW)  # 03:00, 17 hours out
     assert log["m"]["market_12h"] == {
-        "p": pytest.approx(0.61), "ask1": 0.62, "ask2": pytest.approx(0.4),
-        "at": "2026-10-06T03:00Z", "ours": 0.7,
+        "p": pytest.approx(0.61),
+        "ask1": 0.62,
+        "ask2": pytest.approx(0.4),
+        "at": "2026-10-06T03:00Z",
+        "ours": 0.7,
     }
     late = [_open("Cupid", "Cupid", "Fuego", 0.7, 0.72)]
-    markets.attach_prices(log, late, lambda n: n, NOW + datetime.timedelta(hours=10))  # 7 hours out
+    markets.attach_prices(
+        log, late, lambda n: n, NOW + datetime.timedelta(hours=10)
+    )  # 7 hours out
     assert log["m"]["market"]["p"] == pytest.approx(0.71)
     assert log["m"]["market_12h"]["at"] == "2026-10-06T03:00Z"  # kept
 
@@ -169,8 +185,18 @@ def test_backfill_prices_adds_the_twelve_hour_price_to_priced_matches():
     def bet_at(row, team1, start):
         return 0.58, 0.6, 0.44, start - markets.BET_LEAD
 
-    assert markets.backfill_prices(log, book, lambda n: n, lambda *a: pytest.fail("priced"), later, bet_at) == 1
+    assert (
+        markets.backfill_prices(
+            log, book, lambda n: n, lambda *a: pytest.fail("priced"), later, bet_at
+        )
+        == 1
+    )
     assert log["m"]["market"] == {"p": 0.6}
     assert log["m"]["market_12h"] == {
-        "p": 0.58, "ask1": 0.6, "ask2": 0.44, "at": "2026-10-06T08:00Z", "ours": 0.7, "backfilled": True,
+        "p": 0.58,
+        "ask1": 0.6,
+        "ask2": 0.44,
+        "at": "2026-10-06T08:00Z",
+        "ours": 0.7,
+        "backfilled": True,
     }

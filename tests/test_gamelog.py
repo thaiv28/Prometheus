@@ -128,13 +128,17 @@ def test_calls_use_forge_within_a_league_and_elo_across_leagues():
     minor_games = games.assign(league="LJL")
     minor = gamelog.add_calls(minor_games, _states(minor_games), weights)
     assert minor.iloc[0]["method"] == "forge"
-    assert minor.iloc[0]["p"] == pytest.approx(1 / (1 + math.exp(-OTHER_LEAGUE_FORGE_ELO_WEIGHT * 100)))
+    assert minor.iloc[0]["p"] == pytest.approx(
+        1 / (1 + math.exp(-OTHER_LEAGUE_FORGE_ELO_WEIGHT * 100))
+    )
     # Without a Form state (so no home league either), Elo on the pooled curve.
     states = _states(minor_games)
     states = states[states["gameid"] != minor_games.loc[0, "gameid"]]
     no_form = gamelog.add_calls(minor_games, states, weights)
     assert no_form.iloc[0]["method"] == "elo"
-    assert no_form.iloc[0]["p"] == pytest.approx(1 / (1 + math.exp(-OTHER_LEAGUE_ELO_WEIGHT * 100)))
+    assert no_form.iloc[0]["p"] == pytest.approx(
+        1 / (1 + math.exp(-OTHER_LEAGUE_ELO_WEIGHT * 100))
+    )
 
 
 def test_calls_skip_games_without_pre_game_elo():

@@ -29,7 +29,8 @@ from pathlib import Path
 
 import numpy as np
 
-from prometheus.form import load_weights as load_form_weights, scores
+from prometheus.form import load_weights as load_form_weights
+from prometheus.form import scores
 from prometheus.types import ALL_MAJOR_LEAGUES
 
 WEIGHTS_PATH = Path(__file__).with_name("forge_weights.json")
@@ -98,11 +99,16 @@ def other_league_forge_probability(elo_gap, form_gap):
     """Chance to win one game inside a non-major league from the Elo gap and the
     Form gap, both in Elo points (Form scaled by `FORM_POINTS`, as in FORGE ratings).
     Works on numbers and arrays."""
-    log_odds = OTHER_LEAGUE_FORGE_ELO_WEIGHT * elo_gap + OTHER_LEAGUE_FORM_WEIGHT / FORM_POINTS * form_gap
+    log_odds = (
+        OTHER_LEAGUE_FORGE_ELO_WEIGHT * elo_gap
+        + OTHER_LEAGUE_FORM_WEIGHT / FORM_POINTS * form_gap
+    )
     return 1 / (1 + np.exp(-log_odds))
 
 
-def win_probability(rating, opponent_rating, same_league=True, elo=None, opponent_elo=None):
+def win_probability(
+    rating, opponent_rating, same_league=True, elo=None, opponent_elo=None
+):
     """Chance that a team beats an opponent in one game on a neutral side.
 
     Same home league: from the FORGE ratings. Different leagues: from Elo alone.
@@ -129,18 +135,34 @@ def team_forms(states, form_weights=None):
         form_weights = load_form_weights()["weights"]
     states = states.assign(pre_score=scores(states, form_weights, "pre_"))
     states["post_score"] = scores(states, form_weights, "post_")
-    league_mean = states.groupby(["home", "year"])["pre_score"].mean().rename("league_mean")
+    league_mean = (
+        states.groupby(["home", "year"])["pre_score"].mean().rename("league_mean")
+    )
 
-    last = states.groupby(["teamid", "year"]).tail(1).join(league_mean, on=["home", "year"])
+    last = (
+        states.groupby(["teamid", "year"])
+        .tail(1)
+        .join(league_mean, on=["home", "year"])
+    )
     seasons = last.assign(form=last["post_score"] - last["league_mean"])
     seasons = seasons.rename(columns={"date": "latest_date"})[
         ["teamid", "teamname", "home", "year", "latest_date", "form"]
     ]
 
     now = states.groupby("teamid").tail(1)
-    newest = league_mean.reset_index().sort_values("year").groupby("home").tail(1).set_index("home")["league_mean"]
-    now = now.assign(form=now["post_score"] - now["home"].map(newest), latest_date=now["date"])
-    now = now[["teamid", "teamname", "home", "year", "latest_date", "form", "form_games"]]
+    newest = (
+        league_mean.reset_index()
+        .sort_values("year")
+        .groupby("home")
+        .tail(1)
+        .set_index("home")["league_mean"]
+    )
+    now = now.assign(
+        form=now["post_score"] - now["home"].map(newest), latest_date=now["date"]
+    )
+    now = now[
+        ["teamid", "teamname", "home", "year", "latest_date", "form", "form_games"]
+    ]
     return now.reset_index(drop=True), seasons.reset_index(drop=True)
 
 
@@ -157,7 +179,11 @@ def forge_ratings(forms, elos):
         slope (log-odds per point of FORGE gap inside the league) and latest_date,
         highest rating first.
     """
-    keys = ["teamname", "year"] if "year" in elos.columns and "year" in forms.columns else ["teamname"]
+    keys = (
+        ["teamname", "year"]
+        if "year" in elos.columns and "year" in forms.columns
+        else ["teamname"]
+    )
     e = elos.drop_duplicates(keys)[keys + ["elo"]]
     df = forms.drop_duplicates(keys).merge(e, on=keys, how="inner")
     df = df.rename(columns={"home": "league"})
@@ -165,5 +191,14 @@ def forge_ratings(forms, elos):
     df["slope"] = weights.str[0]
     df["form"] = weights.str[1] / df["slope"] * df["form"]
     df["forge"] = df["elo"] + df["form"]
-    cols = ["teamname", "league", "year", "form", "elo", "forge", "slope", "latest_date"]
+    cols = [
+        "teamname",
+        "league",
+        "year",
+        "form",
+        "elo",
+        "forge",
+        "slope",
+        "latest_date",
+    ]
     return df[cols].sort_values("forge", ascending=False).reset_index(drop=True)

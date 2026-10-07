@@ -53,6 +53,9 @@ from sklearn.linear_model import LogisticRegression
 from sqlalchemy import text
 
 from prometheus import schedule, utils
+from prometheus.elo import get_latest_elos
+from prometheus.evaluation import game_losses, paired_bootstrap
+from prometheus.form import form_states, load_form_games, opponent_adjust
 from prometheus.markets import (
     MAP,
     MARKET_ALIASES,
@@ -65,9 +68,6 @@ from prometheus.markets import (
     get,
     quote_at,
 )
-from prometheus.elo import get_latest_elos
-from prometheus.evaluation import game_losses, paired_bootstrap
-from prometheus.form import form_states, load_form_games, opponent_adjust
 
 CACHE = Path("data/markets")
 EARLY_HOURS = 12
@@ -288,7 +288,11 @@ def betting_section(s):
         "order would pay (the team's ask, or one minus the opponent's bid, whichever is cheaper), then pays Kalshi's "
         f"fee per order: ceil(rate × contracts × P × (1 − P)), to the cent, at the rates Kalshi lists for "
         f"`{SERIES}`: {100 * taker:g}% for orders that take the book, "
-        + (f"{100 * maker:g}% for resting orders" if maker else "nothing for resting orders (the *None* rows)")
+        + (
+            f"{100 * maker:g}% for resting orders"
+            if maker
+            else "nothing for resting orders (the *None* rows)"
+        )
         + ". Resting orders would also fill at a better price than assumed here. *Back our pick* bets every match on "
         "the team "
         "we favour; *value* bets only where our chance beats the price by more than the edge shown. ROI is profit "
@@ -299,7 +303,12 @@ def betting_section(s):
         "",
     ]
     for label, part in slices_of(frame):
-        if label not in ("All", "FORGE (same major league)", "FORGE (same other league)", "Other leagues"):
+        if label not in (
+            "All",
+            "FORGE (same major league)",
+            "FORGE (same other league)",
+            "Other leagues",
+        ):
             continue
         lines += [
             f"**{label}** ({len(part)} series with a price)",
@@ -349,9 +358,10 @@ def load_pairs(since):
 def series_games(pairs, team1, team2, start):
     """Games each team won against the other from the day before to two days after
     `start` (our dates and Kalshi's times can disagree by a day), from our data."""
-    lo, hi = (start - datetime.timedelta(days=1)).date(), (
-        start + datetime.timedelta(days=1)
-    ).date()
+    lo, hi = (
+        (start - datetime.timedelta(days=1)).date(),
+        (start + datetime.timedelta(days=1)).date(),
+    )
     games = pairs[
         (pairs["team"] == team1)
         & (pairs["opponent"] == team2)
@@ -368,7 +378,9 @@ def fee_rows():
     try:
         taker, maker = fetch_fee_rates(SERIES)
     except (OSError, ValueError, KeyError) as err:
-        print(f"  couldn't read Kalshi's fee rates ({err}); using taker 7%, no maker fee")
+        print(
+            f"  couldn't read Kalshi's fee rates ({err}); using taker 7%, no maker fee"
+        )
         taker, maker = 0.07, 0.0
     rows = [(f"Taker {100 * taker:g}%", taker)]
     if maker > 0:
@@ -400,7 +412,9 @@ def our_calls(rows, states, match_team, cache):
         p, method = schedule.game_probability(
             ratings.loc[ours[0]], ratings.loc[ours[1]]
         )
-        major = row_is_major(ratings.loc[ours[0]]["league"], ratings.loc[ours[1]]["league"])
+        major = row_is_major(
+            ratings.loc[ours[0]]["league"], ratings.loc[ours[1]]["league"]
+        )
         out.append(
             {
                 **row,
@@ -509,8 +523,14 @@ def slices_of(frame):
         ("All", frame),
         ("Major league or international", frame[frame["major"]]),
         ("Other leagues", frame[~frame["major"]]),
-        ("FORGE (same major league)", frame[(frame["method"] == "forge") & frame["major"]]),
-        ("FORGE (same other league)", frame[(frame["method"] == "forge") & ~frame["major"]]),
+        (
+            "FORGE (same major league)",
+            frame[(frame["method"] == "forge") & frame["major"]],
+        ),
+        (
+            "FORGE (same other league)",
+            frame[(frame["method"] == "forge") & ~frame["major"]],
+        ),
         ("Elo (same other league)", frame[frame["method"] == "elo"]),
         ("Elo across leagues", frame[frame["method"] == "elo-cross"]),
     ]

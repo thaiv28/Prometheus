@@ -35,20 +35,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import elo_variants as ev  # noqa: E402
 
 FEATURES = ["gold", "kills", "towers", "short"]
-SQUASH_GRID = {"scale": [0.5, 1.0, 2.0], "center": [-0.5, 0.0, 0.5], "lower": [0.55, 0.65, 0.75]}
-GL_GRID = {"lower_bound": [0.55, 0.65, 0.75], "center": [25 * 60, 30 * 60, 35 * 60], "steepness": [2, 3, 5]}
+SQUASH_GRID = {
+    "scale": [0.5, 1.0, 2.0],
+    "center": [-0.5, 0.0, 0.5],
+    "lower": [0.55, 0.65, 0.75],
+}
+GL_GRID = {
+    "lower_bound": [0.55, 0.65, 0.75],
+    "center": [25 * 60, 30 * 60, 35 * 60],
+    "steepness": [2, 3, 5],
+}
 K_GRID = [12, 16, 20, 24, 28, 32, 40]
 ASYM_GRID = {"threshold": [1.0, 1.5, 2.0], "bonus": [0.05, 0.1, 0.2]}
 
 
 def raw_features(games):
     """Winner-perspective margins: gold, kill and tower differences and shortness (-seconds)."""
-    return pd.DataFrame({
-        "gold": games["w_totalgold"] - games["l_totalgold"],
-        "kills": games["w_kills"] - games["l_kills"],
-        "towers": games["w_towers"] - games["l_towers"],
-        "short": -games["gamelength"].astype(float),
-    })
+    return pd.DataFrame(
+        {
+            "gold": games["w_totalgold"] - games["l_totalgold"],
+            "kills": games["w_kills"] - games["l_kills"],
+            "towers": games["w_towers"] - games["l_towers"],
+            "short": -games["gamelength"].astype(float),
+        }
+    )
 
 
 class Standardizer:
@@ -91,21 +101,40 @@ def learned_weights(inputs, std, train_years):
     z = std.z(g).to_numpy()
     rows = []
     for team, opp in (("teamid", "opponent_teamid"), ("opponent_teamid", "teamid")):
-        won = g["result"].astype(bool).to_numpy() if team == "teamid" else ~g["result"].astype(bool).to_numpy()
+        won = (
+            g["result"].astype(bool).to_numpy()
+            if team == "teamid"
+            else ~g["result"].astype(bool).to_numpy()
+        )
         key = pd.MultiIndex.from_arrays([g["gameid"], g[team]])
         okey = pd.MultiIndex.from_arrays([g["gameid"], g[opp]])
-        rows.append(pd.DataFrame({
-            "team": g[team].to_numpy(), "date": g["date"].to_numpy(), "order": np.arange(len(g)),
-            "year": g["year"].to_numpy(), "won": won.astype(float),
-            "gap": plain.reindex(key).to_numpy() - plain.reindex(okey).to_numpy(),
-            **{f: np.where(won, 1, -1) * z[:, i] for i, f in enumerate(FEATURES)},
-        }))
+        rows.append(
+            pd.DataFrame(
+                {
+                    "team": g[team].to_numpy(),
+                    "date": g["date"].to_numpy(),
+                    "order": np.arange(len(g)),
+                    "year": g["year"].to_numpy(),
+                    "won": won.astype(float),
+                    "gap": plain.reindex(key).to_numpy()
+                    - plain.reindex(okey).to_numpy(),
+                    **{
+                        f: np.where(won, 1, -1) * z[:, i]
+                        for i, f in enumerate(FEATURES)
+                    },
+                }
+            )
+        )
     tg = pd.concat(rows).sort_values(["team", "order"]).reset_index(drop=True)
     nxt = tg.groupby("team")[["won", "gap", "year"]].shift(-1)
-    data = tg.assign(next_won=nxt["won"], next_gap=nxt["gap"], next_year=nxt["year"]).dropna()
+    data = tg.assign(
+        next_won=nxt["won"], next_gap=nxt["gap"], next_year=nxt["year"]
+    ).dropna()
     data = data[data["year"].isin(train_years) & data["next_year"].isin(train_years)]
     offset = data["next_gap"].to_numpy() * np.log(10) / 400
-    beta = logistic_offset(data[FEATURES].to_numpy(), data["next_won"].to_numpy(), offset)
+    beta = logistic_offset(
+        data[FEATURES].to_numpy(), data["next_won"].to_numpy(), offset
+    )
     return pd.Series(beta[1:], index=FEATURES), len(data)
 
 
@@ -125,7 +154,10 @@ def composite_fn(std, weights, train_mask, games):
 
 def squash_margin(comp):
     def make(scale, center, lower):
-        return ev.with_fallback(lambda g: ev.bounded(comp(g), scale, center, lower, 1.0))
+        return ev.with_fallback(
+            lambda g: ev.bounded(comp(g), scale, center, lower, 1.0)
+        )
+
     return make
 
 
@@ -138,7 +170,9 @@ def asym_margin(comp):
             s = np.asarray(gl(g), dtype=float)
             out = np.where(c > threshold, np.minimum(1.0, s + bonus), s)
             return np.where(np.isnan(c), s, out)
+
         return m
+
     return make
 
 
@@ -175,11 +209,16 @@ def main():
         print(results[label].row, flush=True)
 
     results["3. Game length, re-tuned shape"] = ev.held_out(
-        inputs, ev.game_length_margin, GL_GRID, "3. Game length, re-tuned shape")
+        inputs, ev.game_length_margin, GL_GRID, "3. Game length, re-tuned shape"
+    )
     n_points += len(ev.param_grid(GL_GRID))
 
     results["4a. K, published margin"] = ev.held_out(
-        inputs, lambda: ev.game_length_margin(), {"K": K_GRID}, "4a. K, published margin")
+        inputs,
+        lambda: ev.game_length_margin(),
+        {"K": K_GRID},
+        "4a. K, published margin",
+    )
     n_points += len(K_GRID)
 
     comp_labels = list(comps)
@@ -187,14 +226,24 @@ def main():
     squash = results[best_comp].params
     make = squash_margin(comps[best_comp])
     label4b = f"4b. K, with {best_comp.split('. ')[1]}"
-    results[label4b] = ev.held_out(inputs, lambda: make(**squash), {"K": K_GRID}, label4b)
+    results[label4b] = ev.held_out(
+        inputs, lambda: make(**squash), {"K": K_GRID}, label4b
+    )
     n_points += len(K_GRID)
 
     results["5. Asymmetric (bonus for extreme composite)"] = ev.held_out(
-        inputs, asym_margin(comps[best_comp]), ASYM_GRID, "5. Asymmetric (bonus for extreme composite)")
+        inputs,
+        asym_margin(comps[best_comp]),
+        ASYM_GRID,
+        "5. Asymmetric (bonus for extreme composite)",
+    )
     n_points += len(ev.param_grid(ASYM_GRID))
 
-    base_train = ev.score(inputs, inputs.baseline(), years=train, forge=False).log_loss("elo_live", "Domestic").mean()
+    base_train = (
+        ev.score(inputs, inputs.baseline(), years=train, forge=False)
+        .log_loss("elo_live", "Domestic")
+        .mean()
+    )
     best = min(results, key=lambda l: results[l].tuning["objective"].iloc[0])
     d = ev.deltas(inputs.baseline_scores(test), results[best].scores)
 
@@ -217,11 +266,18 @@ def main():
         f"- 1a learned weights: logistic model of each team's next game (both in training seasons, "
         f"{n_learn:,} team-games), offset by plain Elo's pre-match gap (every win scores 1.0, K=20), "
         "margins signed + for the winner, − for the loser. Weights (per z): "
-        + ", ".join(f"{k} {v:+.3f}" for k, v in w_learn.items()) + ".",
+        + ", ".join(f"{k} {v:+.3f}" for k, v in w_learn.items())
+        + ".",
         f"- 1b first principal component of the four z-scores ({pca_share:.0%} of variance): "
-        + ", ".join(f"{k} {v:+.3f}" for k, v in w_pca.items()) + ".",
-        "- Training correlations of the z-scores: " + ", ".join(
-            f"{a}/{b} {corr.loc[a, b]:.2f}" for i, a in enumerate(FEATURES) for b in FEATURES[i + 1:]) + ".",
+        + ", ".join(f"{k} {v:+.3f}" for k, v in w_pca.items())
+        + ".",
+        "- Training correlations of the z-scores: "
+        + ", ".join(
+            f"{a}/{b} {corr.loc[a, b]:.2f}"
+            for i, a in enumerate(FEATURES)
+            for b in FEATURES[i + 1 :]
+        )
+        + ".",
         f"- 3 re-tunes the published logistic in game length: {GL_GRID} (upper bound 1.0).",
         f"- 4a tunes K over {K_GRID} with the published margin; 4b the same K grid with the composite "
         f"that did best on training ({best_comp}, squash {squash} fixed).",
@@ -233,7 +289,8 @@ def main():
         "",
         "## Held-out results (2022 onward), every candidate",
         "",
-        "Training objective = domestic Elo-live log loss on " f"{train[0]}–{train[-1]} "
+        "Training objective = domestic Elo-live log loss on "
+        f"{train[0]}–{train[-1]} "
         f"(baseline {base_train:.5f}).",
         "",
         "| Candidate | Chosen params | Train obj. |",
@@ -260,10 +317,13 @@ def main():
         f"FORGE domestic Δ {fdom['delta']:+.4f} ({fdom['lo']:+.4f} to {fdom['hi']:+.4f}), "
         f"international Δ {fintl['delta']:+.4f} ({fintl['lo']:+.4f} to {fintl['hi']:+.4f}).",
         "",
-        ("Meets the significance rule (domestic Elo-live interval below 0, international not "
-         "significantly worse)." if meets else
-         "Does **not** meet the significance rule (domestic Elo-live interval must lie entirely below 0 "
-         "with international not significantly worse)."),
+        (
+            "Meets the significance rule (domestic Elo-live interval below 0, international not "
+            "significantly worse)."
+            if meets
+            else "Does **not** meet the significance rule (domestic Elo-live interval must lie entirely below 0 "
+            "with international not significantly worse)."
+        ),
         f" With {len(results)} candidates (and {n_points} tuned points) the intervals are not corrected "
         "for multiple comparisons, so a single marginal pass would be weak evidence.",
     ]

@@ -1,8 +1,8 @@
 import datetime
-
-import pandas as pd
 from collections.abc import Iterable
 from enum import Enum
+
+import pandas as pd
 
 from prometheus import utils
 

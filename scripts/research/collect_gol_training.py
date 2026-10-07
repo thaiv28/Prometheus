@@ -1,21 +1,20 @@
 """Resumable public gol.gg dataset acquisition; excludes LPL and viewed 2026."""
 
 import argparse
-from collections import deque
 import datetime as dt
 import hashlib
 import json
 import math
-from pathlib import Path
 import re
 import shutil
-from types import SimpleNamespace
 import urllib.error
 import urllib.parse
-
-import pandas as pd
+from collections import deque
+from pathlib import Path
+from types import SimpleNamespace
 
 import audit_gol_coverage as audit
+import pandas as pd
 import pilot_gol as pilot
 
 
@@ -40,7 +39,7 @@ class BudgetCache(pilot.Cache):
         except urllib.error.HTTPError as error:
             if error.code in (401, 403, 429):
                 raise CollectionStopped(
-                    f'http_{error.code}; Retry-After={error.headers.get("Retry-After", "unspecified")}'
+                    f"http_{error.code}; Retry-After={error.headers.get('Retry-After', 'unspecified')}"
                 ) from error
             raise
 
@@ -195,7 +194,7 @@ def export(args, samples, progress):
     args.out.write_text(
         f"""# gol.gg training-data collection
 
-Status: {progress['stop_reason']}. New HTTP requests this batch: {progress['requests_this_run']}. {len(samples)} downloaded maps, {progress['ready_games']} verified games, {len(dataset)} training rows at 10/15/20 minutes. Discovery/download errors recorded: {len(progress['discovery_errors'])}. LPL excluded as requested. 2026 excluded. This is a partial acquisition dataset, not a fitted model or a complete season corpus.
+Status: {progress["stop_reason"]}. New HTTP requests this batch: {progress["requests_this_run"]}. {len(samples)} downloaded maps, {progress["ready_games"]} verified games, {len(dataset)} training rows at 10/15/20 minutes. Discovery/download errors recorded: {len(progress["discovery_errors"])}. LPL excluded as requested. 2026 excluded. This is a partial acquisition dataset, not a fitted model or a complete season corpus.
 
 ## Download inventory
 
@@ -344,5 +343,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-requests", type=int, default=300)
     parser.add_argument("--delay", type=float, default=2)
     parser.add_argument("--artifacts", type=Path, default=Path("data/gol_training"))
-    parser.add_argument("--out", type=Path, default=Path("docs/research/gol_training_report.md"))
+    parser.add_argument(
+        "--out", type=Path, default=Path("docs/research/gol_training_report.md")
+    )
     run(parser.parse_args())

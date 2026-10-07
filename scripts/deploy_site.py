@@ -53,9 +53,7 @@ def plan(old, new, always=HOURLY_FILES):
 
     Files in `always` are left out of both lists (they're uploaded separately).
     """
-    upload = sorted(
-        p for p, h in new.items() if p not in always and old.get(p) != h
-    )
+    upload = sorted(p for p, h in new.items() if p not in always and old.get(p) != h)
     delete = sorted(p for p in old if p not in new and p not in always)
     return upload, delete
 
@@ -74,7 +72,11 @@ def read_manifest(bucket):
     """The last deploy's manifest, or None if there isn't one."""
     try:
         text = aws(
-            "s3", "cp", f"s3://{bucket}/{MANIFEST_KEY}", "-", "--only-show-errors",
+            "s3",
+            "cp",
+            f"s3://{bucket}/{MANIFEST_KEY}",
+            "-",
+            "--only-show-errors",
             capture=True,
         )
     except subprocess.CalledProcessError:
@@ -95,7 +97,11 @@ def upload_files(output, bucket, paths, dry_run):
             except OSError:
                 shutil.copy2(output / rel, dest)
         aws(
-            "s3", "cp", staging, f"s3://{bucket}/{SITE_PREFIX}", "--recursive",
+            "s3",
+            "cp",
+            staging,
+            f"s3://{bucket}/{SITE_PREFIX}",
+            "--recursive",
             "--only-show-errors",
             dry_run=dry_run,
         )
@@ -106,8 +112,12 @@ def delete_keys(bucket, paths, dry_run):
         chunk = paths[start : start + 1000]
         objects = [{"Key": f"{SITE_PREFIX}/{p}"} for p in chunk]
         aws(
-            "s3api", "delete-objects", "--bucket", bucket,
-            "--delete", json.dumps({"Objects": objects, "Quiet": True}),
+            "s3api",
+            "delete-objects",
+            "--bucket",
+            bucket,
+            "--delete",
+            json.dumps({"Objects": objects, "Quiet": True}),
             dry_run=dry_run,
         )
 
@@ -116,18 +126,32 @@ def upload_hourly_files(output, bucket, dry_run):
     for name in HOURLY_FILES:
         if (output / name).is_file():
             aws(
-                "s3", "cp", str(output / name), f"s3://{bucket}/{SITE_PREFIX}/{name}",
-                "--only-show-errors", "--content-type", "application/json",
-                "--cache-control", HOURLY_CACHE_CONTROL,
+                "s3",
+                "cp",
+                str(output / name),
+                f"s3://{bucket}/{SITE_PREFIX}/{name}",
+                "--only-show-errors",
+                "--content-type",
+                "application/json",
+                "--cache-control",
+                HOURLY_CACHE_CONTROL,
                 dry_run=dry_run,
             )
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--full", action="store_true", help="sync every file, ignoring the manifest")
-    parser.add_argument("--output", type=Path, default=OUTPUT, help="the built site (default output/)")
-    parser.add_argument("--dry-run", action="store_true", help="print the AWS commands instead of running them")
+    parser.add_argument(
+        "--full", action="store_true", help="sync every file, ignoring the manifest"
+    )
+    parser.add_argument(
+        "--output", type=Path, default=OUTPUT, help="the built site (default output/)"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the AWS commands instead of running them",
+    )
     args = parser.parse_args(argv)
     output = args.output.resolve()
     bucket = os.environ["BUCKET"]
@@ -137,18 +161,42 @@ def main(argv=None):
     new = build_manifest(output)
     old = None if args.full else read_manifest(bucket)
     # No manifest while files change: a run that dies here leaves the next one a full sync.
-    aws("s3", "rm", f"s3://{bucket}/{MANIFEST_KEY}", "--only-show-errors", dry_run=args.dry_run)
+    aws(
+        "s3",
+        "rm",
+        f"s3://{bucket}/{MANIFEST_KEY}",
+        "--only-show-errors",
+        dry_run=args.dry_run,
+    )
     if old is None:
         print(f"Full upload of {len(new):,} files")
         # `s3 sync` skips a file whose size matches and whose local copy is older,
         # so copy everything, then sync only to delete what the site no longer has.
         site = f"s3://{bucket}/{SITE_PREFIX}"
-        aws("s3", "cp", str(output), site, "--recursive", "--only-show-errors", dry_run=args.dry_run)
-        aws("s3", "sync", str(output), site, "--delete", "--only-show-errors", dry_run=args.dry_run)
+        aws(
+            "s3",
+            "cp",
+            str(output),
+            site,
+            "--recursive",
+            "--only-show-errors",
+            dry_run=args.dry_run,
+        )
+        aws(
+            "s3",
+            "sync",
+            str(output),
+            site,
+            "--delete",
+            "--only-show-errors",
+            dry_run=args.dry_run,
+        )
     else:
         upload, delete = plan(old, new)
-        print(f"{len(upload):,} changed or new, {len(delete):,} removed, "
-              f"{len(new) - len(upload):,} unchanged")
+        print(
+            f"{len(upload):,} changed or new, {len(delete):,} removed, "
+            f"{len(new) - len(upload):,} unchanged"
+        )
         upload_files(output, bucket, upload, args.dry_run)
         delete_keys(bucket, delete, args.dry_run)
     upload_hourly_files(output, bucket, args.dry_run)
@@ -157,8 +205,13 @@ def main(argv=None):
         json.dump(new, f, separators=(",", ":"))
     try:
         aws(
-            "s3", "cp", f.name, f"s3://{bucket}/{MANIFEST_KEY}", "--only-show-errors",
-            "--content-type", "application/json",
+            "s3",
+            "cp",
+            f.name,
+            f"s3://{bucket}/{MANIFEST_KEY}",
+            "--only-show-errors",
+            "--content-type",
+            "application/json",
             dry_run=args.dry_run,
         )
     finally:

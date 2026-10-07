@@ -525,7 +525,9 @@ def report(coverage, metrics, predictions, manifest, artifacts):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
-    parser.add_argument("--out", type=Path, default=Path("docs/research/snapshot_report.md"))
+    parser.add_argument(
+        "--out", type=Path, default=Path("docs/research/snapshot_report.md")
+    )
     parser.add_argument("--artifacts", type=Path, default=Path("data/snapshot_audit"))
     args = parser.parse_args()
     frames, manifest = load_raw(args.raw_dir)

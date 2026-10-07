@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pandas as pd
 import pytest
+
 from prometheus.ranking import get_glory_ranking, load_glory_games
 
 
@@ -44,9 +45,9 @@ def test_get_glory_ranking_multiyear_integration(mock_get_engine, inmemory_engin
         ("C", 2023),
     ]
     actual_order = list(zip(df["teamname"], df["year"]))
-    assert (
-        actual_order == expected_order
-    ), f"Expected {expected_order}, got {actual_order}"
+    assert actual_order == expected_order, (
+        f"Expected {expected_order}, got {actual_order}"
+    )
 
 
 @patch("prometheus.utils.get_engine")
@@ -60,9 +61,9 @@ def test_get_glory_ranking_integration(mock_get_engine, inmemory_engine):
 
     expected_order = ["B", "A", "D", "C"]
     actual_order = df["teamname"].tolist()
-    assert (
-        actual_order == expected_order
-    ), f"Expected {expected_order}, got {actual_order}"
+    assert actual_order == expected_order, (
+        f"Expected {expected_order}, got {actual_order}"
+    )
 
     for score in df["score"]:
         assert 0 <= score <= 300, f"Score {score} out of expected range 0-300"
@@ -132,7 +133,9 @@ def test_get_glory_ranking_sort_by_league_score(mock_get_engine, inmemory_engine
     for i in range(len(df_sorted) - 1):
         assert (
             df_sorted.iloc[i]["league_score"] >= df_sorted.iloc[i + 1]["league_score"]
-        ), f"League scores not in descending order: {df_sorted.iloc[i]['league_score']} < {df_sorted.iloc[i + 1]['league_score']}"
+        ), (
+            f"League scores not in descending order: {df_sorted.iloc[i]['league_score']} < {df_sorted.iloc[i + 1]['league_score']}"
+        )
 
 
 @patch("prometheus.utils.get_engine")
@@ -146,9 +149,9 @@ def test_get_glory_ranking_sort_by_era_score(mock_get_engine, inmemory_engine):
 
     # Check that the first few entries are in descending order by era_score
     for i in range(len(df_sorted) - 1):
-        assert (
-            df_sorted.iloc[i]["era_score"] >= df_sorted.iloc[i + 1]["era_score"]
-        ), f"Era scores not in descending order: {df_sorted.iloc[i]['era_score']} < {df_sorted.iloc[i + 1]['era_score']}"
+        assert df_sorted.iloc[i]["era_score"] >= df_sorted.iloc[i + 1]["era_score"], (
+            f"Era scores not in descending order: {df_sorted.iloc[i]['era_score']} < {df_sorted.iloc[i + 1]['era_score']}"
+        )
 
 
 @patch("prometheus.utils.get_engine")

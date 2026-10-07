@@ -50,8 +50,18 @@ import numpy as np
 import pandas as pd
 
 from prometheus import elo, form
-from prometheus.elo import compute_elo_records, expected_score, load_elo_games, load_rosters, winner_score
-from prometheus.evaluation import game_losses, out_of_year_probabilities, paired_bootstrap
+from prometheus.elo import (
+    compute_elo_records,
+    expected_score,
+    load_elo_games,
+    load_rosters,
+    winner_score,
+)
+from prometheus.evaluation import (
+    game_losses,
+    out_of_year_probabilities,
+    paired_bootstrap,
+)
 from prometheus.types import INTERNATIONAL_LEAGUES
 from prometheus.utils import get_engine
 
@@ -60,11 +70,26 @@ import evaluate_metrics as em  # noqa: E402  (scripts/ is not a package)
 
 # End-of-game team stats from `match_stats` given to margin functions.
 STATS = [
-    "totalgold", "kills", "towers", "barons", "dragons", "atakhans", "heralds",
-    "firstherald", "firstdragon", "firstbaron", "firsttower", "visionscore",
+    "totalgold",
+    "kills",
+    "towers",
+    "barons",
+    "dragons",
+    "atakhans",
+    "heralds",
+    "firstherald",
+    "firstdragon",
+    "firstbaron",
+    "firsttower",
+    "visionscore",
 ]
 # The published game-length margin (`elo.winner_score` and its defaults).
-GAME_LENGTH_DEFAULTS = {"upper_bound": 1.0, "lower_bound": 0.65, "center": 30 * 60, "steepness": 3}
+GAME_LENGTH_DEFAULTS = {
+    "upper_bound": 1.0,
+    "lower_bound": 0.65,
+    "center": 30 * 60,
+    "steepness": 3,
+}
 K_DEFAULT = 20
 # Tune on seasons up to this one; report on the later ones.
 TUNE_LAST_YEAR = 2021
@@ -72,7 +97,15 @@ TUNE_LAST_YEAR = 2021
 REPLAY_PARAMS = ("K", "league_share", "active_days", "starting_elo")
 METRICS = ("elo_live", "forge")
 TEST_SETS = ("Domestic", "International")
-ELO_COLUMNS = ["gameid", "teamid", "opponent_teamid", "gamelength", "result", "league", "date"]
+ELO_COLUMNS = [
+    "gameid",
+    "teamid",
+    "opponent_teamid",
+    "gamelength",
+    "result",
+    "league",
+    "date",
+]
 
 
 # --- inputs ------------------------------------------------------------------------
@@ -133,8 +166,14 @@ def clean_stats(stats: pd.DataFrame) -> pd.DataFrame:
 
 def _load_stat_games(games: pd.DataFrame) -> pd.DataFrame:
     engine = get_engine()
-    years = pd.read_sql("SELECT gameid, MIN(year) AS year FROM matches GROUP BY gameid", engine)
-    stats = clean_stats(pd.read_sql(f"SELECT gameid, teamid, {', '.join(STATS)} FROM match_stats", engine))
+    years = pd.read_sql(
+        "SELECT gameid, MIN(year) AS year FROM matches GROUP BY gameid", engine
+    )
+    stats = clean_stats(
+        pd.read_sql(
+            f"SELECT gameid, teamid, {', '.join(STATS)} FROM match_stats", engine
+        )
+    )
     stats = stats.set_index(["gameid", "teamid"])
     out = games.merge(years, on="gameid", how="left")
     won = out["result"].astype(bool).to_numpy()
@@ -159,11 +198,16 @@ def load_inputs(verbose=True) -> Inputs:
     t = time.time()
     years = em.get_available_years(em.ALL_MAJOR_LEAGUES)
     with contextlib.redirect_stdout(io.StringIO()):  # backtest prints every month
-        frame = em.backtest(em.load_games(), em.load_results(), em.load_elo_timeline(), years)
+        frame = em.backtest(
+            em.load_games(), em.load_results(), em.load_elo_timeline(), years
+        )
     form_games = form.load_form_games()
     say(f"  Backtest games and Form inputs: {time.time() - t:.1f} s")
 
-    db = pd.read_sql("SELECT gameid, teamid, pre_match_elo, home_league FROM game_length_elo", get_engine())
+    db = pd.read_sql(
+        "SELECT gameid, teamid, pre_match_elo, home_league FROM game_length_elo",
+        get_engine(),
+    )
     db_homes = set(db["home_league"].dropna())
     return Inputs(
         games=stat_games,
@@ -213,7 +257,9 @@ def winner_scores(inputs, margin_fn) -> np.ndarray:
     """`margin_fn(inputs.games)` as an array, checked to be one score in (0.5, 1] per game."""
     s = np.asarray(margin_fn(inputs.games), dtype=float).reshape(-1)
     if len(s) != len(inputs.games):
-        raise ValueError(f"margin returned {len(s)} scores for {len(inputs.games)} games")
+        raise ValueError(
+            f"margin returned {len(s)} scores for {len(inputs.games)} games"
+        )
     bad = ~((s > 0.5) & (s <= 1.0))  # NaN is bad too
     if bad.any():
         example = inputs.games.loc[bad, "gameid"].iloc[0]
@@ -260,10 +306,15 @@ def replay(inputs, margin_fn, K=K_DEFAULT, international=None, records=False, **
     Returns:
         Series of pre-match Elo indexed by (gameid, teamid), two rows per game.
     """
-    games = inputs.games[ELO_COLUMNS].assign(gamelength=winner_scores(inputs, margin_fn))
+    games = inputs.games[ELO_COLUMNS].assign(
+        gamelength=winner_scores(inputs, margin_fn)
+    )
     with _international(international):
         out, _ = compute_elo_records(
-            games, functools.partial(margin_elo_change, K=K), rosters=inputs.rosters, **kw
+            games,
+            functools.partial(margin_elo_change, K=K),
+            rosters=inputs.rosters,
+            **kw,
         )
     return out if records else out.set_index(["gameid", "teamid"])["pre_match_elo"]
 
@@ -273,12 +324,20 @@ def pregame_elos(inputs, pre_match: pd.Series) -> pd.DataFrame:
     g = inputs.games
     rows = []
     for team, opp in (("teamid", "opponent_teamid"), ("opponent_teamid", "teamid")):
-        rows.append(pd.DataFrame({
-            "gameid": g["gameid"].to_numpy(),
-            "teamid": g[team].to_numpy(),
-            "elo": pre_match.reindex(pd.MultiIndex.from_arrays([g["gameid"], g[team]])).to_numpy(),
-            "opp_elo": pre_match.reindex(pd.MultiIndex.from_arrays([g["gameid"], g[opp]])).to_numpy(),
-        }))
+        rows.append(
+            pd.DataFrame(
+                {
+                    "gameid": g["gameid"].to_numpy(),
+                    "teamid": g[team].to_numpy(),
+                    "elo": pre_match.reindex(
+                        pd.MultiIndex.from_arrays([g["gameid"], g[team]])
+                    ).to_numpy(),
+                    "opp_elo": pre_match.reindex(
+                        pd.MultiIndex.from_arrays([g["gameid"], g[opp]])
+                    ).to_numpy(),
+                }
+            )
+        )
     return pd.concat(rows, ignore_index=True)
 
 
@@ -308,7 +367,14 @@ class Scores:
         for metric, losses in self.losses.items():
             for test_set in TEST_SETS:
                 l = losses[self.mask(test_set)]
-                rows.append({"metric": metric, "test_set": test_set, "games": len(l), **l.mean().to_dict()})
+                rows.append(
+                    {
+                        "metric": metric,
+                        "test_set": test_set,
+                        "games": len(l),
+                        **l.mean().to_dict(),
+                    }
+                )
         return pd.DataFrame(rows).set_index(["metric", "test_set"])
 
 
@@ -326,7 +392,9 @@ def _with_elo(frame, pre_match):
 
 def variant_form_states(inputs, pre_match):
     """Form states with the opponent adjustment by `pre_match` Elo, as the site would."""
-    return form.form_states(form.opponent_adjust(inputs.form_games, elos=pregame_elos(inputs, pre_match)))
+    return form.form_states(
+        form.opponent_adjust(inputs.form_games, elos=pregame_elos(inputs, pre_match))
+    )
 
 
 def score(inputs, pre_match, years=None, forge=True, states=None) -> Scores:
@@ -348,13 +416,19 @@ def score(inputs, pre_match, years=None, forge=True, states=None) -> Scores:
     if years is not None:
         frame = frame[frame["year"].isin(list(years))].reset_index(drop=True)
     frame = _with_elo(frame, pre_match)
-    losses = {"elo_live": game_losses(out_of_year_probabilities(frame, "elo_live"), frame["won"])}
+    losses = {
+        "elo_live": game_losses(
+            out_of_year_probabilities(frame, "elo_live"), frame["won"]
+        )
+    }
     if forge:
         if states is None:
             states = variant_form_states(inputs, pre_match)
         frame = em.add_form(frame, states)
         losses["forge"] = game_losses(em.forge_probabilities(frame), frame["won"])
-    games = frame[["gameid", "year", "league", "test_set", "won"]].reset_index(drop=True)
+    games = frame[["gameid", "year", "league", "test_set", "won"]].reset_index(
+        drop=True
+    )
     return Scores(games, losses)
 
 
@@ -373,19 +447,34 @@ def _as_scores(inputs, x, years):
 
 def deltas(baseline: Scores, variant: Scores) -> pd.DataFrame:
     """Log loss of each, and variant minus baseline with a paired 95% interval."""
-    if not np.array_equal(baseline.games["gameid"].to_numpy(), variant.games["gameid"].to_numpy()):
+    if not np.array_equal(
+        baseline.games["gameid"].to_numpy(), variant.games["gameid"].to_numpy()
+    ):
         raise ValueError("baseline and variant were scored on different games")
     rows = []
     for metric in METRICS:
         if metric not in baseline.losses or metric not in variant.losses:
             continue
         for test_set in TEST_SETS:
-            b, v = baseline.log_loss(metric, test_set), variant.log_loss(metric, test_set)
+            b, v = (
+                baseline.log_loss(metric, test_set),
+                variant.log_loss(metric, test_set),
+            )
             if len(v) == 0:
                 continue
             mean, lo, hi = paired_bootstrap(v, b)
-            rows.append({"metric": metric, "test_set": test_set, "games": len(v), "baseline": b.mean(),
-                         "variant": v.mean(), "delta": mean, "lo": lo, "hi": hi})
+            rows.append(
+                {
+                    "metric": metric,
+                    "test_set": test_set,
+                    "games": len(v),
+                    "baseline": b.mean(),
+                    "variant": v.mean(),
+                    "delta": mean,
+                    "lo": lo,
+                    "hi": hi,
+                }
+            )
     return pd.DataFrame(rows).set_index(["metric", "test_set"])
 
 
@@ -396,7 +485,9 @@ def compare(inputs, baseline_pre, variant_pre, label, years=None) -> str:
     already computed on the same `years`. Δ < 0 means the variant is better; an
     interval that excludes 0 is a real difference (the significance rule in AGENTS.md).
     """
-    d = deltas(_as_scores(inputs, baseline_pre, years), _as_scores(inputs, variant_pre, years))
+    d = deltas(
+        _as_scores(inputs, baseline_pre, years), _as_scores(inputs, variant_pre, years)
+    )
     cells = []
     for metric in METRICS:
         for test_set in TEST_SETS:
@@ -404,7 +495,9 @@ def compare(inputs, baseline_pre, variant_pre, label, years=None) -> str:
                 cells.append("–")
                 continue
             r = d.loc[(metric, test_set)]
-            cells.append(f"{r['variant']:.4f} ({r['delta']:+.4f}, {r['lo']:+.4f} to {r['hi']:+.4f})")
+            cells.append(
+                f"{r['variant']:.4f} ({r['delta']:+.4f}, {r['lo']:+.4f} to {r['hi']:+.4f})"
+            )
     return f"| {label} | " + " | ".join(cells) + " |"
 
 
@@ -417,7 +510,9 @@ def split_years(years, last_train_year=TUNE_LAST_YEAR):
     train = [y for y in years if y <= last_train_year]
     test = [y for y in years if y > last_train_year]
     if not train or not test:
-        raise ValueError(f"split at {last_train_year} leaves no train or no test seasons: {years}")
+        raise ValueError(
+            f"split at {last_train_year} leaves no train or no test seasons: {years}"
+        )
     return train, test
 
 
@@ -425,7 +520,10 @@ def param_grid(grid):
     """A list of parameter dicts: a dict of lists (all combinations) or a list of dicts."""
     if isinstance(grid, dict):
         keys = list(grid)
-        return [dict(zip(keys, values)) for values in itertools.product(*(grid[k] for k in keys))]
+        return [
+            dict(zip(keys, values))
+            for values in itertools.product(*(grid[k] for k in keys))
+        ]
     return [dict(p) for p in grid]
 
 
@@ -435,7 +533,9 @@ def _split_params(params):
     return margin_kw, replay_kw
 
 
-def tune(inputs, make_margin, grid, years, objective=("elo_live", "Domestic"), verbose=True) -> pd.DataFrame:
+def tune(
+    inputs, make_margin, grid, years, objective=("elo_live", "Domestic"), verbose=True
+) -> pd.DataFrame:
     """Score every parameter set on `years` only; best (lowest mean log loss) first.
 
     Returns one row per parameter set: each parameter, `params` (the dict) and
@@ -451,10 +551,20 @@ def tune(inputs, make_margin, grid, years, objective=("elo_live", "Domestic"), v
         margin_kw, replay_kw = _split_params(params)
         pre = replay(inputs, make_margin(**margin_kw), **replay_kw)
         s = score(inputs, pre, years=years, forge=metric == "forge")
-        rows.append({**params, "params": params, "objective": s.log_loss(metric, test_set).mean()})
+        rows.append(
+            {
+                **params,
+                "params": params,
+                "objective": s.log_loss(metric, test_set).mean(),
+            }
+        )
         if verbose:
             print(f"    {params}: {rows[-1]['objective']:.5f}")
-    return pd.DataFrame(rows).sort_values("objective", kind="mergesort").reset_index(drop=True)
+    return (
+        pd.DataFrame(rows)
+        .sort_values("objective", kind="mergesort")
+        .reset_index(drop=True)
+    )
 
 
 @dataclass
@@ -468,8 +578,15 @@ class HeldOut:
     row: str  # `compare` row on the test years
 
 
-def held_out(inputs, make_margin, grid, label, last_train_year=TUNE_LAST_YEAR,
-             objective=("elo_live", "Domestic"), verbose=True) -> HeldOut:
+def held_out(
+    inputs,
+    make_margin,
+    grid,
+    label,
+    last_train_year=TUNE_LAST_YEAR,
+    objective=("elo_live", "Domestic"),
+    verbose=True,
+) -> HeldOut:
     """Tune on seasons up to `last_train_year`, then compare with the baseline on later ones.
 
     The baseline (published Elo, current code) is scored on the same held-out games
@@ -483,7 +600,9 @@ def held_out(inputs, make_margin, grid, label, last_train_year=TUNE_LAST_YEAR,
     margin_kw, replay_kw = _split_params(params)
     pre = replay(inputs, make_margin(**margin_kw), **replay_kw)
     scores = score(inputs, pre, years=test)
-    row = compare(inputs, inputs.baseline_scores(test), scores, f"{label} {params}", years=test)
+    row = compare(
+        inputs, inputs.baseline_scores(test), scores, f"{label} {params}", years=test
+    )
     return HeldOut(params, table, train, test, pre, scores, row)
 
 
@@ -495,7 +614,9 @@ def coverage(inputs) -> pd.DataFrame:
     g = inputs.games
     out = {}
     for stat in STATS:
-        out[stat] = (g[f"w_{stat}"].notna() & g[f"l_{stat}"].notna()).groupby(g["year"]).mean()
+        out[stat] = (
+            (g[f"w_{stat}"].notna() & g[f"l_{stat}"].notna()).groupby(g["year"]).mean()
+        )
     table = pd.DataFrame(out)
     table.insert(0, "games", g.groupby("year").size())
     return table
@@ -512,14 +633,18 @@ def reproduction_check(inputs):
     db = inputs.db_pre_match
     current = replay(inputs, game_length_margin())
     diff_now = (current - db.reindex(current.index)).abs()
-    lines = [f"Current code vs DB: max |Δ| = {diff_now.max():.6g} over {len(diff_now):,} team-games; "
-             f"{int((diff_now > 1e-6).sum()):,} differ"]
+    lines = [
+        f"Current code vs DB: max |Δ| = {diff_now.max():.6g} over {len(diff_now):,} team-games; "
+        f"{int((diff_now > 1e-6).sum()):,} differ"
+    ]
     if inputs.db_domestic:
         era = [l for l in INTERNATIONAL_LEAGUES if l not in inputs.db_domestic]
         as_built = replay(inputs, game_length_margin(), international=era)
         diff = (as_built - db.reindex(as_built.index)).abs()
-        lines.append(f"DB built with {', '.join(inputs.db_domestic)} as home leagues (since added to "
-                     f"INTERNATIONAL_LEAGUES). Replaying that way: max |Δ| = {diff.max():.3g}")
+        lines.append(
+            f"DB built with {', '.join(inputs.db_domestic)} as home leagues (since added to "
+            f"INTERNATIONAL_LEAGUES). Replaying that way: max |Δ| = {diff.max():.3g}"
+        )
         changed = diff_now[diff_now > 1e-6].index.get_level_values("gameid")
         if len(changed):
             first = inputs.games.loc[inputs.games["gameid"].isin(changed), "date"].min()
@@ -537,28 +662,47 @@ def evaluate_metrics_check(inputs, as_built):
     theirs = {}
     for key, _, cols in em.METRICS:
         if key in METRICS:
-            p = em.forge_probabilities(frame) if cols == em.FORGE else out_of_year_probabilities(frame, cols)
+            p = (
+                em.forge_probabilities(frame)
+                if cols == em.FORGE
+                else out_of_year_probabilities(frame, cols)
+            )
             theirs[key] = game_losses(p, frame["won"])["log_loss"].to_numpy()
     mine = score(inputs, as_built)
-    worst = max(np.abs(mine.losses[k]["log_loss"].to_numpy() - theirs[k]).max() for k in METRICS)
+    worst = max(
+        np.abs(mine.losses[k]["log_loss"].to_numpy() - theirs[k]).max() for k in METRICS
+    )
     assert worst < 1e-9, f"score differs from evaluate_metrics by {worst}"
     return f"Same per-game log loss as evaluate_metrics.py on the DB (max |Δ| = {worst:.2g})"
 
 
 def _summary_table(scores):
     s = scores.summary()
-    lines = ["| Metric | Test set | Games | Accuracy | Brier | Log loss |", "|---|---|---:|---:|---:|---:|"]
+    lines = [
+        "| Metric | Test set | Games | Accuracy | Brier | Log loss |",
+        "|---|---|---:|---:|---:|---:|",
+    ]
     for (metric, test_set), r in s.iterrows():
-        lines.append(f"| {metric} | {test_set} | {int(r['games']):,} | {r['accuracy']:.1%} "
-                     f"| {r['brier']:.4f} | {r['log_loss']:.4f} |")
+        lines.append(
+            f"| {metric} | {test_set} | {int(r['games']):,} | {r['accuracy']:.1%} "
+            f"| {r['brier']:.4f} | {r['log_loss']:.4f} |"
+        )
     return "\n".join(lines)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--baseline", action="store_true", help="Reproduction check, baseline row and timing")
-    parser.add_argument("--coverage", action="store_true", help="match_stats coverage per season")
-    parser.add_argument("--example", action="store_true", help="A tuned gold-margin variant, held out")
+    parser.add_argument(
+        "--baseline",
+        action="store_true",
+        help="Reproduction check, baseline row and timing",
+    )
+    parser.add_argument(
+        "--coverage", action="store_true", help="match_stats coverage per season"
+    )
+    parser.add_argument(
+        "--example", action="store_true", help="A tuned gold-margin variant, held out"
+    )
     args = parser.parse_args()
     if not (args.baseline or args.coverage or args.example):
         parser.error("pick --baseline, --coverage or --example")
@@ -587,10 +731,14 @@ def main():
         t = time.time()
         score(inputs, base, forge=False)
         t_elo = time.time() - t
-        print(f"\nTiming: replay {t_replay:.1f} s, score with FORGE {t_score:.1f} s, Elo only {t_elo:.1f} s")
+        print(
+            f"\nTiming: replay {t_replay:.1f} s, score with FORGE {t_score:.1f} s, Elo only {t_elo:.1f} s"
+        )
 
         years = sorted(full.games["year"].unique())
-        print(f"\n## Baseline (game-length margin, current code), every season {years[0]}–{years[-1]}\n")
+        print(
+            f"\n## Baseline (game-length margin, current code), every season {years[0]}–{years[-1]}\n"
+        )
         print(_summary_table(full))
         train, test = split_years(years)
         held = inputs.baseline_scores(test)
@@ -600,11 +748,19 @@ def main():
         print(compare(inputs, held, held, "baseline (vs itself)", years=test))
 
     if args.example:
+
         def gold_margin(scale):
-            return with_fallback(lambda g: bounded(g["w_totalgold"] - g["l_totalgold"], scale))
+            return with_fallback(
+                lambda g: bounded(g["w_totalgold"] - g["l_totalgold"], scale)
+            )
 
         t = time.time()
-        result = held_out(inputs, gold_margin, {"scale": [2000, 5000, 10000]}, "gold gap, logistic 0.65–1")
+        result = held_out(
+            inputs,
+            gold_margin,
+            {"scale": [2000, 5000, 10000]},
+            "gold gap, logistic 0.65–1",
+        )
         print(f"\n  held_out: {time.time() - t:.1f} s\n")
         print(COMPARE_HEADER)
         print(result.row)

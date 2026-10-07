@@ -4,17 +4,16 @@ Run: uv run python scripts/research/evaluate_champions.py
 """
 
 import argparse
-from collections import Counter
 import json
+from collections import Counter
 from pathlib import Path
 
+import audit_snapshots as snapshots
 import pandas as pd
 from scipy import sparse
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
-
-import audit_snapshots as snapshots
 
 YEARS = (2023, 2024, 2025)
 CHAMPION_MIN = 10
@@ -429,7 +428,9 @@ def report(metrics, pooled, coverage):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
-    parser.add_argument("--out", type=Path, default=Path("docs/research/champion_report.md"))
+    parser.add_argument(
+        "--out", type=Path, default=Path("docs/research/champion_report.md")
+    )
     parser.add_argument(
         "--artifacts", type=Path, default=Path("data/champion_experiment")
     )

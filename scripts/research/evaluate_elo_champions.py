@@ -80,7 +80,9 @@ def report(pooled, annual, coverage, audit):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
-    parser.add_argument("--out", type=Path, default=Path("docs/research/elo_champion_report.md"))
+    parser.add_argument(
+        "--out", type=Path, default=Path("docs/research/elo_champion_report.md")
+    )
     parser.add_argument("--artifacts", type=Path, default=Path("data/elo_champions"))
     args = parser.parse_args()
     ratings, audit = experiment.load_ratings()

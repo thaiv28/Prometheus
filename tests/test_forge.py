@@ -7,9 +7,18 @@ from prometheus import forge
 
 
 def test_ratings_are_elo_plus_form_points():
-    forms = pd.DataFrame({"teamname": ["A", "B", "C"], "home": ["LCK", "LCK", "LCS"], "form": [0.5, -0.5, 0.0], "year": 2026,
-                          "latest_date": "2026-09-01"})
-    elos = pd.DataFrame({"teamname": ["A", "B", "C", "D"], "elo": [1700.0, 1600.0, 1450.0, 1500.0]})
+    forms = pd.DataFrame(
+        {
+            "teamname": ["A", "B", "C"],
+            "home": ["LCK", "LCK", "LCS"],
+            "form": [0.5, -0.5, 0.0],
+            "year": 2026,
+            "latest_date": "2026-09-01",
+        }
+    )
+    elos = pd.DataFrame(
+        {"teamname": ["A", "B", "C", "D"], "elo": [1700.0, 1600.0, 1450.0, 1500.0]}
+    )
     df = forge.forge_ratings(forms, elos).set_index("teamname")
     # D has an Elo but no Form, so it is left out.
     assert sorted(df.index) == ["A", "B", "C"]
@@ -18,7 +27,15 @@ def test_ratings_are_elo_plus_form_points():
 
 
 def test_major_ratings_keep_the_majors_scale():
-    forms = pd.DataFrame({"teamname": ["A", "B"], "home": ["LCK", "LEC"], "form": [0.37, -0.81], "year": 2026, "latest_date": "2026-09-01"})
+    forms = pd.DataFrame(
+        {
+            "teamname": ["A", "B"],
+            "home": ["LCK", "LEC"],
+            "form": [0.37, -0.81],
+            "year": 2026,
+            "latest_date": "2026-09-01",
+        }
+    )
     elos = pd.DataFrame({"teamname": ["A", "B"], "elo": [1712.3, 1488.9]})
     df = forge.forge_ratings(forms, elos).set_index("teamname")
     # Bit-identical to the published Elo + FORM_POINTS * form.
@@ -28,7 +45,15 @@ def test_major_ratings_keep_the_majors_scale():
 
 
 def test_other_league_rating_gap_gives_its_blend_odds():
-    forms = pd.DataFrame({"teamname": ["A", "B"], "home": ["LFL", "LFL"], "form": [0.6, -0.2], "year": 2026, "latest_date": "2026-09-01"})
+    forms = pd.DataFrame(
+        {
+            "teamname": ["A", "B"],
+            "home": ["LFL", "LFL"],
+            "form": [0.6, -0.2],
+            "year": 2026,
+            "latest_date": "2026-09-01",
+        }
+    )
     elos = pd.DataFrame({"teamname": ["A", "B"], "elo": [1580.0, 1490.0]})
     df = forge.forge_ratings(forms, elos).set_index("teamname")
     a, b = df.loc["A"], df.loc["B"]
@@ -48,7 +73,9 @@ def test_same_league_odds_come_from_the_rating_gap():
 
 
 def test_cross_league_odds_use_elo_only():
-    p = forge.win_probability(1900, 1500, same_league=False, elo=1600, opponent_elo=1600)
+    p = forge.win_probability(
+        1900, 1500, same_league=False, elo=1600, opponent_elo=1600
+    )
     assert p == pytest.approx(0.5)
 
 
@@ -57,7 +84,9 @@ def test_weights_round_trip_and_changes(tmp_path):
     forge.save_weights({"elo_weight": 0.0030000049, "form_weight": 0.7}, path)
     weights = forge.load_weights(path)
     assert weights == {"elo_weight": 0.003, "form_weight": 0.7}
-    changes = forge.weight_changes(weights, {"elo_weight": 0.0033, "form_weight": 0.665})
+    changes = forge.weight_changes(
+        weights, {"elo_weight": 0.0033, "form_weight": 0.665}
+    )
     assert changes["elo_weight"] == pytest.approx(0.10)
     assert changes["form_weight"] == pytest.approx(0.05)
 

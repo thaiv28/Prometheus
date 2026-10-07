@@ -4,14 +4,13 @@ import argparse
 import datetime as dt
 import hashlib
 import json
-from pathlib import Path
 import re
-from types import SimpleNamespace
 import urllib.error
 import urllib.parse
+from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
-
 import pilot_gol as pilot
 
 SEED = 42
@@ -228,7 +227,7 @@ def report(coverage, games, frames, manifest):
     ]
     return f"""# gol.gg historical coverage audit
 
-{len(games)} sampled series entries across {len(coverage)} fixed tournament strata (2022–2025). {int(coverage.valid_timelines.sum())} validated timelines, {int(coverage.oe_matched.sum())} OE matches, {len(frames['training_candidates'])} training-ready 10/15/20-minute rows. {checks}.
+{len(games)} sampled series entries across {len(coverage)} fixed tournament strata (2022–2025). {int(coverage.valid_timelines.sum())} validated timelines, {int(coverage.oe_matched.sum())} OE matches, {len(frames["training_candidates"])} training-ready 10/15/20-minute rows. {checks}.
 
 ## League summary
 
@@ -262,7 +261,7 @@ Run `.venv/bin/python scripts/research/audit_gol_coverage.py` to reprocess cache
 
 Next expand reliable event strata to additional splits and all map numbers, and investigate explicit parser/matching failures before collecting a training corpus. Do not drop poorly covered regions silently. Use chronological same-game gold+Elo versus gold+Elo+objectives comparisons only after acquisition passes a separate dataset-quality gate. 2026 has already been viewed and is excluded here.
 
-HTTP requests this run: {manifest['network_requests_this_run']}. Selection seed: {SEED}.
+HTTP requests this run: {manifest["network_requests_this_run"]}. Selection seed: {SEED}.
 """
 
 
@@ -345,5 +344,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fetch", action="store_true")
     parser.add_argument("--artifacts", type=Path, default=Path("data/gol_coverage"))
-    parser.add_argument("--out", type=Path, default=Path("docs/research/gol_coverage_report.md"))
+    parser.add_argument(
+        "--out", type=Path, default=Path("docs/research/gol_coverage_report.md")
+    )
     run(parser.parse_args())

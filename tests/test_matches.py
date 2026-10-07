@@ -1,5 +1,5 @@
-import pytest
 import pandas as pd
+import pytest
 
 from prometheus.matches import team_season_averages
 

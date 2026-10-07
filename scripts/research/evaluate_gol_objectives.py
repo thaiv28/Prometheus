@@ -5,14 +5,13 @@ import hashlib
 import json
 from pathlib import Path
 
+import audit_snapshots as audit
+import evaluate_champions as champions
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-
-import audit_snapshots as audit
-import evaluate_champions as champions
 
 BASE = ["gold_gap", "elo_gap"]
 OBJECTIVES = [
@@ -257,7 +256,7 @@ def report(frames, manifest):
 
 ## Fixed method
 
-{manifest['games']} verified games, LPL excluded. Train calendar 2022–2023, calibrate 2024, evaluate 2025; exact same games for both variants at each minute. C=1 logistic regression, training-only scaling; C=1e6 sigmoid calibration on the separate calibration year. Explicit series IDs stay in one partition; paired 2,000-draw bootstrap resamples league/series clusters, seed 42. Primary comparison uses calibrated probabilities; raw results are reported without selecting between them after scoring.
+{manifest["games"]} verified games, LPL excluded. Train calendar 2022–2023, calibrate 2024, evaluate 2025; exact same games for both variants at each minute. C=1 logistic regression, training-only scaling; C=1e6 sigmoid calibration on the separate calibration year. Explicit series IDs stay in one partition; paired 2,000-draw bootstrap resamples league/series clusters, seed 42. Primary comparison uses calibrated probabilities; raw results are reported without selecting between them after scoring.
 
 Predictors: gold and pre-match Elo gaps; added past objective gaps for towers, elemental dragons, Elder, Baron, Herald, grubs and Atakhan. Features constant in training are omitted and recorded in fitted_models.json. In particular, newer objectives absent in 2022–2023 have no learned effects; this experiment cannot assess their separate usefulness. Final totals validate source parsing and never enter the model. Winner/identity/date fields are labels/metadata only.
 
@@ -269,7 +268,7 @@ Predictors: gold and pre-match Elo gaps; added past objective gaps for towers, e
 
 Learning curves use RAW 2024 predictions from increasing chronological 2022–2023 prefixes, with no calibration fit on the curve's evaluation data. No C, feature, cutoff or model selection is made from 2025 scores. `learning_curves.csv` records the development curves.
 
-{audit.table(frames['power_estimates'])}
+{audit.table(frames["power_estimates"])}
 
 Power figures are provisional normal-approximation estimates for hypothetical gains, using observed paired series-cluster variance, 80% power / two-sided 5% significance. They concern EVALUATION games in addition to training/calibration data, assume similar future clustering/variance and fixed fitted models, and are not guaranteed minimums. Use them to refine acquisition, not claim accuracy or a market edge.
 

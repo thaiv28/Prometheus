@@ -1,8 +1,8 @@
 """Locked partitions, no future fitting, paired series resampling, cohort gates."""
 
-from pathlib import Path
-import sys
 import json
+import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd

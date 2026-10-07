@@ -83,10 +83,16 @@ def opponent_adjust(games, features=GLORY_FEATURES, elos=None):
     for year in years:
         rows = games["year"] == year
         train = rated & ((games["year"] < year) if year != years[0] else rows)
-        offset = (games.loc[rows, "opp_elo"] - games.loc[train, "opp_elo"].mean()).fillna(0)
+        offset = (
+            games.loc[rows, "opp_elo"] - games.loc[train, "opp_elo"].mean()
+        ).fillna(0)
         for feature in features:
             fit = train & games[feature].notna()
-            coef = LinearRegression().fit(games.loc[fit, ["elo", "opp_elo"]], games.loc[fit, feature]).coef_[1]
+            coef = (
+                LinearRegression()
+                .fit(games.loc[fit, ["elo", "opp_elo"]], games.loc[fit, feature])
+                .coef_[1]
+            )
             adjusted.loc[rows, feature] = games.loc[rows, feature] - coef * offset
     games[features] = adjusted
     return games.drop(columns=["elo", "opp_elo"])
@@ -98,13 +104,23 @@ def _season_priors(games, features):
     by_day = games.groupby(["year", "date"])[features].agg(["sum", "count"])
     sums = by_day.xs("sum", axis=1, level=1).groupby(level="year").cumsum()
     counts = by_day.xs("count", axis=1, level=1).groupby(level="year").cumsum()
-    running = sums.groupby(level="year").shift(1) / counts.groupby(level="year").shift(1)
+    running = sums.groupby(level="year").shift(1) / counts.groupby(level="year").shift(
+        1
+    )
     previous = games.groupby("year")[features].mean().shift(1).bfill()
-    fallback = previous.reindex(running.index.get_level_values("year")).set_axis(running.index)
+    fallback = previous.reindex(running.index.get_level_values("year")).set_axis(
+        running.index
+    )
     return running.fillna(fallback)
 
 
-def form_states(games, features=GLORY_FEATURES, half_life=HALF_LIFE, carry=CARRY, prior_games=PRIOR_GAMES):
+def form_states(
+    games,
+    features=GLORY_FEATURES,
+    half_life=HALF_LIFE,
+    carry=CARRY,
+    prior_games=PRIOR_GAMES,
+):
     """Each team's Form state before and after every game.
 
     Args:
@@ -117,7 +133,9 @@ def form_states(games, features=GLORY_FEATURES, half_life=HALF_LIFE, carry=CARRY
     """
     decay = 0.5 ** (1 / half_life)
     priors = _season_priors(games, features)
-    prior_rows = priors.reindex(pd.MultiIndex.from_arrays([games["year"], games["date"]])).to_numpy()
+    prior_rows = priors.reindex(
+        pd.MultiIndex.from_arrays([games["year"], games["date"]])
+    ).to_numpy()
     values = games[features].to_numpy(dtype=float)
     # A missing stat counts as an average game for that stat.
     values = np.where(np.isnan(values), prior_rows, values)
@@ -149,13 +167,19 @@ def form_states(games, features=GLORY_FEATURES, half_life=HALF_LIFE, carry=CARRY
             counts[leagues[i]] = counts.get(leagues[i], 0) + 1
             home_of[team] = max(counts, key=counts.get)
         home[i] = home_of.get(team, leagues[i])
-        pre[i] = (sums[team] + prior_games * prior_rows[i]) / (weights[team] + prior_games)
+        pre[i] = (sums[team] + prior_games * prior_rows[i]) / (
+            weights[team] + prior_games
+        )
         seen[i] = weights[team]
         sums[team] = decay * sums[team] + values[i]
         weights[team] = decay * weights[team] + 1.0
-        post[i] = (sums[team] + prior_games * prior_rows[i]) / (weights[team] + prior_games)
+        post[i] = (sums[team] + prior_games * prior_rows[i]) / (
+            weights[team] + prior_games
+        )
 
-    out = games[["gameid", "teamid", "teamname", "league", "year", "date"]].reset_index(drop=True)
+    out = games[["gameid", "teamid", "teamname", "league", "year", "date"]].reset_index(
+        drop=True
+    )
     out["home"] = home
     out["form_games"] = seen
     out = pd.concat(
@@ -174,14 +198,18 @@ def fit_form_weights(gaps, won):
     x = np.asarray(gaps, dtype=float)
     scale = x.std(axis=0)
     scale[scale == 0] = 1.0
-    model = LogisticRegression(C=1e6, max_iter=1000).fit(x / scale, np.asarray(won, dtype=int))
+    model = LogisticRegression(C=1e6, max_iter=1000).fit(
+        x / scale, np.asarray(won, dtype=int)
+    )
     return model.coef_[0] / scale
 
 
 def scores(states, weights, prefix="pre_"):
     """Log-odds strength of each state row: its stats times the Form weights."""
     cols = [f"{prefix}{f}" for f in weights]
-    return states[cols].to_numpy(dtype=float) @ np.array(list(weights.values()), dtype=float)
+    return states[cols].to_numpy(dtype=float) @ np.array(
+        list(weights.values()), dtype=float
+    )
 
 
 def league_relative(states, score):
@@ -194,7 +222,9 @@ def league_relative(states, score):
     day = frame.groupby(["home", "year", "date"])["score"].agg(["sum", "count"])
     running = day.groupby(level=["home", "year"]).cumsum()
     mean = (running["sum"] / running["count"]).rename("league_mean")
-    return score - frame.join(mean, on=["home", "year", "date"])["league_mean"].to_numpy()
+    return (
+        score - frame.join(mean, on=["home", "year", "date"])["league_mean"].to_numpy()
+    )
 
 
 def load_weights(path=WEIGHTS_PATH):

@@ -1,7 +1,7 @@
 """Audit sampling and missing-data denominators, independent of network."""
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -95,8 +95,8 @@ def test_coverage_keeps_failures_and_unknown_duration_denominators():
 
 
 def test_offline_missing_listings_remain_unavailable(tmp_path, monkeypatch):
-    from types import SimpleNamespace
     import json
+    from types import SimpleNamespace
 
     from sqlalchemy import create_engine, text
 

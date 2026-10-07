@@ -1,6 +1,6 @@
 from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 
 def fit_glory_pipeline(games, features):
@@ -9,4 +9,3 @@ def fit_glory_pipeline(games, features):
         [("scaler", StandardScaler()), ("regressor", LinearRegression())]
     )
     return pipeline.fit(games[features], games["result"].astype(int))
-

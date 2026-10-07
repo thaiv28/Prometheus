@@ -7,11 +7,17 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from prometheus.elo import calculate_game_length_elo_change, compute_elo_records, winner_score
+from prometheus.elo import (
+    calculate_game_length_elo_change,
+    compute_elo_records,
+    winner_score,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts" / "research"))
-_spec = importlib.util.spec_from_file_location("elo_variants", ROOT / "scripts" / "research" / "elo_variants.py")
+_spec = importlib.util.spec_from_file_location(
+    "elo_variants", ROOT / "scripts" / "research" / "elo_variants.py"
+)
 ev = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ev)
 
@@ -56,10 +62,16 @@ def test_loser_gets_complement_of_winner_score():
 
 
 def test_replay_with_game_length_margin_reproduces_published_elo():
-    rosters = {("g1", "a"): ("p1", "p2"), ("g1", "b"): ("p3", "p4"), ("g6", "a"): ("p1", "p5")}
+    rosters = {
+        ("g1", "a"): ("p1", "p2"),
+        ("g1", "b"): ("p3", "p4"),
+        ("g6", "a"): ("p1", "p5"),
+    }
     inputs = _inputs(rosters)
     pre = ev.replay(inputs, ev.game_length_margin())
-    published, _ = compute_elo_records(_games()[ev.ELO_COLUMNS], calculate_game_length_elo_change, rosters=rosters)
+    published, _ = compute_elo_records(
+        _games()[ev.ELO_COLUMNS], calculate_game_length_elo_change, rosters=rosters
+    )
     expected = published.set_index(["gameid", "teamid"])["pre_match_elo"]
     assert np.abs(pre.to_numpy() - expected.to_numpy()).max() < 1e-9
     assert list(pre.index) == list(expected.index)
@@ -77,7 +89,9 @@ def test_replay_passes_k_and_compute_kwargs():
     k20 = ev.replay(inputs, ev.game_length_margin(), records=True)
     k40 = ev.replay(inputs, ev.game_length_margin(), K=40, records=True)
     assert k40["elo_change"].iloc[0] == pytest.approx(2 * k20["elo_change"].iloc[0])
-    no_share = ev.replay(inputs, ev.game_length_margin(), league_share=0.0, records=True)
+    no_share = ev.replay(
+        inputs, ev.game_length_margin(), league_share=0.0, records=True
+    )
     assert (no_share["league_offset"] == 0).all()
 
 
@@ -124,8 +138,16 @@ def test_clean_stats_marks_filled_values_missing():
     stats = pd.DataFrame({stat: [3, 2.5, 0] for stat in ev.STATS})
     stats["visionscore"] = [0, 120, 98.4]
     clean = ev.clean_stats(stats)
-    assert clean["kills"].tolist()[0] == 3 and np.isnan(clean["kills"][1]) and clean["kills"][2] == 0
-    assert np.isnan(clean["visionscore"][0]) and clean["visionscore"][1] == 120 and np.isnan(clean["visionscore"][2])
+    assert (
+        clean["kills"].tolist()[0] == 3
+        and np.isnan(clean["kills"][1])
+        and clean["kills"][2] == 0
+    )
+    assert (
+        np.isnan(clean["visionscore"][0])
+        and clean["visionscore"][1] == 120
+        and np.isnan(clean["visionscore"][2])
+    )
 
 
 def test_pregame_elos_has_both_sides():
@@ -153,11 +175,18 @@ def test_param_grid():
 
 def _fake_scores(years, loss_by_year):
     """Scores with one domestic game per year and a fixed log loss."""
-    games = pd.DataFrame({
-        "gameid": [f"g{y}" for y in years], "year": years, "league": "LCK",
-        "test_set": "Domestic", "won": 1,
-    })
-    losses = pd.DataFrame({"accuracy": 1.0, "brier": 0.1, "log_loss": [loss_by_year(y) for y in years]})
+    games = pd.DataFrame(
+        {
+            "gameid": [f"g{y}" for y in years],
+            "year": years,
+            "league": "LCK",
+            "test_set": "Domestic",
+            "won": 1,
+        }
+    )
+    losses = pd.DataFrame(
+        {"accuracy": 1.0, "brier": 0.1, "log_loss": [loss_by_year(y) for y in years]}
+    )
     return ev.Scores(games, {"elo_live": losses, "forge": losses})
 
 
@@ -176,12 +205,28 @@ def test_tuning_sees_train_years_only_and_reports_on_test(monkeypatch):
     monkeypatch.setattr(ev, "replay", fake_replay)
     monkeypatch.setattr(ev, "score", fake_score)
     frame = pd.DataFrame({"year": [2019, 2020, 2021, 2022, 2023]})
-    inputs = ev.Inputs(games=None, rosters={}, frame=frame, form_games=None, db_pre_match=None, db_domestic=())
+    inputs = ev.Inputs(
+        games=None,
+        rosters={},
+        frame=frame,
+        form_games=None,
+        db_pre_match=None,
+        db_domestic=(),
+    )
     inputs.cache["baseline"] = pd.Series([3.0])
-    result = ev.held_out(inputs, lambda scale: (lambda g: scale), {"scale": [1, 2, 3]}, "toy", verbose=False)
+    result = ev.held_out(
+        inputs,
+        lambda scale: lambda g: scale,
+        {"scale": [1, 2, 3]},
+        "toy",
+        verbose=False,
+    )
 
     assert result.params == {"scale": 2}
-    assert result.train_years == [2019, 2020, 2021] and result.test_years == [2022, 2023]
+    assert result.train_years == [2019, 2020, 2021] and result.test_years == [
+        2022,
+        2023,
+    ]
     assert seen_years[:3] == [[2019, 2020, 2021]] * 3  # every tuning run
     assert all(y == [2022, 2023] for y in seen_years[3:])  # variant and baseline
     assert result.tuning["objective"].is_monotonic_increasing

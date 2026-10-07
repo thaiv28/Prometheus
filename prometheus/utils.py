@@ -1,10 +1,11 @@
-from rich.table import Table
 from rich.console import Console
+from rich.table import Table
 from sqlalchemy import create_engine
 
-from . import DB_PATH
-from prometheus.types import League
 from prometheus import types
+from prometheus.types import League
+
+from . import DB_PATH
 
 
 def get_engine():
