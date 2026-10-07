@@ -45,6 +45,17 @@
   // Roles exist only on pages that offer a role picker (AURA).
   const state = { years: new Set(), leagues: new Set(), roles: new Set(), search: "", sort: { key: "rank", dir: "asc" } };
 
+  // FORGE rates each league on its own scale (the majors share one), so its page
+  // shows one scale at a time, majors by default; a team search reaches every
+  // league and ranks each team within its own.
+  const oneScale = Boolean(config.leagueScales);
+  const majors = config.majorLeagues || [];
+  const scaleOf = (league) => (majors.includes(league) ? "majors" : league);
+  const sameSet = (a, b) => a.size === b.size && [...a].every((v) => b.has(v));
+  const defaultLeagues = () => new Set(oneScale ? majors : []);
+  const leaguesChanged = () => !sameSet(state.leagues, defaultLeagues());
+  if (oneScale) state.leagues = defaultLeagues();
+
   const tbody = $("#rows");
   const countEl = $(".count");
   const descEl = $("#table-desc");
@@ -66,7 +77,9 @@
   function readUrl() {
     const q = new URLSearchParams(location.search);
     (q.get("years") || "").split(",").filter(Boolean).forEach((y) => state.years.add(y));
-    (q.get("leagues") || "").split(",").filter(Boolean).forEach((l) => state.leagues.add(l));
+    const leagues = (q.get("leagues") || "").split(",").filter(Boolean);
+    // One scale at a time: any of the majors, or one other league.
+    if (leagues.length) state.leagues = new Set(!oneScale || leagues.every((l) => majors.includes(l)) ? leagues : [leagues[0]]);
     (q.get("roles") || "").split(",").filter((r) => r in ROLES).forEach((r) => state.roles.add(r));
     state.search = q.get("search") || "";
     const sort = (q.get("sort") || "").split(":");
@@ -78,7 +91,7 @@
   function writeUrl() {
     const q = new URLSearchParams();
     if (state.years.size) q.set("years", [...state.years].join(","));
-    if (state.leagues.size) q.set("leagues", [...state.leagues].join(","));
+    if (state.leagues.size && leaguesChanged()) q.set("leagues", [...state.leagues].join(","));
     if (state.roles.size) q.set("roles", [...state.roles].join(","));
     if (state.search) q.set("search", state.search);
     if (state.sort.key !== "rank" || state.sort.dir !== "asc") q.set("sort", state.sort.key + ":" + state.sort.dir);
@@ -99,15 +112,24 @@
 
   function filtered() {
     const term = state.search.trim().toLowerCase();
+    const anyLeague = oneScale && term !== "";
     const out = pool().filter((r) =>
-      (!state.leagues.size || state.leagues.has(String(r.league))) &&
+      (anyLeague || !state.leagues.size || state.leagues.has(String(r.league))) &&
       (!state.roles.size || state.roles.has(String(r.position))) &&
       (!term || String(nameOf(r)).toLowerCase().includes(term) ||
         (entity === "player" && String(r.teamname).toLowerCase().includes(term)))
     );
     // Rank is position by the page's value within the current view, independent of the sort column.
     out.sort((a, b) => Number(b[valueKey]) - Number(a[valueKey]));
-    return out.map((r, i) => ({ ...r, rank: i + 1 }));
+    if (!anyLeague) return out.map((r, i) => ({ ...r, rank: i + 1 }));
+    // A search across leagues ranks each team within its own scale.
+    const shown = new Set(out.map((r) => scaleOf(r.league)));
+    const ranked = new Map();
+    const seen = {};
+    pool().filter((r) => shown.has(scaleOf(r.league)))
+      .sort((a, b) => Number(b[valueKey]) - Number(a[valueKey]))
+      .forEach((r) => { const k = scaleOf(r.league); seen[k] = (seen[k] || 0) + 1; ranked.set(r, seen[k]); });
+    return out.map((r) => ({ ...r, rank: ranked.get(r) }));
   }
 
   function sorted(list) {
@@ -309,7 +331,10 @@
 
   function describeView() {
     const leagues = [...state.leagues].sort();
-    const leaguePart = !leagues.length ? "all" : leagues.length > 4 ? `${leagues.length} leagues’` : leagues.join(", ");
+    const majorsOnly = oneScale && sameSet(state.leagues, new Set(majors));
+    const leaguePart = state.search.trim() && oneScale ? "all"
+      : majorsOnly ? "major-league"
+      : !leagues.length ? "all" : leagues.length > 4 ? `${leagues.length} leagues’` : leagues.join(", ");
     const roleOrder = Object.keys(ROLES);
     const roles = [...state.roles].sort((a, b) => roleOrder.indexOf(a) - roleOrder.indexOf(b)).map((r) => ROLES[r].toLowerCase());
     const rolePart = roles.length ? ` (${roles.join(", ")})` : "";
@@ -325,22 +350,26 @@
     $$(".picker").forEach((picker) => {
       const set = state[picker.dataset.filter];
       $$("input[type=checkbox]", picker).forEach((cb) => { cb.checked = set.has(cb.value); });
+      $$("input[type=radio]", picker).forEach((rb) => { rb.checked = sameSet(set, new Set(rb.value.split(","))); });
       const valueEl = $(".picker-value", picker);
       const kind = picker.dataset.filter;
       const roleOrder = Object.keys(ROLES);
       const values = [...set]
         .sort((a, b) => (kind === "years" ? b - a : kind === "roles" ? roleOrder.indexOf(a) - roleOrder.indexOf(b) : a.localeCompare(b)))
         .map((v) => (kind === "roles" ? ROLES[v] : v));
-      valueEl.textContent = values.length ? (values.length > 3 ? `${values.length} selected` : values.join(", ")) : valueEl.dataset.all;
+      valueEl.textContent = picker.dataset.one && kind === "leagues" && !leaguesChanged() ? valueEl.dataset.all
+        : values.length ? (values.length > 3 ? `${values.length} selected` : values.join(", ")) : valueEl.dataset.all;
     });
     $$("th[data-key]").forEach((th) => {
       const active = th.dataset.key === state.sort.key;
       th.setAttribute("aria-sort", active ? (state.sort.dir === "asc" ? "ascending" : "descending") : "none");
     });
-    clearBtn.hidden = !(state.years.size || state.leagues.size || state.roles.size || state.search);
+    clearBtn.hidden = !(state.years.size || leaguesChanged() || state.roles.size || state.search);
     descEl.textContent = describeView();
     // Count against everything the year filter could show, so seasons don't read as a subset of "now".
-    const total = isRating ? pool().length : rows.length;
+    // One-scale pages count against the chosen league's teams.
+    const inScale = (r) => !oneScale || state.search.trim() || state.leagues.has(String(r.league));
+    const total = isRating ? pool().filter(inScale).length : rows.length;
     countEl.textContent = count === total
       ? `${numberFormat.format(total)} shown.`
       : `${numberFormat.format(count)} of ${numberFormat.format(total)} shown.`;
@@ -361,7 +390,7 @@
 
   function clearFilters() {
     state.years.clear();
-    state.leagues.clear();
+    state.leagues = defaultLeagues();
     state.roles.clear();
     state.search = "";
     if (searchInput) searchInput.value = "";
@@ -371,7 +400,13 @@
   // ---- Events ----------------------------------------------------------
   document.addEventListener("change", (e) => {
     const picker = e.target.closest(".picker");
-    if (!picker || e.target.type !== "checkbox") return;
+    if (!picker) return;
+    if (e.target.type === "radio") {
+      state[picker.dataset.filter] = new Set(e.target.value.split(","));
+      update();
+      return;
+    }
+    if (e.target.type !== "checkbox") return;
     const set = state[picker.dataset.filter];
     e.target.checked ? set.add(e.target.value) : set.delete(e.target.value);
     update();

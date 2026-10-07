@@ -63,6 +63,22 @@
           </fieldset>
         </details>
         {% endif %}
+        {% if config.leagueScales %}
+        {#- Ratings compare only within one league's scale (the majors share one), so
+            this picker chooses one scale at a time. -#}
+        <details class="picker" data-filter="leagues" data-one="true">
+          <summary><span class="picker-label">league</span> <span class="picker-value" data-all="Majors">Majors</span></summary>
+          <fieldset class="picker-panel picker-panel--leagues">
+            <legend class="picker-legend">One league’s scale</legend>
+            <div class="picker-options">
+              <label class="picker-option--wide"><input type="radio" name="league-scale" value="{{ major_leagues | join(',') }}" /> Major leagues</label>
+              {% for l in filters.leagues %}
+              <label data-league="{{ l }}"><input type="radio" name="league-scale" value="{{ l }}" /> <span class="league-mark" aria-hidden="true"></span>{{ l }}</label>
+              {% endfor %}
+            </div>
+          </fieldset>
+        </details>
+        {% else %}
         <details class="picker" data-filter="leagues">
           <summary><span class="picker-label">leagues</span> <span class="picker-value" data-all="All">All</span></summary>
           <fieldset class="picker-panel picker-panel--leagues">
@@ -77,6 +93,7 @@
             </div>
           </fieldset>
         </details>
+        {% endif %}
         {% if filters.roles %}
         {% set role_names = {'top': 'Top', 'jng': 'Jungle', 'mid': 'Mid', 'bot': 'Bot', 'sup': 'Support'} %}
         <details class="picker" data-filter="roles">

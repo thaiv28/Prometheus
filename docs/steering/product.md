@@ -32,7 +32,7 @@ Each published stat answers one question: GLORY, how well did a team play this s
 
 Predictions (2026-10-03) put the forecasts to work on real fixtures: every scheduled match between two rated teams (schedule from Leaguepedia) gets each team's series chance, saved before the match and scored against the result. It is a use of FORGE and Elo, not a new metric. The market benchmark (`docs/market_report.md`, 2026-10-04) judges it against Kalshi's prices: in major leagues FORGE ties the market a day out but trails it at the close (late news); in other leagues and across leagues the market is clearly better.
 
-Scope: season stats and the FORGE page cover the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present; Elo, Form and FORGE's match calls cover every region. Data comes from Oracle's Elixir and refreshes daily via CI.
+Scope: season stats cover the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present; Elo, Form and FORGE cover every region (FORGE ratings on each league's own scale). Data comes from Oracle's Elixir and refreshes daily via CI.
 
 ## Product principles
 
