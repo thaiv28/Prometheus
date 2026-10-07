@@ -13,9 +13,11 @@ permissions:
   id-token: write
   issues: write # the daily Kalshi alert issue
 
+# One group per ref (a PR's is refs/pull/<n>/merge), so PR runs never wait on or
+# cancel a main publish. A new push to a PR cancels its older run; main runs queue.
 concurrency:
   group: deploy-prometheus-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -32,9 +34,12 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen && uv pip install -e .
       # Google Drive rate-limits the shared CSVs; keep the last good copy so a
-      # throttled day rebuilds from yesterday's data instead of failing.
+      # throttled day rebuilds from yesterday's data instead of failing. Restores
+      # the newest entry (the run-id key never matches; the prefix does). Only main
+      # saves, keyed on the CSVs' content, in "Save CSVs to the cache" below.
       - name: Restore cached CSVs
-        uses: actions/cache@v4
+        id: raw-cache
+        uses: actions/cache/restore@v4
         with:
           path: data/raw
           key: oracles-elixir-${{ github.run_id }}
@@ -64,6 +69,16 @@ jobs:
           mkdir -p "$RUNNER_TEMP/backup"
           for f in data/raw/*.csv; do gzip -n -c "$f" > "$RUNNER_TEMP/backup/$(basename "$f").gz"; done
           aws s3 sync "$RUNNER_TEMP/backup" "$DATA_BACKUP" --size-only --only-show-errors
+      # Main only (about 200 MB an entry; PRs read main's). Skipped when the CSVs are
+      # the ones just restored, so an unchanged day adds no entry.
+      - name: Save CSVs to the cache
+        if: >-
+          env.CAN_USE_AWS == 'true' && hashFiles('data/raw/*.csv') != '' &&
+          steps.raw-cache.outputs.cache-matched-key != format('oracles-elixir-{0}', hashFiles('data/raw/*.csv'))
+        uses: actions/cache/save@v4
+        with:
+          path: data/raw
+          key: oracles-elixir-${{ hashFiles('data/raw/*.csv') }}
       - name: Test
         run: uv run pytest -q
       # Refit the FORGE weights on today's data; warns (does not fail) on a big move.
@@ -131,6 +146,16 @@ jobs:
         run: aws s3 sync output "s3://$BUCKET/releases/${{ github.run_id }}" --delete
       - name: Publish release
         run: aws s3 sync "s3://$BUCKET/releases/${{ github.run_id }}" "s3://$BUCKET/current" --delete
+      # The hourly prices job rewrites these two without invalidating, so CloudFront
+      # must keep them only 5 minutes (its policy's default is a day when the object
+      # has no Cache-Control). Set it on the published copies, before invalidating.
+      - name: Short cache for the hourly files
+        run: |
+          for f in kalshi.json predictions.json; do
+            [ -f "output/$f" ] || continue
+            aws s3 cp "output/$f" "s3://$BUCKET/current/$f" --only-show-errors \
+              --content-type application/json --cache-control "max-age=300"
+          done
       - name: Invalidate edge cache
         run: aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
       - name: Check deployment health

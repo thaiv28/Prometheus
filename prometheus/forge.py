@@ -26,9 +26,8 @@ import math
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 
-from prometheus.form import league_relative, load_weights as load_form_weights, scores
+from prometheus.form import load_weights as load_form_weights, scores
 
 WEIGHTS_PATH = Path(__file__).with_name("forge_weights.json")
 LEAGUE_CURVES_PATH = Path(__file__).with_name("league_curves.json")

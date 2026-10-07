@@ -1,6 +1,5 @@
 import pandas as pd
-from unittest.mock import patch, MagicMock
-import pytest
+from unittest.mock import patch
 from sklearn.pipeline import Pipeline
 
 from prometheus.regression import _fit_glory_model

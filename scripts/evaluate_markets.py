@@ -24,7 +24,10 @@ For every settled series market between two teams we rate, this script:
   near zero means the market already knows what we know;
 - repeats the comparison for single games: the map-1 market before the series
   starts against our one-game chance, scored on map 1. That needs no best-of and
-  doesn't lean on the independent-games assumption behind our series odds.
+  doesn't lean on the independent-games assumption behind our series odds;
+- scores the prediction log's saved calls (made before each match, not
+  reconstructed) against the Kalshi prices stored with them (`saved_calls`).
+  This part is read from the log on every run, `--reuse` included.
 
 Prices with no two-sided quote, or a spread wider than `MAX_SPREAD`, are left
 out. Our forecast weights were fit on data that includes these matches, which
@@ -34,7 +37,7 @@ Kalshi's market data is public (no key). Markets and candlesticks are cached
 under `data/markets/` (gitignored); `--refresh` refetches the market lists.
 
 Usage:
-    uv run python scripts/evaluate_markets.py [--out docs/market_report.md] [--refresh]
+    uv run python scripts/evaluate_markets.py [--out docs/market_report.md] [--refresh] [--reuse] [--log data/predictions.json]
 """
 
 import argparse
@@ -558,7 +561,126 @@ def lead_ladder(s):
     return lines
 
 
-def report(series_frame, map_frame, counts):
+# ---------------------------------------------------------------- saved calls
+
+# Fewest series before a saved-calls row gets an interval.
+SAVED_MIN_SERIES = 10
+
+
+def saved_calls(entries):
+    """The prediction log's calls saved before the match (not `reconstructed`),
+    settled and priced by Kalshi before the start, one row each: our series call
+    for team 1 (`p_series`) and the close (`market.p`); our call when the
+    12-hour price was read (`market_12h.ours`) and that price (NaN without one);
+    whether each price was `backfilled` from Kalshi's history; won1, method and
+    `major` (both home leagues major)."""
+    rows = []
+    for e in entries:
+        close, early = e.get("market") or {}, e.get("market_12h") or {}
+        if (
+            e.get("reconstructed")
+            or not e.get("matched")
+            or e.get("winner") not in (1, 2)
+            or e.get("p_series") is None
+            or close.get("p") is None
+            or close["at"] > e["start"]
+        ):
+            continue
+        has_early = early.get("p") is not None and early.get("ours") is not None
+        rows.append(
+            {
+                "start": e["start"],
+                "method": e.get("method"),
+                "major": row_is_major(e.get("home1"), e.get("home2")),
+                "won1": e["winner"] == 1,
+                "p_series": e["p_series"],
+                "market_close": close["p"],
+                "backfilled_close": bool(close.get("backfilled")),
+                "ours_early": early["ours"] if has_early else np.nan,
+                "market_early": early["p"] if has_early else np.nan,
+                "backfilled_early": has_early and bool(early.get("backfilled")),
+            }
+        )
+    columns = [
+        "start",
+        "method",
+        "major",
+        "won1",
+        "p_series",
+        "market_close",
+        "backfilled_close",
+        "ours_early",
+        "market_early",
+        "backfilled_early",
+    ]
+    return pd.DataFrame(rows, columns=columns)
+
+
+def saved_slices(frame):
+    """FORGE within a major league, FORGE within another league, and every other
+    call (Elo within a league or across leagues)."""
+    forge = frame["method"] == "forge"
+    major = frame["major"].astype(bool)
+    return [
+        ("All", frame),
+        ("FORGE (same major league)", frame[forge & major]),
+        ("FORGE (same other league)", frame[forge & ~major]),
+        ("Other", frame[~forge]),
+    ]
+
+
+def saved_table(frame, ours_col, market_col, backfilled_col, min_n=SAVED_MIN_SERIES):
+    """Ours against the market on the saved calls, by `saved_slices`: counts,
+    log loss and the paired differences, with intervals from `min_n` series."""
+    lines = [
+        "| Matches | n | Backfilled prices | Log loss, ours | Log loss, market | Δ log loss (95%) | Δ Brier (95%) |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for label, part in saved_slices(frame.dropna(subset=[ours_col, market_col])):
+        if part.empty:
+            lines.append(f"| {label} | 0 | — | — | — | — | — |")
+            continue
+        r = compare(part, ours_col, market_col)
+        if r["n"] >= min_n:
+            diffs = f"{_fmt_diff(r, 'log_loss')} | {_fmt_diff(r, 'brier')}"
+        else:
+            diffs = f"{r['diff_log_loss']:+.4f} | {r['diff_brier']:+.4f}"
+        lines.append(
+            f"| {label} | {r['n']} | {int(part[backfilled_col].sum())} | "
+            f"{r['ours_log_loss']:.4f} | {r['market_log_loss']:.4f} | {diffs} |"
+        )
+    return lines
+
+
+def saved_section(frame):
+    """The report's section on the log's saved calls against Kalshi."""
+    lines = [
+        "## Saved calls",
+        "",
+        "Calls as the Predictions page made them before each match (from the prediction log, not "
+        "reconstructed), against Kalshi's price stored with them: the close, against our call at the start, "
+        f"and {EARLY_HOURS} hours before, against our call when that price was read. Backfilled prices were "
+        "read later from Kalshi's history; a backfilled early price can predate the call. "
+        f"Intervals from {SAVED_MIN_SERIES} series. The sample is small.",
+        "",
+    ]
+    if frame.empty:
+        return lines + ["No settled saved calls with a price yet.", ""]
+    return lines + [
+        f"Matches from {frame['start'].min()[:10]} to {frame['start'].max()[:10]}.",
+        "",
+        "**At the close**",
+        "",
+        *saved_table(frame, "p_series", "market_close", "backfilled_close"),
+        "",
+        f"**{EARLY_HOURS} hours before the start**",
+        "",
+        *saved_table(frame, "ours_early", "market_early", "backfilled_early"),
+        "",
+    ]
+
+
+def report(series_frame, map_frame, counts, saved=None):
     s = series_frame
     lines = [
         "# Our calls against the prediction market",
@@ -599,6 +721,7 @@ def report(series_frame, map_frame, counts):
         + _fmt_diff(compare(early, "market_early", "market_close"), "log_loss")
         + " log loss (early minus close).",
         "",
+        *([] if saved is None else saved_section(saved)),
         *lead_ladder(s),
         *betting_section(s[s["timed"]]),
         "## Does our call add to the market?",
@@ -660,11 +783,18 @@ def main():
         action="store_true",
         help="Rewrite the report from the last run's saved match tables (skips the slow ratings)",
     )
+    parser.add_argument(
+        "--log",
+        default="data/predictions.json",
+        help="Prediction log whose saved calls are scored against Kalshi",
+    )
     args = parser.parse_args()
-    saved = CACHE / "frames.pkl"
+    log = Path(args.log)
+    calls = saved_calls(json.loads(log.read_text())["matches"] if log.exists() else [])
+    frames = CACHE / "frames.pkl"
     if args.reuse:
-        series_frame, map_frame, counts, unmatched = pd.read_pickle(saved)
-        return _finish(series_frame, map_frame, counts, unmatched, args.out)
+        series_frame, map_frame, counts, unmatched = pd.read_pickle(frames)
+        return _finish(series_frame, map_frame, counts, unmatched, args.out, calls)
 
     _log("loading games and Form states")
     states = form_states(opponent_adjust(load_form_games()))
@@ -748,13 +878,13 @@ def main():
         "series_early": int(series_frame["market_early"].notna().sum()),
         "unmatched": len(unmatched),
     }
-    pd.to_pickle((series_frame, map_frame, counts, unmatched), saved)
-    _finish(series_frame, map_frame, counts, unmatched, args.out)
+    pd.to_pickle((series_frame, map_frame, counts, unmatched), frames)
+    _finish(series_frame, map_frame, counts, unmatched, args.out, calls)
 
 
-def _finish(series_frame, map_frame, counts, unmatched, out):
+def _finish(series_frame, map_frame, counts, unmatched, out, saved=None):
     _log("writing the report")
-    text = report(series_frame, map_frame, counts)
+    text = report(series_frame, map_frame, counts, saved)
     print(text)
     print("\nUnmatched Kalshi names:", ", ".join(unmatched))
     if out:

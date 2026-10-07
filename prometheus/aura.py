@@ -61,9 +61,10 @@ def load_aura_games(minutes=MINUTES):
     FROM player_stats p
     JOIN match_players mp ON mp.gameid = p.gameid AND mp.teamid = p.teamid AND mp.position = p.position
     JOIN matches m ON m.gameid = p.gameid AND m.teamid = p.teamid
-    ORDER BY m.date, p.gameid, p.teamid, p.position
     """
-    players = pd.read_sql(stmt, get_engine())
+    # Sorting here is much faster than ORDER BY over this join.
+    keys = ["date", "gameid", "teamid", "position"]
+    players = pd.read_sql(stmt, get_engine()).sort_values(keys, ignore_index=True)
     full = players.groupby(["gameid", "teamid"])["position"].transform("size") == len(ROLES)
     players = players[full]
     both = players.groupby("gameid")["teamid"].transform("nunique") == 2

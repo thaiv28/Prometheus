@@ -39,6 +39,30 @@ Closer to what our call knew. Only matches whose market had a quote by then.
 
 How far the market moved in those hours, on the same matches: +0.0220 (+0.0154 to +0.0289) log loss (early minus close).
 
+## Saved calls
+
+Calls as the Predictions page made them before each match (from the prediction log, not reconstructed), against Kalshi's price stored with them: the close, against our call at the start, and 12 hours before, against our call when that price was read. Backfilled prices were read later from Kalshi's history; a backfilled early price can predate the call. Intervals from 10 series. The sample is small.
+
+Matches from 2026-10-04 to 2026-10-07.
+
+**At the close**
+
+| Matches | n | Backfilled prices | Log loss, ours | Log loss, market | Δ log loss (95%) | Δ Brier (95%) |
+|---|---:|---:|---:|---:|---:|---:|
+| All | 24 | 12 | 0.5109 | 0.3704 | +0.1404 (+0.0036 to +0.2830) | +0.0630 (+0.0171 to +0.1185) |
+| FORGE (same major league) | 3 | 1 | 0.6309 | 0.6295 | +0.0013 | -0.0019 |
+| FORGE (same other league) | 0 | — | — | — | — | — |
+| Other | 21 | 11 | 0.4937 | 0.3334 | +0.1603 (-0.0053 to +0.3281) | +0.0723 (+0.0194 to +0.1369) |
+
+**12 hours before the start**
+
+| Matches | n | Backfilled prices | Log loss, ours | Log loss, market | Δ log loss (95%) | Δ Brier (95%) |
+|---|---:|---:|---:|---:|---:|---:|
+| All | 18 | 15 | 0.4679 | 0.3501 | +0.1178 (+0.0090 to +0.2709) | +0.0515 (+0.0035 to +0.1186) |
+| FORGE (same major league) | 3 | 2 | 0.6306 | 0.6665 | -0.0359 | -0.0188 |
+| FORGE (same other league) | 0 | — | — | — | — | — |
+| Other | 15 | 13 | 0.4353 | 0.2868 | +0.1485 (+0.0240 to +0.3218) | +0.0655 (+0.0115 to +0.1428) |
+
 ## By lead time
 
 The market's price at each lead time against our call (from the day before), on the same matches: exact start times and a usable quote at every lead time up to 24 hours. Our weight is from the joint fit described in the next section, refit at each lead time.

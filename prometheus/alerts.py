@@ -6,7 +6,10 @@ called by FORGE (both teams from one major league), where FORGE's chance for a
 team beats what a contract on that team costs now (the ask) by more than `EDGE`.
 That is the slice the market backtest supports (`docs/market_report.md`): calls
 in other leagues (Elo, and FORGE since 2026-10-06) lost to the market and are
-never alerted.
+never alerted. FORGE calls inside one non-major league that pass the same bar
+are kept as paper alerts (`paper_alert`, never posted): in the backtest their
+closing line value was positive but their return after fees wasn't, so they
+earn a forward record before being turned on.
 
 Each alert is recorded on its log entry (`alert`: the team backed, FORGE's
 chance, the price, the edge and when), once: a match alerted on two days keeps
@@ -38,10 +41,11 @@ def _start(entry):
     )
 
 
-def select(log, now, edge=EDGE):
+def select(log, now, edge=EDGE, minor=False):
     """Alert candidates, soonest first: dicts with the entry, the team backed
     (side 1 or 2), FORGE's chance for it, its price and the edge. Only prices read
-    at this build (`market.at` is `now`) count."""
+    at this build (`market.at` is `now`) count. FORGE calls within a major league,
+    or with `minor` within a non-major one (the paper track)."""
     now_s = now.strftime("%Y-%m-%dT%H:%MZ")
     out = []
     for entry in log.values():
@@ -49,7 +53,7 @@ def select(log, now, edge=EDGE):
         if (
             not entry.get("matched")
             or entry.get("method") != "forge"
-            or entry.get("home1") not in MAJORS
+            or (entry.get("home1") in MAJORS) == minor
             or market.get("at") != now_s
         ):
             continue
@@ -76,13 +80,13 @@ def select(log, now, edge=EDGE):
     return sorted(out, key=lambda a: (a["entry"]["start"], a["entry"]["match_id"]))
 
 
-def record(alerts, now):
-    """Store each alert on its log entry, unless the match already has one."""
+def record(alerts, now, key="alert"):
+    """Store each alert on its log entry under `key`, unless the match already has one."""
     now_s = now.strftime("%Y-%m-%dT%H:%MZ")
     new = 0
     for a in alerts:
-        if "alert" not in a["entry"]:
-            a["entry"]["alert"] = {
+        if key not in a["entry"]:
+            a["entry"][key] = {
                 "side": a["side"],
                 "p": round(a["p"], 4),
                 "price": round(a["price"], 4),
@@ -93,22 +97,22 @@ def record(alerts, now):
     return new
 
 
-def paper_record(log, rate=0.07):
+def paper_record(log, rate=0.07, key="alert"):
     """(alerts settled, won, staked, profit) for $1 on each recorded alert after
-    Kalshi's fee at `rate`."""
-    bets = settled_alerts(log, rate)
+    Kalshi's fee at `rate`; `key="paper_alert"` for the minor-league paper track."""
+    bets = settled_alerts(log, rate, key)
     profit = sum(b["profit"] for b in bets)
     return len(bets), sum(b["won"] for b in bets), float(len(bets)), profit
 
 
-def settled_alerts(log, rate=0.07):
+def settled_alerts(log, rate=0.07, key="alert"):
     """Each settled alert as a $1 paper bet: won, profit after Kalshi's fee at
     `rate`, and CLV (closing line value: the last price before the start for the
     team backed, minus the price alerted; None when the match has no price). CLV
     doesn't wait on the result, so it shows an edge in far fewer bets than profit."""
     out = []
     for entry in log.values():
-        alert = entry.get("alert")
+        alert = entry.get(key)
         if not alert or entry.get("winner") not in (1, 2):
             continue
         won = entry["winner"] == alert["side"]
@@ -277,7 +281,9 @@ def update(log, now, data_through, slugify, team_slugs):
     """Select and record this run's alerts, then the issue to post: a dict with
     title, body, day (the title prefix the workflow matches) and comment (the
     matches new since the last run, which GitHub emails; None when there are
-    none), or None when there is nothing to show today."""
+    none), or None when there is nothing to show today. Minor-league paper
+    alerts are recorded too, but never shown."""
+    record(select(log, now, minor=True), now, key="paper_alert")
     chosen = select(log, now)
     new_ids = [a["entry"]["match_id"] for a in chosen if "alert" not in a["entry"]]
     record(chosen, now)

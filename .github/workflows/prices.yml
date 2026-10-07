@@ -25,7 +25,6 @@ jobs:
     env:
       PREDICTIONS_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/predictions/predictions.json
       BUCKET: ${{ vars.DEPLOYMENT_BUCKET }}
-      DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
@@ -44,7 +43,7 @@ jobs:
         if: steps.busy.outputs.busy == 'false'
       - name: Install dependencies
         if: steps.busy.outputs.busy == 'false'
-        run: uv sync --frozen && uv pip install -e .
+        run: uv sync --frozen --no-dev && uv pip install -e .
       - uses: aws-actions/configure-aws-credentials@v4
         if: steps.busy.outputs.busy == 'false'
         with:
@@ -59,15 +58,15 @@ jobs:
       - name: Save the prediction log
         if: steps.busy.outputs.busy == 'false'
         run: aws s3 cp data/predictions.json "$PREDICTIONS_BACKUP" --only-show-errors
+      # No CloudFront invalidation (an hourly one would pass the free 1,000 paths a
+      # month): max-age=300 lets the edge serve the new files within 5 minutes.
       - name: Publish prices to the site
-        if: steps.busy.outputs.busy == 'false' && env.BUCKET != '' && env.DISTRIBUTION_ID != ''
+        if: steps.busy.outputs.busy == 'false' && env.BUCKET != ''
         run: |
           for f in kalshi.json predictions.json; do
             aws s3 cp "output-prices/$f" "s3://$BUCKET/current/$f" --only-show-errors \
               --content-type application/json --cache-control "max-age=300"
           done
-          aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" \
-            --paths /kalshi.json /predictions.json > /dev/null
       - name: Post the Kalshi alert
         if: steps.busy.outputs.busy == 'false' && hashFiles('data/kalshi_alert.json') != ''
         continue-on-error: true

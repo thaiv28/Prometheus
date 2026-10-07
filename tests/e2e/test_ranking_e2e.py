@@ -10,19 +10,22 @@ def test_glory_custom_leagues_e2e():
         league=ALL_MAJOR_LEAGUES, year=2022, minimum_matches=5
     )
 
+    assert not custom_league_df.empty
     assert all(custom_league_df["league"].isin(["LCK", "LPL"]))
-    # should be GEN.G and T1 for top of 2022 in both cases
-    assert major_league_df.iloc[0].equals(custom_league_df.iloc[0])
-    assert major_league_df.iloc[1].equals(custom_league_df.iloc[1])
+    # The model is always fit on every major league, so asking for fewer leagues
+    # only filters the rows: LCK and LPL teams keep their scores and order.
+    in_custom = major_league_df[major_league_df["league"].isin(["LCK", "LPL"])]
+    assert in_custom.reset_index(drop=True).equals(custom_league_df)
 
 
 def test_glory_min_matches_e2e():
     all_teams_df = get_glory_ranking(league=["LCS"], year=2017, minimum_matches=0)
     qualified_teams_df = get_glory_ranking(league=["LCS"], year=2017, minimum_matches=5)
 
-    # when minimum matches is 5, we shouldn't have Cloud9 Challengers in the list
-    assert not all_teams_df.iloc[0].equals(qualified_teams_df.iloc[0])
+    # Cloud9 Challenger played three games in LCS 2017 (the promotion series), so
+    # it is ranked with no minimum and dropped with a minimum of five.
     assert not all_teams_df[all_teams_df["teamname"] == "Cloud9 Challenger"].empty
     assert qualified_teams_df[
         qualified_teams_df["teamname"] == "Cloud9 Challenger"
     ].empty
+    assert set(qualified_teams_df["teamname"]) < set(all_teams_df["teamname"])

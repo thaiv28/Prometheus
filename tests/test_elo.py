@@ -2,7 +2,6 @@ import pandas as pd
 import pytest
 
 from prometheus.elo import (
-    _elo_table,
     calculate_game_length_elo_change,
     compute_elo_records,
     expected_score,

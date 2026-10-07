@@ -9,7 +9,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from prometheus import schedule
 from prometheus.schedule import series_probability
