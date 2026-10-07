@@ -4,8 +4,9 @@ After each build has refreshed the prediction log (our calls and Kalshi's prices
 `select` picks matches that start in the next `MIN_HOURS`–`MAX_HOURS` hours,
 called by FORGE (both teams from one major league), where FORGE's chance for a
 team beats what a contract on that team costs now (the ask) by more than `EDGE`.
-That is the slice the market backtest supports (`docs/market_report.md`): Elo
-calls in other leagues lost to the market and are never alerted.
+That is the slice the market backtest supports (`docs/market_report.md`): calls
+in other leagues (Elo, and FORGE since 2026-10-06) lost to the market and are
+never alerted.
 
 Each alert is recorded on its log entry (`alert`: the team backed, FORGE's
 chance, the price, the edge and when), once: a match alerted on two days keeps
@@ -20,8 +21,10 @@ import urllib.parse
 from zoneinfo import ZoneInfo
 
 from prometheus import markets
+from prometheus.types import ALL_MAJOR_LEAGUES
 
 EDGE = 0.05
+MAJORS = {l.value for l in ALL_MAJOR_LEAGUES}
 MIN_HOURS, MAX_HOURS = 6, 36
 SITE_URL = "https://prometheus.thaiv.dev"
 REPORT_URL = "https://github.com/thaiv28/Prometheus/blob/main/docs/market_report.md"
@@ -46,6 +49,7 @@ def select(log, now, edge=EDGE):
         if (
             not entry.get("matched")
             or entry.get("method") != "forge"
+            or entry.get("home1") not in MAJORS
             or market.get("at") != now_s
         ):
             continue

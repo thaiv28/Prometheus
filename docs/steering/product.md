@@ -20,7 +20,7 @@ Prometheus is a public, browsable stat site for League of Legends esports, simil
 | **Game-length Elo** | Shipped (forecast) | Elo for every team in every region, built from player ratings (team = average of its five starters), where fast wins move ratings more. International games move a shared league offset, so a region's teams rise or fall together. |
 | **Player Elo** | Shipped (player rating) | Every player's game-length Elo: all five starters move by the team's change, and the rating follows the player through transfers. Records how a player's teams did, not credit within a team. |
 | **Form** (Predictive GLORY) | Sunset (still used inside FORGE) | Recent, opponent-adjusted gold/objective stats weighted to predict the next game, relative to the team's league, in Elo points. Alone it predicts no better than Elo within a league and worse between leagues; its page stays up under Sunset stats. |
-| **FORGE** (Form + Elo; was GlorELO+) | Shipped (headline forecast) | Elo + Form within a league, Elo alone between leagues, with a head-to-head win probability. Beats Elo domestically (log loss −0.0028, −0.0040 to −0.0016); equals it internationally. |
+| **FORGE** (Form + Elo; was GlorELO+) | Shipped (headline forecast) | Elo + Form within a league, Elo alone between leagues, with a head-to-head win probability. Beats Elo domestically (log loss −0.0028, −0.0040 to −0.0016); equals it internationally. Inside non-major leagues (own weights, 2026-10-06) beats Elo on each league's curve (−0.0051, −0.0060 to −0.0041). |
 | **GLORY+** | Folded into GLORY | GLORY adjusted by opponents' pre-game Elo; `glory_plus.html` redirects to GLORY |
 | **GLORY (unadjusted)** | Sunset | The original GLORY with no opponent adjustment; page kept on Sunset stats |
 | **GLORB** (Baseline) | Sunset | Same features as GLORY with equal weights. On its own it predicts no better than win % so far. Its page stays up under Sunset stats. |
@@ -32,7 +32,7 @@ Each published stat answers one question: GLORY, how well did a team play this s
 
 Predictions (2026-10-03) put the forecasts to work on real fixtures: every scheduled match between two rated teams (schedule from Leaguepedia) gets each team's series chance, saved before the match and scored against the result. It is a use of FORGE and Elo, not a new metric. The market benchmark (`docs/market_report.md`, 2026-10-04) judges it against Kalshi's prices: in major leagues FORGE ties the market a day out but trails it at the close (late news); in other leagues and across leagues the market is clearly better.
 
-Scope: season stats and FORGE cover the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present; Elo and Form cover every region. Data comes from Oracle's Elixir and refreshes daily via CI.
+Scope: season stats and the FORGE page cover the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to present; Elo, Form and FORGE's match calls cover every region. Data comes from Oracle's Elixir and refreshes daily via CI.
 
 ## Product principles
 

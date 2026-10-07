@@ -63,4 +63,13 @@ Elo on games inside one non-major league: the standard 400-point curve, one curv
 | All | 67,928 | 0.6453 | 0.6285 | 0.6268 | -0.0168 (-0.0182 to -0.0154) | -0.0017 (-0.0021 to -0.0012) |
 | 2022 on | 36,122 | 0.6398 | 0.6230 | 0.6210 | -0.0168 (-0.0187 to -0.0149) | -0.0020 (-0.0028 to -0.0013) |
 
-FORGE weights (log-odds per point): elo_weight = 0.00483, form_weight = 0.50500, cross_region_elo_weight = 0.00874, other_league_elo_weight = 0.01241. Form: half-life 20 games, carry 0.5, prior 5 games.
+#### FORGE within other leagues: 67,928 games (0 without Form left out)
+
+Elo + Form on one curve fit on the other seasons, with Form's stat weights fit on major-league games of the other seasons (as in the domestic backtest).
+
+| Games | n | Elo, one curve | Elo, per league | FORGE | Accuracy, per league | Accuracy, FORGE | FORGE vs per league (95% CI) | FORGE vs one curve (95% CI) |
+|---|---:|---:|---:|---:|---:|---:|---|---|
+| All | 67,928 | 0.6285 | 0.6268 | 0.6217 | 64.3% | 64.9% | -0.0051 (-0.0060 to -0.0041) | -0.0067 (-0.0076 to -0.0058) |
+| 2022 on | 36,122 | 0.6230 | 0.6210 | 0.6160 | 64.7% | 65.5% | -0.0049 (-0.0062 to -0.0036) | -0.0070 (-0.0082 to -0.0058) |
+
+FORGE weights (log-odds per point): elo_weight = 0.00483, form_weight = 0.50500, cross_region_elo_weight = 0.00874, other_league_elo_weight = 0.01241, other_league_forge_elo_weight = 0.00776, other_league_form_weight = 0.52056. Form: half-life 20 games, carry 0.5, prior 5 games.

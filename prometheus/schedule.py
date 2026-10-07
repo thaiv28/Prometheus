@@ -6,8 +6,8 @@ rate-limits anonymous clients after a few quick calls, so a build makes one or t
 paged requests and backs off when refused.
 
 Predictions use the published forecasts: FORGE between two teams of the same
-major league, Elo alone between leagues (as the FORGE head to head does), and
-Elo's own expected score within any other league, where FORGE isn't validated.
+league (with its own weights outside the major leagues), and Elo alone between
+leagues (as the FORGE head to head does).
 A series chance follows from the one-game chance, treating games as independent.
 
 Each build updates a prediction log (JSON): a match's prediction is refreshed
@@ -37,6 +37,7 @@ from prometheus.forge import (
     CROSS_REGION_ELO_WEIGHT,
     ELO_WEIGHT,
     FORM_POINTS,
+    other_league_forge_probability,
     other_league_weight,
     team_forms,
 )
@@ -281,6 +282,7 @@ def team_ratings(forms_now, elos):
     df = elos[["teamname", "league", "elo", "latest_date"]].merge(
         forms[["teamname", "form"]], on="teamname", how="left"
     )
+    df["has_form"] = df["form"].notna()
     df["form"] = FORM_POINTS * df["form"].fillna(0.0)
     df["forge"] = df["elo"] + df["form"]
     return df.set_index("teamname")
@@ -292,6 +294,8 @@ def game_probability(a, b):
         return 1 / (1 + math.exp(-CROSS_REGION_ELO_WEIGHT * (a["elo"] - b["elo"]))), "elo-cross"
     if a["league"] in MAJORS:
         return 1 / (1 + math.exp(-ELO_WEIGHT * (a["forge"] - b["forge"]))), "forge"
+    if a["has_form"] and b["has_form"]:
+        return float(other_league_forge_probability(a["elo"] - b["elo"], a["form"] - b["form"])), "forge"
     weight = other_league_weight(a["league"])
     return 1 / (1 + math.exp(-weight * (a["elo"] - b["elo"]))), "elo"
 
@@ -574,8 +578,8 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
 
     `market.p` is the last price read before the start (prices stop updating
     once a match begins; for matches before the hourly reads, the last hourly
-    quote from Kalshi's price history). Returns rows for FORGE and Elo (same- and
-    cross-league Elo calls), each split by `source`: "saved" (calls saved before
+    quote from Kalshi's price history). Returns rows for FORGE (within any
+    league) and Elo (across leagues, or a team without Form), each split by `source`: "saved" (calls saved before
     the match) and "backtest" (calls rebuilt afterwards from the ratings the day
     before): series, how often each favourite won (a 50-50 call counts as half),
     each side's mean log loss per series, and `diff` (ours minus Kalshi's, with a

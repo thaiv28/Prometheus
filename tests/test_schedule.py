@@ -8,7 +8,8 @@ import pandas as pd
 import pytest
 
 from prometheus import markets, schedule
-from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, other_league_weight
+from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, FORM_POINTS, other_league_weight
+from prometheus import forge
 
 UTC = datetime.timezone.utc
 
@@ -56,8 +57,8 @@ def test_game_probability_picks_the_method_by_league():
     lck_a = {"league": "LCK", "elo": 1800, "forge": 1900}
     lck_b = {"league": "LCK", "elo": 1800, "forge": 1800}
     lec = {"league": "LEC", "elo": 1700, "forge": 2000}
-    em_a = {"league": "EM", "elo": 1600, "forge": 1650}
-    em_b = {"league": "EM", "elo": 1500, "forge": 1500}
+    em_a = {"league": "EM", "elo": 1600, "form": 50, "forge": 1650, "has_form": True}
+    em_b = {"league": "EM", "elo": 1500, "form": 0, "forge": 1500, "has_form": True}
 
     p, method = schedule.game_probability(lck_a, lck_b)
     assert method == "forge"
@@ -68,8 +69,14 @@ def test_game_probability_picks_the_method_by_league():
     assert p == pytest.approx(1 / (1 + math.exp(-CROSS_REGION_ELO_WEIGHT * 100)))
 
     p, method = schedule.game_probability(em_a, em_b)
-    assert method == "elo"  # FORGE isn't validated outside the major leagues
-    # The league's own fitted curve, steeper than the textbook 400-point one.
+    assert method == "forge"  # outside the majors, with its own weights
+    gap = forge.OTHER_LEAGUE_FORGE_ELO_WEIGHT * 100 + forge.OTHER_LEAGUE_FORM_WEIGHT * 50 / FORM_POINTS
+    assert p == pytest.approx(1 / (1 + math.exp(-gap)))
+
+    # A team without Form: Elo on the league's own fitted curve, steeper than the
+    # textbook 400-point one.
+    p, method = schedule.game_probability(em_a, {**em_b, "has_form": False})
+    assert method == "elo"
     assert p == pytest.approx(1 / (1 + math.exp(-other_league_weight("EM") * 100)))
     assert p > 1 / (1 + 10 ** (-100 / 400))
 
@@ -124,7 +131,7 @@ def test_parse_schedule_types_and_predict():
 
 def _pred(mid, start, p=0.6, matched=True):
     return {"match_id": mid, "start": start, "team1": "A", "team2": "B", "ours1": "A", "ours2": "B",
-            "best_of": 3, "league": "LCK", "matched": matched, "p_game": p, "p_series": p, "method": "forge"}
+            "best_of": 3, "league": "LCK", "home1": "LCK", "home2": "LCK", "matched": matched, "p_game": p, "p_series": p, "method": "forge"}
 
 
 def test_update_log_refreshes_until_start_then_freezes_and_adds_results():
@@ -226,6 +233,8 @@ def test_market_scorecard_splits_forge_and_elo_and_needs_enough_series():
     entries = [
         {**_pred("a", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market), **early},
         {**_pred("b", "2026-10-04T08:00Z", 0.4), "winner": 1, "market": dict(market), "method": "elo", **early},
+        # FORGE within a minor league counts as FORGE.
+        {**_pred("m", "2026-10-04T08:00Z", 0.4), "winner": 1, "market": dict(market), "home1": "LDL", "home2": "LDL", **early},
         {**_pred("f", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market)},  # no 12-hour price
         {**_pred("c", "2026-10-04T08:00Z", 0.8), "winner": 1},  # no price
         {**_pred("d", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": {"p": 0.5, "at": "2026-10-04T09:00Z"}},  # priced after the start
@@ -237,11 +246,11 @@ def test_market_scorecard_splits_forge_and_elo_and_needs_enough_series():
     rows = {(r["label"], r["source"]): r for r in schedule.market_scorecard(entries, min_n=2)}
     assert list(rows) == schedule.BET_GROUPS
     forge, elo, backtest = rows[("FORGE", "saved")], rows[("Elo", "saved")], rows[("FORGE", "backtest")]
-    assert (forge["series"], elo["series"], backtest["series"], rows[("Elo", "backtest")]["series"]) == (1, 1, 2, 0)
-    assert forge["ours_loss"] == pytest.approx(-math.log(0.8))
+    assert (forge["series"], elo["series"], backtest["series"], rows[("Elo", "backtest")]["series"]) == (2, 1, 2, 0)
+    assert forge["ours_loss"] == pytest.approx((-math.log(0.8) - math.log(0.4)) / 2)
     assert forge["market_loss"] == pytest.approx(math.log(2))
-    assert (forge["ours_pct"], forge["market_pct"], elo["ours_pct"]) == (100, 50, 0)
-    assert forge["diff"] is None and backtest["diff"] is not None
+    assert (forge["ours_pct"], forge["market_pct"], elo["ours_pct"]) == (50, 50, 0)
+    assert elo["diff"] is None and backtest["diff"] is not None
     assert backtest["diff"][0] == pytest.approx((-math.log(0.8) - math.log(0.4)) / 2 - math.log(2))
     assert schedule.market_scorecard([])[0]["ours_loss"] is None
 
