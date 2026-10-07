@@ -17,6 +17,28 @@ def test_ratings_are_elo_plus_form_points():
     assert df.loc["C", "league"] == "LCS"
 
 
+def test_major_ratings_keep_the_majors_scale():
+    forms = pd.DataFrame({"teamname": ["A", "B"], "home": ["LCK", "LEC"], "form": [0.37, -0.81], "year": 2026, "latest_date": "2026-09-01"})
+    elos = pd.DataFrame({"teamname": ["A", "B"], "elo": [1712.3, 1488.9]})
+    df = forge.forge_ratings(forms, elos).set_index("teamname")
+    # Bit-identical to the published Elo + FORM_POINTS * form.
+    assert (df["form"] == forms.set_index("teamname")["form"] * forge.FORM_POINTS).all()
+    assert (df["forge"] == df["elo"] + df["form"]).all()
+    assert (df["slope"] == forge.ELO_WEIGHT).all()
+
+
+def test_other_league_rating_gap_gives_its_blend_odds():
+    forms = pd.DataFrame({"teamname": ["A", "B"], "home": ["LFL", "LFL"], "form": [0.6, -0.2], "year": 2026, "latest_date": "2026-09-01"})
+    elos = pd.DataFrame({"teamname": ["A", "B"], "elo": [1580.0, 1490.0]})
+    df = forge.forge_ratings(forms, elos).set_index("teamname")
+    a, b = df.loc["A"], df.loc["B"]
+    assert a["slope"] == forge.OTHER_LEAGUE_FORGE_ELO_WEIGHT
+    p = 1 / (1 + math.exp(-a["slope"] * (a["forge"] - b["forge"])))
+    # other_league_forge_probability takes the Form gap on the majors' points.
+    expected = forge.other_league_forge_probability(90.0, forge.FORM_POINTS * 0.8)
+    assert p == pytest.approx(float(expected), abs=1e-12)
+
+
 def test_same_league_odds_come_from_the_rating_gap():
     a, b = 1650.0, 1550.0
     p = forge.win_probability(a, b)

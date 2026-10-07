@@ -11,9 +11,11 @@ without Form falls back to Elo alone on its league's fitted curve
 (`league_curves.json`, slopes shrunk toward the pooled one), or on the pooled curve
 `OTHER_LEAGUE_ELO_WEIGHT` for a league without one.
 
-A team's FORGE rating is its Elo plus its Form in Elo points
-(`FORM_WEIGHT / ELO_WEIGHT` per unit of Form), so the same-league win chance is
-`1 / (1 + exp(-ELO_WEIGHT * rating gap))`.
+A team's FORGE rating is its Elo plus its Form in Elo points, both on its home
+league's scale: with that league's blend weights a (Elo) and b (Form), Form counts
+b / a points per unit (`FORM_POINTS` in the majors), so the same-league win chance
+is `1 / (1 + exp(-a * rating gap))`. Ratings compare only within one league's
+scale; the four majors share one.
 
 The weights are fit by the rolling backtest in `scripts/evaluate_metrics.py` and
 live in `forge_weights.json`. `--write-weights` refreshes them; CI runs
@@ -29,6 +31,7 @@ import numpy as np
 import pandas as pd
 
 from prometheus.form import league_relative, load_weights as load_form_weights, scores
+from prometheus.types import ALL_MAJOR_LEAGUES
 
 WEIGHTS_PATH = Path(__file__).with_name("forge_weights.json")
 LEAGUE_CURVES_PATH = Path(__file__).with_name("league_curves.json")
@@ -73,6 +76,18 @@ OTHER_LEAGUE_FORM_WEIGHT = _WEIGHTS["other_league_form_weight"]
 LEAGUE_CURVES = load_league_curves()
 # Elo points per unit of Form (log-odds against the league average).
 FORM_POINTS = FORM_WEIGHT / ELO_WEIGHT
+
+
+MAJORS = {l.value for l in ALL_MAJOR_LEAGUES}
+
+
+def blend_weights(league):
+    """(Elo weight, Form weight) of FORGE's blend inside `league`: log-odds per Elo
+    point and per unit of Form. The majors share one pair; every other league uses
+    the pooled non-major pair for now."""
+    if league in MAJORS:
+        return ELO_WEIGHT, FORM_WEIGHT
+    return OTHER_LEAGUE_FORGE_ELO_WEIGHT, OTHER_LEAGUE_FORM_WEIGHT
 
 
 def other_league_weight(league):
@@ -131,21 +146,25 @@ def team_forms(states, form_weights=None):
 
 
 def forge_ratings(forms, elos):
-    """FORGE ratings: each team's Elo plus its Form in Elo points.
+    """FORGE ratings: each team's Elo plus its Form in Elo points, on its home
+    league's scale (`blend_weights`).
 
     Args:
         forms: Rows from `team_forms` (teamname, home, form, ...).
         elos: `get_latest_elos` or `get_season_elos` rows (teamname, elo, ...),
             matched on team name (and year when both have one).
     Returns:
-        DataFrame with teamname, league, year, form (Elo points), elo, forge and
-        latest_date, highest rating first.
+        DataFrame with teamname, league, year, form (Elo points), elo, forge,
+        slope (log-odds per point of FORGE gap inside the league) and latest_date,
+        highest rating first.
     """
     keys = ["teamname", "year"] if "year" in elos.columns and "year" in forms.columns else ["teamname"]
     e = elos.drop_duplicates(keys)[keys + ["elo"]]
     df = forms.drop_duplicates(keys).merge(e, on=keys, how="inner")
     df = df.rename(columns={"home": "league"})
-    df["form"] = FORM_POINTS * df["form"]
+    weights = df["league"].map(blend_weights)
+    df["slope"] = weights.str[0]
+    df["form"] = weights.str[1] / df["slope"] * df["form"]
     df["forge"] = df["elo"] + df["form"]
-    cols = ["teamname", "league", "year", "form", "elo", "forge", "latest_date"]
+    cols = ["teamname", "league", "year", "form", "elo", "forge", "slope", "latest_date"]
     return df[cols].sort_values("forge", ascending=False).reset_index(drop=True)

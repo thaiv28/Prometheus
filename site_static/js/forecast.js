@@ -1,7 +1,8 @@
 // FORGE page: the head-to-head box. Between teams from the same league the chance
-// that A beats B on a neutral side is 1 / (1 + e^(-w * (A - B))) on FORGE ratings.
-// Between leagues Form doesn't compare, so it comes from the Elo gap alone, on its
-// own curve. Both weights are embedded in the page config by build_site.py.
+// that A beats B on a neutral side is 1 / (1 + e^(-w * (A - B))) on FORGE ratings,
+// with w that league's slope (each league has its own scale). Between leagues Form
+// doesn't compare, so it comes from the Elo gap alone, on its own curve. The weights
+// are embedded in the page config by build_site.py.
 (function () {
   "use strict";
 
@@ -27,7 +28,7 @@
     const sameLeague = x.league === y.league;
     if (note) note.hidden = sameLeague;
     const gap = sameLeague
-      ? weights.elo * (Number(x.forge) - Number(y.forge))
+      ? (weights.leagues?.[x.league] ?? weights.elo) * (Number(x.forge) - Number(y.forge))
       : weights.crossRegionElo * (Number(x.elo) - Number(y.elo));
     return 1 / (1 + Math.exp(-gap));
   }

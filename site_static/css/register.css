@@ -195,7 +195,8 @@
 }
 .picker-options label:hover { background: var(--paper-wash); }
 .picker-options label .league-mark { margin-right: 0; }
-.picker input[type="checkbox"] {
+.picker-options .picker-option--wide { grid-column: 1 / -1; }
+.picker input[type="checkbox"], .picker input[type="radio"] {
   appearance: none;
   -webkit-appearance: none;
   margin: 0;
@@ -206,7 +207,7 @@
   background: var(--paper);
   border-radius: 0;
 }
-.picker input[type="checkbox"]:checked { background: var(--ink); box-shadow: inset 0 0 0 2px var(--paper); }
+.picker input[type="checkbox"]:checked, .picker input[type="radio"]:checked { background: var(--ink); box-shadow: inset 0 0 0 2px var(--paper); }
 .picker-shortcut, .clear-filters {
   all: unset;
   cursor: pointer;
