@@ -2,6 +2,11 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-07 — Deploy and storage docs after the lifecycle rules shipped
+
+- Docs only. The site bucket's lifecycle rules (infra PR #14, deployed to `ThaivPrometheusProject`) and the first changed-only deploy (11 of 11,182 files) are recorded in `deployment.md` and `current_state.md`; the Future work item now lists only the follow-up checks.
+- Checks: `aws s3api get-bucket-lifecycle-configuration` shows the three rules; publish runs 37676605275 (full upload) and 37677819818 (11 files) passed. `uv run pytest -q`.
+
 ## 2026-10-07 — Changed-only deploys, faster player reads, ruff and a pre-data CI check, research archived
 
 - **Deploy.** `scripts/deploy_site.py` replaces the `releases/<run id>` upload and the copy to `current/`: it hashes `output/`, compares with `s3://$DEPLOYMENT_BUCKET/deploy/manifest.json`, uploads only changed and new files straight into `current/`, deletes removed ones, always re-sends `kalshi.json` and `predictions.json` with `max-age=300`, then writes the manifest. The manifest is deleted before any file changes, so a failed run makes the next one upload everything; `full_upload` on a manual dispatch forces that. The footer's "Last updated" date is gone (the home page's title line keeps it), so unchanged pages hash the same. Rollback: re-run an earlier run's deploy job (artifacts last 7 days) or restore S3 versions and delete the manifest (`deployment.md`). Game-log JSON is not gzipped at upload: CloudFront already compresses it, and unchanged files are no longer re-sent.
