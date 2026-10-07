@@ -36,10 +36,13 @@ Correlations are within year and role. Differences use a paired bootstrap.
 
 Usage:
     uv run python scripts/evaluate_aura.py [--out docs/aura_report.md]
+    uv run python scripts/evaluate_aura.py --dump DIR   # also save the held-out check's data (compare_benchmarks.py)
 """
 
 import argparse
 import datetime
+import json
+import os
 
 import numpy as np
 import pandas as pd
@@ -91,20 +94,36 @@ def ece(p, won, bins=10):
     )
 
 
-def calibration(players):
-    """Out-of-year scores at each snapshot, and the 15-minute reliability bins."""
+def calibration(players, keep=None):
+    """Out-of-year scores at each snapshot, and the 15-minute reliability bins.
+
+    With a `keep` dict, also stores each snapshot's per-game predictions there
+    (`keep["calibration"]`: minute, gameid, p, won).
+    """
     rows, bins = [], None
     for minute in aura.MINUTES:
         games = aura.game_frame(players, minute)
         test_years = sorted(y for y in games["year"].unique() if y >= FIRST_TEST_YEAR)
-        p, won, blue = [], [], []
+        p, won, blue, ids = [], [], [], []
         for year in test_years:
             train, test = games[games["year"] < year], games[games["year"] == year]
             intercept, weights = aura.fit_aura_weights(train)
             p.append(aura.win_probability(test, intercept, weights))
             won.append(test["won"].to_numpy())
             blue.append(np.full(len(test), train["won"].mean()))
+            ids.append(test.index.to_numpy())
         p, won, blue = np.concatenate(p), np.concatenate(won), np.concatenate(blue)
+        if keep is not None:
+            keep.setdefault("calibration", []).append(
+                pd.DataFrame(
+                    {
+                        "minute": minute,
+                        "gameid": np.concatenate(ids),
+                        "p": p,
+                        "won": won,
+                    }
+                )
+            )
         rows.append(
             {
                 "minute": minute,
@@ -388,11 +407,12 @@ def _sub_rows(subs, label):
     return out
 
 
-def held_out(players):
+def held_out(players, keep=None):
     """AURA against the 15-minute term alone, both with weights from earlier years only.
 
     The AURA change rule's comparison: major-league player-seasons from
-    `HELD_OUT_FROM`. Returns rows of numbers and the paired differences.
+    `HELD_OUT_FROM`. Returns rows of numbers and the paired differences. With a
+    `keep` dict, also stores the split halves, new-team pairs and roster table there.
     """
     frame = players[KEY + ["gameid", "teamid", "teamname", "league", "result"]].copy()
     frame["win"] = players["result"].astype(float)
@@ -409,6 +429,8 @@ def held_out(players):
         ["teamname", "year", "half", "win", "roster"]
     ].rename(columns={"roster": "aura"})
     roster["aura15"] = roster_table(frame, score="aura15")["roster"].to_numpy()
+    if keep is not None:
+        keep.update(halves=halves, moved=moved, roster=roster)
     rows = {
         n: {
             "split": halves[f"{n}_0"].corr(halves[f"{n}_1"]),
@@ -625,20 +647,62 @@ def report(
     return "\n".join(lines)
 
 
+def write_dump(out_dir, keep):
+    """The held-out check's inputs and the calibration predictions, for
+    `compare_benchmarks.py`.
+
+    `halves.csv.gz` (per player-season: aura_0 / aura_1, centred within year and
+    role), `moved.csv.gz` (new-team pairs: aura / aura_next), `roster.csv.gz` (per
+    team-season half: win and roster AURA from the other half, centred) and
+    `calibration.csv.gz` (per snapshot and test game: p and won). `metrics.json`
+    holds the headline numbers.
+    """
+    halves = keep["halves"][KEY + ["aura_0", "aura_1"]]
+    moved = keep["moved"][KEY + ["aura", "aura_next"]]
+    roster = keep["roster"][["teamname", "year", "half", "win", "aura"]]
+    cal = pd.concat(keep["calibration"], ignore_index=True)
+    os.makedirs(out_dir, exist_ok=True)
+    for name, frame in (
+        ("halves", halves),
+        ("moved", moved),
+        ("roster", roster),
+        ("calibration", cal),
+    ):
+        frame.to_csv(os.path.join(out_dir, f"{name}.csv.gz"), index=False)
+    headline = {
+        "split_half_r": halves["aura_0"].corr(halves["aura_1"]),
+        "new_team_r": moved["aura"].corr(moved["aura_next"]),
+        "roster_r": _roster_r(roster, "aura"),
+        **{
+            f"ece_{m}": ece(g["p"].to_numpy(), g["won"].to_numpy())
+            for m, g in cal.groupby("minute")
+        },
+    }
+    with open(os.path.join(out_dir, "metrics.json"), "w") as f:
+        json.dump({k: round(float(v), 6) for k, v in headline.items()}, f, indent=1)
+    print(f"Wrote the AURA benchmark data to {out_dir}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--out", help="Also write the report to this Markdown file")
+    parser.add_argument(
+        "--dump",
+        metavar="DIR",
+        help="Also save the held-out check's data and headline numbers to DIR (for compare_benchmarks.py)",
+    )
     args = parser.parse_args()
+    keep = {} if args.dump else None
 
     print("Loading player-games...")
     players = aura.load_aura_games()
     print("Calibration...")
-    cal, bins = calibration(players)
+    cal, bins = calibration(players, keep)
     print("Player scores...")
     scores = all_scores(players)
     frame = score_frame(scores)
     print("Held-out check...")
-    held = held_out(players)
+    held = held_out(players, keep)
     print("Roster test...")
     glory = None
     try:
@@ -679,6 +743,8 @@ def main():
     if args.out:
         with open(args.out, "w") as f:
             f.write(text + "\n")
+    if args.dump:
+        write_dump(args.dump, keep)
 
 
 if __name__ == "__main__":

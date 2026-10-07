@@ -2,7 +2,7 @@
 # Rebuild db/prometheus.db from Oracle's Elixir CSVs.
 #
 # Data: CSVs live in data/raw. If it's empty they are downloaded from Google Drive.
-# Set REFRESH_DATA=1 (CI does) to re-download even when CSVs exist; if that download
+# Set REFRESH_DATA=1 (CI does on main, once a day) to re-download even when CSVs exist; if that download
 # fails (Drive rate-limits shared files), the existing CSVs are used instead.
 set -euo pipefail
 
@@ -35,7 +35,8 @@ download() {
             touch "$FRESH_MARKER"
             return 0
         fi
-        [ "$attempt" -lt 3 ] && sleep $((attempt * 30))
+        # Drive's "too many users" refusal lasts hours, so waiting longer doesn't help.
+        [ "$attempt" -lt 3 ] && sleep 10
     done
     rm -rf "$tmp"
     return 1

@@ -463,6 +463,59 @@ def get_latest_elos(method: str, date: datetime.date | None = None) -> pd.DataFr
     return pd.read_sql(text(stmt), get_engine(), params=params)
 
 
+class LatestElos:
+    """`get_latest_elos` for many cutoff dates from one read of the tables.
+
+    `LatestElos(method)(date)` returns the same rows as `get_latest_elos(method,
+    date)`. Each call to `get_latest_elos` scans every game again (about a second),
+    so a caller that needs the ratings before each of hundreds of days (the market
+    benchmark, the prediction log's rebuilt calls) uses this instead.
+    """
+
+    def __init__(self, method: str):
+        table = _elo_table(method)
+        offsets_table = _offsets_table(method)
+        engine = get_engine()
+        self.games = pd.read_sql(
+            f"""
+            SELECT e.teamid, m.teamname, m.league,
+                   CAST(strftime('%Y', m.date) AS INT) AS year,
+                   COALESCE(e.main_elo, e.post_match_elo) AS elo, e.home_league,
+                   e.league_offset, m.date AS latest_date, DATE(m.date) AS day
+            FROM {table} e
+            JOIN matches m ON e.gameid = m.gameid AND e.teamid = m.teamid
+            ORDER BY m.date, m.gameid
+            """,
+            engine,
+        )
+        self.offsets = pd.read_sql(
+            f"SELECT league, league_offset, DATE(date) AS day FROM {offsets_table} ORDER BY rowid",
+            engine,
+        )
+
+    def __call__(self, date: datetime.date | None = None) -> pd.DataFrame:
+        games, offsets = self.games, self.offsets
+        if date is not None:
+            cutoff = date.isoformat()
+            games = games[games["day"] <= cutoff]
+            offsets = offsets[offsets["day"] <= cutoff]
+        last = games.groupby("teamid").tail(1)
+        current = offsets.groupby("league").tail(1).set_index("league")["league_offset"]
+        moved = last["home_league"].map(current) - last["league_offset"]
+        out = pd.DataFrame(
+            {
+                "teamname": last["teamname"],
+                "league": last["home_league"].fillna(last["league"]),
+                "year": last["year"],
+                "elo": last["elo"] + moved.fillna(0),
+                "latest_date": last["latest_date"],
+            }
+        )
+        return out.sort_values("elo", ascending=False, kind="stable").reset_index(
+            drop=True
+        )
+
+
 def get_season_elos(method: str) -> pd.DataFrame:
     """Return every team's rating at the end of each calendar year it played.
 

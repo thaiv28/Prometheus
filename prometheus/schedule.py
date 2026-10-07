@@ -32,7 +32,7 @@ from pathlib import Path
 import pandas as pd
 
 from prometheus import markets
-from prometheus.elo import get_latest_elos
+from prometheus.elo import LatestElos, get_latest_elos
 from prometheus.forge import (
     CROSS_REGION_ELO_WEIGHT,
     ELO_WEIGHT,
@@ -485,6 +485,35 @@ def ratings_before(states, day):
     )
 
 
+class RatingsBefore:
+    """`ratings_before(states, day)` for many days, cached by day.
+
+    Same ratings, but the game days and the Elo history are read once (on the
+    first call) instead of for every day: about 0.15 s a day instead of 1.2 s,
+    which is most of the market benchmark's run time.
+    """
+
+    def __init__(self, states):
+        self.states = states
+        self.cache = {}
+        self._days = None
+        self._elos = None
+
+    def __call__(self, day):
+        if day not in self.cache:
+            if self._elos is None:
+                self._days = pd.to_datetime(self.states["date"]).dt.date
+                self._elos = LatestElos("game_length")
+            forms_now, _ = team_forms(self.states[self._days < day])
+            self.cache[day] = team_ratings(
+                forms_now, self._elos(day - datetime.timedelta(days=1))
+            )
+        return self.cache[day]
+
+    def __len__(self):
+        return len(self.cache)
+
+
 def build_predictions(
     states,
     log_path,
@@ -514,13 +543,11 @@ def build_predictions(
     data_through = str(pd.to_datetime(states["date"]).max())[:10]
     predictions = predict(schedule, ratings, match_team)
 
-    cache = {}
+    before = RatingsBefore(states)
 
     def reconstruct(row):
         day = row["start"].date()
-        if day not in cache:
-            cache[day] = ratings_before(states, day)
-        rec = predict(pd.DataFrame([row]), cache[day], match_team)[0]
+        rec = predict(pd.DataFrame([row]), before(day), match_team)[0]
         return {
             **rec,
             "predicted": None,

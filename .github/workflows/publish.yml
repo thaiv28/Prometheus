@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   # Lint and the test suite need no data (e2e builds a small DB from a committed
-  # CSV sample), so they run first and fail fast, before the CSV download.
+  # CSV sample). They run alongside the build; deploy waits for both.
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -43,7 +43,6 @@ jobs:
         run: uv run pytest -q
 
   build:
-    needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -56,16 +55,21 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: Install dependencies
         run: uv sync --frozen && uv pip install -e .
-      # Google Drive rate-limits the shared CSVs; keep the last good copy so a
-      # throttled day rebuilds from yesterday's data instead of failing. Restores
-      # the newest entry (the run-id key never matches; the prefix does). Only main
-      # saves, keyed on the CSVs' content, in "Save CSVs to the cache" below.
+      # Oracle's Elixir updates its CSVs once a day, before the 10:00 UTC cron, and
+      # Google Drive refuses them when they've been downloaded too often ("Too many
+      # users"). So they're downloaded at most once per data day (10:00 UTC to
+      # 10:00 UTC), on main, and cached as oracles-elixir-day-<day>; every other
+      # run restores the newest entry and skips Drive. A failed download saves
+      # nothing, so the next main run tries again, building from the cache meanwhile.
+      - name: Data day
+        id: day
+        run: echo "day=$(date -u -d '10 hours ago' +%F)" >> "$GITHUB_OUTPUT"
       - name: Restore cached CSVs
         id: raw-cache
         uses: actions/cache/restore@v4
         with:
           path: data/raw
-          key: oracles-elixir-${{ github.run_id }}
+          key: oracles-elixir-day-${{ steps.day.outputs.day }}
           restore-keys: oracles-elixir-
       # On main, the platform artifacts bucket holds the last good CSVs as a
       # fallback (PR builds can't assume the AWS role, so they rely on the cache).
@@ -82,9 +86,11 @@ jobs:
           mkdir -p data/raw
           aws s3 cp "$DATA_BACKUP" data/raw/ --recursive --only-show-errors
           gunzip -f data/raw/*.csv.gz
+      # Download only on main when today's CSVs aren't cached yet (PRs never do:
+      # they can't save to main's cache, and every download counts against Drive).
       - name: Build database
         env:
-          REFRESH_DATA: "1"
+          REFRESH_DATA: ${{ env.CAN_USE_AWS == 'true' && steps.raw-cache.outputs.cache-hit != 'true' && '1' || '0' }}
         run: uv run bash scripts/setup_db.sh
       - name: Back up freshly downloaded CSVs
         if: env.CAN_USE_AWS == 'true' && hashFiles('data/.fresh-download') != ''
@@ -92,16 +98,14 @@ jobs:
           mkdir -p "$RUNNER_TEMP/backup"
           for f in data/raw/*.csv; do gzip -n -c "$f" > "$RUNNER_TEMP/backup/$(basename "$f").gz"; done
           aws s3 sync "$RUNNER_TEMP/backup" "$DATA_BACKUP" --size-only --only-show-errors
-      # Main only (about 200 MB an entry; PRs read main's). Skipped when the CSVs are
-      # the ones just restored, so an unchanged day adds no entry.
+      # Main only, after a successful download (about 225 MB an entry, one per day;
+      # unused entries expire after a week). PRs read main's.
       - name: Save CSVs to the cache
-        if: >-
-          env.CAN_USE_AWS == 'true' && hashFiles('data/raw/*.csv') != '' &&
-          steps.raw-cache.outputs.cache-matched-key != format('oracles-elixir-{0}', hashFiles('data/raw/*.csv'))
+        if: env.CAN_USE_AWS == 'true' && hashFiles('data/.fresh-download') != ''
         uses: actions/cache/save@v4
         with:
           path: data/raw
-          key: oracles-elixir-${{ hashFiles('data/raw/*.csv') }}
+          key: oracles-elixir-day-${{ steps.day.outputs.day }}
       # The e2e tests again, on today's full DB.
       - name: Test on the full DB
         env:
@@ -151,7 +155,7 @@ jobs:
 
   # Mirrors thaiv28/project-platform-workflows deploy-static.yml, which builds with npm.
   deploy:
-    needs: build
+    needs: [check, build]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DEPLOYMENT_BUCKET != '' && vars.CLOUDFRONT_DISTRIBUTION_ID != ''
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -10,7 +10,7 @@ For every settled series market between two teams we rate, this script:
 
 - reconstructs our call as the Predictions page makes it (FORGE within a
   league, Elo across leagues), from games before the
-  match day (`schedule.ratings_before`), with the best-of taken from the games in
+  match day (`schedule.RatingsBefore`), with the best-of taken from the games in
   our data;
 - reads the market's mid price (from hourly candlesticks) at two moments: the
   close, the last hour before the scheduled start, which knows lineups and late
@@ -393,20 +393,19 @@ def _log(message):
     print(f"[{datetime.datetime.now():%H:%M:%S}] {message}", flush=True)
 
 
-def our_calls(rows, states, match_team, cache):
-    """Adds p_game, method, our names and `major` to rows we can rate. `cache`
-    holds `ratings_before` by day, shared between calls."""
+def our_calls(rows, before, match_team):
+    """Adds p_game, method, our names and `major` to rows we can rate. `before` is
+    a `schedule.RatingsBefore`, shared between calls so each day is rated once."""
     out = []
     for row in rows:
         ours = [match_team(row["team1"]), match_team(row["team2"])]
         if None in ours or ours[0] == ours[1]:
             continue
         day = row["start"].date()
-        if day not in cache:
-            cache[day] = schedule.ratings_before(states, day)
-            if len(cache) % 25 == 0:
-                _log(f"ratings for {len(cache)} match days")
-        ratings = cache[day]
+        new = day not in before.cache
+        ratings = before(day)
+        if new and len(before) % 25 == 0:
+            _log(f"ratings for {len(before)} match days")
         if not all(t in ratings.index for t in ours):
             continue
         p, method = schedule.game_probability(
@@ -837,8 +836,8 @@ def main():
             if match_team(r[f"team{i}"]) is None
         }
     )
-    ratings_cache = {}
-    rated = our_calls(series_rows, states, match_team, ratings_cache)
+    before = schedule.RatingsBefore(states)
+    rated = our_calls(series_rows, before, match_team)
     print(f"{len(series_rows)} series markets, {len(rated)} between rated teams")
 
     prefetch_candles(rated, SERIES)
@@ -880,7 +879,7 @@ def main():
         for r in events(fetch_markets(MAP, args.refresh))
         if r["map"] == 1 and r["start"].date() < data_end
     ]
-    map_rated = our_calls(map_rows, states, match_team, ratings_cache)
+    map_rated = our_calls(map_rows, before, match_team)
     prefetch_candles(map_rated, MAP)
     priced = []
     for r in map_rated:
