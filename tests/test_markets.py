@@ -7,6 +7,22 @@ from prometheus import markets
 UTC = datetime.timezone.utc
 
 
+def test_fee_rates_follow_the_series_fee_type():
+    # LoL series charge takers only (Kalshi's general table); sports series with
+    # maker fees charge resting orders a quarter of the taker rate.
+    assert markets.fee_rates({"fee_type": "quadratic", "fee_multiplier": 1}) == (0.07, 0.0)
+    taker, maker = markets.fee_rates({"fee_type": "quadratic_with_maker_fees", "fee_multiplier": 0.5})
+    assert taker == pytest.approx(0.035) and maker == pytest.approx(0.00875)
+    with pytest.raises(ValueError):
+        markets.fee_rates({"fee_type": "flat", "fee_multiplier": 1})
+
+
+def test_fee_is_the_general_trading_fee_rounded_up_to_the_cent():
+    # $1 at 50¢ is two contracts: 0.07 × 2 × 0.5 × 0.5 = 3.5¢, rounded up to 4¢.
+    assert markets.fee(0.5, 1) == 0.04
+    assert markets.fee(0.5, 1, rate=0.0) == 0.0
+
+
 def _open(
     side,
     team1,

@@ -2,6 +2,12 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change.
 
+## 2026-10-06 — Kalshi fees: no maker fee on LoL markets
+
+- **Finding.** Kalshi's `/series` data lists `fee_type: quadratic`, `fee_multiplier: 1` for `KXLOLGAME` and `KXLOLMAP` (also CS2 and Valorant), while NFL, NBA and NHL game series list `quadratic_with_maker_fees` (MLB at 0.5). Kalshi's API docs: `quadratic` is the General Trading Fees Table only; `quadratic_with_maker_fees` adds maker fees (0.25 × taker; 0.5 for `quadratic_with_combo_maker_fees`). So on LoL, takers pay ceil(0.07 × C × P × (1 − P)) and resting orders pay nothing. The market report's "Maker 1.75%" rows were wrong; its "None" rows were the maker numbers all along. The 7% taker rate used by the alerts and Table IV is right.
+- **Change.** `markets.fee_rates` / `fetch_fee_rates` read the rates from Kalshi's series data; `evaluate_markets.py`'s betting tables use them (`fee_rows`: taker, a maker row only when the series has maker fees, and None, labelled as also covering resting orders), with a fallback to taker 7% / no maker fee if Kalshi can't be reached. The report text says where the rates come from. `docs/market_report.md` rewritten with `--reuse` (only the betting section changed).
+- Checks: `uv run pytest -q`; new `test_fee_rates_follow_the_series_fee_type`, `test_fee_is_the_general_trading_fee_rounded_up_to_the_cent`.
+
 ## 2026-10-06 — Kalshi name aliases and folding; league-move conversion tests (no metric change)
 
 - **Aliases.** 15 new `MARKET_ALIASES` (`prometheus/markets.py`), each found from the games: for every Kalshi market with one unmatched team, the teams its matched opponent actually played within a day of the market's date. Accepted only where that candidate agrees in most of the team's markets (e.g. Team Orange Gaming → TeamOrangeGaming 28 of 28, The Ruddy Sack → Ruddy Corporation 17/17, Orzel Barczaca Esports → Barcząca Esports by Yumisu 18/24, Los Heretics → Team Heretics Academy 22/24, AG.AL → Anyone's Legend 3/3, Saigon Dino → 1TAP Dino 2/3). Left alone: Francesinhas and Ruddy Esports (no consistent candidate).
