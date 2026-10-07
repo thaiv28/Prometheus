@@ -92,6 +92,12 @@ def compute_elo_records(
     rosters: dict | None = None,
     active_days: int = ACTIVE_DAYS,
     player_records: bool = False,
+    move: str = "offset",
+    move_weight: float = 1.0,
+    move_scope: str = "all",
+    link_share: float = 0.0,
+    majors: tuple = (),
+    link_teams_only: bool = False,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
 
@@ -150,6 +156,9 @@ def compute_elo_records(
     last_roster = {}
     main_roster = {}
     league_offset = defaultdict(float)
+    # EXPERIMENT: offsets from non-international links, added to team ratings only
+    # (never to a moving player's conversion) when `link_teams_only`.
+    team_offset = defaultdict(float)
 
     def league_average(league, date):
         recent = [
@@ -163,8 +172,22 @@ def compute_elo_records(
             own[player] = league_average(league, date) if league is not None else starting_elo
             player_league[player] = league
         elif player_league[player] != league:
-            # Moving league (a transfer, promotion, a cup) keeps the player's rating.
-            own[player] += league_offset[player_league[player]] - league_offset[league]
+            old = player_league[player]
+            by_standing = (
+                move == "standing"
+                and old is not None
+                and league is not None
+                and (move_scope == "all" or old not in majors or league not in majors)
+            )
+            if by_standing:
+                # EXPERIMENT: keep the player's standing in the old league (distance
+                # from its active average), scaled by `move_weight`, in the new one.
+                own[player] = league_average(league, date) + move_weight * (
+                    own[player] - league_average(old, date)
+                )
+            else:
+                # Moving league (a transfer, promotion, a cup) keeps the player's rating.
+                own[player] += league_offset[old] - league_offset[league]
             player_league[player] = league
 
     elo_records = []
@@ -192,7 +215,7 @@ def compute_elo_records(
 
         def rating(side):
             _, team_league, roster = side
-            offset = league_offset[team_league] if team_league is not None else 0.0
+            offset = league_offset[team_league] + team_offset[team_league] if team_league is not None else 0.0
             return sum(own[p] for p in roster) / len(roster) + offset
 
         pre = [rating(side) for side in sides]
@@ -213,15 +236,17 @@ def compute_elo_records(
                 own[player] += change
 
         team_league, opponent_league = sides[0][1], sides[1][1]
+        share = league_share if not domestic else link_share
         if (
             has_league
-            and not domestic
+            and share
             and team_league is not None
             and opponent_league is not None
             and team_league != opponent_league
         ):
-            league_offset[team_league] += league_share * elo_change
-            league_offset[opponent_league] -= league_share * elo_change
+            moved_offset = team_offset if (domestic and link_teams_only) else league_offset
+            moved_offset[team_league] += share * elo_change
+            moved_offset[opponent_league] -= share * elo_change
             for moved in (team_league, opponent_league):
                 offset_records.append(
                     {
@@ -254,7 +279,7 @@ def compute_elo_records(
             main_elo = sum(
                 own[p] + (league_offset[player_league[p]] if player_league[p] is not None else 0.0)
                 for p in main
-            ) / len(main)
+            ) / len(main) + (team_offset[team_league] if team_league is not None else 0.0)
             elo_records.append(
                 {
                     "gameid": row.gameid,
