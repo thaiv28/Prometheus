@@ -38,6 +38,14 @@ under `data/markets/` (gitignored); `--refresh` refetches the market lists.
 
 Usage:
     uv run python scripts/evaluate_markets.py [--out docs/market_report.md] [--refresh] [--reuse] [--log data/predictions.json]
+    uv run python scripts/evaluate_markets.py --offline --dump DIR   # the PR benchmark check
+    uv run python scripts/evaluate_markets.py --update-cache         # CI: fetch new settled markets only
+
+`--offline` reads only the cache (no market list or candlestick fetches), so two runs
+on the same cache price the same markets. `--dump DIR` also writes our call and the
+result for every scored series and map 1 (`calls.csv.gz`, keyed by Kalshi's event
+ticker) for `compare_benchmarks.py`. `--update-cache` refetches both market lists
+and the candlesticks of every settled match not yet cached, then stops (no DB).
 """
 
 import argparse
@@ -157,13 +165,15 @@ def prefetch_candles(rows, series, pause=0.1):
     """Fetch candlesticks for `rows`, one market per match (the more traded of the
     two contracts; the other is used too when already cached), one request at a
     time with a short pause: parallel requests trip Kalshi's rate limit."""
-    cutoff = historical_cutoff()
     todo = []
     for r in rows:
         if any(cached_candles(m["ticker"]) is not None for m in r["markets"]):
             continue
         todo.append(max(r["markets"], key=lambda m: m["volume"]))
     print(f"Fetching candlesticks for {len(todo)} {series} matches")
+    if not todo:
+        return
+    cutoff = historical_cutoff()
     for i, m in enumerate(todo, 1):
         fetch_candles(
             series,
@@ -807,12 +817,29 @@ def main():
         default="data/predictions.json",
         help="Prediction log whose saved calls are scored against Kalshi",
     )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Use only the cached markets and candlesticks (fetch nothing)",
+    )
+    parser.add_argument(
+        "--dump", help="Also write each scored call and result here (PR check)"
+    )
+    parser.add_argument(
+        "--update-cache",
+        action="store_true",
+        help="Fetch new settled markets and their candlesticks, then stop",
+    )
     args = parser.parse_args()
+    if args.update_cache:
+        return update_cache()
     log = Path(args.log)
     calls = saved_calls(json.loads(log.read_text())["matches"] if log.exists() else [])
     frames = CACHE / "frames.pkl"
     if args.reuse:
         series_frame, map_frame, counts, unmatched = pd.read_pickle(frames)
+        if args.dump:
+            write_dump(series_frame, map_frame, counts, args.dump)
         return _finish(series_frame, map_frame, counts, unmatched, args.out, calls)
 
     _log("loading games and Form states")
@@ -840,7 +867,8 @@ def main():
     rated = our_calls(series_rows, before, match_team)
     print(f"{len(series_rows)} series markets, {len(rated)} between rated teams")
 
-    prefetch_candles(rated, SERIES)
+    if not args.offline:
+        prefetch_candles(rated, SERIES)
     pairs = load_pairs(
         min(r["start"] for r in series_rows).date() - datetime.timedelta(days=2)
     )
@@ -880,7 +908,8 @@ def main():
         if r["map"] == 1 and r["start"].date() < data_end
     ]
     map_rated = our_calls(map_rows, before, match_team)
-    prefetch_candles(map_rated, MAP)
+    if not args.offline:
+        prefetch_candles(map_rated, MAP)
     priced = []
     for r in map_rated:
         r["market_close"], _ = market_chance(r["markets"], r["team1"], r["start"])
@@ -898,7 +927,38 @@ def main():
         "unmatched": len(unmatched),
     }
     pd.to_pickle((series_frame, map_frame, counts, unmatched), frames)
+    if args.dump:
+        write_dump(series_frame, map_frame, counts, args.dump)
     _finish(series_frame, map_frame, counts, unmatched, args.out, calls)
+
+
+DUMP_COLUMNS = ["kind", "event_ticker", "team1", "method", "major", "p", "won1"]
+
+
+def write_dump(series_frame, map_frame, counts, dirname):
+    """Our call and the result per scored series (`p_series`) and map 1 (`p_game`)
+    for `compare_benchmarks.py`, plus the counts as `metrics.json`."""
+    out = Path(dirname)
+    out.mkdir(parents=True, exist_ok=True)
+    calls = pd.concat(
+        [
+            series_frame.assign(kind="series", p=series_frame["p_series"]),
+            map_frame.assign(kind="map1", p=map_frame["p_game"]),
+        ]
+    )[DUMP_COLUMNS]
+    calls.to_csv(out / "calls.csv.gz", index=False)
+    (out / "metrics.json").write_text(json.dumps(counts, indent=1))
+
+
+def update_cache():
+    """Refetch both market lists and fetch candlesticks for every settled match
+    not cached yet (CI keeps the cache; no ratings, so no DB needed)."""
+    for series in (SERIES, MAP):
+        rows = events(fetch_markets(series, refresh=True))
+        if series == MAP:
+            rows = [r for r in rows if r["map"] == 1]  # only map 1 is scored
+        print(f"{series}: {len(rows)} settled matches")
+        prefetch_candles(rows, series)
 
 
 def _finish(series_frame, map_frame, counts, unmatched, out, saved=None):

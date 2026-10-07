@@ -2,10 +2,11 @@ name: Benchmarks
 
 # On pull requests: run the forecast backtest, season-stat report and AURA report on
 # the PR (head: the merge commit) and on its base (the commit it merges onto), each
-# on its own DB built from the same CSVs, and compare them
-# (scripts/compare_benchmarks.py). Head and base run as parallel jobs, each running
-# the three scripts at once; the base's dumps are cached by base commit and CSVs, so
-# later pushes to a PR rerun only the head. Posts one sticky comment and fails when a
+# on its own DB built from the same CSVs, plus the market benchmark on the same
+# cached Kalshi markets, and compare them (scripts/compare_benchmarks.py). Head and
+# base, and the core benchmarks and the market one, run as parallel jobs (the core
+# job runs its three scripts at once); the base's dumps are cached by base commit
+# and inputs, so later pushes to a PR rerun only the head. Posts one sticky comment and fails when a
 # guarded value is significantly worse, unless the PR has the `benchmark-override`
 # label. A label change reuses the verdict for the same commit instead of rerunning.
 # Never runs on main pushes or schedules.
@@ -28,8 +29,8 @@ env:
 
 jobs:
   # What to run: a stored verdict to reuse (label changes), the base commit, whether
-  # the base can dump, and one CSV cache entry both sides restore exactly, so they
-  # read the same data.
+  # the base can dump, one CSV cache entry and one Kalshi cache entry both sides
+  # restore exactly (so they read the same data), and the matrix of jobs.
   prepare:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -38,6 +39,8 @@ jobs:
       base_sha: ${{ steps.base.outputs.sha }}
       has_dump: ${{ steps.base.outputs.has_dump }}
       raw_key: ${{ steps.raw.outputs.cache-matched-key }}
+      kalshi_key: ${{ steps.kalshi.outputs.cache-matched-key }}
+      jobs: ${{ steps.matrix.outputs.jobs }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,6 +67,9 @@ jobs:
             echo "The base's benchmark scripts have no --dump: no baseline yet."
             echo "has_dump=false" >> "$GITHUB_OUTPUT"
           fi
+          if git show HEAD^1:scripts/evaluate_markets.py | grep -q -- '--dump'; then
+            echo "markets_dump=true" >> "$GITHUB_OUTPUT"
+          fi
       # Main's newest CSVs (see publish.yml). Only looked up here; each side
       # restores this exact entry.
       - name: Find cached CSVs
@@ -74,6 +80,31 @@ jobs:
           key: oracles-elixir-${{ github.run_id }}
           restore-keys: oracles-elixir-
           lookup-only: true
+      # Kalshi's markets and candlesticks, kept by publish.yml's kalshi-cache job.
+      - name: Find the cached Kalshi markets
+        id: kalshi
+        uses: actions/cache/restore@v4
+        with:
+          path: data/markets
+          key: kalshi-markets-${{ github.run_id }}
+          restore-keys: kalshi-markets-
+          lookup-only: true
+      # Core benchmarks on both sides; the market benchmark too when there is a
+      # Kalshi cache and the base can dump it.
+      - name: Jobs
+        id: matrix
+        env:
+          HAS_DUMP: ${{ steps.base.outputs.has_dump }}
+          MARKETS_DUMP: ${{ steps.base.outputs.markets_dump }}
+          KALSHI_KEY: ${{ steps.kalshi.outputs.cache-matched-key }}
+        run: |
+          groups='"core"'
+          [ "$MARKETS_DUMP" = true ] && [ -n "$KALSHI_KEY" ] && groups='"core","markets"'
+          if [ "$HAS_DUMP" = true ]; then
+            echo "jobs={\"side\":[\"head\",\"base\"],\"group\":[$groups]}" >> "$GITHUB_OUTPUT"
+          else
+            echo 'jobs={"side":["none"],"group":["none"]}' >> "$GITHUB_OUTPUT"
+          fi
 
   bench:
     needs: prepare
@@ -81,14 +112,17 @@ jobs:
     if: needs.prepare.outputs.verdict == '' && needs.prepare.outputs.has_dump == 'true'
     strategy:
       fail-fast: false
-      matrix:
-        side: [head, base]
+      matrix: ${{ fromJSON(needs.prepare.outputs.jobs) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       SIDE: ${{ matrix.side }}
+      GROUP: ${{ matrix.group }}
       BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
       RAW_KEY: ${{ needs.prepare.outputs.raw_key }}
+      KALSHI_KEY: ${{ needs.prepare.outputs.kalshi_key }}
+      # The base's dumps depend only on its commit and its inputs.
+      DUMP_KEY: benchmark-dumps-${{ matrix.group }}-${{ needs.prepare.outputs.base_sha }}-${{ needs.prepare.outputs.raw_key }}${{ matrix.group == 'markets' && format('-{0}', needs.prepare.outputs.kalshi_key) || '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -97,14 +131,13 @@ jobs:
       - name: Check out the base
         if: matrix.side == 'base'
         run: git checkout --detach "$BASE_SHA"
-      # The base's dumps depend only on its commit and the CSVs.
       - name: Restore the base's cached dumps
         id: dumps
         if: matrix.side == 'base' && env.RAW_KEY != ''
         uses: actions/cache/restore@v4
         with:
           path: dumps
-          key: benchmark-dumps-${{ env.BASE_SHA }}-${{ env.RAW_KEY }}
+          key: ${{ env.DUMP_KEY }}
       - uses: astral-sh/setup-uv@v6
         if: steps.dumps.outputs.cache-hit != 'true'
       - name: Install dependencies
@@ -116,13 +149,19 @@ jobs:
         with:
           path: data/raw
           key: ${{ env.RAW_KEY }}
+      - name: Restore the cached Kalshi markets
+        if: steps.dumps.outputs.cache-hit != 'true' && matrix.group == 'markets'
+        uses: actions/cache/restore@v4
+        with:
+          path: data/markets
+          key: ${{ env.KALSHI_KEY }}
       - name: Build the database
         if: steps.dumps.outputs.cache-hit != 'true'
         run: uv run bash scripts/setup_db.sh
       # The three scripts only read the DB, so they run at once (4 cores); each
       # log is printed, and the step fails if any script does.
-      - name: Benchmarks
-        if: steps.dumps.outputs.cache-hit != 'true'
+      - name: Core benchmarks
+        if: steps.dumps.outputs.cache-hit != 'true' && matrix.group == 'core'
         run: |
           mkdir -p dumps
           pids=()
@@ -134,15 +173,25 @@ jobs:
           for pid in "${pids[@]}"; do wait "$pid" || status=1; done
           for log in dumps/*.log; do echo "::group::$log"; cat "$log"; echo "::endgroup::"; done
           exit $status
+      # Offline: only the cached markets, so both sides price the same ones.
+      - name: Market benchmark
+        if: steps.dumps.outputs.cache-hit != 'true' && matrix.group == 'markets'
+        env:
+          VECLIB_MAXIMUM_THREADS: "1"
+        run: |
+          mkdir -p dumps
+          uv run python scripts/evaluate_markets.py --offline --dump dumps/markets > dumps/markets.log 2>&1 \
+            || { cat dumps/markets.log; exit 1; }
+          tail -n 20 dumps/markets.log
       - name: Cache the base's dumps
         if: matrix.side == 'base' && env.RAW_KEY != '' && steps.dumps.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: dumps
-          key: benchmark-dumps-${{ env.BASE_SHA }}-${{ env.RAW_KEY }}
+          key: ${{ env.DUMP_KEY }}
       - uses: actions/upload-artifact@v4
         with:
-          name: dumps-${{ matrix.side }}
+          name: dumps-${{ matrix.side }}-${{ matrix.group }}
           path: dumps
           retention-days: 3
 
@@ -170,10 +219,19 @@ jobs:
       - name: Install dependencies
         if: env.REUSED == '' && env.HAS_DUMP == 'true' && env.BENCH == 'success'
         run: uv sync --frozen && uv pip install -e .
+      # Each side's core and market artifacts merge into one directory.
       - uses: actions/download-artifact@v4
         if: env.REUSED == '' && env.HAS_DUMP == 'true' && env.BENCH == 'success'
         with:
-          path: ${{ runner.temp }}/dumps
+          pattern: dumps-base-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/dumps/dumps-base
+      - uses: actions/download-artifact@v4
+        if: env.REUSED == '' && env.HAS_DUMP == 'true' && env.BENCH == 'success'
+        with:
+          pattern: dumps-head-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/dumps/dumps-head
       - name: Compare
         id: compare
         if: env.REUSED == ''

@@ -1,8 +1,8 @@
 """
 compare_benchmarks.py: Compare two benchmark dumps (base and head) on the same units.
 
-Reads the `--dump` output of `evaluate_metrics.py`, `evaluate_season_stats.py` and
-`evaluate_aura.py` for two versions of the code, pairs them on shared keys (games,
+Reads the `--dump` output of `evaluate_metrics.py`, `evaluate_season_stats.py`,
+`evaluate_aura.py` and `evaluate_markets.py` for two versions of the code, pairs them on shared keys (games,
 team-seasons, player-seasons) and reports each headline difference with a 95%
 paired-bootstrap interval:
 
@@ -12,6 +12,8 @@ paired-bootstrap interval:
   minus base (resampling team-seasons).
 - AURA (held-out check): split-half r, new-team r and roster r, head minus base,
   and each snapshot's calibration ECE.
+- Kalshi markets: log loss of our series and map-1 calls on the same settled
+  markets, head minus base (Kalshi's prices are the same on both sides).
 
 A line is "better" or "worse" when its interval lies entirely on one side of 0,
 otherwise "within noise". The exit code is 1 when a guarded value is significantly
@@ -30,7 +32,11 @@ import sys
 import numpy as np
 import pandas as pd
 
-from prometheus.evaluation import paired_bootstrap, paired_correlation_bootstrap
+from prometheus.evaluation import (
+    game_losses,
+    paired_bootstrap,
+    paired_correlation_bootstrap,
+)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from evaluate_aura import ece  # noqa: E402  (a sibling script)
@@ -50,6 +56,10 @@ GUARDED_FORECASTS = {
 # Published season stats.
 GUARDED_STATS = {"glory"}
 ECE_LIMIT = 0.01
+# Our calls on Kalshi's markets (the accuracy-fix rule's market benchmark): every
+# series, FORGE within a major league (the calls the alerts use), and map 1.
+GUARDED_MARKETS = {("series", "all"), ("series", "forge (major)"), ("map1", "all")}
+MARKET_KEY = ["kind", "event_ticker", "team1"]
 N_RESAMPLES = 2000
 FORECAST_KEY = ["section", "forecast", "gameid", "teamid"]
 SEASON_KEY = ["teamname", "year"]
@@ -329,6 +339,50 @@ def aura_ece(base, head):
     return rows
 
 
+def _market_slice(frame):
+    major = frame["major"].astype(str).str.lower() == "true"
+    forge = frame["method"] == "forge"
+    return np.select(
+        [forge & major, forge], ["forge (major)", "forge (other league)"], "other"
+    )
+
+
+def compare_markets(base, head, n_resamples=N_RESAMPLES):
+    """Log loss of our calls per kind (series, map 1) and slice, on the markets
+    both dumps scored. Slices follow the head's method."""
+    rows = []
+    for kind in ("series", "map1"):
+        both, only = _pair(
+            base[base["kind"] == kind], head[head["kind"] == kind], MARKET_KEY
+        )
+        if both.empty:
+            rows.append(_missing("Markets", f"{kind} log loss", True, only))
+            continue
+        head_rows = both.rename(
+            columns={"method_head": "method", "major_head": "major"}
+        )
+        slices = _market_slice(head_rows)
+        for name in ["all", "forge (major)", "forge (other league)", "other"]:
+            pick = both if name == "all" else both[slices == name]
+            if pick.empty or (kind == "map1" and name != "all"):
+                continue
+            b = game_losses(pick["p_base"], pick["won1_base"])["log_loss"].to_numpy()
+            h = game_losses(pick["p_head"], pick["won1_head"])["log_loss"].to_numpy()
+            rows.append(
+                _row(
+                    "Markets",
+                    f"{kind} log loss, {name} ({len(pick):,})",
+                    b.mean(),
+                    h.mean(),
+                    paired_bootstrap(h, b, n_resamples=n_resamples),
+                    True,
+                    (kind, name) in GUARDED_MARKETS,
+                    only,
+                )
+            )
+    return rows
+
+
 def failures(rows):
     """Guarded rows that are significantly worse, or an ECE over the limit."""
     return [
@@ -355,7 +409,7 @@ def render(sections, notes=()):
     for title, part in sections:
         if not part:
             continue
-        digits = 4 if title == "Forecasts" else 3
+        digits = 4 if title in ("Forecasts", "Markets") else 3
         lines += [
             "",
             f"#### {title}",
@@ -435,13 +489,22 @@ def compare_dirs(base_dir, head_dir, n_resamples=N_RESAMPLES):
         )
     else:
         notes.append("AURA report: missing from one side, not compared.")
+
+    b, h = (_read(sub(d, "markets"), "calls.csv.gz") for d in (base_dir, head_dir))
+    if b is not None and h is not None:
+        sections.append(("Markets", compare_markets(b, h, n_resamples)))
+    else:
+        notes.append(
+            "Market benchmark: missing from one side (no Kalshi cache in CI yet, "
+            "or the base can't dump it), not compared."
+        )
     return sections, notes
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
-        "base", help="Base dump directory (metrics/, season/, aura/ inside)"
+        "base", help="Base dump directory (metrics/, season/, aura/, markets/ inside)"
     )
     parser.add_argument("head", help="Head dump directory (same layout)")
     parser.add_argument("--out", help="Also write the report to this Markdown file")

@@ -210,7 +210,40 @@ def test_compare_dirs_and_exit_code(tmp_path):
         (tmp_path / side / "season" / "metrics.json").write_text(json.dumps(META))
     sections, notes = cb.compare_dirs(tmp_path / "base", tmp_path / "head", N)
     assert [title for title, _ in sections] == ["Forecasts", "Season stats"]
-    assert notes == ["AURA report: missing from one side, not compared."]
+    assert notes[0] == "AURA report: missing from one side, not compared."
+    assert notes[1].startswith("Market benchmark: missing from one side")
     report = cb.render(sections, notes)
     assert report.startswith("**Benchmarks: 1 guarded check(s) failed**")
     assert "#### Forecasts" in report and "#### Season stats" in report
+
+
+def _calls(kind, n=2000, shift=0.0, seed=0, method="forge", major=True):
+    rng = np.random.default_rng(seed)
+    won = rng.integers(0, 2, n)
+    p = np.clip(np.where(won == 1, 0.65, 0.35) + rng.normal(0, 0.1, n), 0.05, 0.95)
+    return pd.DataFrame(
+        {
+            "kind": kind,
+            "event_ticker": [f"{kind}{i}" for i in range(n)],
+            "team1": "A",
+            "method": method,
+            "major": major,
+            "p": np.clip(p + shift * np.where(won == 1, -1, 1), 0.01, 0.99),
+            "won1": won,
+        }
+    )
+
+
+def test_markets_worse_calls_fail_and_same_calls_pass():
+    base = pd.concat([_calls("series"), _calls("map1", seed=1)])
+    same = cb.compare_markets(base, base.copy(), n_resamples=N)
+    assert not cb.failures(same)
+    assert {r["name"].split(" (")[0] for r in same} == {
+        "series log loss, all",
+        "series log loss, forge",
+        "map1 log loss, all",
+    }
+    worse = pd.concat([_calls("series", shift=0.08), _calls("map1", seed=1)])
+    rows = cb.compare_markets(base, worse, n_resamples=N)
+    failed = {r["name"].split(" (")[0] for r in cb.failures(rows)}
+    assert failed == {"series log loss, all", "series log loss, forge"}
