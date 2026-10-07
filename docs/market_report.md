@@ -17,12 +17,12 @@ Last quote before the scheduled start. The market then knows lineups and late ne
 
 | Matches | n | Picked, ours | Picked, market | Log loss, ours | Log loss, market | Δ log loss (95%) | Δ Brier (95%) |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| All | 2486 | 69.5% | 73.5% | 0.5800 | 0.5325 | +0.0474 (+0.0348 to +0.0608) | +0.0186 (+0.0138 to +0.0238) |
-| Major league or international | 824 | 67.5% | 70.3% | 0.6002 | 0.5790 | +0.0212 (+0.0031 to +0.0386) | +0.0082 (+0.0012 to +0.0152) |
-| Other leagues | 1662 | 70.6% | 75.1% | 0.5699 | 0.5095 | +0.0605 (+0.0435 to +0.0776) | +0.0237 (+0.0174 to +0.0302) |
-| FORGE (same major league) | 788 | 68.1% | 70.4% | 0.5943 | 0.5760 | +0.0183 (+0.0006 to +0.0368) | +0.0067 (-0.0002 to +0.0142) |
-| FORGE (same other league) | 1321 | 70.6% | 74.4% | 0.5678 | 0.5195 | +0.0484 (+0.0298 to +0.0654) | +0.0185 (+0.0116 to +0.0250) |
-| Elo across leagues | 377 | 68.7% | 77.1% | 0.5924 | 0.4873 | +0.1051 (+0.0654 to +0.1440) | +0.0439 (+0.0277 to +0.0600) |
+| All | 2486 | 69.6% | 73.5% | 0.5778 | 0.5325 | +0.0453 (+0.0329 to +0.0587) | +0.0179 (+0.0132 to +0.0231) |
+| Major league or international | 824 | 67.2% | 70.3% | 0.6016 | 0.5790 | +0.0226 (+0.0046 to +0.0405) | +0.0088 (+0.0015 to +0.0159) |
+| Other leagues | 1662 | 70.8% | 75.1% | 0.5660 | 0.5095 | +0.0565 (+0.0403 to +0.0729) | +0.0225 (+0.0162 to +0.0287) |
+| FORGE (same major league) | 788 | 67.9% | 70.4% | 0.5960 | 0.5760 | +0.0200 (+0.0017 to +0.0392) | +0.0073 (+0.0001 to +0.0150) |
+| FORGE (same other league) | 1321 | 70.8% | 74.4% | 0.5682 | 0.5195 | +0.0488 (+0.0304 to +0.0659) | +0.0188 (+0.0119 to +0.0254) |
+| Elo across leagues | 377 | 69.0% | 77.1% | 0.5734 | 0.4873 | +0.0860 (+0.0483 to +0.1261) | +0.0370 (+0.0222 to +0.0529) |
 
 ## Series winners, 12 hours before the start
 
@@ -30,12 +30,12 @@ Closer to what our call knew. Only matches whose market had a quote by then.
 
 | Matches | n | Picked, ours | Picked, market | Log loss, ours | Log loss, market | Δ log loss (95%) | Δ Brier (95%) |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| All | 2172 | 69.9% | 70.7% | 0.5757 | 0.5540 | +0.0217 (+0.0093 to +0.0344) | +0.0081 (+0.0034 to +0.0129) |
-| Major league or international | 787 | 67.6% | 67.9% | 0.5976 | 0.5923 | +0.0052 (-0.0108 to +0.0221) | +0.0015 (-0.0048 to +0.0078) |
-| Other leagues | 1385 | 71.2% | 72.3% | 0.5632 | 0.5322 | +0.0310 (+0.0128 to +0.0492) | +0.0119 (+0.0050 to +0.0187) |
-| FORGE (same major league) | 756 | 68.1% | 68.1% | 0.5937 | 0.5911 | +0.0026 (-0.0137 to +0.0187) | +0.0002 (-0.0058 to +0.0064) |
-| FORGE (same other league) | 1153 | 70.9% | 71.2% | 0.5661 | 0.5441 | +0.0220 (+0.0050 to +0.0400) | +0.0078 (+0.0015 to +0.0145) |
-| Elo across leagues | 263 | 70.7% | 76.2% | 0.5655 | 0.4907 | +0.0748 (+0.0256 to +0.1251) | +0.0324 (+0.0121 to +0.0535) |
+| All | 2172 | 69.8% | 70.7% | 0.5758 | 0.5540 | +0.0218 (+0.0091 to +0.0348) | +0.0082 (+0.0035 to +0.0130) |
+| Major league or international | 787 | 67.3% | 67.9% | 0.5993 | 0.5923 | +0.0070 (-0.0095 to +0.0243) | +0.0021 (-0.0043 to +0.0085) |
+| Other leagues | 1385 | 71.2% | 72.3% | 0.5624 | 0.5322 | +0.0302 (+0.0123 to +0.0493) | +0.0117 (+0.0049 to +0.0187) |
+| FORGE (same major league) | 756 | 67.9% | 68.1% | 0.5956 | 0.5911 | +0.0045 (-0.0126 to +0.0211) | +0.0009 (-0.0053 to +0.0074) |
+| FORGE (same other league) | 1153 | 70.9% | 71.2% | 0.5684 | 0.5441 | +0.0242 (+0.0068 to +0.0420) | +0.0087 (+0.0025 to +0.0154) |
+| Elo across leagues | 263 | 70.3% | 76.2% | 0.5513 | 0.4907 | +0.0606 (+0.0108 to +0.1100) | +0.0270 (+0.0071 to +0.0464) |
 
 How far the market moved in those hours, on the same matches: +0.0220 (+0.0154 to +0.0289) log loss (early minus close).
 
@@ -43,45 +43,45 @@ How far the market moved in those hours, on the same matches: +0.0220 (+0.0154 t
 
 The market's price at each lead time against our call (from the day before), on the same matches: exact start times and a usable quote at every lead time up to 24 hours. Our weight is from the joint fit described in the next section, refit at each lead time.
 
-**Major league or international** (513 series; our log loss 0.5705)
+**Major league or international** (513 series; our log loss 0.5711)
 
 | Market price | Market log loss | Δ log loss, ours − market (95%) | Our weight beside it (95%) |
 |---|---:|---:|---:|
-| At the close | 0.5537 | +0.0169 (-0.0017 to +0.0360) | 0.18 (-0.16 to 0.57) |
-| 6 hours before | 0.5666 | +0.0039 (-0.0132 to +0.0213) | 0.38 (-0.08 to 0.94) |
-| 12 hours before | 0.5673 | +0.0032 (-0.0139 to +0.0209) | 0.41 (-0.03 to 0.92) |
-| 18 hours before | 0.5692 | +0.0013 (-0.0165 to +0.0198) | 0.46 (0.02 to 0.93) |
-| 24 hours before | 0.5733 | -0.0027 (-0.0216 to +0.0172) | 0.55 (0.12 to 1.00) |
+| At the close | 0.5537 | +0.0175 (-0.0013 to +0.0369) | 0.18 (-0.17 to 0.56) |
+| 6 hours before | 0.5666 | +0.0045 (-0.0132 to +0.0225) | 0.36 (-0.10 to 0.93) |
+| 12 hours before | 0.5673 | +0.0038 (-0.0137 to +0.0217) | 0.39 (-0.04 to 0.90) |
+| 18 hours before | 0.5692 | +0.0019 (-0.0162 to +0.0206) | 0.45 (0.01 to 0.92) |
+| 24 hours before | 0.5733 | -0.0022 (-0.0214 to +0.0186) | 0.54 (0.10 to 0.99) |
 
-**Other leagues** (871 series; our log loss 0.5511)
-
-| Market price | Market log loss | Δ log loss, ours − market (95%) | Our weight beside it (95%) |
-|---|---:|---:|---:|
-| At the close | 0.4914 | +0.0597 (+0.0375 to +0.0830) | -0.01 (-0.22 to 0.24) |
-| 6 hours before | 0.5104 | +0.0407 (+0.0204 to +0.0631) | 0.02 (-0.20 to 0.28) |
-| 12 hours before | 0.5164 | +0.0347 (+0.0135 to +0.0577) | 0.14 (-0.08 to 0.38) |
-| 18 hours before | 0.5169 | +0.0342 (+0.0126 to +0.0573) | 0.15 (-0.08 to 0.38) |
-| 24 hours before | 0.5227 | +0.0284 (+0.0071 to +0.0517) | 0.20 (-0.02 to 0.44) |
-
-**FORGE (same major league)** (501 series; our log loss 0.5665)
+**Other leagues** (871 series; our log loss 0.5528)
 
 | Market price | Market log loss | Δ log loss, ours − market (95%) | Our weight beside it (95%) |
 |---|---:|---:|---:|
-| At the close | 0.5528 | +0.0137 (-0.0056 to +0.0346) | 0.24 (-0.12 to 0.65) |
-| 6 hours before | 0.5659 | +0.0006 (-0.0170 to +0.0191) | 0.47 (-0.04 to 1.14) |
-| 12 hours before | 0.5666 | -0.0001 (-0.0180 to +0.0190) | 0.49 (0.01 to 1.11) |
-| 18 hours before | 0.5687 | -0.0022 (-0.0205 to +0.0177) | 0.55 (0.07 to 1.10) |
-| 24 hours before | 0.5699 | -0.0034 (-0.0232 to +0.0170) | 0.57 (0.11 to 1.10) |
+| At the close | 0.4914 | +0.0615 (+0.0390 to +0.0850) | -0.05 (-0.26 to 0.20) |
+| 6 hours before | 0.5104 | +0.0424 (+0.0222 to +0.0647) | -0.03 (-0.23 to 0.23) |
+| 12 hours before | 0.5164 | +0.0364 (+0.0153 to +0.0591) | 0.10 (-0.11 to 0.34) |
+| 18 hours before | 0.5169 | +0.0359 (+0.0145 to +0.0592) | 0.11 (-0.10 to 0.35) |
+| 24 hours before | 0.5227 | +0.0301 (+0.0095 to +0.0533) | 0.16 (-0.06 to 0.39) |
 
-**FORGE (same other league)** (781 series; our log loss 0.5515)
+**FORGE (same major league)** (501 series; our log loss 0.5674)
 
 | Market price | Market log loss | Δ log loss, ours − market (95%) | Our weight beside it (95%) |
 |---|---:|---:|---:|
-| At the close | 0.4976 | +0.0539 (+0.0308 to +0.0788) | -0.07 (-0.33 to 0.18) |
-| 6 hours before | 0.5166 | +0.0349 (+0.0156 to +0.0554) | -0.05 (-0.30 to 0.18) |
-| 12 hours before | 0.5236 | +0.0279 (+0.0078 to +0.0499) | 0.10 (-0.15 to 0.35) |
-| 18 hours before | 0.5239 | +0.0276 (+0.0070 to +0.0504) | 0.10 (-0.16 to 0.33) |
-| 24 hours before | 0.5286 | +0.0229 (+0.0024 to +0.0458) | 0.15 (-0.10 to 0.38) |
+| At the close | 0.5528 | +0.0146 (-0.0049 to +0.0357) | 0.22 (-0.13 to 0.65) |
+| 6 hours before | 0.5659 | +0.0015 (-0.0166 to +0.0203) | 0.44 (-0.06 to 1.10) |
+| 12 hours before | 0.5666 | +0.0007 (-0.0173 to +0.0201) | 0.47 (-0.01 to 1.08) |
+| 18 hours before | 0.5687 | -0.0013 (-0.0200 to +0.0186) | 0.52 (0.06 to 1.07) |
+| 24 hours before | 0.5699 | -0.0025 (-0.0224 to +0.0184) | 0.55 (0.09 to 1.09) |
+
+**FORGE (same other league)** (781 series; our log loss 0.5538)
+
+| Market price | Market log loss | Δ log loss, ours − market (95%) | Our weight beside it (95%) |
+|---|---:|---:|---:|
+| At the close | 0.4976 | +0.0562 (+0.0333 to +0.0810) | -0.09 (-0.34 to 0.17) |
+| 6 hours before | 0.5166 | +0.0373 (+0.0179 to +0.0579) | -0.08 (-0.32 to 0.16) |
+| 12 hours before | 0.5236 | +0.0303 (+0.0101 to +0.0529) | 0.08 (-0.18 to 0.32) |
+| 18 hours before | 0.5239 | +0.0299 (+0.0092 to +0.0530) | 0.08 (-0.17 to 0.31) |
+| 24 hours before | 0.5286 | +0.0252 (+0.0048 to +0.0489) | 0.13 (-0.12 to 0.36) |
 
 ## Betting $1 a match, 12 hours before the start
 
@@ -91,61 +91,61 @@ Each bet buys $1 of a team's contract 12 hours before the scheduled start at the
 
 | Strategy | Fee | Bets | Won | Profit | ROI (95%) | CLV, points (95%) | Beat close |
 |---|---|---:|---:|---:|---:|---:|---:|
-| Back our pick | Taker 7% | 1820 | 1284 | -11.79 | -0.6% (-4.1% to +2.7%) | +0.39 (-0.01 to +0.80) | 48% |
-| Back our pick | None (also resting orders) | 1820 | 1284 | +35.95 | +2.0% (-1.5% to +5.3%) | +0.39 (-0.01 to +0.80) | 48% |
-| Value, edge > 0.00 | Taker 7% | 1734 | 959 | +3.67 | +0.2% (-5.2% to +6.3%) | +0.43 (+0.01 to +0.85) | 51% |
-| Value, edge > 0.00 | None (also resting orders) | 1734 | 959 | +70.02 | +4.0% (-1.4% to +10.1%) | +0.43 (+0.01 to +0.85) | 51% |
-| Value, edge > 0.03 | Taker 7% | 1281 | 706 | +7.12 | +0.6% (-6.5% to +7.8%) | +0.63 (+0.12 to +1.13) | 54% |
-| Value, edge > 0.03 | None (also resting orders) | 1281 | 706 | +56.42 | +4.4% (-2.7% to +11.7%) | +0.63 (+0.12 to +1.13) | 54% |
-| Value, edge > 0.05 | Taker 7% | 1032 | 561 | +13.96 | +1.4% (-6.2% to +9.6%) | +0.93 (+0.32 to +1.53) | 56% |
-| Value, edge > 0.05 | None (also resting orders) | 1032 | 561 | +54.58 | +5.3% (-2.3% to +13.6%) | +0.93 (+0.32 to +1.53) | 56% |
-| Value, edge > 0.10 | Taker 7% | 546 | 276 | +8.89 | +1.6% (-10.1% to +14.2%) | +1.45 (+0.53 to +2.43) | 58% |
-| Value, edge > 0.10 | None (also resting orders) | 546 | 276 | +32.15 | +5.9% (-5.8% to +18.4%) | +1.45 (+0.53 to +2.43) | 58% |
+| Back our pick | Taker 7% | 1820 | 1282 | -23.80 | -1.3% (-4.4% to +1.9%) | +0.40 (-0.01 to +0.78) | 48% |
+| Back our pick | None (also resting orders) | 1820 | 1282 | +23.92 | +1.3% (-1.8% to +4.6%) | +0.40 (-0.01 to +0.78) | 48% |
+| Value, edge > 0.00 | Taker 7% | 1718 | 954 | +9.85 | +0.6% (-5.3% to +6.4%) | +0.48 (+0.07 to +0.89) | 52% |
+| Value, edge > 0.00 | None (also resting orders) | 1718 | 954 | +75.04 | +4.4% (-1.5% to +10.1%) | +0.48 (+0.07 to +0.89) | 52% |
+| Value, edge > 0.03 | Taker 7% | 1267 | 709 | +21.59 | +1.7% (-5.4% to +8.5%) | +0.79 (+0.25 to +1.32) | 55% |
+| Value, edge > 0.03 | None (also resting orders) | 1267 | 709 | +69.55 | +5.5% (-1.6% to +12.3%) | +0.79 (+0.25 to +1.32) | 55% |
+| Value, edge > 0.05 | Taker 7% | 1013 | 556 | +25.31 | +2.5% (-5.4% to +10.6%) | +1.05 (+0.45 to +1.68) | 57% |
+| Value, edge > 0.05 | None (also resting orders) | 1013 | 556 | +64.70 | +6.4% (-1.5% to +14.5%) | +1.05 (+0.45 to +1.68) | 57% |
+| Value, edge > 0.10 | Taker 7% | 537 | 271 | -7.43 | -1.4% (-13.1% to +11.0%) | +1.45 (+0.50 to +2.37) | 59% |
+| Value, edge > 0.10 | None (also resting orders) | 537 | 271 | +14.91 | +2.8% (-8.9% to +15.1%) | +1.45 (+0.50 to +2.37) | 59% |
 
 **Other leagues** (1233 series with a price)
 
 | Strategy | Fee | Bets | Won | Profit | ROI (95%) | CLV, points (95%) | Beat close |
 |---|---|---:|---:|---:|---:|---:|---:|
-| Back our pick | Taker 7% | 1233 | 885 | +19.68 | +1.6% (-2.8% to +6.2%) | +0.76 (+0.26 to +1.28) | 51% |
-| Back our pick | None (also resting orders) | 1233 | 885 | +52.14 | +4.2% (-0.2% to +8.9%) | +0.76 (+0.26 to +1.28) | 51% |
-| Value, edge > 0.00 | Taker 7% | 1173 | 652 | -13.15 | -1.1% (-8.2% to +6.2%) | +0.46 (-0.08 to +0.99) | 50% |
-| Value, edge > 0.00 | None (also resting orders) | 1173 | 652 | +31.86 | +2.7% (-4.2% to +10.0%) | +0.46 (-0.08 to +0.99) | 50% |
-| Value, edge > 0.03 | Taker 7% | 925 | 514 | -14.58 | -1.6% (-9.5% to +6.2%) | +0.72 (+0.11 to +1.32) | 54% |
-| Value, edge > 0.03 | None (also resting orders) | 925 | 514 | +20.79 | +2.2% (-5.6% to +10.0%) | +0.72 (+0.11 to +1.32) | 54% |
-| Value, edge > 0.05 | Taker 7% | 782 | 423 | -15.13 | -1.9% (-10.9% to +7.2%) | +1.01 (+0.30 to +1.73) | 56% |
-| Value, edge > 0.05 | None (also resting orders) | 782 | 423 | +15.46 | +2.0% (-7.0% to +11.1%) | +1.01 (+0.30 to +1.73) | 56% |
-| Value, edge > 0.10 | Taker 7% | 445 | 223 | -3.30 | -0.7% (-13.8% to +13.3%) | +1.74 (+0.67 to +2.80) | 58% |
-| Value, edge > 0.10 | None (also resting orders) | 445 | 223 | +15.67 | +3.5% (-9.6% to +17.6%) | +1.74 (+0.67 to +2.80) | 58% |
+| Back our pick | Taker 7% | 1233 | 883 | +6.66 | +0.5% (-3.5% to +4.7%) | +0.79 (+0.29 to +1.30) | 52% |
+| Back our pick | None (also resting orders) | 1233 | 883 | +39.05 | +3.2% (-0.9% to +7.3%) | +0.79 (+0.29 to +1.30) | 52% |
+| Value, edge > 0.00 | Taker 7% | 1163 | 652 | -10.22 | -0.9% (-7.8% to +6.6%) | +0.55 (+0.05 to +1.07) | 51% |
+| Value, edge > 0.00 | None (also resting orders) | 1163 | 652 | +33.75 | +2.9% (-4.0% to +10.4%) | +0.55 (+0.05 to +1.07) | 51% |
+| Value, edge > 0.03 | Taker 7% | 912 | 513 | -9.37 | -1.0% (-8.6% to +7.5%) | +0.92 (+0.29 to +1.59) | 55% |
+| Value, edge > 0.03 | None (also resting orders) | 912 | 513 | +24.70 | +2.7% (-4.9% to +11.3%) | +0.92 (+0.29 to +1.59) | 55% |
+| Value, edge > 0.05 | Taker 7% | 750 | 414 | -4.10 | -0.5% (-9.7% to +8.8%) | +1.12 (+0.38 to +1.87) | 56% |
+| Value, edge > 0.05 | None (also resting orders) | 750 | 414 | +24.62 | +3.3% (-5.9% to +12.6%) | +1.12 (+0.38 to +1.87) | 56% |
+| Value, edge > 0.10 | Taker 7% | 439 | 221 | -14.51 | -3.3% (-16.1% to +10.4%) | +1.73 (+0.73 to +2.78) | 59% |
+| Value, edge > 0.10 | None (also resting orders) | 439 | 221 | +3.67 | +0.8% (-12.0% to +14.5%) | +1.73 (+0.73 to +2.78) | 59% |
 
 **FORGE (same major league)** (561 series with a price)
 
 | Strategy | Fee | Bets | Won | Profit | ROI (95%) | CLV, points (95%) | Beat close |
 |---|---|---:|---:|---:|---:|---:|---:|
-| Back our pick | Taker 7% | 561 | 385 | -21.68 | -3.9% (-9.7% to +2.0%) | -0.40 (-0.99 to +0.23) | 42% |
-| Back our pick | None (also resting orders) | 561 | 385 | -6.97 | -1.2% (-7.0% to +4.6%) | -0.40 (-0.99 to +0.23) | 42% |
-| Value, edge > 0.00 | Taker 7% | 535 | 298 | +17.39 | +3.3% (-6.8% to +13.5%) | +0.36 (-0.26 to +1.00) | 54% |
-| Value, edge > 0.00 | None (also resting orders) | 535 | 298 | +37.58 | +7.0% (-3.0% to +17.4%) | +0.36 (-0.26 to +1.00) | 54% |
-| Value, edge > 0.03 | Taker 7% | 338 | 188 | +20.16 | +6.0% (-8.0% to +19.9%) | +0.40 (-0.51 to +1.28) | 56% |
-| Value, edge > 0.03 | None (also resting orders) | 338 | 188 | +33.10 | +9.8% (-4.1% to +23.8%) | +0.40 (-0.51 to +1.28) | 56% |
-| Value, edge > 0.05 | Taker 7% | 235 | 134 | +24.40 | +10.4% (-5.2% to +28.0%) | +0.69 (-0.54 to +1.88) | 60% |
-| Value, edge > 0.05 | None (also resting orders) | 235 | 134 | +33.59 | +14.3% (-1.3% to +32.0%) | +0.69 (-0.54 to +1.88) | 60% |
-| Value, edge > 0.10 | Taker 7% | 95 | 52 | +13.25 | +13.9% (-13.7% to +44.6%) | +0.28 (-2.02 to +2.55) | 62% |
-| Value, edge > 0.10 | None (also resting orders) | 95 | 52 | +17.22 | +18.1% (-9.6% to +48.7%) | +0.28 (-2.02 to +2.55) | 62% |
+| Back our pick | Taker 7% | 561 | 385 | -20.68 | -3.7% (-9.4% to +2.2%) | -0.41 (-1.01 to +0.20) | 42% |
+| Back our pick | None (also resting orders) | 561 | 385 | -5.92 | -1.1% (-6.8% to +4.9%) | -0.41 (-1.01 to +0.20) | 42% |
+| Value, edge > 0.00 | Taker 7% | 531 | 295 | +21.18 | +4.0% (-6.6% to +13.9%) | +0.35 (-0.27 to +0.98) | 53% |
+| Value, edge > 0.00 | None (also resting orders) | 531 | 295 | +41.30 | +7.8% (-2.8% to +17.8%) | +0.35 (-0.27 to +0.98) | 53% |
+| Value, edge > 0.03 | Taker 7% | 338 | 192 | +28.40 | +8.4% (-5.3% to +22.7%) | +0.45 (-0.46 to +1.32) | 55% |
+| Value, edge > 0.03 | None (also resting orders) | 338 | 192 | +41.33 | +12.2% (-1.5% to +26.5%) | +0.45 (-0.46 to +1.32) | 55% |
+| Value, edge > 0.05 | Taker 7% | 246 | 138 | +26.85 | +10.9% (-5.0% to +27.7%) | +0.88 (-0.28 to +2.06) | 60% |
+| Value, edge > 0.05 | None (also resting orders) | 246 | 138 | +36.56 | +14.9% (-1.2% to +31.7%) | +0.88 (-0.28 to +2.06) | 60% |
+| Value, edge > 0.10 | Taker 7% | 91 | 49 | +9.20 | +10.1% (-17.1% to +40.6%) | +0.34 (-2.03 to +2.72) | 64% |
+| Value, edge > 0.10 | None (also resting orders) | 91 | 49 | +12.97 | +14.3% (-12.9% to +44.9%) | +0.34 (-2.03 to +2.72) | 64% |
 
 **FORGE (same other league)** (1029 series with a price)
 
 | Strategy | Fee | Bets | Won | Profit | ROI (95%) | CLV, points (95%) | Beat close |
 |---|---|---:|---:|---:|---:|---:|---:|
-| Back our pick | Taker 7% | 1029 | 737 | +5.96 | +0.6% (-4.1% to +4.9%) | +0.62 (+0.09 to +1.16) | 50% |
-| Back our pick | None (also resting orders) | 1029 | 737 | +33.08 | +3.2% (-1.5% to +7.6%) | +0.62 (+0.09 to +1.16) | 50% |
-| Value, edge > 0.00 | Taker 7% | 975 | 584 | +13.61 | +1.4% (-5.2% to +8.2%) | +0.66 (+0.10 to +1.22) | 51% |
-| Value, edge > 0.00 | None (also resting orders) | 975 | 584 | +48.57 | +5.0% (-1.7% to +11.8%) | +0.66 (+0.10 to +1.22) | 51% |
-| Value, edge > 0.03 | Taker 7% | 758 | 459 | +0.13 | +0.0% (-7.3% to +7.5%) | +0.98 (+0.33 to +1.63) | 56% |
-| Value, edge > 0.03 | None (also resting orders) | 758 | 459 | +26.79 | +3.5% (-3.7% to +11.0%) | +0.98 (+0.33 to +1.63) | 56% |
-| Value, edge > 0.05 | Taker 7% | 629 | 375 | -3.88 | -0.6% (-8.5% to +7.4%) | +1.27 (+0.50 to +1.97) | 57% |
-| Value, edge > 0.05 | None (also resting orders) | 629 | 375 | +18.57 | +3.0% (-5.0% to +11.0%) | +1.27 (+0.50 to +1.97) | 57% |
-| Value, edge > 0.10 | Taker 7% | 331 | 191 | -4.86 | -1.5% (-12.2% to +10.1%) | +2.22 (+1.06 to +3.31) | 60% |
-| Value, edge > 0.10 | None (also resting orders) | 331 | 191 | +7.74 | +2.3% (-8.3% to +13.9%) | +2.22 (+1.06 to +3.31) | 60% |
+| Back our pick | Taker 7% | 1029 | 737 | +5.69 | +0.6% (-4.1% to +5.0%) | +0.66 (+0.14 to +1.21) | 51% |
+| Back our pick | None (also resting orders) | 1029 | 737 | +32.79 | +3.2% (-1.5% to +7.6%) | +0.66 (+0.14 to +1.21) | 51% |
+| Value, edge > 0.00 | Taker 7% | 972 | 580 | +11.53 | +1.2% (-5.5% to +7.9%) | +0.69 (+0.12 to +1.23) | 52% |
+| Value, edge > 0.00 | None (also resting orders) | 972 | 580 | +46.45 | +4.8% (-1.9% to +11.5%) | +0.69 (+0.12 to +1.23) | 52% |
+| Value, edge > 0.03 | Taker 7% | 749 | 450 | -4.80 | -0.6% (-7.9% to +7.1%) | +1.07 (+0.41 to +1.71) | 55% |
+| Value, edge > 0.03 | None (also resting orders) | 749 | 450 | +21.56 | +2.9% (-4.4% to +10.5%) | +1.07 (+0.41 to +1.71) | 55% |
+| Value, edge > 0.05 | Taker 7% | 615 | 368 | +1.42 | +0.2% (-7.5% to +8.3%) | +1.26 (+0.48 to +2.06) | 57% |
+| Value, edge > 0.05 | None (also resting orders) | 615 | 368 | +23.39 | +3.8% (-3.9% to +11.8%) | +1.26 (+0.48 to +2.06) | 57% |
+| Value, edge > 0.10 | Taker 7% | 339 | 187 | -18.94 | -5.6% (-16.2% to +4.7%) | +1.74 (+0.62 to +2.89) | 58% |
+| Value, edge > 0.10 | None (also resting orders) | 339 | 187 | -5.83 | -1.7% (-12.3% to +8.6%) | +1.74 (+0.62 to +2.89) | 58% |
 
 ## Does our call add to the market?
 
@@ -153,9 +153,9 @@ Logistic fit of the series result on the market's log-odds at the close and ours
 
 | Matches | n | Market weight (95%) | Our weight (95%) |
 |---|---:|---:|---:|
-| All | 2486 | 0.98 (0.86 to 1.14) | 0.08 (-0.05 to 0.20) |
-| Major league or international | 824 | 0.78 (0.50 to 1.06) | 0.14 (-0.13 to 0.41) |
-| Other leagues | 1662 | 1.07 (0.91 to 1.25) | 0.07 (-0.08 to 0.22) |
+| All | 2486 | 0.98 (0.86 to 1.14) | 0.08 (-0.04 to 0.20) |
+| Major league or international | 824 | 0.79 (0.52 to 1.06) | 0.13 (-0.14 to 0.39) |
+| Other leagues | 1662 | 1.07 (0.90 to 1.26) | 0.07 (-0.07 to 0.21) |
 
 ## Calibration
 
@@ -165,7 +165,7 @@ Expected calibration error (games-weighted gap between chance and result over te
 |---|---:|---:|---:|
 | All | 2486 | 0.034 | 0.024 |
 | Major league or international | 824 | 0.038 | 0.045 |
-| Other leagues | 1662 | 0.038 | 0.029 |
+| Other leagues | 1662 | 0.042 | 0.029 |
 
 ## Single games: map 1
 
@@ -173,10 +173,10 @@ The map-1 market's last quote before the series starts against our one-game chan
 
 | Matches | n | Picked, ours | Picked, market | Log loss, ours | Log loss, market | Δ log loss (95%) | Δ Brier (95%) |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| All | 1561 | 66.2% | 67.8% | 0.6160 | 0.6005 | +0.0155 (+0.0059 to +0.0255) | +0.0066 (+0.0026 to +0.0108) |
-| Major league or international | 684 | 65.5% | 66.0% | 0.6280 | 0.6232 | +0.0048 (-0.0064 to +0.0163) | +0.0014 (-0.0036 to +0.0063) |
-| Other leagues | 877 | 66.7% | 69.2% | 0.6066 | 0.5827 | +0.0239 (+0.0081 to +0.0395) | +0.0107 (+0.0041 to +0.0171) |
-| FORGE (same major league) | 656 | 65.9% | 65.9% | 0.6274 | 0.6240 | +0.0034 (-0.0075 to +0.0142) | +0.0007 (-0.0042 to +0.0053) |
-| FORGE (same other league) | 753 | 65.5% | 68.5% | 0.6109 | 0.5937 | +0.0172 (+0.0018 to +0.0325) | +0.0084 (+0.0020 to +0.0150) |
-| Elo across leagues | 152 | 71.1% | 72.4% | 0.5919 | 0.5325 | +0.0594 (+0.0058 to +0.1106) | +0.0231 (+0.0006 to +0.0457) |
+| All | 1561 | 66.4% | 67.8% | 0.6141 | 0.6005 | +0.0136 (+0.0043 to +0.0236) | +0.0058 (+0.0019 to +0.0100) |
+| Major league or international | 684 | 65.2% | 66.0% | 0.6284 | 0.6232 | +0.0051 (-0.0065 to +0.0167) | +0.0015 (-0.0035 to +0.0065) |
+| Other leagues | 877 | 67.4% | 69.2% | 0.6030 | 0.5827 | +0.0202 (+0.0046 to +0.0355) | +0.0091 (+0.0026 to +0.0155) |
+| FORGE (same major league) | 656 | 65.5% | 65.9% | 0.6276 | 0.6240 | +0.0035 (-0.0075 to +0.0143) | +0.0008 (-0.0043 to +0.0054) |
+| FORGE (same other league) | 753 | 66.1% | 68.5% | 0.6118 | 0.5937 | +0.0181 (+0.0026 to +0.0333) | +0.0088 (+0.0023 to +0.0153) |
+| Elo across leagues | 152 | 71.7% | 72.4% | 0.5676 | 0.5325 | +0.0351 (-0.0120 to +0.0821) | +0.0128 (-0.0073 to +0.0331) |
 
