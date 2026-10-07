@@ -8,8 +8,8 @@ price is a probability with no bookmaker margin, only the bid-ask spread.
 
 For every settled series market between two teams we rate, this script:
 
-- reconstructs our call as the Predictions page makes it (FORGE within a major
-  league, Elo across leagues, Elo within other leagues), from games before the
+- reconstructs our call as the Predictions page makes it (FORGE within a
+  league, Elo across leagues), from games before the
   match day (`schedule.ratings_before`), with the best-of taken from the games in
   our data;
 - reads the market's mid price (from hourly candlesticks) at two moments: the
@@ -18,7 +18,7 @@ For every settled series market between two teams we rate, this script:
   our call knew;
 - scores both on the series result (accuracy, Brier, log loss), with a paired
   bootstrap of the difference, by slice (major-league or international, other
-  leagues; FORGE, Elo, cross-league Elo);
+  leagues; FORGE in a major or other league, Elo, cross-league Elo);
 - asks whether our call adds anything to the market: a logistic fit of the
   result on both log-odds, with a bootstrap interval for our weight. A weight
   near zero means the market already knows what we know;
@@ -296,7 +296,7 @@ def betting_section(s):
         "",
     ]
     for label, part in slices_of(frame):
-        if label not in ("All", "FORGE (same major league)", "Other leagues"):
+        if label not in ("All", "FORGE (same major league)", "FORGE (same other league)", "Other leagues"):
             continue
         lines += [
             f"**{label}** ({len(part)} series with a price)",
@@ -397,9 +397,7 @@ def our_calls(rows, states, match_team, cache):
         p, method = schedule.game_probability(
             ratings.loc[ours[0]], ratings.loc[ours[1]]
         )
-        major = row_is_major(
-            ratings.loc[ours[0]]["league"], ratings.loc[ours[1]]["league"], method
-        )
+        major = row_is_major(ratings.loc[ours[0]]["league"], ratings.loc[ours[1]]["league"])
         out.append(
             {
                 **row,
@@ -413,10 +411,10 @@ def our_calls(rows, states, match_team, cache):
     return out
 
 
-def row_is_major(home1, home2, method):
-    """Major-league or international (both teams from major leagues, or a FORGE call)."""
+def row_is_major(home1, home2):
+    """Major-league or international: both teams from major leagues."""
     majors = set(schedule.MAJORS)
-    return method == "forge" or (home1 in majors and home2 in majors)
+    return home1 in majors and home2 in majors
 
 
 # ---------------------------------------------------------------- scoring
@@ -508,7 +506,8 @@ def slices_of(frame):
         ("All", frame),
         ("Major league or international", frame[frame["major"]]),
         ("Other leagues", frame[~frame["major"]]),
-        ("FORGE (same major league)", frame[frame["method"] == "forge"]),
+        ("FORGE (same major league)", frame[(frame["method"] == "forge") & frame["major"]]),
+        ("FORGE (same other league)", frame[(frame["method"] == "forge") & ~frame["major"]]),
         ("Elo (same other league)", frame[frame["method"] == "elo"]),
         ("Elo across leagues", frame[frame["method"] == "elo-cross"]),
     ]
@@ -536,6 +535,7 @@ def lead_ladder(s):
             label
             not in (
                 "FORGE (same major league)",
+                "FORGE (same other league)",
                 "Major league or international",
                 "Other leagues",
             )

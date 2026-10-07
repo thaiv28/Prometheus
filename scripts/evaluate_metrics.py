@@ -155,6 +155,44 @@ def summarize_other_leagues(games):
             f"| {label} | {int(mask.sum()):,} | {s.mean():.4f} | {f.mean():.4f} | {l.mean():.4f} "
             f"| {delta(f, s)} | {delta(l, f)} |"
         )
+    return "\n".join(lines) + "\n" + summarize_other_league_forge(games, fitted, per_league)
+
+
+def summarize_other_league_forge(games, fitted, per_league):
+    """FORGE inside non-major leagues: Elo + Form on one curve (fit on the other
+    seasons) against Elo on one curve and Elo per league (the published call).
+
+    `games` needs a `form` column; games where either team has no Form are left out
+    of every column, so all three are scored on the same games.
+    """
+    has_form = games["form"].notna().to_numpy()
+    sub = games[has_form].reset_index(drop=True)
+    forge_l = game_losses(out_of_year_probabilities(sub, ["elo_live", "form"]), sub["won"])
+    lines = [
+        f"\n#### FORGE within other leagues: {len(sub):,} games "
+        f"({int((~has_form).sum()):,} without Form left out)\n",
+        "Elo + Form on one curve fit on the other seasons, with Form's stat weights fit on "
+        "major-league games of the other seasons (as in the domestic backtest).\n",
+        "| Games | n | Elo, one curve | Elo, per league | FORGE | Accuracy, per league | Accuracy, FORGE "
+        "| FORGE vs per league (95% CI) | FORGE vs one curve (95% CI) |",
+        "|---|---:|---:|---:|---:|---:|---:|---|---|",
+    ]
+
+    def delta(a, b):
+        mean, lo, hi = paired_bootstrap(a, b)
+        return f"{mean:+.4f} ({lo:+.4f} to {hi:+.4f})"
+
+    for label, mask in (("All", sub["year"] > 0), ("2022 on", sub["year"] >= 2022)):
+        mask = mask.to_numpy()
+        f = fitted[has_form]["log_loss"].to_numpy()[mask]
+        l = per_league[has_form]["log_loss"].to_numpy()[mask]
+        g = forge_l["log_loss"].to_numpy()[mask]
+        acc_l = per_league[has_form]["accuracy"].to_numpy()[mask].mean()
+        acc_g = forge_l["accuracy"].to_numpy()[mask].mean()
+        lines.append(
+            f"| {label} | {int(mask.sum()):,} | {f.mean():.4f} | {l.mean():.4f} | {g.mean():.4f} "
+            f"| {acc_l:.1%} | {acc_g:.1%} | {delta(g, l)} | {delta(g, f)} |"
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -316,11 +354,15 @@ def _state_gaps(frame, states):
     return blue - red
 
 
-def add_form(frame, states):
-    """Add each game's league-relative Form gap, with Form weights fit out of year.
+def out_of_year_form(frame, states):
+    """Every team-game's pre-game league-relative Form, with Form weights fit out of year.
 
     For each season, Form's weights come from domestic games in every other season,
     so no game is scored with weights that saw it.
+
+    Returns:
+        Series of Form (log-odds vs the team's league so far this season), indexed
+        by (gameid, teamid).
     """
     gaps = _state_gaps(frame, states)
     domestic = (frame["test_set"] == "Domestic").to_numpy()
@@ -331,10 +373,22 @@ def add_form(frame, states):
         weights = dict(zip(GLORY_FEATURES, form.fit_form_weights(gaps[train], won[train])))
         rows = (states["year"] == year).to_numpy()
         score[rows] = form.scores(states[rows], weights)
-    relative = pd.Series(form.league_relative(states, score), index=pd.MultiIndex.from_frame(states[["gameid", "teamid"]]))
-    blue = relative.reindex(pd.MultiIndex.from_arrays([frame["gameid"], frame["blue_id"]])).to_numpy()
-    red = relative.reindex(pd.MultiIndex.from_arrays([frame["gameid"], frame["red_id"]])).to_numpy()
-    return frame.assign(form=blue - red)
+    return pd.Series(form.league_relative(states, score), index=pd.MultiIndex.from_frame(states[["gameid", "teamid"]]))
+
+
+def form_gap(relative, gameids, teamids, opponent_teamids):
+    """Form of each team minus its opponent's, from `out_of_year_form` output."""
+    mine = relative.reindex(pd.MultiIndex.from_arrays([gameids, teamids])).to_numpy()
+    theirs = relative.reindex(pd.MultiIndex.from_arrays([gameids, opponent_teamids])).to_numpy()
+    return mine - theirs
+
+
+def add_form(frame, states, relative=None):
+    """Add each game's blue-minus-red Form gap (Form from `out_of_year_form`, computed
+    unless given)."""
+    if relative is None:
+        relative = out_of_year_form(frame, states)
+    return frame.assign(form=form_gap(relative, frame["gameid"], frame["blue_id"], frame["red_id"]))
 
 
 def forge_probabilities(frame):
@@ -431,9 +485,11 @@ def published_weights(frame, states, other):
     Returns:
         (form_weights, forge_weights). Form: log-odds per unit of each stat's gap,
         fit on domestic games. FORGE: elo_weight and form_weight (same-league
-        games), cross_region_elo_weight (every game) and other_league_elo_weight
-        (`other`: games inside one non-major league), plus per-league slopes for
-        `league_curves.json`. Returns (form_weights, league_curves, forge_weights).
+        games), cross_region_elo_weight (every game), other_league_elo_weight
+        (`other`: games inside one non-major league; Elo alone, for teams without
+        Form) and other_league_forge_elo_weight and other_league_form_weight (the
+        same games, Elo and Form), plus per-league slopes for `league_curves.json`.
+        Returns (form_weights, league_curves, forge_weights).
     """
     gaps = _state_gaps(frame, states)
     domestic = (frame["test_set"] == "Domestic").to_numpy()
@@ -449,12 +505,19 @@ def published_weights(frame, states, other):
     elo_w, form_w = _slopes(np.c_[frame["elo_live"].to_numpy()[same], (blue - red)[same]], won[same])
     (cross_w,) = _slopes(frame["elo_live"].to_numpy(), won)
     (other_w,) = _slopes(other["elo_live"].to_numpy(), other["won"].to_numpy())
+    other_form = form_gap(relative, other["gameid"], other["teamid"], other["opponent_teamid"])
+    has_form = ~np.isnan(other_form)
+    other_elo_w, other_form_w = _slopes(
+        np.c_[other["elo_live"].to_numpy()[has_form], other_form[has_form]], other["won"].to_numpy()[has_form]
+    )
     _, league_curves = shrunk_league_slopes(other["elo_live"], other["won"], other["league"])
     return form_weights, league_curves, {
         "elo_weight": elo_w,
         "form_weight": form_w,
         "cross_region_elo_weight": cross_w,
         "other_league_elo_weight": other_w,
+        "other_league_forge_elo_weight": other_elo_w,
+        "other_league_form_weight": other_form_w,
     }
 
 
@@ -528,9 +591,12 @@ def main():
     games, results, elo_timeline = load_games(), load_results(), load_elo_timeline()
     states = form_states()
     print("Backtesting:")
-    frame = add_form(backtest(games, results, elo_timeline, years), states)
+    frame = backtest(games, results, elo_timeline, years)
+    relative = out_of_year_form(frame, states)
+    frame = add_form(frame, states, relative)
     pairs = load_pair_games()
     other = other_league_games(pairs, INTERNATIONAL_LEAGUES, MAJORS)
+    other = other.assign(form=form_gap(relative, other["gameid"], other["teamid"], other["opponent_teamid"]))
     form_weights, league_curves, weights = published_weights(frame, states, other)
     if args.check_weights:
         check_weights(form_weights, weights, league_curves)

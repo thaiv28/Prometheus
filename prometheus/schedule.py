@@ -6,8 +6,8 @@ rate-limits anonymous clients after a few quick calls, so a build makes one or t
 paged requests and backs off when refused.
 
 Predictions use the published forecasts: FORGE between two teams of the same
-major league, Elo alone between leagues (as the FORGE head to head does), and
-Elo's own expected score within any other league, where FORGE isn't validated.
+league (with its own weights outside the major leagues), and Elo alone between
+leagues (as the FORGE head to head does).
 A series chance follows from the one-game chance, treating games as independent.
 
 Each build updates a prediction log (JSON): a match's prediction is refreshed
@@ -37,6 +37,7 @@ from prometheus.forge import (
     CROSS_REGION_ELO_WEIGHT,
     ELO_WEIGHT,
     FORM_POINTS,
+    other_league_forge_probability,
     other_league_weight,
     team_forms,
 )
@@ -281,6 +282,7 @@ def team_ratings(forms_now, elos):
     df = elos[["teamname", "league", "elo", "latest_date"]].merge(
         forms[["teamname", "form"]], on="teamname", how="left"
     )
+    df["has_form"] = df["form"].notna()
     df["form"] = FORM_POINTS * df["form"].fillna(0.0)
     df["forge"] = df["elo"] + df["form"]
     return df.set_index("teamname")
@@ -292,6 +294,8 @@ def game_probability(a, b):
         return 1 / (1 + math.exp(-CROSS_REGION_ELO_WEIGHT * (a["elo"] - b["elo"]))), "elo-cross"
     if a["league"] in MAJORS:
         return 1 / (1 + math.exp(-ELO_WEIGHT * (a["forge"] - b["forge"]))), "forge"
+    if a["has_form"] and b["has_form"]:
+        return float(other_league_forge_probability(a["elo"] - b["elo"], a["form"] - b["form"])), "forge"
     weight = other_league_weight(a["league"])
     return 1 / (1 + math.exp(-weight * (a["elo"] - b["elo"]))), "elo"
 
@@ -548,19 +552,21 @@ def scorecard(entries):
     return rows
 
 
-# Tables III and IV: FORGE and Elo calls, each saved before the match or rebuilt
-# afterwards (the backtest).
+# Tables III and IV: FORGE calls within a major league, and every other call (Elo
+# across leagues, and FORGE or Elo within other leagues), each saved before the
+# match or rebuilt afterwards (the backtest).
 BET_GROUPS = [
     ("FORGE", "saved"),
     ("FORGE", "backtest"),
-    ("Elo", "saved"),
-    ("Elo", "backtest"),
+    ("Other", "saved"),
+    ("Other", "backtest"),
 ]
 
 
 def _group(entry):
     """(method label, source) of a logged call, as `BET_GROUPS` names them."""
-    label = "FORGE" if entry.get("method") == "forge" else "Elo"
+    major_forge = entry.get("method") == "forge" and entry.get("home1") in MAJORS
+    label = "FORGE" if major_forge else "Other"
     return label, "backtest" if entry.get("reconstructed") else "saved"
 
 
@@ -574,8 +580,8 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
 
     `market.p` is the last price read before the start (prices stop updating
     once a match begins; for matches before the hourly reads, the last hourly
-    quote from Kalshi's price history). Returns rows for FORGE and Elo (same- and
-    cross-league Elo calls), each split by `source`: "saved" (calls saved before
+    quote from Kalshi's price history). Returns rows for FORGE (within a major
+    league) and Other (every other call), each split by `source`: "saved" (calls saved before
     the match) and "backtest" (calls rebuilt afterwards from the ratings the day
     before): series, how often each favourite won (a 50-50 call counts as half),
     each side's mean log loss per series, and `diff` (ours minus Kalshi's, with a
@@ -642,7 +648,7 @@ def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
 
     The side is the one with the larger edge. Each bet scores its profit after
     Kalshi's fee at `rate` and its CLV: the last price before the start for that
-    team (`market.p`) minus the price paid. Returns rows for "FORGE" and "Elo",
+    team (`market.p`) minus the price paid. Returns rows for "FORGE" and "Other",
     each edge in turn: bets, won, mean return per dollar and mean CLV, each with a
     95% bootstrap interval once there are `min_n` bets (else None), and the share
     of bets beating the close. Rows come in `BET_GROUPS` order, split by source
