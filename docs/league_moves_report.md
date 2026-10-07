@@ -16,7 +16,9 @@ test's values), scope all moves or only moves touching a non-major league. Score
 `evaluate_metrics.py`: domestic and international (Elo and FORGE), cross-league in every
 league, and within other leagues (per-league curves), each paired against published Elo.
 
-    uv run python scripts/league_moves.py --out docs/league_moves_report.md
+    git checkout 26d774b && uv run python scripts/league_moves.py --out docs/league_moves_report.md
+
+The harness and the experimental switches were removed when team-only links at 0.25 shipped; run it from that commit.
 
 On macOS set VECLIB_MAXIMUM_THREADS=1.
 

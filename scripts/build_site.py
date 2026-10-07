@@ -159,9 +159,9 @@ ELO_METRICS = {
             "Every player has a rating, and a team's Elo is the average of its five starters. Each game moves the winning starters up and the losing starters down by the same amount, so players keep their ratings when they change teams. A new player starts at the average of the league's active players.",
             "Short games move ratings most. A heavy favourite that needs 50 minutes to win can still lose a little rating.",
             "The table opens on teams that have played in the last six months, at today's rating. Pick a season to rank every team by its rating at the end of that year, or several seasons to compare across years.",
-            "International results also move a shared rating for each league, so when a region's teams win abroad, every team in that region rises, even those that stayed home.",
+            "Games between leagues (internationals, and at a smaller weight cups, EMEA Masters and promotion) also move a shared rating for each league, so when a region's teams win abroad, every team in that region rises, even those that stayed home.",
         ],
-        "caveats": "Regions meet only at international events, so a league that rarely plays abroad is measured loosely. Team names are taken from each team's last game in the period shown.",
+        "caveats": "Major regions meet only at international events, so a league that rarely plays another is measured loosely. Team names are taken from each team's last game in the period shown.",
         "lede_note": 2,
     }
 }

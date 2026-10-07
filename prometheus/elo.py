@@ -12,6 +12,10 @@ STARTING_ELO = 1500
 # Share of a team's Elo change in a cross-league international game that also moves
 # its home league's offset (and so every team in that league). Tuned in the backtest.
 LEAGUE_SHARE = 0.5
+# Share of a team's change in a cross-league game elsewhere (EMEA Masters, a cup, a
+# promotion series) that moves the two leagues' link offsets. A player moving league
+# converts by the international offsets alone, so links don't travel with players.
+LINK_SHARE = 0.25
 # A new player starts at the average of players whose last game in the league was
 # within this many days.
 ACTIVE_DAYS = 365
@@ -92,12 +96,7 @@ def compute_elo_records(
     rosters: dict | None = None,
     active_days: int = ACTIVE_DAYS,
     player_records: bool = False,
-    move: str = "offset",
-    move_weight: float = 1.0,
-    move_scope: str = "all",
-    link_share: float = 0.0,
-    majors: tuple = (),
-    link_teams_only: bool = False,
+    link_share: float = LINK_SHARE,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
 
@@ -107,7 +106,10 @@ def compute_elo_records(
     only move players. Leagues are linked only by international events, so when teams
     from two leagues meet there, each league's offset also moves by `league_share` of
     the team's change: an upset at Worlds lifts the whole region, not only the team
-    that travelled. A new player starts at the average rating of the players active in
+    that travelled. Cross-league games elsewhere (EMEA Masters, cups, promotion) move
+    a separate link offset by `link_share`. It counts in every rating, but a player
+    moving league converts by the international offsets alone, so minor-league links
+    don't travel into a major with promoted players. A new player starts at the average rating of the players active in
     the team's league (last game there within `active_days`), or `starting_elo` plus
     the offset when there are none.
 
@@ -124,6 +126,8 @@ def compute_elo_records(
         elo_func: Function returning the Elo change for `teamid`.
         starting_elo: Rating of a player entering a league with no active players.
         league_share: Share of an international change applied to league offsets.
+        link_share: Share of a non-international cross-league change applied to
+            link offsets.
         rosters: Maps (gameid, teamid) to that team's starters (player ids). A team
             with no roster for a game uses its last roster; one that never had a
             roster plays as a single "player", which is plain team Elo.
@@ -135,7 +139,7 @@ def compute_elo_records(
         (records, offsets). `records` has two rows per game (one per team): gameid,
         teamid, pre_match_elo, post_match_elo, elo_change, home_league (see above;
         None if it has only played international events), league_offset (that
-        league's offset after the game) and main_elo (the team's rating with its main
+        league's offset after the game, link offset included) and main_elo (the team's rating with its main
         roster after the game, the rating to forecast its next match with). `offsets` has
         gameid, date (when `games` has one), league and league_offset after every
         game that moved an offset. With `player_records`, a third frame has gameid,
@@ -155,10 +159,11 @@ def compute_elo_records(
     season_counts = {}  # (team, year) -> {league: games}
     last_roster = {}
     main_roster = {}
-    league_offset = defaultdict(float)
-    # EXPERIMENT: offsets from non-international links, added to team ratings only
-    # (never to a moving player's conversion) when `link_teams_only`.
-    team_offset = defaultdict(float)
+    league_offset = defaultdict(float)  # from international events
+    link_offset = defaultdict(float)  # from cross-league games elsewhere
+
+    def offset(league):
+        return league_offset[league] + link_offset[league] if league is not None else 0.0
 
     def league_average(league, date):
         recent = [
@@ -172,22 +177,9 @@ def compute_elo_records(
             own[player] = league_average(league, date) if league is not None else starting_elo
             player_league[player] = league
         elif player_league[player] != league:
-            old = player_league[player]
-            by_standing = (
-                move == "standing"
-                and old is not None
-                and league is not None
-                and (move_scope == "all" or old not in majors or league not in majors)
-            )
-            if by_standing:
-                # EXPERIMENT: keep the player's standing in the old league (distance
-                # from its active average), scaled by `move_weight`, in the new one.
-                own[player] = league_average(league, date) + move_weight * (
-                    own[player] - league_average(old, date)
-                )
-            else:
-                # Moving league (a transfer, promotion, a cup) keeps the player's rating.
-                own[player] += league_offset[old] - league_offset[league]
+            # Moving league (a transfer, promotion) keeps the player's rating with the
+            # international offsets; link offsets stay with the league.
+            own[player] += league_offset[player_league[player]] - league_offset[league]
             player_league[player] = league
 
     elo_records = []
@@ -215,13 +207,12 @@ def compute_elo_records(
 
         def rating(side):
             _, team_league, roster = side
-            offset = league_offset[team_league] + team_offset[team_league] if team_league is not None else 0.0
-            return sum(own[p] for p in roster) / len(roster) + offset
+            return sum(own[p] for p in roster) / len(roster) + offset(team_league)
 
         pre = [rating(side) for side in sides]
         if player_records:
             player_pre = {
-                p: own[p] + (league_offset[team_league] if team_league is not None else 0.0)
+                p: own[p] + offset(team_league)
                 for _, team_league, roster in sides
                 for p in roster
             }
@@ -244,7 +235,7 @@ def compute_elo_records(
             and opponent_league is not None
             and team_league != opponent_league
         ):
-            moved_offset = team_offset if (domestic and link_teams_only) else league_offset
+            moved_offset = link_offset if domestic else league_offset
             moved_offset[team_league] += share * elo_change
             moved_offset[opponent_league] -= share * elo_change
             for moved in (team_league, opponent_league):
@@ -253,7 +244,7 @@ def compute_elo_records(
                         "gameid": row.gameid,
                         "date": getattr(row, "date", None),
                         "league": moved,
-                        "league_offset": league_offset[moved],
+                        "league_offset": offset(moved),
                     }
                 )
 
@@ -267,7 +258,7 @@ def compute_elo_records(
                 last_seen[player] = (date, team_league)
                 members[team_league].add(player)
             after = rating(side)
-            offset_now = league_offset[team_league] if team_league is not None else 0.0
+            offset_now = offset(team_league)
             if player_records and roster != (("team", team),):
                 for player in roster:
                     player_rows.append(
@@ -276,10 +267,7 @@ def compute_elo_records(
                     )
             main = main_roster[team]
             # Each player's own rating plus the offset of the league they sit in now.
-            main_elo = sum(
-                own[p] + (league_offset[player_league[p]] if player_league[p] is not None else 0.0)
-                for p in main
-            ) / len(main) + (team_offset[team_league] if team_league is not None else 0.0)
+            main_elo = sum(own[p] + offset(player_league[p]) for p in main) / len(main)
             elo_records.append(
                 {
                     "gameid": row.gameid,
@@ -288,7 +276,7 @@ def compute_elo_records(
                     "post_match_elo": after,
                     "elo_change": after - before,
                     "home_league": team_league,
-                    "league_offset": league_offset[team_league] if team_league is not None else 0.0,
+                    "league_offset": offset_now,
                     "main_elo": main_elo,
                 }
             )

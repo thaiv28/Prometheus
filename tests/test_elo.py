@@ -267,9 +267,12 @@ def test_a_cup_keeps_the_home_league_and_main_roster():
 
     # Two LCK games outweigh the cup, so A's home stays LCK through it and into 2025.
     assert [_row(df, g, "A").home_league for g in games.gameid] == ["LCK"] * 5
-    # The academy game rates the academy lineup but leaves A's main rating alone.
+    # The academy game rates the academy lineup; A's main rating moves only by the
+    # LCK link offset the cup game moved (C's home is the cup, another league).
     assert _row(df, "g3", "A").pre_match_elo != pytest.approx(_row(df, "g2", "A").post_match_elo)
-    assert _row(df, "g3", "A").main_elo == pytest.approx(_row(df, "g2", "A").main_elo)
+    link = _row(df, "g3", "A").league_offset - _row(df, "g2", "A").league_offset
+    assert link != 0
+    assert _row(df, "g3", "A").main_elo == pytest.approx(_row(df, "g2", "A").main_elo + link)
     # The main roster's cup game counts.
     assert _row(df, "g4", "A").main_elo == pytest.approx(_row(df, "g4", "A").post_match_elo)
 
@@ -289,3 +292,36 @@ def test_home_league_moves_to_the_most_played_league():
     df, _ = compute_elo_records(games, calculate_game_length_elo_change)
     # A tie (one game each) keeps LCKC; the second LCK game moves A to the LCK.
     assert [_row(df, g, "A").home_league for g in games.gameid] == ["LCKC", "LCKC", "LCK", "LCK"]
+
+
+def test_cup_links_leagues_but_not_players_who_move():
+    # A (LFL) beats C (PRM) at EMEA Masters; then A's a0 joins C.
+    games = pd.DataFrame(
+        {
+            "gameid": ["g1", "g2", "g3", "g4", "g5"],
+            "teamid": ["A", "C", "A", "B", "D"],
+            "opponent_teamid": ["B", "D", "C", "A", "C"],
+            "gamelength": [1800] * 5,
+            "result": [1, 1, 1, 0, 0],
+            "league": ["LFL", "PRM", "EM", "LFL", "PRM"],
+            "date": ["2024-01-01", "2024-01-01", "2024-03-01", "2024-04-01", "2024-04-01"],
+        }
+    )
+    rosters = {}
+    for g, t, o in zip(games.gameid, games.teamid, games.opponent_teamid):
+        rosters[(g, t)], rosters[(g, o)] = _five(t.lower()), _five(o.lower())
+    rosters[("g5", "C")] = ("a0",) + _five("c")[1:]
+    df, offsets, players = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters, link_share=0.25, player_records=True
+    )
+    em_a = _row(df, "g3", "A")
+    own = em_a.elo_change / 1.25  # A's players' own change; LFL's link offset adds a quarter
+    assert em_a.league_offset == pytest.approx(0.25 * own)
+    assert _row(df, "g3", "C").league_offset == pytest.approx(-0.25 * own)
+    assert set(offsets["league"]) == {"LFL", "PRM"}
+    # B stayed home but carries LFL's link offset into its next game.
+    assert _row(df, "g4", "B").pre_match_elo == pytest.approx(_row(df, "g1", "B").post_match_elo + 0.25 * own)
+    # a0 moves to PRM: the link offsets stay with the leagues (no international
+    # offsets to convert by), so a0 leaves LFL's behind and takes on PRM's.
+    a0 = players[players.playerid == "a0"].set_index("gameid")
+    assert a0.loc["g5", "pre_match_elo"] - a0.loc["g4", "post_match_elo"] == pytest.approx(-0.5 * own)

@@ -10,7 +10,7 @@ Season stats:
 - **Luck** (sunset): wins above what a team's play earned.
 
 Forecasts:
-- **Game-length Elo**: a rating for every team in every region, built from player ratings (a team's Elo is the average of its five starters, so ratings follow players through roster moves). Fast wins move it more, and international results move a shared league offset, so a whole region rises or falls with how its teams do abroad.
+- **Game-length Elo**: a rating for every team in every region, built from player ratings (a team's Elo is the average of its five starters, so ratings follow players through roster moves). Fast wins move it more, and results between leagues (internationals, and at a smaller share cups, EMEA Masters and promotion) move a shared league offset, so a whole region rises or falls with how its teams do against others.
 - **Player Elo**: the player ratings behind team Elo, on their own register and one page per player (Elo after every game, career by team). Teammates move together, so it follows a player's teams through a career rather than splitting credit within a team.
 - **FORGE** (Form + Elo, formerly GlorELO+): the headline forecast of who wins the next game. Elo plus Form, a team's recent, opponent-adjusted stats weighted to predict the next game and compared with its own league.
 
@@ -142,7 +142,7 @@ Where Kalshi, a prediction market, lists the match, the page also shows the mark
 ### How accurate are the metrics?
 `scripts/evaluate_metrics.py` backtests the forecasts. Each game is predicted from earlier games only: from ratings at the start of the month, or from each team's rating going into the game ("live"). Results are scored by accuracy, Brier score and log loss, and compared with a simple baseline (win % so far this season) using a paired bootstrap. International games between teams from different major regions are scored separately, because they are the only direct test of cross-region strength. Latest results: [docs/metric_backtest.md](docs/metric_backtest.md).
 
-On 16,765 major-league games, FORGE picks the winner 64.8% of the time with log loss 0.6292, against Elo's 64.3% and 0.6320 (and 0.6347 for team Elo without player ratings); on 979 cross-region international games it equals Elo (65.1%, 0.6299). Inside non-major leagues (67,928 games), Elo on each league's fitted curve has log loss 0.6268, against 0.6285 for one curve for all of them and 0.6453 for the textbook 400-point curve. On 9,430 games between teams from different leagues at any event (EMEA Masters, cups, promotion and international), Elo's log loss is 0.6193.
+On 16,765 major-league games, FORGE picks the winner 64.7% of the time with log loss 0.6290, against Elo's 64.3% and 0.6318 (and 0.6345 for team Elo without player ratings); on 979 cross-region international games it equals Elo (65.3%, 0.6310). Inside non-major leagues (67,928 games), Elo on each league's fitted curve has log loss 0.6270, against 0.6285 for one curve for all of them and 0.6453 for the textbook 400-point curve. On 9,430 games between teams from different leagues at any event (EMEA Masters, cups, promotion and international), Elo's log loss is 0.6070.
 
 Season stats are judged separately by `scripts/evaluate_season_stats.py` ([docs/season_stats_report.md](docs/season_stats_report.md)): each team-season's games are split into two random halves, and a stat is reliable when the halves agree. It also reports how well each stat matches that season's win % and Record.
 
