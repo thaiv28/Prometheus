@@ -552,19 +552,21 @@ def scorecard(entries):
     return rows
 
 
-# Tables III and IV: FORGE and Elo calls, each saved before the match or rebuilt
-# afterwards (the backtest).
+# Tables III and IV: FORGE calls within a major league, and every other call (Elo
+# across leagues, and FORGE or Elo within other leagues), each saved before the
+# match or rebuilt afterwards (the backtest).
 BET_GROUPS = [
     ("FORGE", "saved"),
     ("FORGE", "backtest"),
-    ("Elo", "saved"),
-    ("Elo", "backtest"),
+    ("Other", "saved"),
+    ("Other", "backtest"),
 ]
 
 
 def _group(entry):
     """(method label, source) of a logged call, as `BET_GROUPS` names them."""
-    label = "FORGE" if entry.get("method") == "forge" else "Elo"
+    major_forge = entry.get("method") == "forge" and entry.get("home1") in MAJORS
+    label = "FORGE" if major_forge else "Other"
     return label, "backtest" if entry.get("reconstructed") else "saved"
 
 
@@ -578,8 +580,8 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
 
     `market.p` is the last price read before the start (prices stop updating
     once a match begins; for matches before the hourly reads, the last hourly
-    quote from Kalshi's price history). Returns rows for FORGE (within any
-    league) and Elo (across leagues, or a team without Form), each split by `source`: "saved" (calls saved before
+    quote from Kalshi's price history). Returns rows for FORGE (within a major
+    league) and Other (every other call), each split by `source`: "saved" (calls saved before
     the match) and "backtest" (calls rebuilt afterwards from the ratings the day
     before): series, how often each favourite won (a 50-50 call counts as half),
     each side's mean log loss per series, and `diff` (ours minus Kalshi's, with a
@@ -646,7 +648,7 @@ def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
 
     The side is the one with the larger edge. Each bet scores its profit after
     Kalshi's fee at `rate` and its CLV: the last price before the start for that
-    team (`market.p`) minus the price paid. Returns rows for "FORGE" and "Elo",
+    team (`market.p`) minus the price paid. Returns rows for "FORGE" and "Other",
     each edge in turn: bets, won, mean return per dollar and mean CLV, each with a
     95% bootstrap interval once there are `min_n` bets (else None), and the share
     of bets beating the close. Rows come in `BET_GROUPS` order, split by source

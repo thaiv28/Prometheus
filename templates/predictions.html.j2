@@ -64,7 +64,7 @@
 
         {% set span = view.backtest_span %}
         <figure class="register-figure" aria-labelledby="market-cap">
-          <figcaption id="market-cap" class="table-caption">Table III. Against Kalshi’s last price before the start, on matches also priced 12 hours out. Difference: our log loss minus Kalshi’s; below 0 beats the market. Saved: calls made before the match.{% if span %} Backtest: calls rebuilt from the day before, {{ span[0] | longdate }} – {{ span[1] | longdate }}; the forecast weights saw these games.{% endif %}<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
+          <figcaption id="market-cap" class="table-caption">Table III. Against Kalshi’s last price before the start, on matches also priced 12 hours out. FORGE: calls within a major league; Other: every other call. Difference: our log loss minus Kalshi’s; below 0 beats the market. Saved: calls made before the match.{% if span %} Backtest: calls rebuilt from the day before, {{ span[0] | longdate }} – {{ span[1] | longdate }}; the forecast weights saw these games.{% endif %}<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
           <div class="table-scroll">
             <table class="register register--record register--market register--edges">
               <thead>

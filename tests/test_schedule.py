@@ -227,13 +227,13 @@ def test_attach_market_prices_never_fails_the_build(monkeypatch):
     assert schedule.attach_market_prices({}, _ratings(), datetime.datetime.now(UTC), fetch=lambda: pytest.fail("skipped")) is None
 
 
-def test_market_scorecard_splits_forge_and_elo_and_needs_enough_series():
+def test_market_scorecard_splits_major_forge_from_other_calls_and_needs_enough_series():
     market = {"p": 0.5, "at": "2026-10-04T07:00Z"}
     early = {"market_12h": {"p": 0.5}}
     entries = [
         {**_pred("a", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market), **early},
         {**_pred("b", "2026-10-04T08:00Z", 0.4), "winner": 1, "market": dict(market), "method": "elo", **early},
-        # FORGE within a minor league counts as FORGE.
+        # FORGE within a minor league counts with the other calls.
         {**_pred("m", "2026-10-04T08:00Z", 0.4), "winner": 1, "market": dict(market), "home1": "LDL", "home2": "LDL", **early},
         {**_pred("f", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market)},  # no 12-hour price
         {**_pred("c", "2026-10-04T08:00Z", 0.8), "winner": 1},  # no price
@@ -245,12 +245,12 @@ def test_market_scorecard_splits_forge_and_elo_and_needs_enough_series():
     ]
     rows = {(r["label"], r["source"]): r for r in schedule.market_scorecard(entries, min_n=2)}
     assert list(rows) == schedule.BET_GROUPS
-    forge, elo, backtest = rows[("FORGE", "saved")], rows[("Elo", "saved")], rows[("FORGE", "backtest")]
-    assert (forge["series"], elo["series"], backtest["series"], rows[("Elo", "backtest")]["series"]) == (2, 1, 2, 0)
-    assert forge["ours_loss"] == pytest.approx((-math.log(0.8) - math.log(0.4)) / 2)
+    forge, elo, backtest = rows[("FORGE", "saved")], rows[("Other", "saved")], rows[("FORGE", "backtest")]
+    assert (forge["series"], elo["series"], backtest["series"], rows[("Other", "backtest")]["series"]) == (1, 2, 2, 0)
+    assert forge["ours_loss"] == pytest.approx(-math.log(0.8))
     assert forge["market_loss"] == pytest.approx(math.log(2))
-    assert (forge["ours_pct"], forge["market_pct"], elo["ours_pct"]) == (50, 50, 0)
-    assert elo["diff"] is None and backtest["diff"] is not None
+    assert (forge["ours_pct"], forge["market_pct"], elo["ours_pct"]) == (100, 50, 0)
+    assert forge["diff"] is None and backtest["diff"] is not None
     assert backtest["diff"][0] == pytest.approx((-math.log(0.8) - math.log(0.4)) / 2 - math.log(2))
     assert schedule.market_scorecard([])[0]["ours_loss"] is None
 
@@ -272,15 +272,15 @@ def test_edge_record_bets_the_side_with_the_edge_and_scores_return_and_clv():
     assert {(r["label"], r["source"]) for r in out} == set(schedule.BET_GROUPS)
     rows = {(r["label"], r["edge"]): r for r in out if r["source"] == "saved"}
     backtest = {(r["label"], r["edge"]): r for r in out if r["source"] == "backtest"}
-    assert backtest[("FORGE", 0.05)]["bets"] == 1 and backtest[("Elo", 0.0)]["bets"] == 0
+    assert backtest[("FORGE", 0.05)]["bets"] == 1 and backtest[("Other", 0.0)]["bets"] == 0
     five = rows[("FORGE", 0.05)]
     assert (five["bets"], five["won"]) == (2, 1)
     profits = [1 / 0.60 - 1 - markets.fee(0.60, 1), -1 - markets.fee(0.62, 1)]
     assert five["roi"] == pytest.approx(sum(profits) / 2)
     assert five["clv"] == pytest.approx(0.02) and five["beat"] == 0.5
     assert five["roi_ci"] is not None and rows[("FORGE", 0.10)]["bets"] == 0
-    assert rows[("Elo", 0.0)]["bets"] == 1 and rows[("Elo", 0.03)]["bets"] == 0
-    assert rows[("Elo", 0.0)]["roi_ci"] is None  # under min_n
+    assert rows[("Other", 0.0)]["bets"] == 1 and rows[("Other", 0.03)]["bets"] == 0
+    assert rows[("Other", 0.0)]["roi_ci"] is None  # under min_n
     # Every match, backing our pick: here the same sides as the value bets.
     assert (rows[("FORGE", None)]["bets"], rows[("FORGE", None)]["won"]) == (2, 1)
-    assert rows[("Elo", None)]["bets"] == 1
+    assert rows[("Other", None)]["bets"] == 1

@@ -281,7 +281,7 @@ def test_predictions_view_splits_upcoming_past_and_home():
     assert view["scorecard"][1]["series"] == 1 and view["scorecard"][0]["series"] == 0
     assert [(g["label"], [s["name"] for s in g["sources"]]) for g in view["vs_market"]] == [
         ("FORGE", ["saved", "backtest"]),
-        ("Elo", ["saved", "backtest"]),
+        ("Other", ["saved", "backtest"]),
     ]
     assert view["alerts"]["settled"] == 0 and view["alerts"]["clv"] is None
     assert view["leagues"][:2] == ["LCK", "Worlds"]
