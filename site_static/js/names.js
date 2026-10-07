@@ -3,8 +3,11 @@
 const PrometheusNames = (function () {
   "use strict";
 
-  // Lower case without accents, for matching names as typed.
-  const fold = (s) => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  // Lower case without accents, for matching names as typed. Letters such as ø
+  // have no accent to strip, so they are spelled out (as schedule.fold does).
+  const PLAIN = { "ø": "o", "æ": "ae", "œ": "oe", "ß": "ss", "đ": "d", "ł": "l", "þ": "th" };
+  const fold = (s) =>
+    String(s).toLowerCase().replace(/[øæœßđłþ]/g, (c) => PLAIN[c]).normalize("NFD").replace(/[̀-ͯ]/g, "");
 
   // Same as build_site._slugify, so a name links to its page.
   const slugify = (name) =>

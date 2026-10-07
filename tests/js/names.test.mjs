@@ -14,6 +14,8 @@ test("slugify matches build_site._slugify", () => {
 
 test("fold drops accents and case", () => {
   assert.equal(fold("Ünited ÉSPORTS"), "united esports");
+  assert.equal(fold("LØS"), "los");
+  assert.equal(fold("Sørby eSport"), "sorby esport");
 });
 
 const items = (names) => names.map((n) => ({ n, key: fold(n) }));

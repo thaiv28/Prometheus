@@ -8,8 +8,8 @@ price is a probability with no bookmaker margin, only the bid-ask spread.
 
 For every settled series market between two teams we rate, this script:
 
-- reconstructs our call as the Predictions page makes it (FORGE within a major
-  league, Elo across leagues, Elo within other leagues), from games before the
+- reconstructs our call as the Predictions page makes it (FORGE within a
+  league, Elo across leagues), from games before the
   match day (`schedule.ratings_before`), with the best-of taken from the games in
   our data;
 - reads the market's mid price (from hourly candlesticks) at two moments: the
@@ -18,7 +18,7 @@ For every settled series market between two teams we rate, this script:
   our call knew;
 - scores both on the series result (accuracy, Brier, log loss), with a paired
   bootstrap of the difference, by slice (major-league or international, other
-  leagues; FORGE, Elo, cross-league Elo);
+  leagues; FORGE in a major or other league, Elo, cross-league Elo);
 - asks whether our call adds anything to the market: a logistic fit of the
   result on both log-odds, with a bootstrap interval for our weight. A weight
   near zero means the market already knows what we know;
@@ -58,6 +58,7 @@ from prometheus.markets import (
     book_at,
     events,
     fee,
+    fetch_fee_rates,
     get,
     quote_at,
 )
@@ -67,11 +68,9 @@ from prometheus.form import form_states, load_form_games, opponent_adjust
 
 CACHE = Path("data/markets")
 EARLY_HOURS = 12
-# Betting: hours before the start the bets are placed, Kalshi's fee rates
-# (fee per order = ceil(rate × contracts × P × (1 − P)), to the cent; taker 7%,
-# resting maker orders 1.75%), and the value-bet edges tried, fixed in advance.
+# Betting: hours before the start the bets are placed and the value-bet edges
+# tried, fixed in advance. Fee rates come from Kalshi's series data (`fee_rows`).
 BET_HOURS = 12
-FEE_RATES = (("Taker 7%", 0.07), ("Maker 1.75%", 0.0175), ("None", 0.0))
 EDGES = (0.0, 0.03, 0.05, 0.10)
 # Lead times for the ladder: the market's price this many hours before the start.
 LEAD_HOURS = (6, 12, 18, 24)
@@ -277,14 +276,18 @@ def roi_interval(profits, n_resamples=2000, seed=0):
 
 
 def betting_section(s):
+    taker, maker, fee_rates = fee_rows()
     frame = s[s["cost1"].notna() | s["cost2"].notna()]
     lines = [
         f"## Betting $1 a match, {BET_HOURS} hours before the start",
         "",
         f"Each bet buys $1 of a team's contract {BET_HOURS} hours before the scheduled start at the price a market "
         "order would pay (the team's ask, or one minus the opponent's bid, whichever is cheaper), then pays Kalshi's "
-        "fee per order: ceil(rate × contracts × P × (1 − P)), to the cent (taker orders 7%, resting maker orders "
-        "1.75%, which would fill at a better price than assumed here). *Back our pick* bets every match on the team "
+        f"fee per order: ceil(rate × contracts × P × (1 − P)), to the cent, at the rates Kalshi lists for "
+        f"`{SERIES}`: {100 * taker:g}% for orders that take the book, "
+        + (f"{100 * maker:g}% for resting orders" if maker else "nothing for resting orders (the *None* rows)")
+        + ". Resting orders would also fill at a better price than assumed here. *Back our pick* bets every match on "
+        "the team "
         "we favour; *value* bets only where our chance beats the price by more than the edge shown. ROI is profit "
         "per dollar staked, with a 95% bootstrap interval over bets. CLV (closing line value) is the market's closing "
         "chance for the team backed minus the price paid, in points, with its interval and the share of bets that "
@@ -293,7 +296,7 @@ def betting_section(s):
         "",
     ]
     for label, part in slices_of(frame):
-        if label not in ("All", "FORGE (same major league)", "Other leagues"):
+        if label not in ("All", "FORGE (same major league)", "FORGE (same other league)", "Other leagues"):
             continue
         lines += [
             f"**{label}** ({len(part)} series with a price)",
@@ -313,7 +316,7 @@ def betting_section(s):
                 )
             else:
                 clv_cells = "— | — |"
-            for fee_name, rate in FEE_RATES:
+            for fee_name, rate in fee_rates:
                 prof = bet_profits(part, rate, edge)
                 if len(prof) < 10:
                     continue
@@ -355,6 +358,22 @@ def series_games(pairs, team1, team2, start):
     return int(games["result"].sum()), int((1 - games["result"]).sum())
 
 
+def fee_rows():
+    """The fee rows of the betting tables: Kalshi's taker rate for the series, its
+    maker rate when it has one, and no fee. Read from Kalshi; the published LoL
+    rates (taker 7%, makers free) if that fails."""
+    try:
+        taker, maker = fetch_fee_rates(SERIES)
+    except (OSError, ValueError, KeyError) as err:
+        print(f"  couldn't read Kalshi's fee rates ({err}); using taker 7%, no maker fee")
+        taker, maker = 0.07, 0.0
+    rows = [(f"Taker {100 * taker:g}%", taker)]
+    if maker > 0:
+        rows.append((f"Maker {100 * maker:g}%", maker))
+    label = "None (also resting orders)" if maker == 0 else "None"
+    return taker, maker, rows + [(label, 0.0)]
+
+
 def _log(message):
     print(f"[{datetime.datetime.now():%H:%M:%S}] {message}", flush=True)
 
@@ -378,9 +397,7 @@ def our_calls(rows, states, match_team, cache):
         p, method = schedule.game_probability(
             ratings.loc[ours[0]], ratings.loc[ours[1]]
         )
-        major = row_is_major(
-            ratings.loc[ours[0]]["league"], ratings.loc[ours[1]]["league"], method
-        )
+        major = row_is_major(ratings.loc[ours[0]]["league"], ratings.loc[ours[1]]["league"])
         out.append(
             {
                 **row,
@@ -394,10 +411,10 @@ def our_calls(rows, states, match_team, cache):
     return out
 
 
-def row_is_major(home1, home2, method):
-    """Major-league or international (both teams from major leagues, or a FORGE call)."""
+def row_is_major(home1, home2):
+    """Major-league or international: both teams from major leagues."""
     majors = set(schedule.MAJORS)
-    return method == "forge" or (home1 in majors and home2 in majors)
+    return home1 in majors and home2 in majors
 
 
 # ---------------------------------------------------------------- scoring
@@ -489,7 +506,8 @@ def slices_of(frame):
         ("All", frame),
         ("Major league or international", frame[frame["major"]]),
         ("Other leagues", frame[~frame["major"]]),
-        ("FORGE (same major league)", frame[frame["method"] == "forge"]),
+        ("FORGE (same major league)", frame[(frame["method"] == "forge") & frame["major"]]),
+        ("FORGE (same other league)", frame[(frame["method"] == "forge") & ~frame["major"]]),
         ("Elo (same other league)", frame[frame["method"] == "elo"]),
         ("Elo across leagues", frame[frame["method"] == "elo-cross"]),
     ]
@@ -517,6 +535,7 @@ def lead_ladder(s):
             label
             not in (
                 "FORGE (same major league)",
+                "FORGE (same other league)",
                 "Major league or international",
                 "Other leagues",
             )

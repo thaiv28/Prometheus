@@ -8,7 +8,8 @@ import pandas as pd
 import pytest
 
 from prometheus import markets, schedule
-from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, other_league_weight
+from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, FORM_POINTS, other_league_weight
+from prometheus import forge
 
 UTC = datetime.timezone.utc
 
@@ -16,6 +17,10 @@ UTC = datetime.timezone.utc
 def test_fold_and_strip_disambiguation():
     assert schedule.fold("Barça eSports") == "barca esports"
     assert schedule.fold("Movistar KOI Fénix!") == "movistar koi fenix"
+    # Letters with no accent to strip: LØS and Sørby are "los" and "sorby", not "ls".
+    assert schedule.fold("LØS") == "los"
+    assert schedule.fold("Sørby eSport") == "sorby esport"
+    assert schedule.fold("Orzeł Barcząca") == "orzel barczaca"
     assert schedule.strip_disambiguation("LYON (2024 American Team)") == "LYON"
     assert schedule.strip_disambiguation("Gen.G") == "Gen.G"
 
@@ -52,8 +57,8 @@ def test_game_probability_picks_the_method_by_league():
     lck_a = {"league": "LCK", "elo": 1800, "forge": 1900}
     lck_b = {"league": "LCK", "elo": 1800, "forge": 1800}
     lec = {"league": "LEC", "elo": 1700, "forge": 2000}
-    em_a = {"league": "EM", "elo": 1600, "forge": 1650}
-    em_b = {"league": "EM", "elo": 1500, "forge": 1500}
+    em_a = {"league": "EM", "elo": 1600, "form": 50, "forge": 1650, "has_form": True}
+    em_b = {"league": "EM", "elo": 1500, "form": 0, "forge": 1500, "has_form": True}
 
     p, method = schedule.game_probability(lck_a, lck_b)
     assert method == "forge"
@@ -64,8 +69,14 @@ def test_game_probability_picks_the_method_by_league():
     assert p == pytest.approx(1 / (1 + math.exp(-CROSS_REGION_ELO_WEIGHT * 100)))
 
     p, method = schedule.game_probability(em_a, em_b)
-    assert method == "elo"  # FORGE isn't validated outside the major leagues
-    # The league's own fitted curve, steeper than the textbook 400-point one.
+    assert method == "forge"  # outside the majors, with its own weights
+    gap = forge.OTHER_LEAGUE_FORGE_ELO_WEIGHT * 100 + forge.OTHER_LEAGUE_FORM_WEIGHT * 50 / FORM_POINTS
+    assert p == pytest.approx(1 / (1 + math.exp(-gap)))
+
+    # A team without Form: Elo on the league's own fitted curve, steeper than the
+    # textbook 400-point one.
+    p, method = schedule.game_probability(em_a, {**em_b, "has_form": False})
+    assert method == "elo"
     assert p == pytest.approx(1 / (1 + math.exp(-other_league_weight("EM") * 100)))
     assert p > 1 / (1 + 10 ** (-100 / 400))
 
@@ -120,7 +131,7 @@ def test_parse_schedule_types_and_predict():
 
 def _pred(mid, start, p=0.6, matched=True):
     return {"match_id": mid, "start": start, "team1": "A", "team2": "B", "ours1": "A", "ours2": "B",
-            "best_of": 3, "league": "LCK", "matched": matched, "p_game": p, "p_series": p, "method": "forge"}
+            "best_of": 3, "league": "LCK", "home1": "LCK", "home2": "LCK", "matched": matched, "p_game": p, "p_series": p, "method": "forge"}
 
 
 def test_update_log_refreshes_until_start_then_freezes_and_adds_results():
@@ -216,12 +227,14 @@ def test_attach_market_prices_never_fails_the_build(monkeypatch):
     assert schedule.attach_market_prices({}, _ratings(), datetime.datetime.now(UTC), fetch=lambda: pytest.fail("skipped")) is None
 
 
-def test_market_scorecard_splits_forge_and_elo_and_needs_enough_series():
+def test_market_scorecard_splits_major_forge_from_other_calls_and_needs_enough_series():
     market = {"p": 0.5, "at": "2026-10-04T07:00Z"}
     early = {"market_12h": {"p": 0.5}}
     entries = [
         {**_pred("a", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market), **early},
         {**_pred("b", "2026-10-04T08:00Z", 0.4), "winner": 1, "market": dict(market), "method": "elo", **early},
+        # FORGE within a minor league counts with the other calls.
+        {**_pred("m", "2026-10-04T08:00Z", 0.4), "winner": 1, "market": dict(market), "home1": "LDL", "home2": "LDL", **early},
         {**_pred("f", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": dict(market)},  # no 12-hour price
         {**_pred("c", "2026-10-04T08:00Z", 0.8), "winner": 1},  # no price
         {**_pred("d", "2026-10-04T08:00Z", 0.8), "winner": 1, "market": {"p": 0.5, "at": "2026-10-04T09:00Z"}},  # priced after the start
@@ -232,8 +245,8 @@ def test_market_scorecard_splits_forge_and_elo_and_needs_enough_series():
     ]
     rows = {(r["label"], r["source"]): r for r in schedule.market_scorecard(entries, min_n=2)}
     assert list(rows) == schedule.BET_GROUPS
-    forge, elo, backtest = rows[("FORGE", "saved")], rows[("Elo", "saved")], rows[("FORGE", "backtest")]
-    assert (forge["series"], elo["series"], backtest["series"], rows[("Elo", "backtest")]["series"]) == (1, 1, 2, 0)
+    forge, elo, backtest = rows[("FORGE", "saved")], rows[("Other", "saved")], rows[("FORGE", "backtest")]
+    assert (forge["series"], elo["series"], backtest["series"], rows[("Other", "backtest")]["series"]) == (1, 2, 2, 0)
     assert forge["ours_loss"] == pytest.approx(-math.log(0.8))
     assert forge["market_loss"] == pytest.approx(math.log(2))
     assert (forge["ours_pct"], forge["market_pct"], elo["ours_pct"]) == (100, 50, 0)
@@ -259,15 +272,15 @@ def test_edge_record_bets_the_side_with_the_edge_and_scores_return_and_clv():
     assert {(r["label"], r["source"]) for r in out} == set(schedule.BET_GROUPS)
     rows = {(r["label"], r["edge"]): r for r in out if r["source"] == "saved"}
     backtest = {(r["label"], r["edge"]): r for r in out if r["source"] == "backtest"}
-    assert backtest[("FORGE", 0.05)]["bets"] == 1 and backtest[("Elo", 0.0)]["bets"] == 0
+    assert backtest[("FORGE", 0.05)]["bets"] == 1 and backtest[("Other", 0.0)]["bets"] == 0
     five = rows[("FORGE", 0.05)]
     assert (five["bets"], five["won"]) == (2, 1)
     profits = [1 / 0.60 - 1 - markets.fee(0.60, 1), -1 - markets.fee(0.62, 1)]
     assert five["roi"] == pytest.approx(sum(profits) / 2)
     assert five["clv"] == pytest.approx(0.02) and five["beat"] == 0.5
     assert five["roi_ci"] is not None and rows[("FORGE", 0.10)]["bets"] == 0
-    assert rows[("Elo", 0.0)]["bets"] == 1 and rows[("Elo", 0.03)]["bets"] == 0
-    assert rows[("Elo", 0.0)]["roi_ci"] is None  # under min_n
+    assert rows[("Other", 0.0)]["bets"] == 1 and rows[("Other", 0.03)]["bets"] == 0
+    assert rows[("Other", 0.0)]["roi_ci"] is None  # under min_n
     # Every match, backing our pick: here the same sides as the value bets.
     assert (rows[("FORGE", None)]["bets"], rows[("FORGE", None)]["won"]) == (2, 1)
-    assert rows[("Elo", None)]["bets"] == 1
+    assert rows[("Other", None)]["bets"] == 1

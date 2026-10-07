@@ -4,7 +4,7 @@ Oracle's Elixir has no series id, so a series is a run of a team's games against
 one opponent with no more than `SERIES_GAP` between a game and the next. Each
 game carries the result, side, length, the Elo change, the starting five (team
 logs) or the champion and AURA (player logs), and our call before it: FORGE
-between two teams from the same major league, Elo otherwise, the way the
+between two teams from the same league, Elo across leagues, the way the
 Predictions page calls a match (`schedule.game_probability`), from the pre-game
 Elo and pre-game Form. A series carries our chance of taking it (game 1's call
 and the best-of read off the score) and Kalshi's last price before it started,
@@ -21,7 +21,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, FORM_POINTS, other_league_weight
+from prometheus.forge import (
+    CROSS_REGION_ELO_WEIGHT,
+    ELO_WEIGHT,
+    FORM_POINTS,
+    other_league_forge_probability,
+    other_league_weight,
+)
 from prometheus.form import league_relative, load_weights as load_form_weights, scores
 from prometheus.schedule import series_probability
 from prometheus.types import ALL_MAJOR_LEAGUES
@@ -101,13 +107,18 @@ def add_calls(games, states, form_weights=None):
     )
     h, oh = pd.Series(h).fillna("").to_numpy(), pd.Series(oh).fillna("").to_numpy()
     cross = (h != "") & (oh != "") & (h != oh)
-    forge = ~cross & pd.Series(h).isin(MAJORS).to_numpy() & ~np.isnan(f) & ~np.isnan(of)
+    forge = ~cross & ~np.isnan(f) & ~np.isnan(of)
+    major = pd.Series(h).isin(MAJORS).to_numpy()
     p = np.where(
         cross,
         1 / (1 + np.exp(-CROSS_REGION_ELO_WEIGHT * (e - oe))),
         np.where(
             forge,
-            1 / (1 + np.exp(-ELO_WEIGHT * ((e + f) - (oe + of)))),
+            np.where(
+                major,
+                1 / (1 + np.exp(-ELO_WEIGHT * ((e + f) - (oe + of)))),
+                other_league_forge_probability(e - oe, f - of),
+            ),
             1 / (1 + np.exp(-np.array([other_league_weight(l) for l in h]) * (e - oe))),
         ),
     )

@@ -10,7 +10,12 @@ import pandas as pd
 import pytest
 
 from prometheus import gamelog
-from prometheus.forge import CROSS_REGION_ELO_WEIGHT, ELO_WEIGHT, other_league_weight
+from prometheus.forge import (
+    CROSS_REGION_ELO_WEIGHT,
+    ELO_WEIGHT,
+    OTHER_LEAGUE_ELO_WEIGHT,
+    OTHER_LEAGUE_FORGE_ELO_WEIGHT,
+)
 from prometheus.schedule import series_probability
 from prometheus.types import GLORY_FEATURES
 
@@ -105,7 +110,7 @@ def test_best_of_reads_the_score():
     assert gamelog.best_of(1, 1) is None
 
 
-def test_calls_use_forge_within_a_major_league_and_elo_otherwise():
+def test_calls_use_forge_within_a_league_and_elo_across_leagues():
     games = _games()
     games.loc[games["teamname"] == "A", "elo_pre"] = 1600.0
     games.loc[games["opp"] == "A", "opp_elo_pre"] = 1600.0
@@ -119,12 +124,17 @@ def test_calls_use_forge_within_a_major_league_and_elo_otherwise():
     assert a_vs_c["p"] == pytest.approx(
         1 / (1 + math.exp(-CROSS_REGION_ELO_WEIGHT * 100))
     )
-    # A minor league uses Elo on that league's fitted curve.
-    minor = gamelog.add_calls(
-        games.assign(league="LJL"), _states(games.assign(league="LJL")), weights
-    )
-    assert minor.iloc[0]["method"] == "elo"
-    assert minor.iloc[0]["p"] == pytest.approx(1 / (1 + math.exp(-other_league_weight("LJL") * 100)))
+    # A minor league uses FORGE's other-league weights (Form gap 0 here).
+    minor_games = games.assign(league="LJL")
+    minor = gamelog.add_calls(minor_games, _states(minor_games), weights)
+    assert minor.iloc[0]["method"] == "forge"
+    assert minor.iloc[0]["p"] == pytest.approx(1 / (1 + math.exp(-OTHER_LEAGUE_FORGE_ELO_WEIGHT * 100)))
+    # Without a Form state (so no home league either), Elo on the pooled curve.
+    states = _states(minor_games)
+    states = states[states["gameid"] != minor_games.loc[0, "gameid"]]
+    no_form = gamelog.add_calls(minor_games, states, weights)
+    assert no_form.iloc[0]["method"] == "elo"
+    assert no_form.iloc[0]["p"] == pytest.approx(1 / (1 + math.exp(-OTHER_LEAGUE_ELO_WEIGHT * 100)))
 
 
 def test_calls_skip_games_without_pre_game_elo():

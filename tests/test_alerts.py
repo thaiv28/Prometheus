@@ -28,6 +28,8 @@ def _entry(
         "p_series": p,
         "ours1": "JD Gaming",
         "ours2": "LGD Gaming",
+        "home1": "LPL",
+        "home2": "LPL",
         "event": "Demacia Cup",
         "league": "DCup",
         "market": {
@@ -47,6 +49,7 @@ def test_select_takes_forge_edges_in_the_window_with_fresh_prices():
         "edge": _entry("edge"),  # 61 - 54 = +7
         "small": _entry("small", ask1=0.58),  # +3: below the bar
         "elo": _entry("elo", method="elo"),  # not FORGE
+        "minor": _entry("minor", home1="LDL", home2="LDL"),  # FORGE outside the majors
         "soon": _entry("soon", start="2026-10-06T14:00Z"),  # 4 hours out
         "late": _entry("late", start="2026-10-08T10:00Z"),  # 48 hours out
         "stale": _entry("stale", at="2026-10-05T10:00Z"),  # yesterday's price

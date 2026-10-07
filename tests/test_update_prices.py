@@ -42,6 +42,8 @@ def test_run_prices_the_log_writes_site_files_and_the_alert(tmp_path):
         "p_series": 0.566,
         "ours1": "FlyQuest",
         "ours2": "Shopify Rebellion",
+        "home1": "LCS",
+        "home2": "LCS",
         "event": "Demacia Cup",
         "league": "DCup",
         "data_through": "2026-10-05",

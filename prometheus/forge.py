@@ -4,10 +4,12 @@ Between two teams from the same home league, the chance to win one game is a
 logistic curve on their Elo gap and their Form gap (see `prometheus/form.py`).
 Between leagues, Form doesn't compare (each team's Form is measured against its
 own league), so the chance comes from Elo alone, on a curve fit to past games.
-Within a non-major league (no Form there) it is Elo alone on that league's fitted
-curve (`league_curves.json`, slopes shrunk toward the pooled one), or on the pooled
-curve `OTHER_LEAGUE_ELO_WEIGHT` for a league without one; both are steeper than the
-textbook 400-point curve.
+Within a non-major league it is the same blend with its own weights
+(`OTHER_LEAGUE_FORGE_ELO_WEIGHT`, `OTHER_LEAGUE_FORM_WEIGHT`, fit on games inside
+non-major leagues; Form's stat weights stay the major-league ones). A team there
+without Form falls back to Elo alone on its league's fitted curve
+(`league_curves.json`, slopes shrunk toward the pooled one), or on the pooled curve
+`OTHER_LEAGUE_ELO_WEIGHT` for a league without one.
 
 A team's FORGE rating is its Elo plus its Form in Elo points
 (`FORM_WEIGHT / ELO_WEIGHT` per unit of Form), so the same-league win chance is
@@ -66,6 +68,8 @@ ELO_WEIGHT = _WEIGHTS["elo_weight"]
 FORM_WEIGHT = _WEIGHTS["form_weight"]
 CROSS_REGION_ELO_WEIGHT = _WEIGHTS["cross_region_elo_weight"]
 OTHER_LEAGUE_ELO_WEIGHT = _WEIGHTS["other_league_elo_weight"]
+OTHER_LEAGUE_FORGE_ELO_WEIGHT = _WEIGHTS["other_league_forge_elo_weight"]
+OTHER_LEAGUE_FORM_WEIGHT = _WEIGHTS["other_league_form_weight"]
 LEAGUE_CURVES = load_league_curves()
 # Elo points per unit of Form (log-odds against the league average).
 FORM_POINTS = FORM_WEIGHT / ELO_WEIGHT
@@ -74,6 +78,14 @@ FORM_POINTS = FORM_WEIGHT / ELO_WEIGHT
 def other_league_weight(league):
     """Win-curve slope for a game inside non-major `league` (pooled if it has none)."""
     return LEAGUE_CURVES.get(league, OTHER_LEAGUE_ELO_WEIGHT)
+
+
+def other_league_forge_probability(elo_gap, form_gap):
+    """Chance to win one game inside a non-major league from the Elo gap and the
+    Form gap, both in Elo points (Form scaled by `FORM_POINTS`, as in FORGE ratings).
+    Works on numbers and arrays."""
+    log_odds = OTHER_LEAGUE_FORGE_ELO_WEIGHT * elo_gap + OTHER_LEAGUE_FORM_WEIGHT / FORM_POINTS * form_gap
+    return 1 / (1 + np.exp(-log_odds))
 
 
 def win_probability(rating, opponent_rating, same_league=True, elo=None, opponent_elo=None):
