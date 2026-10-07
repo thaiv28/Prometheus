@@ -260,10 +260,31 @@ def buy_costs(row, team1):
     return tuple(best)
 
 
-def fee(price, stake, rate=0.07):
-    """Kalshi's fee on one order of `stake` dollars at `price`:
-    ceil(rate × contracts × P × (1 − P)) to the cent (7% for orders that take
-    the book, 1.75% for resting orders)."""
+# Kalshi's general trading fee per order is ceil(rate × contracts × P × (1 − P)),
+# to the cent, with rate 7% times the series' fee multiplier for orders that take
+# the book. Resting (maker) orders pay a share of that only on series whose fee
+# type includes maker fees; the LoL series (`quadratic`) charge makers nothing.
+TAKER_RATE = 0.07
+MAKER_SHARE = {"quadratic": 0.0, "quadratic_with_maker_fees": 0.25, "quadratic_with_combo_maker_fees": 0.5}
+
+
+def fee_rates(series):
+    """(taker rate, maker rate) for a series from Kalshi's `/series` data
+    (`fee_type`, `fee_multiplier`). Flat-fee series aren't supported."""
+    if series["fee_type"] not in MAKER_SHARE:
+        raise ValueError(f"unsupported Kalshi fee type: {series['fee_type']}")
+    taker = TAKER_RATE * float(series.get("fee_multiplier", 1))
+    return taker, taker * MAKER_SHARE[series["fee_type"]]
+
+
+def fetch_fee_rates(ticker=SERIES, sleep=time.sleep):
+    """(taker rate, maker rate) for a series as Kalshi lists it now."""
+    return fee_rates(get(f"/series/{ticker}", sleep=sleep)["series"])
+
+
+def fee(price, stake, rate=TAKER_RATE):
+    """Kalshi's fee on one order of `stake` dollars at `price` and fee `rate`:
+    ceil(rate × contracts × P × (1 − P)) to the cent."""
     contracts = stake / price
     return math.ceil(round(rate * contracts * price * (1 - price) * 100, 6)) / 100
 
