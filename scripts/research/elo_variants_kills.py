@@ -8,9 +8,9 @@ recorded (or, for kill share, a 0-0 game), is tuned on seasons up to 2021 only
 2022 onwards against the published Elo on the same games.
 
 Usage:
-    VECLIB_MAXIMUM_THREADS=1 uv run python -u scripts/elo_variants_kills.py            # all
-    VECLIB_MAXIMUM_THREADS=1 uv run python -u scripts/elo_variants_kills.py --only 0   # one
-    VECLIB_MAXIMUM_THREADS=1 uv run python -u scripts/elo_variants_kills.py --report   # tables
+    VECLIB_MAXIMUM_THREADS=1 uv run python -u scripts/research/elo_variants_kills.py            # all
+    VECLIB_MAXIMUM_THREADS=1 uv run python -u scripts/research/elo_variants_kills.py --only 0   # one
+    VECLIB_MAXIMUM_THREADS=1 uv run python -u scripts/research/elo_variants_kills.py --report   # tables
 
 Each candidate's result is saved to --cache (default /tmp/elo_variants_kills), so
 candidates can run separately and --report prints the tables from the saved results.

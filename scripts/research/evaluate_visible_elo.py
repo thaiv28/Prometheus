@@ -1,6 +1,6 @@
 """Locked 2026 test plus broadcast-compatible gold/kills + Elo research.
 
-Run: .venv/bin/python scripts/evaluate_visible_elo.py
+Run: .venv/bin/python scripts/research/evaluate_visible_elo.py
 """
 
 import argparse
@@ -253,7 +253,7 @@ def report(metrics, coverage, audit):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
-    parser.add_argument("--out", type=Path, default=Path("docs/visible_elo_report.md"))
+    parser.add_argument("--out", type=Path, default=Path("docs/research/visible_elo_report.md"))
     parser.add_argument("--artifacts", type=Path, default=Path("data/visible_elo"))
     args = parser.parse_args()
     ratings, audit = history.load_ratings(end_year=2026)

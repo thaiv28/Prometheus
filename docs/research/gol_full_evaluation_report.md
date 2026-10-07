@@ -217,4 +217,4 @@ Profitability, ROI, market-relative incremental information and executable edge 
 
 ## Reproduction
 
-Run `.venv/bin/python scripts/evaluate_gol_full.py`. First run freezes exact inputs, numeric parameters, predictions, source/helper hashes, diagnostics and plots under data/gol_full_evaluation/. Same-directory reruns are refused. Original experiment is never overwritten. Inspect diagnostics.png for calibration and the paired loss comparison. No published metric, DB or site changes.
+Run `.venv/bin/python scripts/research/evaluate_gol_full.py`. First run freezes exact inputs, numeric parameters, predictions, source/helper hashes, diagnostics and plots under data/gol_full_evaluation/. Same-directory reruns are refused. Original experiment is never overwritten. Inspect diagnostics.png for calibration and the paired loss comparison. No published metric, DB or site changes.

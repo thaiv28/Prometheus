@@ -1,6 +1,6 @@
 """Pre-match Elo ablation for in-game models; development 2023–2025 only.
 
-Run: .venv/bin/python scripts/evaluate_snapshot_elo.py
+Run: .venv/bin/python scripts/research/evaluate_snapshot_elo.py
 """
 
 import argparse
@@ -269,7 +269,7 @@ def report(pooled, annual, coverage, audit):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
-    parser.add_argument("--out", type=Path, default=Path("docs/snapshot_elo_report.md"))
+    parser.add_argument("--out", type=Path, default=Path("docs/research/snapshot_elo_report.md"))
     parser.add_argument("--artifacts", type=Path, default=Path("data/snapshot_elo"))
     args = parser.parse_args()
     ratings, audit = load_ratings()

@@ -10,8 +10,8 @@ import pytest
 from prometheus.elo import calculate_game_length_elo_change, compute_elo_records, winner_score
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "scripts"))
-_spec = importlib.util.spec_from_file_location("elo_variants", ROOT / "scripts" / "elo_variants.py")
+sys.path.insert(0, str(ROOT / "scripts" / "research"))
+_spec = importlib.util.spec_from_file_location("elo_variants", ROOT / "scripts" / "research" / "elo_variants.py")
 ev = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ev)
 

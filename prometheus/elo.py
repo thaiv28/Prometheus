@@ -4,6 +4,7 @@ import datetime
 import pandas as pd
 from sqlalchemy import text
 
+from prometheus.player_tables import PlayerTables
 from prometheus.utils import get_engine
 from prometheus.types import INTERNATIONAL_LEAGUES
 
@@ -481,24 +482,26 @@ def _current_offsets(method: str) -> pd.Series:
     return offsets.groupby("league")["league_offset"].last()
 
 
-def get_player_history(method: str) -> pd.DataFrame:
+def get_player_history(method: str, tables: PlayerTables | None = None) -> pd.DataFrame:
     """Every rostered player's Elo after each game, oldest first.
+
+    `tables` is a `PlayerTables` for `method` (read when None).
 
     Returns:
         DataFrame with gameid, playerid, playername, position, teamid, teamname, league (of
         the game), home_league, date, year (calendar), elo (after the game) and
         league_offset (home league's offset after the game).
     """
-    stmt = f"""
-    SELECT pe.gameid, pe.playerid, mp.playername, mp.position, pe.teamid, m.teamname, m.league,
-           pe.home_league, m.date, pe.post_match_elo AS elo, pe.league_offset
-    FROM {_players_table(method)} pe
-    JOIN match_players mp
-        ON mp.gameid = pe.gameid AND mp.teamid = pe.teamid AND mp.playerid = pe.playerid
-    JOIN matches m ON m.gameid = pe.gameid AND m.teamid = pe.teamid
-    ORDER BY m.date, m.gameid
-    """
-    history = pd.read_sql(stmt, get_engine())
+    if tables is None:
+        tables = PlayerTables(method)
+    cols = ["gameid", "playerid", "playername", "position", "teamid", "teamname", "league",
+            "home_league", "date", "elo", "league_offset"]
+    history = (
+        # Roster order within a game, as the SQL join gave it.
+        tables.roster.merge(tables.elo.drop(columns="elo_pre"), on=["gameid", "teamid", "playerid"])
+        .merge(tables.matches[["gameid", "teamid", "teamname", "league", "date"]], on=["gameid", "teamid"])
+        .sort_values(["date", "gameid"], kind="stable", ignore_index=True)[cols]
+    )
     history["year"] = history["date"].str[:4].astype(int)
     return history
 

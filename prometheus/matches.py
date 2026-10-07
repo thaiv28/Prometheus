@@ -7,21 +7,6 @@ from enum import Enum
 from prometheus import utils
 
 
-def get_team_averages_frame(stat_table_name, minimum_matches=0, filters=None):
-    """
-    Reads from the given stat_table_name, joins with match_raw_stats, applies filters, and returns a pandas DataFrame
-    with one row per team, containing the team's averages for all feature columns in the stat table.
-    Args:
-        stat_table_name (str): Name of the stats table (e.g., 'match_lore_stats').
-        filters (dict, optional): Dictionary of filters, e.g. {'league': 'LPL', 'year': 2018, 'teamid': 'SKT'}
-    Returns:
-        pd.DataFrame: DataFrame with one row per team, columns are teamid and averages for each feature.
-    """
-
-    df = get_matches_frame(stat_table_name, filters)
-    return team_season_averages(df, minimum_matches)
-
-
 def team_season_averages(df, minimum_matches=0):
     """Average per-game rows into one row per team-season, dropping small samples."""
     # Define potential grouping columns and filter to ones that exist in the DataFrame

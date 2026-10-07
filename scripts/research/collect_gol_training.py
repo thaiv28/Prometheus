@@ -209,7 +209,7 @@ All raw pages and hashes are retained. Games/events/validation/gold_comparison/c
 
 ## Resume
 
-`.venv/bin/python scripts/collect_gol_training.py --fetch --max-requests 300 --delay 2` resumes from cached pages. Default is offline. Public requests are serial, at least two seconds apart, with a per-run request budget. Stop on 401/403/429 or a transport/DNS error and preserve progress; honor Retry-After before a later invocation, no automatic retries, concurrency, alternate identity or bypass. Order interleaves the 16 audited non-LPL event strata, so a partial run reaches multiple leagues/years. Additional splits/playoffs/MSI are future acquisition work. The default corpus covers the audit's selected spring/Worlds events and later maps, not every 2022–2025 event.
+`.venv/bin/python scripts/research/collect_gol_training.py --fetch --max-requests 300 --delay 2` resumes from cached pages. Default is offline. Public requests are serial, at least two seconds apart, with a per-run request budget. Stop on 401/403/429 or a transport/DNS error and preserve progress; honor Retry-After before a later invocation, no automatic retries, concurrency, alternate identity or bypass. Order interleaves the 16 audited non-LPL event strata, so a partial run reaches multiple leagues/years. Additional splits/playoffs/MSI are future acquisition work. The default corpus covers the audit's selected spring/Worlds events and later maps, not every 2022–2025 event.
 
 Before fitting objective models, spot-check timeline timestamps and inspect coverage/exclusions. Use chronological splits and identical game cohorts for gold+Elo versus gold+Elo+objectives; this collection does not establish predictive improvement.
 """
@@ -344,5 +344,5 @@ if __name__ == "__main__":
     parser.add_argument("--max-requests", type=int, default=300)
     parser.add_argument("--delay", type=float, default=2)
     parser.add_argument("--artifacts", type=Path, default=Path("data/gol_training"))
-    parser.add_argument("--out", type=Path, default=Path("docs/gol_training_report.md"))
+    parser.add_argument("--out", type=Path, default=Path("docs/research/gol_training_report.md"))
     run(parser.parse_args())

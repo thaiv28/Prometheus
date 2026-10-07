@@ -277,7 +277,7 @@ Power figures are provisional normal-approximation estimates for hypothetical ga
 
 Selected spring/Worlds events, uneven league/era coverage, exclusions and small per-league evaluation slices limit generalization. 2025/2026 outcomes were viewed in earlier research; this is a retrospective feature ablation, not an untouched prospective confirmation. Source totals and gold agree where admitted; every objective timestamp has not been independently verified against broadcasts. No forecast adoption, market execution or DB/site changes.
 
-Run `.venv/bin/python scripts/evaluate_gol_objectives.py` after at least 1,000 verified games. Dataset/sample/collection hashes and fixed feature/split settings are saved in manifest.json; metrics, predictions, development curves, power estimates and fitted numeric parameters under gitignored data/gol_objectives/. No automatic reruns on each collection batch; freeze the first experiment before further changes.
+Run `.venv/bin/python scripts/research/evaluate_gol_objectives.py` after at least 1,000 verified games. Dataset/sample/collection hashes and fixed feature/split settings are saved in manifest.json; metrics, predictions, development curves, power estimates and fitted numeric parameters under gitignored data/gol_objectives/. No automatic reruns on each collection batch; freeze the first experiment before further changes.
 """
 
 
@@ -291,7 +291,7 @@ def main():
     )
     parser.add_argument("--artifacts", type=Path, default=Path("data/gol_objectives"))
     parser.add_argument(
-        "--out", type=Path, default=Path("docs/gol_objective_report.md")
+        "--out", type=Path, default=Path("docs/research/gol_objective_report.md")
     )
     args = parser.parse_args()
     if (args.artifacts / "manifest.json").exists():

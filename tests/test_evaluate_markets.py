@@ -206,7 +206,7 @@ def test_bets_take_the_value_side_with_profit_after_fees_and_clv():
 def test_backfill_last_quote_takes_the_last_tight_quote_by_the_start():
     import sys
 
-    sys.path.insert(0, str(ROOT / "scripts"))
+    sys.path.insert(0, str(ROOT / "scripts" / "oneoff"))
     import backfill_market_prices as backfill
 
     candles = [

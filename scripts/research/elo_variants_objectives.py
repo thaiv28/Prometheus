@@ -8,8 +8,8 @@ is tuned on seasons up to 2021 (domestic Elo-live log loss) and reported on 2022
 against the published Elo on the same games (`elo_variants.held_out`).
 
 Usage (one candidate per process so they can run in parallel; results are pickled):
-    VECLIB_MAXIMUM_THREADS=1 uv run python scripts/elo_variants_objectives.py --run towers_diff
-    VECLIB_MAXIMUM_THREADS=1 uv run python scripts/elo_variants_objectives.py --report
+    VECLIB_MAXIMUM_THREADS=1 uv run python scripts/research/elo_variants_objectives.py --run towers_diff
+    VECLIB_MAXIMUM_THREADS=1 uv run python scripts/research/elo_variants_objectives.py --report
 """
 
 import argparse

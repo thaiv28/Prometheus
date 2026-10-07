@@ -7,9 +7,9 @@ marked `reconstructed`, with its result. Entries already in the log are never
 touched. The schedule is fetched from Leaguepedia a month at a time and cached
 (`--schedule-cache`), so a rerun doesn't fetch again. Needs the built DB.
 
-    uv run python scripts/extend_log.py --log data/predictions.json --since 2026-01-01
+    uv run python scripts/oneoff/extend_log.py --log data/predictions.json --since 2026-01-01
 
-Then price the new entries with `scripts/backfill_market_prices.py`.
+Then price the new entries with `scripts/oneoff/backfill_market_prices.py`.
 """
 
 import argparse

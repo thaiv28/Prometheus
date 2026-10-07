@@ -5,8 +5,8 @@ Can end-of-game kills replace or sharpen the game-length "actual score" in playe
 game-length margin at the same K, and none beats it on the held-out seasons. Most are
 significantly worse.
 
-Script: `scripts/elo_variants_kills.py` (harness: `scripts/elo_variants.py`).
-Run: `VECLIB_MAXIMUM_THREADS=1 uv run python -u scripts/elo_variants_kills.py` takes about 2 minutes
+Script: `scripts/research/elo_variants_kills.py` (harness: `scripts/research/elo_variants.py`).
+Run: `VECLIB_MAXIMUM_THREADS=1 uv run python -u scripts/research/elo_variants_kills.py` takes about 2 minutes
 per candidate. Use `--only i` to run one candidate (they can run in parallel) and `--report` to print the tables.
 
 ## Protocol

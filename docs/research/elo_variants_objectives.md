@@ -6,7 +6,7 @@ are slightly worse, and every one is significantly worse for FORGE domestic.
 
 ## Protocol
 
-- Harness: `scripts/elo_variants.py` (shared). Script: `scripts/elo_variants_objectives.py`
+- Harness: `scripts/research/elo_variants.py` (shared). Script: `scripts/research/elo_variants_objectives.py`
   (`--run <candidate>` per candidate, `--report` for the tables).
 - Each candidate maps a raw objective margin to the winner's score with `bounded` (logistic, 0.65 to 1,
   the published range). Where a stat is missing, it falls back to the published game-length score

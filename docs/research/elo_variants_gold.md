@@ -3,7 +3,7 @@
 Can a gold-based "margin of victory" beat the published game-length margin in player-built Elo?
 No. On the held-out seasons, none of the gold margins clears the significance rule in AGENTS.md.
 
-Script: `scripts/elo_variants_gold.py` (uses the harness in `scripts/elo_variants.py`).
+Script: `scripts/research/elo_variants_gold.py` (uses the harness in `scripts/research/elo_variants.py`).
 Runtime: 402 s for the whole run (single BLAS thread, load ~20 s).
 
 ## Protocol

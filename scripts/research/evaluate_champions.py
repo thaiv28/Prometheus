@@ -1,6 +1,6 @@
 """Exploratory champion ablation on 2023–2025; never evaluates 2026.
 
-Run: uv run python scripts/evaluate_champions.py
+Run: uv run python scripts/research/evaluate_champions.py
 """
 
 import argparse
@@ -429,7 +429,7 @@ def report(metrics, pooled, coverage):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
-    parser.add_argument("--out", type=Path, default=Path("docs/champion_report.md"))
+    parser.add_argument("--out", type=Path, default=Path("docs/research/champion_report.md"))
     parser.add_argument(
         "--artifacts", type=Path, default=Path("data/champion_experiment")
     )

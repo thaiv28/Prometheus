@@ -143,7 +143,7 @@ def test_player_page_renders_stints_and_links():
     history, latest, seasons = _player_frames()
     _, pages, _ = build_site.player_pages_and_rows(history, latest, seasons)
     html = build_site.env.get_template("player.html.j2").render(
-        page_key="player", root_path="../", last_update="today", **pages["vet"]
+        page_key="player", root_path="../", **pages["vet"]
     )
     assert "<h1>Vet</h1>" in html
     assert 'href="../teams/new-team.html"' in html
@@ -184,13 +184,13 @@ def test_player_page_renders_aura_by_season():
     _, pages, _ = build_site.player_pages_and_rows(history, latest, seasons)
     _, by_player = build_site.aura_rows_and_seasons(_aura_seasons(), pd.Series({"p1": "vet"}))
     html = build_site.env.get_template("player.html.j2").render(
-        page_key="player", root_path="../", last_update="today", **pages["vet"], aura_seasons=by_player["vet"]
+        page_key="player", root_path="../", **pages["vet"], aura_seasons=by_player["vet"]
     )
     assert '<h2 id="aura-heading">AURA by season</h2>' in html
     assert "Best AURA season 2025, +6.6 a game, 1st of 31 major-league mid laners that year." in html
     assert "Unranked" in html and "−0.8" in html
     plain = build_site.env.get_template("player.html.j2").render(
-        page_key="player", root_path="../", last_update="today", **pages["vet"]
+        page_key="player", root_path="../", **pages["vet"]
     )
     assert "AURA by season" not in plain and "Best AURA" not in plain
 
@@ -199,7 +199,7 @@ def test_team_page_renders_rosters_with_player_links():
     roster = build_site.team_rosters(_roster_history(), {"mid9": "mid9-page"}, {"mid9": 1712.4})["T1"]
     series = [{"date": "2026-02-01", "elo": 1600.0}]
     html = build_site.env.get_template("team.html.j2").render(
-        page_key="team", root_path="../", last_update="today", teamname="T1", slug="t1",
+        page_key="team", root_path="../", teamname="T1", slug="t1",
         series=[], elo_series=series, best=None, current_elo=1600, current_forge=None,
         current_league="LCK", leagues=["LCK"], roster=roster,
         elo_summary={"games": 1, "peak": series[0], "low": series[0], "first": series[0], "last": series[0]},
@@ -238,7 +238,7 @@ def test_header_menus_list_live_stats_with_their_questions():
 
 def test_header_marks_the_menu_that_leads_to_the_page():
     html = build_site.env.get_template("sunset.html.j2").render(
-        page_key="form", root_path="", metrics=build_site.SUNSET, last_update="today"
+        page_key="form", root_path="", metrics=build_site.SUNSET
     )
     assert '<summary data-current>Teams</summary>' in html
     assert '<summary>Players</summary>' in html
@@ -314,13 +314,13 @@ def test_fixture_row_and_register_carry_the_market_price():
 def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
     monkeypatch.setattr(build_site, "OUTPUT_DIR", str(tmp_path))
     view = build_site.predictions_view(_log(), {"t1"}, datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.timezone.utc))
-    build_site.render_predictions(view, {"matches": 4, "matched": 3, "unmatched": []}, "October 3, 2026")
+    build_site.render_predictions(view, {"matches": 4, "matched": 3, "unmatched": []})
     html = (tmp_path / "predictions.html").read_text()
     assert 'aria-current="page">Predictions' in html
     assert 'data-start="2026-10-04T08:00Z"' in html and "Sunday 4 October" in html
     assert 'href="results/2026-09.html">September 2026' in html
     assert "3 of 4 scheduled matches" in html
-    build_site.render_results(view, "October 3, 2026")
+    build_site.render_results(view)
     month = (tmp_path / "results" / "2026-09.html").read_text()
     assert "Missed" in month and 'href="#note-3"' in month and 'id="note-3"' in month
     assert 'href="../teams/' not in month or "../teams/t1.html" in month
@@ -394,7 +394,7 @@ def test_team_page_orders_sections_and_lists_contents(tmp_path, monkeypatch):
     roster = build_site.team_rosters(_roster_history(), {}, {})["T1"]
     series = [{"date": "2026-02-01", "elo": 1600.0}]
     html = build_site.env.get_template("team.html.j2").render(
-        page_key="team", root_path="../", last_update="today", teamname="T1", slug="t1",
+        page_key="team", root_path="../", teamname="T1", slug="t1",
         series=[{"year": 2026, "league": "LCK", "glory": 60.0, "forge": 1600, "year_rank": 1, "field": 10}],
         elo_series=series, best=None, current_elo=1600, current_forge=None,
         current_league="LCK", leagues=["LCK"], roster=roster,

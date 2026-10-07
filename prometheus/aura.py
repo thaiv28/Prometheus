@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
-from prometheus.utils import get_engine
+from prometheus.player_tables import PlayerTables
 
 MINUTES = (10, 15, 20, 25)
 MINUTE = 15
@@ -47,24 +47,24 @@ ROLES = ("top", "jng", "mid", "bot", "sup")
 C = 1.0
 
 
-def load_aura_games(minutes=MINUTES):
+def load_aura_games(minutes=MINUTES, tables=None):
     """One row per starter per game, with lane gaps `<stat>_<minute>` (own minus lane opponent).
 
     Only team-games with all five starters' snapshots are kept. A gap is NULL when
     the game ended before that minute. `playerid` comes from `match_players`, the
-    same id player Elo uses.
+    same id player Elo uses. `tables` is a `PlayerTables` holding these gaps (read
+    when None).
     """
-    gaps = ", ".join(f"p.{s}at{m} - p.opp_{s}at{m} AS {s}_{m}" for m in minutes for s in STATS)
-    stmt = f"""
-    SELECT p.gameid, p.teamid, p.position, mp.playerid, mp.playername, p.champion,
-           m.date, m.year, m.league, m.teamname, m.side, m.result, {gaps}
-    FROM player_stats p
-    JOIN match_players mp ON mp.gameid = p.gameid AND mp.teamid = p.teamid AND mp.position = p.position
-    JOIN matches m ON m.gameid = p.gameid AND m.teamid = p.teamid
-    """
-    # Sorting here is much faster than ORDER BY over this join.
+    if tables is None:
+        tables = PlayerTables(stats=STATS, minutes=minutes)
+    gaps = [f"{s}_{m}" for m in minutes for s in STATS]
+    cols = ["gameid", "teamid", "position", "playerid", "playername", "champion",
+            "date", "year", "league", "teamname", "side", "result", *gaps]
+    players = tables.stats.merge(tables.roster, on=["gameid", "teamid", "position"]).merge(
+        tables.matches, on=["gameid", "teamid"]
+    )[cols]
     keys = ["date", "gameid", "teamid", "position"]
-    players = pd.read_sql(stmt, get_engine()).sort_values(keys, ignore_index=True)
+    players = players.sort_values(keys, ignore_index=True)
     full = players.groupby(["gameid", "teamid"])["position"].transform("size") == len(ROLES)
     players = players[full]
     both = players.groupby("gameid")["teamid"].transform("nunique") == 2
@@ -148,14 +148,15 @@ def team_centred(change, players):
     return change - (team - change) / (len(ROLES) - 1)
 
 
-def get_aura(players=None, earlier_only=False):
+def get_aura(players=None, earlier_only=False, tables=None):
     """Every player-game with its AURA: the 15-minute term plus `LATE_WEIGHT` of the team-centred change.
 
-    Returns `players` (read when None) with `aura` and `aura_late` (the
-    team-centred change; 0 when the game ended before every late snapshot).
+    Returns `players` (read when None, from `tables` if given) with `aura` and
+    `aura_late` (the team-centred change; 0 when the game ended before every late
+    snapshot).
     """
     if players is None:
-        players = load_aura_games()
+        players = load_aura_games(tables=tables)
     players = players.copy()
     early = snapshot_scores(players, MINUTE, earlier_only)
     late = pd.Series(np.nan, index=players.index)

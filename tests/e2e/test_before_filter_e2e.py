@@ -10,6 +10,8 @@ from prometheus.ranking import get_glory_ranking
 from prometheus.season import load_season_games
 from prometheus.types import ALL_MAJOR_LEAGUES
 
+pytestmark = pytest.mark.e2e
+
 YEAR = 2022
 
 

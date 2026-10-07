@@ -7,6 +7,11 @@ on:
   schedule:
     - cron: "0 10 * * *" # daily at 3am PDT, after Oracle's Elixir updates
   workflow_dispatch:
+    inputs:
+      full_upload:
+        description: "Upload every file, ignoring the deploy manifest"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -20,7 +25,25 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Lint and the test suite need no data (e2e builds a small DB from a committed
+  # CSV sample), so they run first and fail fast, before the CSV download.
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install dependencies
+        run: uv sync --frozen && uv pip install -e .
+      - name: Format
+        run: uv run ruff format --check
+      - name: Lint
+        run: uv run ruff check
+      - name: Test
+        run: uv run pytest -q
+
   build:
+    needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -79,8 +102,11 @@ jobs:
         with:
           path: data/raw
           key: oracles-elixir-${{ hashFiles('data/raw/*.csv') }}
-      - name: Test
-        run: uv run pytest -q
+      # The e2e tests again, on today's full DB.
+      - name: Test on the full DB
+        env:
+          PROMETHEUS_E2E_DB: real
+        run: uv run pytest -q -m e2e
       # Refit the FORGE weights on today's data; warns (does not fail) on a big move.
       - name: Check FORGE weights
         run: uv run python scripts/evaluate_metrics.py --check-weights
@@ -134,6 +160,12 @@ jobs:
       DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
       HEALTH_URL: https://prometheus.thaiv.dev/
     steps:
+      # Only the deploy script; the site itself comes from the build's artifact.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/deploy_site.py
+          sparse-checkout-cone-mode: false
+          path: repo
       - uses: actions/download-artifact@v4
         with:
           name: site
@@ -142,20 +174,14 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-west-2
-      - name: Upload immutable release
-        run: aws s3 sync output "s3://$BUCKET/releases/${{ github.run_id }}" --delete
-      - name: Publish release
-        run: aws s3 sync "s3://$BUCKET/releases/${{ github.run_id }}" "s3://$BUCKET/current" --delete
-      # The hourly prices job rewrites these two without invalidating, so CloudFront
-      # must keep them only 5 minutes (its policy's default is a day when the object
-      # has no Cache-Control). Set it on the published copies, before invalidating.
-      - name: Short cache for the hourly files
-        run: |
-          for f in kalshi.json predictions.json; do
-            [ -f "output/$f" ] || continue
-            aws s3 cp "output/$f" "s3://$BUCKET/current/$f" --only-show-errors \
-              --content-type application/json --cache-control "max-age=300"
-          done
+      # Only files whose content hash changed since the last deploy go up, straight
+      # into current/ (scripts/deploy_site.py; the manifest is deploy/manifest.json).
+      # kalshi.json and predictions.json always go up with a 5-minute Cache-Control,
+      # because the hourly prices job rewrites them without invalidating.
+      - name: Upload changed files
+        env:
+          FULL: ${{ inputs.full_upload && '--full' || '' }}
+        run: python3 repo/scripts/deploy_site.py --output output $FULL
       - name: Invalidate edge cache
         run: aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*"
       - name: Check deployment health

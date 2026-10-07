@@ -19,8 +19,8 @@ Candidates (all squashed into the winner's score with `bounded`, upper 1.0):
     5.  Asymmetric: the game-length score, plus a bonus only when the composite is extreme.
 
 Usage:
-    VECLIB_MAXIMUM_THREADS=1 uv run python scripts/elo_variants_combined.py \
-        --out docs/elo_variants_combined.md
+    VECLIB_MAXIMUM_THREADS=1 uv run python scripts/research/elo_variants_combined.py \
+        --out docs/research/elo_variants_combined.md
 """
 
 import argparse
@@ -201,7 +201,7 @@ def main():
     lines = [
         "# Elo margin variants: combined / learned margins and update settings",
         "",
-        f"Script: `scripts/elo_variants_combined.py` (harness `scripts/elo_variants.py`). "
+        f"Script: `scripts/research/elo_variants_combined.py` (harness `scripts/research/elo_variants.py`). "
         f"Runtime {(time.time() - t0) / 60:.1f} min.",
         "",
         "## Protocol",

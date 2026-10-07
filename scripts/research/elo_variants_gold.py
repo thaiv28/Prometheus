@@ -7,7 +7,7 @@ loss on the training seasons) and reported on the held-out seasons, whatever the
 The best candidate is picked by its training-season log loss, not its held-out one.
 
 Usage:
-    VECLIB_MAXIMUM_THREADS=1 uv run python scripts/elo_variants_gold.py
+    VECLIB_MAXIMUM_THREADS=1 uv run python scripts/research/elo_variants_gold.py
 """
 
 import sys

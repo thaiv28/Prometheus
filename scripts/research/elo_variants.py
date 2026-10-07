@@ -28,9 +28,9 @@ held-out games. Elo is replayed over every game either way (ratings carry across
 but scoring, win curves and Form weights only use the years asked for.
 
 Usage:
-    uv run python scripts/elo_variants.py --baseline   # reproduction check, baseline row, timing
-    uv run python scripts/elo_variants.py --coverage   # match_stats coverage per year
-    uv run python scripts/elo_variants.py --example    # a tuned gold-margin variant, held out
+    uv run python scripts/research/elo_variants.py --baseline   # reproduction check, baseline row, timing
+    uv run python scripts/research/elo_variants.py --coverage   # match_stats coverage per year
+    uv run python scripts/research/elo_variants.py --example    # a tuned gold-margin variant, held out
 
 On macOS set VECLIB_MAXIMUM_THREADS=1 (BLAS threads stall otherwise).
 """
@@ -55,7 +55,7 @@ from prometheus.evaluation import game_losses, out_of_year_probabilities, paired
 from prometheus.types import INTERNATIONAL_LEAGUES
 from prometheus.utils import get_engine
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import evaluate_metrics as em  # noqa: E402  (scripts/ is not a package)
 
 # End-of-game team stats from `match_stats` given to margin functions.

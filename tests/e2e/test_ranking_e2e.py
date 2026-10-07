@@ -1,6 +1,10 @@
+import pytest
+
 from prometheus.ranking import get_glory_ranking
 from prometheus.types import ALL_MAJOR_LEAGUES
 
+
+pytestmark = pytest.mark.e2e
 
 def test_glory_custom_leagues_e2e():
     custom_league_df = get_glory_ranking(

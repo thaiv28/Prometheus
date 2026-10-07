@@ -7,7 +7,7 @@ import urllib.error
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
+sys.path.insert(0, str(Path(__file__).parents[1] / "scripts" / "research"))
 import collect_gol_training as collect
 from test_gol_pilot import html
 

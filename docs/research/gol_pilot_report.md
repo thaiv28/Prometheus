@@ -125,6 +125,6 @@ A passed totals check supports parser consistency but does not independently pro
 
 ## Reproduction
 
-`.venv/bin/python scripts/pilot_gol.py` reprocesses the cached default sample offline. Add `--fetch` to obtain uncached pages; requests are sequential, at least one second apart, follow robots.txt and stop on authentication/rate-limit responses. `--samples PATH` accepts a JSON array of gol_id/sample objects, bounded to 12 games. Outputs games/events/validation/checkpoints/gold_comparison/training_candidates CSVs plus manifest. No DB or published metric changes.
+`.venv/bin/python scripts/research/pilot_gol.py` reprocesses the cached default sample offline. Add `--fetch` to obtain uncached pages; requests are sequential, at least one second apart, follow robots.txt and stop on authentication/rate-limit responses. `--samples PATH` accepts a JSON array of gol_id/sample objects, bounded to 12 games. Outputs games/events/validation/checkpoints/gold_comparison/training_candidates CSVs plus manifest. No DB or published metric changes.
 
 New HTTP requests in this run: 0.

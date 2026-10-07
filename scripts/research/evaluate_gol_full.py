@@ -556,7 +556,7 @@ Profitability, ROI, market-relative incremental information and executable edge 
 
 ## Reproduction
 
-Run `.venv/bin/python scripts/evaluate_gol_full.py`. First run freezes exact inputs, numeric parameters, predictions, source/helper hashes, diagnostics and plots under data/gol_full_evaluation/. Same-directory reruns are refused. Original experiment is never overwritten. Inspect diagnostics.png for calibration and the paired loss comparison. No published metric, DB or site changes.
+Run `.venv/bin/python scripts/research/evaluate_gol_full.py`. First run freezes exact inputs, numeric parameters, predictions, source/helper hashes, diagnostics and plots under data/gol_full_evaluation/. Same-directory reruns are refused. Original experiment is never overwritten. Inspect diagnostics.png for calibration and the paired loss comparison. No published metric, DB or site changes.
 """
 
 
@@ -617,7 +617,7 @@ def main():
         "--artifacts", type=Path, default=Path("data/gol_full_evaluation")
     )
     parser.add_argument(
-        "--out", type=Path, default=Path("docs/gol_full_evaluation_report.md")
+        "--out", type=Path, default=Path("docs/research/gol_full_evaluation_report.md")
     )
     args = parser.parse_args()
     if (args.artifacts / "manifest.json").exists():
@@ -644,9 +644,9 @@ def main():
         args.samples,
         args.dataset.parent / "manifest.json",
         Path(__file__),
-        Path("scripts/evaluate_gol_objectives.py"),
-        Path("scripts/evaluate_champions.py"),
-        Path("scripts/audit_snapshots.py"),
+        Path("scripts/research/evaluate_gol_objectives.py"),
+        Path("scripts/research/evaluate_champions.py"),
+        Path("scripts/research/audit_snapshots.py"),
         Path("data/gol_objectives/fitted_models.json"),
         Path("data/gol_objectives/predictions.csv"),
     ]

@@ -6,7 +6,7 @@ import sys
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts"))
+sys.path.insert(0, str(Path(__file__).parents[1] / "scripts" / "research"))
 import audit_gol_coverage as audit
 
 
@@ -94,10 +94,22 @@ def test_coverage_keeps_failures_and_unknown_duration_denominators():
     assert pd.isna(result.iloc[1].listed_series)
 
 
-def test_offline_missing_listings_remain_unavailable(tmp_path):
+def test_offline_missing_listings_remain_unavailable(tmp_path, monkeypatch):
     from types import SimpleNamespace
     import json
 
+    from sqlalchemy import create_engine, text
+
+    # An empty matches table, so the test doesn't need a built DB.
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE matches (gameid TEXT, date TEXT, teamname TEXT, "
+                "side TEXT, gamelength REAL, result INTEGER, league TEXT)"
+            )
+        )
+    monkeypatch.setattr(audit.pilot, "get_engine", lambda: engine)
     cache = tmp_path / "html"
     cache.mkdir()
     (cache / "robots.txt").write_text("User-agent: *\nDisallow: /private/\n")

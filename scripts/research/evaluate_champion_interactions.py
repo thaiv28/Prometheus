@@ -1,6 +1,6 @@
 """Test champion × state slopes without exact lane matchups, on 2023–2025.
 
-Run: uv run python scripts/evaluate_champion_interactions.py
+Run: uv run python scripts/research/evaluate_champion_interactions.py
 """
 
 import argparse
@@ -113,7 +113,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-dir", type=Path, default=Path("data/raw"))
     parser.add_argument(
-        "--out", type=Path, default=Path("docs/champion_interaction_report.md")
+        "--out", type=Path, default=Path("docs/research/champion_interaction_report.md")
     )
     parser.add_argument(
         "--artifacts", type=Path, default=Path("data/champion_interactions")

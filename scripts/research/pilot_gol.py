@@ -1,7 +1,7 @@
 """Small cached gol.gg historical objective-timeline pilot, separate from training.
 
-Run offline: .venv/bin/python scripts/pilot_gol.py
-Fetch bounded public sample: .venv/bin/python scripts/pilot_gol.py --fetch
+Run offline: .venv/bin/python scripts/research/pilot_gol.py
+Fetch bounded public sample: .venv/bin/python scripts/research/pilot_gol.py --fetch
 """
 
 import argparse
@@ -723,7 +723,7 @@ def report(frames, manifest):
             "",
             "## Reproduction",
             "",
-            "`.venv/bin/python scripts/pilot_gol.py` reprocesses the cached default sample offline. Add `--fetch` to obtain uncached pages; requests are sequential, at least one second apart, follow robots.txt and stop on authentication/rate-limit responses. `--samples PATH` accepts a JSON array of gol_id/sample objects, bounded to 12 games. Outputs games/events/validation/checkpoints/gold_comparison/training_candidates CSVs plus manifest. No DB or published metric changes.",
+            "`.venv/bin/python scripts/research/pilot_gol.py` reprocesses the cached default sample offline. Add `--fetch` to obtain uncached pages; requests are sequential, at least one second apart, follow robots.txt and stop on authentication/rate-limit responses. `--samples PATH` accepts a JSON array of gol_id/sample objects, bounded to 12 games. Outputs games/events/validation/checkpoints/gold_comparison/training_candidates CSVs plus manifest. No DB or published metric changes.",
             "",
             f'New HTTP requests in this run: {manifest["network_requests_this_run"]}.',
             "",
@@ -736,7 +736,7 @@ def main():
     parser.add_argument("--fetch", action="store_true")
     parser.add_argument("--samples", type=Path)
     parser.add_argument("--artifacts", type=Path, default=Path("data/gol_pilot"))
-    parser.add_argument("--out", type=Path, default=Path("docs/gol_pilot_report.md"))
+    parser.add_argument("--out", type=Path, default=Path("docs/research/gol_pilot_report.md"))
     run(parser.parse_args())
 
 
