@@ -149,7 +149,7 @@ jobs:
         with:
           path: dumps
           key: ${{ env.DUMP_KEY }}
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
         if: steps.dumps.outputs.cache-hit != 'true'
       # uv sync installs the package itself since it has a build-system; the
       # explicit install covers base commits from before that.
@@ -228,7 +228,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/benchmark_comment.sh find "$PR_SHA" report.md > /dev/null
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
         if: env.REUSED == '' && env.HAS_DUMP == 'true' && env.BENCH == 'success'
       - name: Install dependencies
         if: env.REUSED == '' && env.HAS_DUMP == 'true' && env.BENCH == 'success'

@@ -32,7 +32,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
       - name: Install dependencies
         run: uv sync --frozen
       - name: Format
@@ -78,7 +78,7 @@ jobs:
       MARKET_PRICES_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/markets/market_prices.json
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
       - name: Install dependencies
         run: uv sync --frozen
       # Oracle's Elixir updates its CSVs once a day, before the 10:00 UTC cron, and
