@@ -1,0 +1,288 @@
+name: Benchmarks
+
+# On pull requests: run the forecast backtest, season-stat report and AURA report on
+# the PR (head: the merge commit) and on its base (the commit it merges onto), each
+# on its own DB built from the same CSVs, plus the market benchmark on the same
+# cached Kalshi markets, and compare them (scripts/compare_benchmarks.py). Head and
+# base, and the core benchmarks and the market one, run as parallel jobs (the core
+# job runs its three scripts at once); the base's dumps are cached by base commit
+# and inputs, so later pushes to a PR rerun only the head. Posts one sticky comment and fails when a
+# guarded value is significantly worse, unless the PR has the `benchmark-override`
+# label. A label change reuses the verdict for the same commit instead of rerunning.
+# Never runs on main pushes or schedules.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write # the sticky comment
+
+concurrency:
+  group: benchmarks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  PR: ${{ github.event.pull_request.number }}
+  PR_SHA: ${{ github.event.pull_request.head.sha }}
+  GH_REPO: ${{ github.repository }}
+
+jobs:
+  # What to run: a stored verdict to reuse (label changes), the base commit, whether
+  # the base can dump, one CSV cache entry and one Kalshi cache entry both sides
+  # restore exactly (so they read the same data), and the matrix of jobs.
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      verdict: ${{ steps.reuse.outputs.verdict }}
+      base_sha: ${{ steps.base.outputs.sha }}
+      has_dump: ${{ steps.base.outputs.has_dump }}
+      raw_key: ${{ steps.raw.outputs.cache-matched-key }}
+      kalshi_key: ${{ steps.kalshi.outputs.cache-matched-key }}
+      jobs: ${{ steps.matrix.outputs.jobs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Reuse the verdict for this commit (label changes)
+        id: reuse
+        if: github.event.action == 'labeled' || github.event.action == 'unlabeled'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          verdict="$(bash scripts/benchmark_comment.sh find "$PR_SHA" report.md)"
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          echo "Previous verdict for $PR_SHA: ${verdict:-none, rerunning}"
+      - name: Base commit
+        id: base
+        run: |
+          echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+          if git show HEAD^1:scripts/evaluate_metrics.py | grep -q -- '--dump' \
+              && git show HEAD^1:scripts/evaluate_season_stats.py | grep -q -- '--dump' \
+              && git show HEAD^1:scripts/evaluate_aura.py | grep -q -- '--dump'; then
+            echo "has_dump=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "The base's benchmark scripts have no --dump: no baseline yet."
+            echo "has_dump=false" >> "$GITHUB_OUTPUT"
+          fi
+          if git show HEAD^1:scripts/evaluate_markets.py | grep -q -- '--dump'; then
+            echo "markets_dump=true" >> "$GITHUB_OUTPUT"
+          fi
+      # Main's newest CSVs (see publish.yml). Only looked up here; each side
+      # restores this exact entry.
+      - name: Find cached CSVs
+        id: raw
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw
+          key: oracles-elixir-${{ github.run_id }}
+          restore-keys: oracles-elixir-
+          lookup-only: true
+      # Kalshi's markets and candlesticks, kept by publish.yml's kalshi-cache job.
+      - name: Find the cached Kalshi markets
+        id: kalshi
+        uses: actions/cache/restore@v4
+        with:
+          path: data/markets
+          key: kalshi-markets-${{ github.run_id }}
+          restore-keys: kalshi-markets-
+          lookup-only: true
+      # Core benchmarks on both sides; the market benchmark too when there is a
+      # Kalshi cache and the base can dump it.
+      - name: Jobs
+        id: matrix
+        env:
+          HAS_DUMP: ${{ steps.base.outputs.has_dump }}
+          MARKETS_DUMP: ${{ steps.base.outputs.markets_dump }}
+          KALSHI_KEY: ${{ steps.kalshi.outputs.cache-matched-key }}
+        run: |
+          groups='"core"'
+          [ "$MARKETS_DUMP" = true ] && [ -n "$KALSHI_KEY" ] && groups='"core","markets"'
+          if [ "$HAS_DUMP" = true ]; then
+            echo "jobs={\"side\":[\"head\",\"base\"],\"group\":[$groups]}" >> "$GITHUB_OUTPUT"
+          else
+            echo 'jobs={"side":["none"],"group":["none"]}' >> "$GITHUB_OUTPUT"
+          fi
+
+  bench:
+    needs: prepare
+    # Without a baseline there is nothing to compare, so neither side runs.
+    if: needs.prepare.outputs.verdict == '' && needs.prepare.outputs.has_dump == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.jobs) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SIDE: ${{ matrix.side }}
+      GROUP: ${{ matrix.group }}
+      BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
+      RAW_KEY: ${{ needs.prepare.outputs.raw_key }}
+      KALSHI_KEY: ${{ needs.prepare.outputs.kalshi_key }}
+      # The base's dumps depend only on its commit and its inputs.
+      DUMP_KEY: benchmark-dumps-${{ matrix.group }}-${{ needs.prepare.outputs.base_sha }}-${{ needs.prepare.outputs.raw_key }}${{ matrix.group == 'markets' && format('-{0}', needs.prepare.outputs.kalshi_key) || '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Check out the base
+        if: matrix.side == 'base'
+        run: git checkout --detach "$BASE_SHA"
+      - name: Restore the base's cached dumps
+        id: dumps
+        if: matrix.side == 'base' && env.RAW_KEY != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: dumps
+          key: ${{ env.DUMP_KEY }}
+      - uses: astral-sh/setup-uv@v6
+        if: steps.dumps.outputs.cache-hit != 'true'
+      - name: Install dependencies
+        if: steps.dumps.outputs.cache-hit != 'true'
+        run: uv sync --frozen && uv pip install -e .
+      - name: Restore cached CSVs
+        if: steps.dumps.outputs.cache-hit != 'true' && env.RAW_KEY != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: data/raw
+          key: ${{ env.RAW_KEY }}
+      - name: Restore the cached Kalshi markets
+        if: steps.dumps.outputs.cache-hit != 'true' && matrix.group == 'markets'
+        uses: actions/cache/restore@v4
+        with:
+          path: data/markets
+          key: ${{ env.KALSHI_KEY }}
+      - name: Build the database
+        if: steps.dumps.outputs.cache-hit != 'true'
+        run: uv run bash scripts/setup_db.sh
+      # The three scripts only read the DB, so they run at once (4 cores); each
+      # log is printed, and the step fails if any script does.
+      - name: Core benchmarks
+        if: steps.dumps.outputs.cache-hit != 'true' && matrix.group == 'core'
+        run: |
+          mkdir -p dumps
+          pids=()
+          for name in metrics:evaluate_metrics season:evaluate_season_stats aura:evaluate_aura; do
+            uv run python "scripts/${name#*:}.py" --dump "dumps/${name%%:*}" > "dumps/${name%%:*}.log" 2>&1 &
+            pids+=($!)
+          done
+          status=0
+          for pid in "${pids[@]}"; do wait "$pid" || status=1; done
+          for log in dumps/*.log; do echo "::group::$log"; cat "$log"; echo "::endgroup::"; done
+          exit $status
+      # Offline: only the cached markets, so both sides price the same ones.
+      - name: Market benchmark
+        if: steps.dumps.outputs.cache-hit != 'true' && matrix.group == 'markets'
+        env:
+          VECLIB_MAXIMUM_THREADS: "1"
+        run: |
+          mkdir -p dumps
+          uv run python scripts/evaluate_markets.py --offline --dump dumps/markets > dumps/markets.log 2>&1 \
+            || { cat dumps/markets.log; exit 1; }
+          tail -n 20 dumps/markets.log
+      - name: Cache the base's dumps
+        if: matrix.side == 'base' && env.RAW_KEY != '' && steps.dumps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: dumps
+          key: ${{ env.DUMP_KEY }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dumps-${{ matrix.side }}-${{ matrix.group }}
+          path: dumps
+          retention-days: 3
+
+  compare:
+    needs: [prepare, bench]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'benchmark-override') }}
+      REUSED: ${{ needs.prepare.outputs.verdict }}
+      HAS_DUMP: ${{ needs.prepare.outputs.has_dump }}
+      BENCH: ${{ needs.bench.result }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Stored report (label changes)
+        if: env.REUSED != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/benchmark_comment.sh find "$PR_SHA" report.md > /dev/null
+      - uses: astral-sh/setup-uv@v6
+        if: env.REUSED == '' && env.HAS_DUMP == 'true' && env.BENCH == 'success'
+      - name: Install dependencies
+        if: env.REUSED == '' && env.HAS_DUMP == 'true' && env.BENCH == 'success'
+        run: uv sync --frozen && uv pip install -e .
+      # Each side's core and market artifacts merge into one directory.
+      - uses: actions/download-artifact@v4
+        if: env.REUSED == '' && env.HAS_DUMP == 'true' && env.BENCH == 'success'
+        with:
+          pattern: dumps-base-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/dumps/dumps-base
+      - uses: actions/download-artifact@v4
+        if: env.REUSED == '' && env.HAS_DUMP == 'true' && env.BENCH == 'success'
+        with:
+          pattern: dumps-head-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/dumps/dumps-head
+      - name: Compare
+        id: compare
+        if: env.REUSED == ''
+        env:
+          DUMPS: ${{ runner.temp }}/dumps
+        run: |
+          if [ "$HAS_DUMP" != true ]; then
+            echo "No baseline yet." > report.md
+            echo "verdict=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$BENCH" != success ]; then
+            echo "The benchmark jobs did not finish ($BENCH); see their logs." > report.md
+            echo "verdict=error" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          set +e
+          uv run python scripts/compare_benchmarks.py "$DUMPS/dumps-base" "$DUMPS/dumps-head" --out report.md
+          code=$?
+          set -e
+          case $code in
+            0) echo "verdict=pass" >> "$GITHUB_OUTPUT" ;;
+            1) echo "verdict=fail" >> "$GITHUB_OUTPUT" ;;
+            *) echo "verdict=error" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      # Fork PRs get a read-only token, so the comment may fail; the report is
+      # also in the run summary. An error verdict isn't stored as a comment.
+      - name: Post the report
+        if: env.REUSED != '' || (steps.compare.outputs.verdict != '' && steps.compare.outputs.verdict != 'error')
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERDICT: ${{ env.REUSED || steps.compare.outputs.verdict }}
+        run: |
+          [ -f report.md ] && cat report.md >> "$GITHUB_STEP_SUMMARY"
+          bash scripts/benchmark_comment.sh post "$PR_SHA" "$VERDICT" "$OVERRIDE" report.md
+      - name: Verdict
+        env:
+          VERDICT: ${{ env.REUSED || steps.compare.outputs.verdict }}
+        run: |
+          echo "Verdict: ${VERDICT:-none}; benchmark-override label: $OVERRIDE"
+          case "$VERDICT" in
+            pass | skip) exit 0 ;;
+            fail)
+              if [ "$OVERRIDE" = true ]; then
+                echo "::notice title=Benchmarks overridden::A guarded value is significantly worse; passing because of the benchmark-override label."
+                exit 0
+              fi
+              echo "::error title=Benchmarks worse::A guarded benchmark value is significantly worse. Add the benchmark-override label if this is intended."
+              exit 1
+              ;;
+            *) exit 1 ;;
+          esac

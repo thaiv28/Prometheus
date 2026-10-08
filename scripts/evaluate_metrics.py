@@ -30,10 +30,13 @@ Usage:
     uv run python scripts/evaluate_metrics.py [--years 2022 2023] [--out report.md]
     uv run python scripts/evaluate_metrics.py --write-weights   # refresh Form and FORGE weights
     uv run python scripts/evaluate_metrics.py --check-weights   # CI: warn if they moved
+    uv run python scripts/evaluate_metrics.py --dump DIR   # also save per-game losses (compare_benchmarks.py)
 """
 
 import argparse
 import datetime
+import json
+import os
 import sys
 
 import numpy as np
@@ -631,12 +634,90 @@ def check_weights(form_weights, forge, league_curves):
     return moved
 
 
+def _dump_rows(section, forecast, games, losses, teamcol):
+    return pd.DataFrame(
+        {
+            "section": section,
+            "forecast": forecast,
+            "gameid": games["gameid"].to_numpy(),
+            "teamid": games[teamcol].to_numpy(),
+            "year": games["year"].to_numpy(),
+            "won": games["won"].to_numpy(),
+            **{
+                col: losses[col].to_numpy() for col in ("log_loss", "brier", "accuracy")
+            },
+        }
+    )
+
+
+def write_dump(out_dir, frame, losses, cross, other):
+    """Per-game losses behind the headline comparisons, for `compare_benchmarks.py`.
+
+    `forecasts.csv.gz`: one row per (section, forecast, game), keyed by gameid and
+    teamid (blue's in Domestic / International, the lower team id elsewhere), with
+    the same losses the report averages. `metrics.json`: mean log loss and games
+    per section and forecast. Recomputes the cross-league and other-league
+    probabilities exactly as the report does.
+    """
+    parts = []
+    for test_set in ("Domestic", "International"):
+        mask = (frame["test_set"] == test_set).to_numpy()
+        for key, _, _ in METRICS:
+            parts.append(
+                _dump_rows(test_set, key, frame[mask], losses[key][mask], "blue_id")
+            )
+    parts.append(
+        _dump_rows(
+            "Cross-league",
+            "elo_live",
+            cross,
+            game_losses(out_of_year_probabilities(cross, "elo_live"), cross["won"]),
+            "teamid",
+        )
+    )
+    section = "Within other leagues"
+    for key, p in (
+        ("elo_standard", 1 / (1 + 10 ** (-other["elo_live"] / 400))),
+        ("elo_one_curve", out_of_year_probabilities(other, "elo_live")),
+        ("elo_per_league", out_of_year_league_probabilities(other)),
+    ):
+        parts.append(
+            _dump_rows(section, key, other, game_losses(p, other["won"]), "teamid")
+        )
+    sub = other[other["form"].notna()].reset_index(drop=True)
+    p = out_of_year_probabilities(sub, ["elo_live", "form"])
+    parts.append(
+        _dump_rows(section, "forge", sub, game_losses(p, sub["won"]), "teamid")
+    )
+    rows = pd.concat(parts, ignore_index=True)
+    os.makedirs(out_dir, exist_ok=True)
+    rows.to_csv(os.path.join(out_dir, "forecasts.csv.gz"), index=False)
+    headline = (
+        rows.groupby(["section", "forecast"])["log_loss"].agg(["mean", "size"]).round(6)
+    )
+    with open(os.path.join(out_dir, "metrics.json"), "w") as f:
+        json.dump(
+            {
+                f"{s} / {k}": {"log_loss": r["mean"], "games": int(r["size"])}
+                for (s, k), r in headline.iterrows()
+            },
+            f,
+            indent=1,
+        )
+    print(f"Wrote {len(rows):,} rows to {out_dir}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
         "--years", type=int, nargs="*", help="Seasons to backtest (default: all)"
     )
     parser.add_argument("--out", help="Also write the report to this Markdown file")
+    parser.add_argument(
+        "--dump",
+        metavar="DIR",
+        help="Also save per-game losses and headline numbers to DIR (for compare_benchmarks.py)",
+    )
     weights_mode = parser.add_mutually_exclusive_group()
     weights_mode.add_argument(
         "--write-weights",
@@ -672,12 +753,12 @@ def main():
         check_weights(form_weights, weights, league_curves)
         return
 
+    losses = score(frame)
+    cross = cross_league_games(pairs, INTERNATIONAL_LEAGUES, MAJORS)
     report = (
         f"## Metric backtest ({datetime.date.today().isoformat()})\n"
-        + summarize(frame, score(frame))
-        + summarize_cross_league(
-            cross_league_games(pairs, INTERNATIONAL_LEAGUES, MAJORS)
-        )
+        + summarize(frame, losses)
+        + summarize_cross_league(cross)
         + summarize_other_leagues(other)
         + format_weights(weights)
     )
@@ -685,6 +766,8 @@ def main():
     if args.out:
         with open(args.out, "w") as f:
             f.write(report + "\n")
+    if args.dump:
+        write_dump(args.dump, frame, losses, cross, other)
     if args.write_weights:
         save_weights(weights)
         form.save_weights(form_weights)

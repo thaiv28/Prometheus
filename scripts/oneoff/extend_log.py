@@ -50,14 +50,11 @@ def extend(log, sched, states, now):
     ratings = schedule.current_ratings(states)
     match_team = schedule.TeamMatcher(ratings.reset_index())
     predictions = schedule.predict(sched, ratings, match_team)
-    cache = {}
+    before = schedule.RatingsBefore(states)
 
     def reconstruct(row):
         day = row["start"].date()
-        if day not in cache:
-            print(f"  ratings before {day}")
-            cache[day] = schedule.ratings_before(states, day)
-        rec = schedule.predict(pd.DataFrame([row]), cache[day], match_team)[0]
+        rec = schedule.predict(pd.DataFrame([row]), before(day), match_team)[0]
         return {
             **rec,
             "predicted": None,

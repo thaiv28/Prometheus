@@ -21,10 +21,13 @@ Luck should be unstable: a luck stat that repeats is measuring skill.
 
 Usage:
     uv run python scripts/evaluate_season_stats.py [--out docs/season_stats_report.md]
+    uv run python scripts/evaluate_season_stats.py --dump DIR   # also save the halves (compare_benchmarks.py)
 """
 
 import argparse
 import datetime
+import json
+import os
 
 import numpy as np
 import pandas as pd
@@ -246,9 +249,42 @@ def report(tables):
     return "\n".join(lines)
 
 
+def write_dump(out_dir, tables):
+    """Per team-season halves behind split-half reliability and r with the other
+    half's win %, for `compare_benchmarks.py`.
+
+    `halves.csv.gz`: one row per (stat, teamname, year) with full, h0, h1, n0, n1
+    (unfiltered; `reliability` and `other_half` apply `MIN_HALF_GAMES`).
+    `metrics.json`: those two numbers per stat, and `MIN_HALF_GAMES`.
+    """
+    rows = pd.concat(
+        [tables[key].reset_index().assign(stat=key) for key, _ in STATS],
+        ignore_index=True,
+    )
+    os.makedirs(out_dir, exist_ok=True)
+    rows[["stat", *KEY, "full", "h0", "h1", "n0", "n1"]].to_csv(
+        os.path.join(out_dir, "halves.csv.gz"), index=False
+    )
+    headline = {
+        key: {
+            "r_half": round(float(reliability(tables[key])["r_half"]), 6),
+            "other_half": round(float(other_half(tables[key], tables["win_pct"])), 6),
+        }
+        for key, _ in STATS
+    }
+    with open(os.path.join(out_dir, "metrics.json"), "w") as f:
+        json.dump({"min_half_games": MIN_HALF_GAMES, "stats": headline}, f, indent=1)
+    print(f"Wrote {len(rows):,} rows to {out_dir}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--out", help="Also write the report to this Markdown file")
+    parser.add_argument(
+        "--dump",
+        metavar="DIR",
+        help="Also save per team-season halves and headline numbers to DIR (for compare_benchmarks.py)",
+    )
     args = parser.parse_args()
 
     print("Loading games...")
@@ -265,6 +301,8 @@ def main():
     if args.out:
         with open(args.out, "w") as f:
             f.write(text + "\n")
+    if args.dump:
+        write_dump(args.dump, tables)
 
 
 if __name__ == "__main__":
