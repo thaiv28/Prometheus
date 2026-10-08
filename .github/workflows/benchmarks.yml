@@ -168,8 +168,18 @@ jobs:
         with:
           path: data/markets
           key: ${{ env.KALSHI_KEY }}
+      # Main's cached DB when this side's CSVs and DB build code match an entry
+      # (same key as publish.yml): usually the base, and the head too when the PR
+      # leaves the DB build alone. Restore only; PR builds save nothing.
+      - name: Restore the cached database
+        id: db
+        if: steps.dumps.outputs.cache-hit != 'true' && env.RAW_KEY != ''
+        uses: actions/cache/restore@v6
+        with:
+          path: db/prometheus.db
+          key: prometheus-db-${{ hashFiles('data/raw/*.csv', 'scripts/setup_db.sh', 'scripts/0*', 'prometheus/**', '!prometheus/site/**', 'uv.lock') }}
       - name: Build the database
-        if: steps.dumps.outputs.cache-hit != 'true'
+        if: steps.dumps.outputs.cache-hit != 'true' && steps.db.outputs.cache-hit != 'true'
         run: uv run bash scripts/setup_db.sh
       # The three scripts only read the DB, so they run at once (4 cores); each
       # log is printed, and the step fails if any script does.

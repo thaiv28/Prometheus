@@ -118,10 +118,29 @@ jobs:
       # they can't save to main's cache, and every download counts against Drive):
       # the current year's file (scripts/download_data.py), and every year's on
       # Mondays in case Oracle's Elixir corrected an older one.
-      - name: Build database
+      - name: Download CSVs
         env:
           REFRESH_DATA: ${{ env.CAN_USE_AWS == 'true' && steps.raw-cache.outputs.cache-hit != 'true' && (steps.day.outputs.weekday == '1' && 'full' || '1') || '0' }}
+        run: uv run bash scripts/setup_db.sh --download-only
+      # The DB depends only on the CSVs, the build scripts and the package (not
+      # the site code), so a run with the same inputs restores it instead of the
+      # ~1.5-minute rebuild. Exact key, no fallback; benchmarks.yml uses the same.
+      - name: Restore the cached database
+        id: db-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: db/prometheus.db
+          key: prometheus-db-${{ hashFiles('data/raw/*.csv', 'scripts/setup_db.sh', 'scripts/0*', 'prometheus/**', '!prometheus/site/**', 'uv.lock') }}
+      - name: Build database
+        if: steps.db-cache.outputs.cache-hit != 'true'
         run: uv run bash scripts/setup_db.sh
+      # Main only (PRs restore main's entries); saved before anything else reads it.
+      - name: Save the database to the cache
+        if: env.CAN_USE_AWS == 'true' && steps.db-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: db/prometheus.db
+          key: ${{ steps.db-cache.outputs.cache-primary-key }}
       - name: Back up freshly downloaded CSVs
         if: env.CAN_USE_AWS == 'true' && hashFiles('data/.fresh-download') != ''
         run: |

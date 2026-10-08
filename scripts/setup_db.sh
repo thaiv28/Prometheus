@@ -5,6 +5,8 @@
 # Set REFRESH_DATA=1 (CI does on main, once a day) to download the current year's
 # file even when CSVs exist, or REFRESH_DATA=full for every year's; if a download
 # fails (Drive rate-limits shared files), the existing CSVs are used instead.
+# With --download-only it stops after the download (CI then restores a cached DB
+# keyed on the CSVs, and runs this again without the flag only on a miss).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
@@ -14,7 +16,6 @@ DB_PATH="$ROOT_DIR/db/prometheus.db"
 FRESH_MARKER="$ROOT_DIR/data/.fresh-download" # tells CI to back up the new CSVs
 
 mkdir -p "$RAW_DIR"
-rm -f "$FRESH_MARKER"
 have_csvs() { compgen -G "$RAW_DIR/*.csv" > /dev/null; }
 
 # scripts/download_data.py downloads each file on its own and replaces one in
@@ -30,6 +31,7 @@ download() {
 }
 
 if ! have_csvs || [ "${REFRESH_DATA:-0}" != "0" ]; then
+    rm -f "$FRESH_MARKER" # cleared only here, so a later run without a download keeps it
     if ! download; then
         if have_csvs; then
             echo "::warning::Google Drive download failed for some files; building from the CSVs at hand."
@@ -40,6 +42,10 @@ if ! have_csvs || [ "${REFRESH_DATA:-0}" != "0" ]; then
     fi
 else
     echo "$RAW_DIR has CSVs. Skipping download (set REFRESH_DATA=1 to refresh)."
+fi
+
+if [ "${1:-}" = "--download-only" ]; then
+    exit 0
 fi
 
 # Rebuild the database from scratch
