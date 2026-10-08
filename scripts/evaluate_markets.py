@@ -866,7 +866,9 @@ def main():
             continue
         agree += 1
         r["best_of"] = 2 * max(w1, w2) - 1
-        r["p_series"] = schedule.series_probability(r["p_game"], r["best_of"])
+        r["p_series"] = schedule.series_probability(
+            r["p_game"], r["best_of"], schedule.SERIES_RHO[r["major"]]
+        )
         r["market_close"], r["spread_close"] = market_chance(
             r["markets"], r["team1"], r["start"]
         )

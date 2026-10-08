@@ -63,6 +63,38 @@ def test_series_probability():
     )
 
 
+def test_series_probability_with_rho():
+    # rho = 0 is independent games; rho > 0 pulls a series toward 50-50, less in a Bo3.
+    assert schedule.series_probability(0.6, 3, 0.0) == schedule.series_probability(
+        0.6, 3
+    )
+    assert schedule.series_probability(0.6, 1, 0.3) == pytest.approx(0.6)
+    for bo in (3, 5):
+        assert schedule.series_probability(0.5, bo, 0.2) == pytest.approx(0.5)
+        assert (
+            0.6
+            < schedule.series_probability(0.6, bo, 0.2)
+            < (schedule.series_probability(0.6, bo))
+        )
+        assert schedule.series_probability(0.7, bo, 0.2) + (
+            schedule.series_probability(0.3, bo, 0.2)
+        ) == pytest.approx(1)
+    # Bo3 at rho: win 2-0 with E[pi^2] = p (p + rho q), or 2-1 twice that times E[pi^2 q]
+    p, rho = 0.6, 0.2
+    kappa = 1 / rho - 1
+    a, b = p * kappa, (1 - p) * kappa
+    two_nil = a * (a + 1) / (kappa * (kappa + 1))
+    two_one = 2 * a * (a + 1) * b / (kappa * (kappa + 1) * (kappa + 2))
+    assert schedule.series_probability(p, 3, rho) == pytest.approx(two_nil + two_one)
+
+
+def test_series_rho_by_tier():
+    assert schedule.series_rho("LCK", "LPL") == schedule.SERIES_RHO[True]
+    assert schedule.series_rho("LCK", "VCS") == schedule.SERIES_RHO[False]
+    assert schedule.series_rho("EM", "EM") == schedule.SERIES_RHO[False]
+    assert schedule.SERIES_RHO[True] < schedule.SERIES_RHO[False]
+
+
 def test_game_probability_picks_the_method_by_league():
     lck_a = {"league": "LCK", "elo": 1800, "forge": 1900}
     lck_b = {"league": "LCK", "elo": 1800, "forge": 1800}
@@ -195,6 +227,9 @@ def test_parse_schedule_types_and_predict():
         and preds[0]["league"] == "LCK"
     )
     assert preds[0]["p_game"] < 0.5 and preds[0]["p_series"] < preds[0]["p_game"]
+    assert preds[0]["p_series"] == round(
+        schedule.series_probability(preds[0]["p_game"], 5, schedule.SERIES_RHO[True]), 4
+    )
     assert preds[0]["start"] == "2026-10-04T08:00Z"
     assert not preds[1]["matched"] and "p_game" not in preds[1]
 
