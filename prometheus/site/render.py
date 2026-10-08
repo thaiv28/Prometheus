@@ -51,17 +51,17 @@ env.filters["compact_series"] = lambda series: [
 ]
 
 
-def _slugify(name: str) -> str:
+def slugify(name: str) -> str:
     name = name.lower().strip()
     name = re.sub(r"[^a-z0-9]+", "-", name)
     name = re.sub(r"-+", "-", name).strip("-")
     return name or "team"
 
 
-env.filters["slugify"] = _slugify
+env.filters["slugify"] = slugify
 
 
-def _write(path, html):
+def write(path, html):
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         f.write(html)
@@ -94,7 +94,7 @@ def copy_static():
 
 
 def render_sunset():
-    _write(
+    write(
         os.path.join(site_config.OUTPUT_DIR, "sunset.html"),
         env.get_template("sunset.html.j2").render(
             page_key="sunset", root_path="", metrics=SUNSET
@@ -104,7 +104,7 @@ def render_sunset():
 
 def render_redirect(key, target, title):
     """A retired page that sends visitors (and search engines) to its replacement."""
-    _write(
+    write(
         os.path.join(site_config.OUTPUT_DIR, f"{key}.html"),
         env.get_template("redirect.html.j2").render(
             page_key=key, root_path="", target=target, title=title
@@ -114,7 +114,7 @@ def render_redirect(key, target, title):
 
 def render_404():
     # CloudFront serves 404.html for any missing path, so links must be root-absolute.
-    _write(
+    write(
         os.path.join(site_config.OUTPUT_DIR, "404.html"),
         env.get_template("404.html.j2").render(page_key="404", root_path="/"),
     )

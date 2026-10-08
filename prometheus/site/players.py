@@ -11,7 +11,7 @@ from prometheus.site.config import (
     PLAYER_PAGE_WINDOW,
     PLAYER_SEASON_GAMES,
 )
-from prometheus.site.render import _slugify, _write, env
+from prometheus.site.render import env, slugify, write
 from prometheus.types import INTERNATIONAL_LEAGUES
 
 
@@ -48,7 +48,7 @@ def aura_rows_and_seasons(seasons, slugs):
             {
                 "year": int(r.year),
                 "teamname": r.teamname,
-                "team_slug": _slugify(r.teamname),
+                "team_slug": slugify(r.teamname),
                 "league": r.league,
                 "position": r.position,
                 "games": int(r.games),
@@ -62,9 +62,9 @@ def aura_rows_and_seasons(seasons, slugs):
 
 def _player_slugs(players):
     """Unique page slugs: the name, then name and last team, then a number."""
-    base = players["playername"].map(_slugify)
+    base = players["playername"].map(slugify)
     shared = base.duplicated(keep=False)
-    slug = base.where(~shared, base + "-" + players["teamname"].map(_slugify))
+    slug = base.where(~shared, base + "-" + players["teamname"].map(slugify))
     order = players.assign(slug=slug).sort_values("playerid")
     order["n"] = order.groupby("slug").cumcount()
     order.loc[order["n"] > 0, "slug"] = (
@@ -156,7 +156,7 @@ def player_pages_and_rows(history, latest, seasons):
         stints_by_player.setdefault(r.playerid, []).append(
             {
                 "teamname": r.teamname,
-                "team_slug": _slugify(r.teamname),
+                "team_slug": slugify(r.teamname),
                 "league": r.home_league or r.league,
                 "position": r.position,
                 "first": r.first[:10],
@@ -184,7 +184,7 @@ def player_pages_and_rows(history, latest, seasons):
             "slug": info["slug"],
             "position": info["position"],
             "teamname": info["teamname"],
-            "team_slug": _slugify(info["teamname"]),
+            "team_slug": slugify(info["teamname"]),
             "home_league": info["league"],
             "current_elo": round(float(info["elo"])),
             "active": bool(
@@ -207,7 +207,7 @@ def player_pages_and_rows(history, latest, seasons):
 def render_player_pages(pages):
     template = env.get_template("player.html.j2")
     for page in pages.values():
-        _write(
+        write(
             os.path.join(site_config.OUTPUT_DIR, "players", f"{page['slug']}.html"),
             template.render(page_key="player", root_path="../", **page),
         )

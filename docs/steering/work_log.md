@@ -2,6 +2,13 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-08 — Site helpers shared across modules lose their underscore
+
+No metric, report or page changes.
+
+- `prometheus/site/`: `slugify` and `write` (render), `active`, `forecast_records`, `rankings` and `season_page` (registers), and `team_pages` (teams) are imported by other modules and `scripts/build_site.py`, so they are now public names (the last item from the 2026-10-07 review). No name they took was in use there.
+- Checks: `PREDICTIONS_FETCH=0 build_site.py` before and after on the same DB and prediction log: every file identical but `kalshi.json` (its timestamp). `uv run pytest -q`, `ruff format --check`, `ruff check`.
+
 ## 2026-10-08 — Starting lineups for predictions: checked, not built
 
 No code, metric or page changes.

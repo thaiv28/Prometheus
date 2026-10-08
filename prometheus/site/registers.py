@@ -22,11 +22,11 @@ from prometheus.site.config import (
     PLAYER_METRICS,
     SECTIONS,
 )
-from prometheus.site.render import _slugify, _write, env
+from prometheus.site.render import env, slugify, write
 from prometheus.types import ALL_MAJOR_LEAGUES, INTERNATIONAL_LEAGUES
 
 
-def _rankings(
+def rankings(
     games,
     minimum_matches,
     z_scores,
@@ -46,7 +46,7 @@ def _rankings(
     )
 
 
-def _forecast_records(now, seasons, rating_cols):
+def forecast_records(now, seasons, rating_cols):
     """Rows for a forecast page: `now` rows (current ratings) then team-season rows.
 
     A `now` row is shown by default when it is `active` (missing means active).
@@ -65,7 +65,7 @@ def _forecast_records(now, seasons, rating_cols):
 
 def _records(df):
     df = df.copy()
-    df["slug"] = df["teamname"].apply(_slugify)
+    df["slug"] = df["teamname"].apply(slugify)
     df["year"] = df["year"].astype(int)
     return df.to_dict(orient="records")
 
@@ -100,7 +100,7 @@ def render_index(
         return [{**r, "bar": bar(r[value_key])} for r in df.to_dict(orient="records")]
 
     forge_now = [r for r in forge_rows if r["now"]]
-    _write(
+    write(
         os.path.join(site_config.OUTPUT_DIR, "index.html"),
         env.get_template("index.html.j2").render(
             page_key="index",
@@ -122,7 +122,7 @@ def render_index(
 
 
 def render_rankings_page(metric, rows, config, filters):
-    _write(
+    write(
         os.path.join(site_config.OUTPUT_DIR, f"{metric['key']}.html"),
         env.get_template("rankings.html.j2").render(
             page_key=metric["key"],
@@ -135,7 +135,7 @@ def render_rankings_page(metric, rows, config, filters):
     )
 
 
-def _season_page(key, df, columns, value_key, domain=None):
+def season_page(key, df, columns, value_key, domain=None):
     config = {
         "valueKey": value_key,
         "columns": columns,
@@ -155,7 +155,7 @@ def _season_page(key, df, columns, value_key, domain=None):
     )
 
 
-def _active(df):
+def active(df):
     """True for rows whose last game is within ACTIVE_WINDOW of the newest game."""
     played = pd.to_datetime(df["latest_date"])
     return played >= played.max() - ACTIVE_WINDOW
@@ -172,9 +172,9 @@ def forge_register(forms_now, forms_seasons, latest_elos, season_elos, majors):
     # league scale, so it is left out.
     domestic = lambda forms: forms[~forms["home"].isin(INTERNATIONAL_LEAGUES)]
     now = forge_ratings(domestic(forms_now), latest_elos)
-    now = now[_active(now)].reset_index(drop=True)
+    now = now[active(now)].reset_index(drop=True)
     seasons = forge_ratings(domestic(forms_seasons), season_elos)
-    rows = _forecast_records(
+    rows = forecast_records(
         now.drop(columns="slope"),
         seasons.drop(columns="slope"),
         ("forge", "elo", "form"),

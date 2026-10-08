@@ -13,7 +13,7 @@ from prometheus.site.config import (
     PREDICTIONS,
     RECENT_RESULT_DAYS,
 )
-from prometheus.site.render import _slugify, _write, env
+from prometheus.site.render import env, slugify, write
 from prometheus.types import INTERNATIONAL_LEAGUES
 
 
@@ -60,7 +60,7 @@ def fixture_row(entry, team_slugs):
         )
     for side in (1, 2):
         name = schedule.display_name(entry, side)
-        slug = _slugify(entry[f"ours{side}"]) if entry.get(f"ours{side}") else None
+        slug = slugify(entry[f"ours{side}"]) if entry.get(f"ours{side}") else None
         row[f"name{side}"] = name
         row[f"slug{side}"] = slug if slug in team_slugs else None
     if row["winner"] in (1, 2):
@@ -181,7 +181,7 @@ def render_results(view):
     months = view["months"]
     template = env.get_template("results.html.j2")
     for i, month in enumerate(months):
-        _write(
+        write(
             os.path.join(folder, f"{month['key']}.html"),
             template.render(
                 page_key="predictions",
@@ -248,7 +248,7 @@ def alert_record(entries):
 
 
 def render_predictions(view, coverage):
-    _write(
+    write(
         os.path.join(site_config.OUTPUT_DIR, "predictions.html"),
         env.get_template("predictions.html.j2").render(
             page_key="predictions",
@@ -313,7 +313,7 @@ def write_kalshi_alert(log, coverage, team_slugs, path=None):
     now = datetime.datetime.strptime(coverage["at"], "%Y-%m-%dT%H:%MZ").replace(
         tzinfo=datetime.UTC
     )
-    alert = alerts.update(log, now, coverage.get("data_through"), _slugify, team_slugs)
+    alert = alerts.update(log, now, coverage.get("data_through"), slugify, team_slugs)
     schedule.save_log(log, site_config.PREDICTIONS_LOG)
     if alert is None:
         return None
