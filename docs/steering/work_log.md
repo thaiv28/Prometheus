@@ -2,6 +2,15 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-08 — CI DB cache, Elo history cutoff test, build_site.py main() in steps
+
+No metric, report or page changes.
+
+- **CI DB cache.** `setup_db.sh --download-only` stops after the CSV download (and the fresh-download marker is now cleared only when a download runs, so the second call keeps it for the backup and cache steps). `publish.yml` then restores `db/prometheus.db` from the Actions cache key `prometheus-db-<hash of data/raw/*.csv, setup_db.sh, scripts/0*, prometheus/** but site/, uv.lock>`, rebuilds only on a miss, and saves on `main`. `benchmarks.yml` restores the same key on each side (no save). The DB build reads no clock, so the same inputs give the same DB.
+- **Test:** `tests/e2e/test_elo_history_e2e.py`: `get_elo_history(date=)` keeps every game on the cutoff day, whose dates carry a time of day, and none after, for every team and for one. Both tests fail when the query compares `m.date <= :date` as strings.
+- **`scripts/build_site.py`:** `main()` runs steps: `render_fixed_pages`, `season_stats`, `forecasts`, `players` (each computes and renders its pages and returns a small dataclass of what later steps use), `predictions_pages`, then the home, team and player pages; `_league_order` and `write_json` replace three and two copies.
+- Checks: site built with `PREDICTIONS_FETCH=0` before and after the refactor on the same DB and prediction log: every file identical but `kalshi.json` (its timestamp). New e2e tests pass on the fixture and the full DB (`PROMETHEUS_E2E_DB=real`). `setup_db.sh --download-only` with CSVs present skips the download, keeps a fresh-download marker and builds nothing; workflow YAML parses. `uv run pytest -q`, `ruff format --check`, `ruff check`. Not run: the workflows themselves (they first run on this PR: expect a DB cache miss there, since no `main` build has saved one yet).
+
 ## 2026-10-08 — Cleanup: site builder split into prometheus/site/, shared evaluation helpers, cache headers, wider lint, shorter steering docs
 
 No metric, report or page changes (checked byte for byte, below).
