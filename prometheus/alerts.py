@@ -37,7 +37,7 @@ OWNER = "thaiv28"
 
 def _start(entry):
     return datetime.datetime.strptime(entry["start"], "%Y-%m-%dT%H:%MZ").replace(
-        tzinfo=datetime.timezone.utc
+        tzinfo=datetime.UTC
     )
 
 

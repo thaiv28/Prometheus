@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts" / "research"))
+sys.path.insert(0, str(Path(__file__).parents[2] / "scripts" / "research"))
 import evaluate_gol_objectives as exp
 
 
@@ -104,7 +104,7 @@ def test_complete_experiment_reports_identical_cohorts_and_development_curves():
     frames, parameters = exp.evaluate(frame)
     assert len(frames["metrics"]) == 6 and len(parameters) == 6
     assert frames["metrics"].test_games.eq(90).all()
-    for minute in [10, 15, 20]:
+    for minute in [10, 15, 20]:  # noqa: B007 (read by the query string)
         p = frames["predictions"].query("minute==@minute")
         ids = p.groupby("variant").oe_gameid.apply(set)
         assert ids.iloc[0] == ids.iloc[1]

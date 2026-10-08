@@ -9,13 +9,10 @@
   const list = form && form.querySelector(".index-search-results");
   if (!input || !list) return;
 
-  const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
-  const { fold, rank } = PrometheusNames;
+  const { fold, rank, esc, ROLES, leagueMark } = PrometheusNames;
   const root = form.dataset.root || "";
   const LIMIT = 8;
 
-  const ROLES = { top: "Top", jng: "Jungle", mid: "Mid", bot: "Bot", sup: "Support" };
   let teams = null; // teams, then players: { n, s, l, d, kind, key, ... }
   let loading = null;
   let matches = [];
@@ -39,7 +36,7 @@
   const find = (query) => (teams ? rank(teams, query, LIMIT) : []);
 
   const href = (t) => `${root}${t.kind === "player" ? "players" : "teams"}/${encodeURIComponent(t.s)}.html`;
-  const mark = (l) => `<span class="league" data-league="${esc(l)}"><span class="league-mark" aria-hidden="true"></span>${esc(l)}</span>`;
+  const mark = (l) => leagueMark(l, true);
   // Teams: league and last year. Players: role and last team.
   const meta = (t) =>
     t.kind === "player"

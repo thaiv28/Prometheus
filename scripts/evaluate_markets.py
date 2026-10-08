@@ -62,7 +62,7 @@ from sqlalchemy import text
 
 from prometheus import schedule, utils
 from prometheus.elo import get_latest_elos
-from prometheus.evaluation import game_losses, paired_bootstrap
+from prometheus.evaluation import ece, game_losses, paired_bootstrap, resamples
 from prometheus.form import form_states, load_form_games, opponent_adjust
 from prometheus.markets import (
     MAP,
@@ -243,7 +243,7 @@ def bets(frame, edge=None):
             (1 - r.p_series, r.cost2, not r.won1, None if close is None else 1 - close),
         ]
         if edge is None:
-            p, cost, won, shut = options[0] if r.p_series >= 0.5 else options[1]
+            _, cost, won, shut = options[0] if r.p_series >= 0.5 else options[1]
             if not _priced(cost):
                 continue
         else:
@@ -254,7 +254,7 @@ def bets(frame, edge=None):
             ]
             if not value:
                 continue
-            _, p, cost, won, shut = max(value, key=lambda v: v[0])
+            _, _, cost, won, shut = max(value, key=lambda v: v[0])
         out.append((cost, won, shut))
     return out
 
@@ -280,11 +280,7 @@ def bet_clv(frame, edge=None):
 
 def roi_interval(profits, n_resamples=2000, seed=0):
     """95% bootstrap interval of the mean profit per bet."""
-    rng = np.random.default_rng(seed)
-    means = [
-        profits[rng.integers(0, len(profits), len(profits))].mean()
-        for _ in range(n_resamples)
-    ]
+    means = [profits[i].mean() for i in resamples(len(profits), n_resamples, seed)]
     return np.percentile(means, [2.5, 97.5])
 
 
@@ -483,25 +479,13 @@ def combined_weights(
         return LogisticRegression(fit_intercept=False, C=1e6).fit(xs, ys).coef_[0]
 
     point = fit(x, y)
-    rng = np.random.default_rng(seed)
-    draws = []
-    for _ in range(n_resamples):
-        idx = rng.integers(0, len(y), len(y))
-        if len(set(y[idx])) == 2:
-            draws.append(fit(x[idx], y[idx]))
+    draws = [
+        fit(x[idx], y[idx])
+        for idx in resamples(len(y), n_resamples, seed)
+        if len(set(y[idx])) == 2
+    ]
     lo, hi = np.percentile(draws, [2.5, 97.5], axis=0)
     return {"market": (point[0], lo[0], hi[0]), "ours": (point[1], lo[1], hi[1])}
-
-
-def calibration(p, won, bins=10):
-    """Expected calibration error over equal-width bins of the chance."""
-    p, won = np.asarray(p, dtype=float), np.asarray(won, dtype=float)
-    idx = np.minimum((p * bins).astype(int), bins - 1)
-    return sum(
-        abs(p[idx == b].mean() - won[idx == b].mean()) * (idx == b).sum()
-        for b in range(bins)
-        if (idx == b).any()
-    ) / len(p)
 
 
 # ---------------------------------------------------------------- report
@@ -780,8 +764,8 @@ def report(series_frame, map_frame, counts, saved=None):
     ]
     for label, frame in slices_of(s)[:3]:
         lines.append(
-            f"| {label} | {len(frame)} | {calibration(frame['p_series'], frame['won1']):.3f} | "
-            f"{calibration(frame['market_close'], frame['won1']):.3f} |"
+            f"| {label} | {len(frame)} | {ece(frame['p_series'], frame['won1']):.3f} | "
+            f"{ece(frame['market_close'], frame['won1']):.3f} |"
         )
     lines += [
         "",
@@ -873,7 +857,7 @@ def main():
         min(r["start"] for r in series_rows).date() - datetime.timedelta(days=2)
     )
     found, agree, rows = 0, 0, []
-    for i, r in enumerate(rated):
+    for r in rated:
         w1, w2 = series_games(pairs, r["ours1"], r["ours2"], r["start"])
         if max(w1, w2) == 0:
             continue

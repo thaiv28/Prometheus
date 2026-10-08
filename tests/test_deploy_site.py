@@ -84,3 +84,46 @@ def test_with_a_manifest_only_changed_files_are_sent(site, monkeypatch):
     (delete,) = [c for c in calls if c[:2] == ("s3api", "delete-objects")]
     assert json.loads(delete[-1])["Objects"] == [{"Key": "current/old.html"}]
     assert any(c[-1] == "max-age=300" and c[2].endswith("kalshi.json") for c in calls)
+
+
+def test_css_js_and_fonts_go_up_with_long_cache_headers(site, monkeypatch):
+    (site / "css").mkdir()
+    (site / "css" / "base.css").write_text("body{}")
+    (site / "js").mkdir()
+    (site / "js" / "nav.js").write_text("1")
+    (site / "fonts").mkdir()
+    (site / "fonts" / "serif.woff2").write_bytes(b"f")
+    calls = _fake_aws(monkeypatch, manifest={"index.html": "old"})
+
+    deploy.main(["--output", str(site)])
+
+    uploads = [c for c in calls if c[:2] == ("s3", "cp") and "--recursive" in c]
+    headers = {
+        c[c.index("--cache-control") + 1] if "--cache-control" in c else None
+        for c in uploads
+    }
+    # One upload per header: pages (none), fonts, and CSS and JS together.
+    assert len(uploads) == 3
+    assert headers == {
+        None,
+        "public, max-age=2592000",
+        "public, max-age=31536000, immutable",
+    }
+    assert deploy.cache_control("css/base.css") == "public, max-age=31536000, immutable"
+    assert deploy.cache_control("fonts/serif.woff2") == "public, max-age=2592000"
+    assert deploy.cache_control("teams/t1.html") is None
+
+
+def test_full_upload_resends_long_cached_files_with_their_headers(site, monkeypatch):
+    (site / "css").mkdir()
+    (site / "css" / "base.css").write_text("body{}")
+    calls = _fake_aws(monkeypatch, manifest=None)
+
+    deploy.main(["--output", str(site)])
+
+    verbs = [c[:2] for c in calls]
+    sync = verbs.index(("s3", "sync"))
+    assert any(
+        "--cache-control" in c and "immutable" in c[c.index("--cache-control") + 1]
+        for c in calls[sync:]
+    )

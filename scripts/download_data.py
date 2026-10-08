@@ -94,7 +94,7 @@ def main():
     if not ids:
         print("Google Drive folder listing has no CSVs.", file=sys.stderr)
         return 1
-    today = datetime.datetime.now(datetime.timezone.utc).date()
+    today = datetime.datetime.now(datetime.UTC).date()
     names = wanted(sorted(ids), RAW_DIR, today, args.full)
     print(
         f"Downloading {len(names)} of {len(ids)} Oracle's Elixir files: {', '.join(n[:4] for n in names)}"

@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from evaluate_markets import (  # noqa: E402
+from evaluate_markets import (
     CACHE,
     _ts,
     cached_candles,
@@ -27,7 +27,7 @@ from evaluate_markets import (  # noqa: E402
     fetch_markets,
     historical_cutoff,
 )
-from update_prices import team_matcher  # noqa: E402
+from update_prices import team_matcher
 
 from prometheus import markets, schedule
 
@@ -101,7 +101,7 @@ def price_history(cutoff, pause=0.1):
         return out
 
     def when(ends):
-        return datetime.datetime.fromtimestamp(max(ends), datetime.timezone.utc)
+        return datetime.datetime.fromtimestamp(max(ends), datetime.UTC)
 
     def price_at(row, team1, start):
         quotes = books(row, team1, start)
@@ -158,7 +158,7 @@ def main():
 
     path = Path(args.log)
     log = schedule.load_log(path)
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     first = min(e["start"] for e in log.values())[:10]
     since = datetime.date.fromisoformat(first) - datetime.timedelta(days=1)
     rows = [

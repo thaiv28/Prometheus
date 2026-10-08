@@ -84,7 +84,7 @@ def test_forecast_only_on_one_side_is_not_paired():
     base = _forecasts("Domestic", "forge", n=50)
     head = pd.concat([base, _forecasts("Domestic", "new", n=50)])
     rows = cb.compare_forecasts(base, head, n_resamples=N)
-    new = [r for r in rows if r["name"] == "new"][0]
+    new = next(r for r in rows if r["name"] == "new")
     assert new["result"] == "not paired" and new["unpaired"] == (0, 50)
     assert not cb.failures(rows)
 
@@ -131,7 +131,7 @@ def test_season_stat_same_data_within_noise_and_short_halves_dropped():
     head = base.copy()
     head.loc[:9, "n0"] = 5  # below min_half_games: dropped from head only
     rows = cb.compare_season_stats(base, META, head, META, n_resamples=N)
-    split = [r for r in rows if r["name"].startswith("glory split")][0]
+    split = next(r for r in rows if r["name"].startswith("glory split"))
     assert split["result"] == "within noise" and split["unpaired"] == (10, 0)
     assert not cb.failures(rows)
 

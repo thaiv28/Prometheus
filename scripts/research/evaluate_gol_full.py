@@ -23,6 +23,8 @@ from sklearn.metrics import (
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
+from prometheus import evaluation
+
 VARIANTS = {
     "constant_prior": [],
     "elo": ["elo_gap"],
@@ -58,15 +60,7 @@ def interval(values, group, repetitions=2000):
 
 
 def ece(y, p, bins):
-    assignments = np.minimum((p * bins).astype(int), bins - 1)
-    return float(
-        sum(
-            np.mean(assignments == b)
-            * abs(p[assignments == b].mean() - y[assignments == b].mean())
-            for b in range(bins)
-            if np.any(assignments == b)
-        )
-    )
+    return float(evaluation.ece(p, y, bins))
 
 
 def diagnostic_scores(y, p, prior):
@@ -383,13 +377,11 @@ def evaluate(frame, repetitions=2000, years=(2024, 2025)):
                         )
                 if name in ("gold_elo", "scoreboard_objectives", "all_objectives"):
                     for size in sorted(
-                        set(
-                            [
-                                v
-                                for v in [100, 200, 400, 600, 800, len(train)]
-                                if v <= len(train)
-                            ]
-                        )
+                        {
+                            v
+                            for v in [100, 200, 400, 600, 800, len(train)]
+                            if v <= len(train)
+                        }
                     ):
                         prefix = train.iloc[:size]
                         if prefix.won.nunique() != 2:

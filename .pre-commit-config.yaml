@@ -1,0 +1,8 @@
+# Optional: `uvx pre-commit install` runs ruff (the version in uv.lock) on each commit,
+# as CI's check job does.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff-check
+      - id: ruff-format

@@ -7,6 +7,7 @@ Fetch bounded public sample: .venv/bin/python scripts/research/pilot_gol.py --fe
 import argparse
 import datetime as dt
 import hashlib
+import itertools
 import json
 import re
 import time
@@ -253,7 +254,7 @@ def parse_timeline(html, game_id):
             }
         )
     if not events or any(
-        a["seconds"] > b["seconds"] for a, b in zip(events, events[1:])
+        a["seconds"] > b["seconds"] for a, b in itertools.pairwise(events)
     ):
         raise ValueError("Empty or unordered timeline")
     checks = []
@@ -625,7 +626,7 @@ def run(args, *, sample_limit=12, cache=None):
     for name, frame in frames.items():
         frame.to_csv(args.artifacts / f"{name}.csv", index=False)
     manifest = {
-        "processed_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "processed_at_utc": dt.datetime.now(dt.UTC).isoformat(),
         "purpose": "purposive coverage/parser pilot; no model training",
         "samples": samples,
         "source_pages": sources,

@@ -114,7 +114,7 @@ def test_calls_use_forge_within_a_league_and_elo_across_leagues():
     games = _games()
     games.loc[games["teamname"] == "A", "elo_pre"] = 1600.0
     games.loc[games["opp"] == "A", "opp_elo_pre"] = 1600.0
-    weights = {f: 0.0 for f in GLORY_FEATURES}
+    weights = dict.fromkeys(GLORY_FEATURES, 0.0)
     called = gamelog.add_calls(games, _states(games, {"C": "LEC"}), weights)
     a_vs_b = called[(called["teamname"] == "A") & (called["opp"] == "B")].iloc[0]
     assert a_vs_b["method"] == "forge"

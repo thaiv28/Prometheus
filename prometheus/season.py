@@ -135,7 +135,7 @@ def get_record(games=None, minimum_matches=0, leagues=None):
     if games is None:
         games = load_season_games()
     out = []
-    for year, season in games.groupby("year"):
+    for _, season in games.groupby("year"):
         info = _team_seasons(season).set_index("teamid")
         info["rating"] = fit_record(season)
         major = info["league"].isin(MAJORS)
@@ -168,7 +168,7 @@ def get_luck(games, features=GLORY_FEATURES, minimum_matches=0):
         %, 0-1), luck (win % points, signed) and luck_wins (wins above earned).
     """
     out = []
-    for year, year_games in games.items():
+    for year_games in games.values():
         pipeline = fit_glory_pipeline(year_games, features)
         played = year_games.assign(
             expected=np.clip(pipeline.predict(year_games[features]), 0, 1),

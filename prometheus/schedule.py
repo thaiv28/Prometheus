@@ -552,7 +552,7 @@ def build_predictions(
     `backfill_days` back. Returns (log, matcher_stats) where matcher_stats counts
     matched and unmatched teams in this fetch, for reporting.
     """
-    now = now or datetime.datetime.now(datetime.timezone.utc)
+    now = now or datetime.datetime.now(datetime.UTC)
     log = load_log(log_path)
     back = days_back if log else backfill_days
     if schedule is None:
@@ -800,7 +800,7 @@ def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
         if not options:
             continue
 
-        def bet(side):
+        def bet(side, options=options, e=e, close=close):
             edge, cost = options[side]
             won = e["winner"] == side
             shut = close.get("p")

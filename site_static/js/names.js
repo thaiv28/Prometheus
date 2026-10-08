@@ -1,5 +1,6 @@
-// Name helpers shared by the header search and the rankings registers, and
-// tested under Node (tests/js). No DOM access here.
+// Helpers shared by the header search, the rankings registers and the game logs,
+// tested under Node (tests/js): name folding, slugs and search ranking, and HTML
+// escaping (every value JS writes into HTML goes through `esc`). No DOM access here.
 const PrometheusNames = (function () {
   "use strict";
 
@@ -29,7 +30,16 @@ const PrometheusNames = (function () {
     return out.sort((a, b) => a[0] - b[0] || a[1] - b[1]).slice(0, limit).map((x) => x[2]);
   }
 
-  return { fold, slugify, rank };
+  const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
+
+  const ROLES = { top: "Top", jng: "Jungle", mid: "Mid", bot: "Bot", sup: "Support" };
+
+  // A league's mark, followed by its code, or with the code only for screen readers.
+  const leagueMark = (code, showCode) =>
+    `<span class="league" data-league="${esc(code)}"><span class="league-mark" aria-hidden="true"></span>${showCode ? esc(code) : `<span class="visually-hidden">${esc(code)}</span>`}</span>`;
+
+  return { fold, slugify, rank, esc, ROLES, leagueMark };
 })();
 
 if (typeof module === "object" && module.exports) module.exports = PrometheusNames;

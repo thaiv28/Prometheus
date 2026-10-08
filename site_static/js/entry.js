@@ -31,9 +31,7 @@
   let data;
   try { data = JSON.parse(holder.textContent); } catch (e) { return; }
 
-  const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
-  const slugify = PrometheusNames.slugify;
+  const { esc, slugify } = PrometheusNames;
   const isPlayer = data.kind === "player";
   const cols = isPlayer ? 9 : 8;
   const KALSHI = "https://kalshi.com/markets/kxlolgame/league-of-legends-game/";

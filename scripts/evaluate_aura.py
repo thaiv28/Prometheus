@@ -52,9 +52,12 @@ from prometheus import aura
 from prometheus.elo import get_pregame_elos
 from prometheus.evaluation import (
     correlation_interval,
+    ece,
     game_losses,
     half_of,
+    interval,
     paired_correlation_bootstrap,
+    resamples,
     spearman_brown,
 )
 from prometheus.season import MAJORS
@@ -82,16 +85,6 @@ ROSTER_LABELS = {
     "glory": "GLORY",
     "win_other": "Win %",
 }
-
-
-def ece(p, won, bins=10):
-    """Expected calibration error over equal-width probability bins."""
-    idx = np.minimum((p * bins).astype(int), bins - 1)
-    return sum(
-        (idx == b).mean() * abs(p[idx == b].mean() - won[idx == b].mean())
-        for b in range(bins)
-        if (idx == b).any()
-    )
 
 
 def calibration(players, keep=None):
@@ -274,20 +267,14 @@ def _roster_r(table, col):
 
 def roster_bootstrap(table, a, b, n_resamples=2000, seed=0):
     """Paired difference in r with this half's win %, resampling team-seasons (both halves together)."""
-    seasons = table[["teamname", "year"]].drop_duplicates().reset_index(drop=True)
+    seasons = table[["teamname", "year"]].drop_duplicates()
     groups = table.groupby(["teamname", "year"]).indices
-    keys = list(zip(seasons["teamname"], seasons["year"]))
-    rng = np.random.default_rng(seed)
+    clusters = [groups[k] for k in zip(seasons["teamname"], seasons["year"])]
     diffs = []
-    for _ in range(n_resamples):
-        pick = rng.integers(0, len(keys), len(keys))
-        sample = table.iloc[np.concatenate([groups[keys[i]] for i in pick])]
+    for rows in resamples(clusters, n_resamples, seed):
+        sample = table.iloc[rows]
         diffs.append(_roster_r(sample, a) - _roster_r(sample, b))
-    return (
-        _roster_r(table, a) - _roster_r(table, b),
-        np.percentile(diffs, 2.5),
-        np.percentile(diffs, 97.5),
-    )
+    return (_roster_r(table, a) - _roster_r(table, b), *interval(diffs))
 
 
 def so_far(players):

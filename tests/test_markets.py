@@ -4,7 +4,7 @@ import pytest
 
 from prometheus import markets
 
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 
 
 def test_fee_rates_follow_the_series_fee_type():

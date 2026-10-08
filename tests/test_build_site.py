@@ -2,10 +2,8 @@
 templates and the search index. No database: frames are built by hand."""
 
 import datetime
-import importlib.util
 import json
 import math
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -14,20 +12,17 @@ import pytest
 
 from prometheus import schedule
 from prometheus.schedule import series_probability
+from prometheus.site import config as site_config
+from prometheus.site import gamelogs, predictions, registers, render, teams
+from prometheus.site import players as site_players
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "scripts"))
-_spec = importlib.util.spec_from_file_location(
-    "build_site", ROOT / "scripts" / "build_site.py"
-)
-build_site = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(build_site)
 
 
 def test_slugify_matches_the_shared_fixture():
     # tests/js/names.test.mjs checks the JS slugify against the same file.
     for case in json.loads((ROOT / "tests" / "js" / "slugs.json").read_text()):
-        assert build_site._slugify(case["name"]) == case["slug"]
+        assert render._slugify(case["name"]) == case["slug"]
 
 
 def test_player_slugs_add_the_team_then_a_number_for_shared_names():
@@ -38,7 +33,7 @@ def test_player_slugs_add_the_team_then_a_number_for_shared_names():
             "teamname": ["T1", "Bilibili Gaming", "Young Miracles", "Young Miracles"],
         }
     )
-    assert build_site._player_slugs(players).tolist() == [
+    assert site_players._player_slugs(players).tolist() == [
         "faker",
         "viper-bilibili-gaming",
         "viper-young-miracles",
@@ -138,7 +133,7 @@ def _player_frames():
 
 def test_player_listing_rows_and_pages():
     history, latest, seasons = _player_frames()
-    rows, pages, listed = build_site.player_pages_and_rows(history, latest, seasons)
+    rows, pages, listed = site_players.player_pages_and_rows(history, latest, seasons)
 
     # Listed: ever in a major league, or active within two years. Not the 2016 amateur.
     assert set(listed["playerid"]) == {"lck", "now"}
@@ -186,7 +181,7 @@ def _roster_history():
 
 
 def test_team_rosters_last_lineup_and_seasons():
-    rosters = build_site.team_rosters(
+    rosters = teams.team_rosters(
         _roster_history(), {"mid9": "mid9-page"}, {"mid9": 1712.4}
     )
     t1 = rosters["T1"]
@@ -226,21 +221,21 @@ def test_team_rosters_cap_extra_players():
         }
         for i in range(6)
     ]
-    rosters = build_site.team_rosters(pd.DataFrame(rows), {}, {})
+    rosters = teams.team_rosters(pd.DataFrame(rows), {}, {})
     top = rosters["X"]["seasons"][0]["roles"][0]
-    assert len(top["players"]) == 1 + build_site.ROSTER_EXTRAS
-    assert top["more"] == 6 - 1 - build_site.ROSTER_EXTRAS
+    assert len(top["players"]) == 1 + site_config.ROSTER_EXTRAS
+    assert top["more"] == 6 - 1 - site_config.ROSTER_EXTRAS
 
 
 def test_compact_series_rounds_to_pairs():
-    compact = build_site.env.filters["compact_series"]
+    compact = render.env.filters["compact_series"]
     assert compact([{"date": "2026-01-01", "elo": 1512.6}]) == [["2026-01-01", 1513]]
 
 
 def test_player_page_renders_stints_and_links():
     history, latest, seasons = _player_frames()
-    _, pages, _ = build_site.player_pages_and_rows(history, latest, seasons)
-    html = build_site.env.get_template("player.html.j2").render(
+    _, pages, _ = site_players.player_pages_and_rows(history, latest, seasons)
+    html = render.env.get_template("player.html.j2").render(
         page_key="player", root_path="../", **pages["vet"]
     )
     assert "<h1>Vet</h1>" in html
@@ -269,7 +264,7 @@ def _aura_seasons():
 
 
 def test_aura_rows_only_list_qualified_seasons_of_listed_players():
-    rows, by_player = build_site.aura_rows_and_seasons(
+    rows, by_player = site_players.aura_rows_and_seasons(
         _aura_seasons(), pd.Series({"p1": "mid"})
     )
     assert [(r["slug"], r["year"], r["aura"]) for r in rows] == [
@@ -288,11 +283,11 @@ def test_aura_rows_only_list_qualified_seasons_of_listed_players():
 
 def test_player_page_renders_aura_by_season():
     history, latest, seasons = _player_frames()
-    _, pages, _ = build_site.player_pages_and_rows(history, latest, seasons)
-    _, by_player = build_site.aura_rows_and_seasons(
+    _, pages, _ = site_players.player_pages_and_rows(history, latest, seasons)
+    _, by_player = site_players.aura_rows_and_seasons(
         _aura_seasons(), pd.Series({"p1": "vet"})
     )
-    html = build_site.env.get_template("player.html.j2").render(
+    html = render.env.get_template("player.html.j2").render(
         page_key="player",
         root_path="../",
         **pages["vet"],
@@ -304,18 +299,18 @@ def test_player_page_renders_aura_by_season():
         in html
     )
     assert "Unranked" in html and "−0.8" in html
-    plain = build_site.env.get_template("player.html.j2").render(
+    plain = render.env.get_template("player.html.j2").render(
         page_key="player", root_path="../", **pages["vet"]
     )
     assert "AURA by season" not in plain and "Best AURA" not in plain
 
 
 def test_team_page_renders_rosters_with_player_links():
-    roster = build_site.team_rosters(
+    roster = teams.team_rosters(
         _roster_history(), {"mid9": "mid9-page"}, {"mid9": 1712.4}
     )["T1"]
     series = [{"date": "2026-02-01", "elo": 1600.0}]
-    html = build_site.env.get_template("team.html.j2").render(
+    html = render.env.get_template("team.html.j2").render(
         page_key="team",
         root_path="../",
         teamname="T1",
@@ -343,7 +338,7 @@ def test_team_page_renders_rosters_with_player_links():
 
 
 def test_player_index_puts_major_leagues_first(tmp_path, monkeypatch):
-    monkeypatch.setattr(build_site, "OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setattr(site_config, "OUTPUT_DIR", str(tmp_path))
     listed = pd.DataFrame(
         {
             "playername": ["Amateur", "Pro"],
@@ -354,7 +349,7 @@ def test_player_index_puts_major_leagues_first(tmp_path, monkeypatch):
             "latest_date": ["2026-09-30", "2026-01-01"],
         }
     )
-    build_site.write_player_index(listed)
+    site_players.write_player_index(listed)
     index = json.loads((tmp_path / "players.json").read_text())
     assert [p["n"] for p in index] == ["Pro", "Amateur"]
     assert index[0] == {
@@ -368,21 +363,21 @@ def test_player_index_puts_major_leagues_first(tmp_path, monkeypatch):
 
 
 def test_header_menus_list_live_stats_with_their_questions():
-    menus = {g["name"]: [l["key"] for l in g["links"]] for g in build_site.NAV}
+    menus = {g["name"]: [l["key"] for l in g["links"]] for g in site_config.NAV}
     assert menus == {
         "Teams": ["glory", "forge", "game_length_elo"],
         "Players": ["player_elo", "aura"],
     }
-    assert all(l["question"].endswith("?") for g in build_site.NAV for l in g["links"])
-    sunset = {m["key"] for m in build_site.SUNSET}
+    assert all(l["question"].endswith("?") for g in site_config.NAV for l in g["links"])
+    sunset = {m["key"] for m in site_config.SUNSET}
     assert "form" in sunset and not sunset & {
         k for keys in menus.values() for k in keys
     }
 
 
 def test_header_marks_the_menu_that_leads_to_the_page():
-    html = build_site.env.get_template("sunset.html.j2").render(
-        page_key="form", root_path="", metrics=build_site.SUNSET
+    html = render.env.get_template("sunset.html.j2").render(
+        page_key="form", root_path="", metrics=site_config.SUNSET
     )
     assert "<summary data-current>Teams</summary>" in html
     assert "<summary>Players</summary>" in html
@@ -440,8 +435,8 @@ def schedule_series(p):
 
 
 def test_predictions_view_splits_upcoming_past_and_home():
-    now = datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.timezone.utc)
-    view = build_site.predictions_view(_log(), {"t1"}, now)
+    now = datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.UTC)
+    view = predictions.predictions_view(_log(), {"t1"}, now)
     assert [r["id"] for d in view["upcoming"] for r in d["rows"]] == ["soon", "later"]
     assert (
         view["past"] == []
@@ -470,7 +465,7 @@ def test_predictions_view_splits_upcoming_past_and_home():
 
 def test_fixture_row_names_fall_back_to_leaguepedia_without_disambiguation():
     entry = {**_log()["soon"], "ours2": None}
-    row = build_site.fixture_row(entry, set())
+    row = predictions.fixture_row(entry, set())
     assert row["name2"] == "soon-b" and row["slug1"] is None
 
 
@@ -484,15 +479,15 @@ def test_fixture_row_and_register_carry_the_market_price():
             "ticker": "K",
         },
     }
-    row = build_site.fixture_row(entry, set())
+    row = predictions.fixture_row(entry, set())
     assert (row["mkt1"], row["mkt2"], row["mkt_at"]) == (63, 37, "3 Oct 02:30 UTC")
     entry["market"]["ticker"] = "KXLOLGAME-26OCT041600T1GEN"
-    row = build_site.fixture_row(entry, set())
+    row = predictions.fixture_row(entry, set())
     assert (
         row["mkt_url"]
         == "https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct041600t1gen"
     )
-    html = build_site.env.from_string(
+    html = render.env.from_string(
         "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days) }}{{ fixtures(days, results=True) }}"
     ).render(days=[{"day": row["day"], "label": "Sunday 4 October", "rows": [row]}])
     assert (
@@ -504,29 +499,29 @@ def test_fixture_row_and_register_carry_the_market_price():
         in html
     )
     assert ">Kalshi<" in html and 'colspan="11"' in html
-    plain = build_site.fixture_row(_log()["soon"], set())
+    plain = predictions.fixture_row(_log()["soon"], set())
     assert "mkt1" not in plain
 
 
 def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
-    monkeypatch.setattr(build_site, "OUTPUT_DIR", str(tmp_path))
-    view = build_site.predictions_view(
-        _log(), {"t1"}, datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.timezone.utc)
+    monkeypatch.setattr(site_config, "OUTPUT_DIR", str(tmp_path))
+    view = predictions.predictions_view(
+        _log(), {"t1"}, datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.UTC)
     )
-    build_site.render_predictions(view, {"matches": 4, "matched": 3, "unmatched": []})
+    predictions.render_predictions(view, {"matches": 4, "matched": 3, "unmatched": []})
     html = (tmp_path / "predictions.html").read_text()
     assert 'aria-current="page">Predictions' in html
     assert 'data-start="2026-10-04T08:00Z"' in html and "Sunday 4 October" in html
     assert 'href="results/2026-09.html">September 2026' in html
     assert "3 of 4 scheduled matches" in html
-    build_site.render_results(view)
+    predictions.render_results(view)
     month = (tmp_path / "results" / "2026-09.html").read_text()
     assert "Missed" in month and 'href="#note-3"' in month and 'id="note-3"' in month
     assert 'href="../teams/' not in month or "../teams/t1.html" in month
     assert "../css/" in month and "All leagues" in month
     assert 'data-select="LCK,LPL,LEC,LCS,Worlds' in html
     # The home page's compact table: no method column, no results.
-    home = build_site.env.from_string(
+    home = render.env.from_string(
         "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days, compact=True) }}"
     ).render(days=view["home"])
     assert "fx-by" not in home and "Result" not in home and 'colspan="10"' in home
@@ -534,7 +529,7 @@ def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
 
 def test_method_groups_split_saved_calls_from_the_backtest():
     rows = [{"label": l, "source": src, "edge": 0.05} for l, src in schedule.BET_GROUPS]
-    forge, elo = build_site.method_groups(rows)
+    forge, elo = predictions.method_groups(rows)
     assert forge["label"] == "FORGE" and [s["name"] for s in forge["sources"]] == [
         "saved",
         "backtest",
@@ -560,8 +555,8 @@ def test_method_groups_split_saved_calls_from_the_backtest():
             "market_12h": {"p": 0.5},
         },  # no result
     ]
-    assert build_site.backtest_span(entries) == ("2026-01-14", "2026-10-03")
-    assert build_site.backtest_span([]) is None
+    assert predictions.backtest_span(entries) == ("2026-01-14", "2026-10-03")
+    assert predictions.backtest_span([]) is None
 
 
 def test_results_register_shows_the_kalshi_closing_line():
@@ -574,17 +569,17 @@ def test_results_register_shows_the_kalshi_closing_line():
             "ticker": "KXLOLGAME-26SEP20T1GEN",
         },
     }
-    days = build_site._by_day([build_site.fixture_row(entry, set())])
-    html = build_site.env.from_string(
+    days = predictions._by_day([predictions.fixture_row(entry, set())])
+    html = render.env.from_string(
         "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days, results=True) }}"
     ).render(days=days)
     assert (
         ">Close<" in html and "63–37</a>" in html and "kxlolgame-26sep20t1gen" in html
     )
     assert 'colspan="10"' in html
-    plain = build_site.env.from_string(
+    plain = render.env.from_string(
         "{% from '_marks.html.j2' import fixtures %}{{ fixtures(days, results=True) }}"
-    ).render(days=build_site._by_day([build_site.fixture_row(_log()["past"], set())]))
+    ).render(days=predictions._by_day([predictions.fixture_row(_log()["past"], set())]))
     assert "No Kalshi market" in plain
 
 
@@ -607,9 +602,9 @@ def _game_log(n_series):
 
 
 def test_game_log_context_embeds_the_newest_and_writes_the_rest(tmp_path, monkeypatch):
-    monkeypatch.setattr(build_site, "OUTPUT_DIR", str(tmp_path))
-    monkeypatch.setattr(build_site, "GAME_LOG_SERIES", 2)
-    games = build_site.game_log_context("team", _game_log(3), "t1")
+    monkeypatch.setattr(site_config, "OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setattr(site_config, "GAME_LOG_SERIES", 2)
+    games = gamelogs.game_log_context("team", _game_log(3), "t1")
     assert (games["series"], games["games"], games["shown"], games["since"]) == (
         3,
         3,
@@ -622,21 +617,19 @@ def test_game_log_context_embeds_the_newest_and_writes_the_rest(tmp_path, monkey
     full = json.loads((tmp_path / "games" / "teams" / "t1.json").read_text())
     assert len(full["series"]) == 3 and full["players"] == [["Mid", "mid"]]
 
-    short = build_site.game_log_context(
+    short = gamelogs.game_log_context(
         "player", {"teams": ["T1"], "series": _game_log(1)["series"]}, "mid"
     )
     assert "src" not in short["data"] and short["data"]["teams"] == ["T1"]
     assert not (tmp_path / "games" / "players").exists()
-    assert (
-        build_site.game_log_context("team", {"players": [], "series": []}, "x") is None
-    )
+    assert gamelogs.game_log_context("team", {"players": [], "series": []}, "x") is None
 
 
 def test_team_page_orders_sections_and_lists_contents(tmp_path, monkeypatch):
-    monkeypatch.setattr(build_site, "OUTPUT_DIR", str(tmp_path))
-    roster = build_site.team_rosters(_roster_history(), {}, {})["T1"]
+    monkeypatch.setattr(site_config, "OUTPUT_DIR", str(tmp_path))
+    roster = teams.team_rosters(_roster_history(), {}, {})["T1"]
     series = [{"date": "2026-02-01", "elo": 1600.0}]
-    html = build_site.env.get_template("team.html.j2").render(
+    html = render.env.get_template("team.html.j2").render(
         page_key="team",
         root_path="../",
         teamname="T1",
@@ -665,7 +658,7 @@ def test_team_page_orders_sections_and_lists_contents(tmp_path, monkeypatch):
             "first": series[0],
             "last": series[0],
         },
-        games=build_site.game_log_context("team", _game_log(1), "t1"),
+        games=gamelogs.game_log_context("team", _game_log(1), "t1"),
     )
     order = [
         html.index(f'<section class="{c}" id="{i}"')
@@ -707,7 +700,7 @@ def test_forge_register_lists_every_league_on_its_own_scale():
             "year": 2026,
         }
     )
-    now, seasons, rows, config, filters = build_site.forge_register(
+    _now, _seasons, rows, config, filters = registers.forge_register(
         forms, forms, elos.drop(columns="year"), elos, ["LCK", "LPL"]
     )
     # A team rated only at an international event has no league scale.

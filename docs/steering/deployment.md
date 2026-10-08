@@ -29,7 +29,7 @@ Runs share a concurrency group per ref (`deploy-prometheus-<ref>`; a PR's ref is
 
 This mirrors the shared `thaiv28/project-platform-workflows` `deploy-static.yml`, which can't be reused directly because it builds with npm.
 
-CSS and JS links carry a content-hash query (`?v=`, from `asset()` in `build_site.py`), so a deploy that changes them reaches browsers that cached the old files; the CloudFront invalidation only clears the edge.
+CSS and JS links carry a content-hash query (`?v=`, from `asset()` in `prometheus/site/render.py`), so a deploy that changes them reaches browsers that cached the old files; the CloudFront invalidation only clears the edge. Since 2026-10-08 the deploy uploads CSS and JS with `Cache-Control: public, max-age=31536000, immutable` and fonts with `public, max-age=2592000` (`deploy_site.cache_control`), so repeat visits don't re-ask for them; pages and JSON carry none and get CloudFront's default. The edge cache key ignores the query string, which is why the `/*` invalidation on every deploy stays. A file uploaded before then gets its header when it next changes, or on a **full_upload** dispatch.
 
 Required repository settings:
 

@@ -85,6 +85,38 @@ def game_losses(p, won):
     )
 
 
+def resamples(units, n_resamples=2000, seed=0):
+    """Bootstrap resamples, as arrays of row positions: `units` is a row count
+    (rows drawn with replacement) or a list of row-position arrays, one per
+    cluster (whole clusters drawn with replacement, their rows kept together).
+    Every resample draws once from one generator seeded with `seed`, so a caller
+    gets the same draws as the loops this replaced."""
+    rng = np.random.default_rng(seed)
+    clusters = None if isinstance(units, (int, np.integer)) else list(units)
+    n = units if clusters is None else len(clusters)
+    for _ in range(n_resamples):
+        pick = rng.integers(0, n, n)
+        yield pick if clusters is None else np.concatenate([clusters[i] for i in pick])
+
+
+def interval(values):
+    """The 95% percentile interval of bootstrap values: (low, high)."""
+    return np.percentile(values, 2.5), np.percentile(values, 97.5)
+
+
+def ece(p, won, bins=10):
+    """Expected calibration error: over equal-width bins of the chance `p`, the
+    share of rows in each bin times the gap between its mean chance and its win
+    rate."""
+    p, won = np.asarray(p, dtype=float), np.asarray(won, dtype=float)
+    idx = np.minimum((p * bins).astype(int), bins - 1)
+    return sum(
+        (idx == b).mean() * abs(p[idx == b].mean() - won[idx == b].mean())
+        for b in range(bins)
+        if (idx == b).any()
+    )
+
+
 def paired_bootstrap(loss_a, loss_b, n_resamples=2000, seed=0):
     """Mean of (loss_a - loss_b) and its 95% bootstrap interval.
 
@@ -92,11 +124,8 @@ def paired_bootstrap(loss_a, loss_b, n_resamples=2000, seed=0):
     metric separately) gives a much tighter, fairer comparison.
     """
     diff = np.asarray(loss_a, dtype=float) - np.asarray(loss_b, dtype=float)
-    rng = np.random.default_rng(seed)
-    means = np.array(
-        [diff[rng.integers(0, len(diff), len(diff))].mean() for _ in range(n_resamples)]
-    )
-    return diff.mean(), np.percentile(means, 2.5), np.percentile(means, 97.5)
+    means = [diff[i].mean() for i in resamples(len(diff), n_resamples, seed)]
+    return (diff.mean(), *interval(means))
 
 
 def elo_as_of(timeline, offsets, cutoff):
@@ -322,14 +351,12 @@ def paired_correlation_bootstrap(pairs_a, pairs_b, n_resamples=2000, seed=0):
     """
     xa, ya = (np.asarray(v, dtype=float) for v in pairs_a)
     xb, yb = (np.asarray(v, dtype=float) for v in pairs_b)
-    corr = lambda x, y: np.corrcoef(x, y)[0, 1]
-    rng = np.random.default_rng(seed)
-    diffs = []
-    for _ in range(n_resamples):
-        i = rng.integers(0, len(xa), len(xa))
-        diffs.append(corr(xa[i], ya[i]) - corr(xb[i], yb[i]))
-    return (
-        corr(xa, ya) - corr(xb, yb),
-        np.percentile(diffs, 2.5),
-        np.percentile(diffs, 97.5),
-    )
+
+    def corr(x, y):
+        return np.corrcoef(x, y)[0, 1]
+
+    diffs = [
+        corr(xa[i], ya[i]) - corr(xb[i], yb[i])
+        for i in resamples(len(xa), n_resamples, seed)
+    ]
+    return (corr(xa, ya) - corr(xb, yb), *interval(diffs))

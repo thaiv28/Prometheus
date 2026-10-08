@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import elo_variants as ev  # noqa: E402
+import elo_variants as ev
 
 OUT = Path("/tmp/elo_variants_objectives")
 
@@ -153,7 +153,7 @@ def run(name):
         comp = pickle.loads((OUT / "composite.pkl").read_bytes())["params"]
         fixed = {k: comp[k] for k in ("weights", "scale", "center")}
         label = f"{label} ({fixed})"
-        make = lambda alpha: blended(alpha, **fixed)  # noqa: E731
+        make = lambda alpha: blended(alpha, **fixed)
     res = ev.held_out(inputs, make, grid, label)
     train = res.train_years
     base_train = (

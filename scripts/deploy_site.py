@@ -12,7 +12,10 @@ uploads everything: `current/` never differs from what the manifest says.
 
 `kalshi.json` and `predictions.json` are always uploaded, with a 5-minute
 Cache-Control, because the hourly prices job rewrites them in `current/` between
-deploys (see docs/steering/deployment.md).
+deploys (see docs/steering/deployment.md). CSS and JS get a year and `immutable`
+(every page links them with a content-hash `?v=`, so a change is a new URL to the
+browser; the deploy's CloudFront invalidation clears the edge), fonts 30 days;
+everything else gets none, and CloudFront's default applies.
 
     BUCKET=... python3 scripts/deploy_site.py [--output output] [--full] [--dry-run]
 
@@ -35,6 +38,16 @@ MANIFEST_KEY = "deploy/manifest.json"
 SITE_PREFIX = "current"
 HOURLY_FILES = ("kalshi.json", "predictions.json")
 HOURLY_CACHE_CONTROL = "max-age=300"
+LONG_CACHE = {
+    ".css": "public, max-age=31536000, immutable",
+    ".js": "public, max-age=31536000, immutable",
+    ".woff2": "public, max-age=2592000",
+}
+
+
+def cache_control(path):
+    """The Cache-Control a site file is uploaded with, or None for the default."""
+    return LONG_CACHE.get(Path(path).suffix)
 
 
 def build_manifest(root):
@@ -85,26 +98,30 @@ def read_manifest(bucket):
 
 
 def upload_files(output, bucket, paths, dry_run):
-    """Copy `paths` (relative to output) into a staging tree and upload it at once."""
-    if not paths:
-        return
-    with tempfile.TemporaryDirectory() as staging:
-        for rel in paths:
-            dest = Path(staging) / rel
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                os.link(output / rel, dest)
-            except OSError:
-                shutil.copy2(output / rel, dest)
-        aws(
-            "s3",
-            "cp",
-            staging,
-            f"s3://{bucket}/{SITE_PREFIX}",
-            "--recursive",
-            "--only-show-errors",
-            dry_run=dry_run,
-        )
+    """Copy `paths` (relative to output) into a staging tree and upload it, one
+    `aws s3 cp --recursive` per Cache-Control value."""
+    groups = {}
+    for rel in paths:
+        groups.setdefault(cache_control(rel), []).append(rel)
+    for header, group in sorted(groups.items(), key=lambda g: g[0] or ""):
+        with tempfile.TemporaryDirectory() as staging:
+            for rel in group:
+                dest = Path(staging) / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    os.link(output / rel, dest)
+                except OSError:
+                    shutil.copy2(output / rel, dest)
+            aws(
+                "s3",
+                "cp",
+                staging,
+                f"s3://{bucket}/{SITE_PREFIX}",
+                "--recursive",
+                "--only-show-errors",
+                *(["--cache-control", header] if header else []),
+                dry_run=dry_run,
+            )
 
 
 def delete_keys(bucket, paths, dry_run):
@@ -191,6 +208,8 @@ def main(argv=None):
             "--only-show-errors",
             dry_run=args.dry_run,
         )
+        # The copy above sets no Cache-Control; send the long-cached files again.
+        upload_files(output, bucket, [p for p in new if cache_control(p)], args.dry_run)
     else:
         upload, delete = plan(old, new)
         print(

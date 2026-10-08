@@ -5,6 +5,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from prometheus import forge, form
 from prometheus.elo import get_latest_elos, get_season_elos
 from prometheus.forge import FORM_POINTS, forge_ratings, team_forms
 from prometheus.form import form_states, load_form_games, opponent_adjust
@@ -45,11 +46,12 @@ def _forecast(metric, years, leagues):
 @app.command("rankings")
 def rankings(
     metric: Annotated[Metric, typer.Argument(help="Metric to rank")],
-    league: Annotated[list[League], typer.Option(help="List of leagues to filter")] = [
-        League.MAJOR
-    ],
+    league: Annotated[
+        list[League] | None,
+        typer.Option(help="List of leagues to filter", show_default="MAJOR"),
+    ] = None,
     year: Annotated[
-        list[str],
+        list[str] | None,
         typer.Option(
             help="Year or range (2021-2023); repeat for more. Default all years, "
             "or now for forecasts (forge, form)"
@@ -64,10 +66,11 @@ def rankings(
     ] = "score",
 ):
     """Fetch and display rankings."""
+    league = league or [League.MAJOR]
     try:
         years = parse_years(year)
     except ValueError as e:
-        raise typer.BadParameter(str(e), param_hint="--year")
+        raise typer.BadParameter(str(e), param_hint="--year") from e
     filtered_leagues = filter_leagues(league, years)
     names = [l.value for l in filtered_leagues]
     try:
@@ -108,7 +111,7 @@ def rankings(
                 )
     except ValueError:
         typer.echo("No data found for given criteria.")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     print_rankings_table(df, metric.value, league, years, n, console)
 
@@ -117,7 +120,7 @@ def rankings(
 def predict(
     days: Annotated[int, typer.Option(help="Days ahead to show, from today (UTC)")] = 1,
     league: Annotated[
-        list[str],
+        list[str] | None,
         typer.Option(help="Only these leagues (e.g. LCK, Worlds); repeat for more"),
     ] = None,
     major: Annotated[
@@ -131,7 +134,7 @@ def predict(
     """
     from prometheus import schedule
 
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     try:
         fixtures = schedule.fetch_schedule(
             now.date(),
@@ -139,7 +142,7 @@ def predict(
         )
     except Exception as e:  # network or rate limit
         typer.echo(f"Couldn't read the schedule from Leaguepedia: {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
     ratings = schedule.current_ratings(form_states(opponent_adjust(load_form_games())))
     preds = schedule.predict(
         fixtures[fixtures["start"] > now],
@@ -187,8 +190,25 @@ def predict(
 
 @app.command("weights")
 def weights():
-    """Fetch and display model weights."""
-    typer.echo("Fetching weights...")
+    """Show the published forecast weights (FORGE's blend and Form's per-stat weights)."""
+    blend = forge.load_weights()
+    table = Table(title="FORGE blend (log-odds per point)")
+    table.add_column("Weight")
+    table.add_column("Value", justify="right")
+    for name, value in blend.items():
+        table.add_row(name, f"{value:.6f}")
+    console.print(table)
+
+    form_data = form.load_weights()
+    table = Table(
+        title=f"Form (half-life {form_data['half_life']} games, "
+        f"carry {form_data['carry']}, prior {form_data['prior_games']} games)"
+    )
+    table.add_column("Stat")
+    table.add_column("Weight", justify="right")
+    for name, value in form_data["weights"].items():
+        table.add_row(name, f"{value:.4f}")
+    console.print(table)
 
 
 if __name__ == "__main__":
