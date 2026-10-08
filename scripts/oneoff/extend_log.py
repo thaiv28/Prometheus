@@ -86,7 +86,7 @@ def main():
 
     path = Path(args.log)
     log = schedule.load_log(path)
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     since = datetime.date.fromisoformat(args.since)
     until = (
         datetime.date.fromisoformat(min(e["start"] for e in log.values())[:10])

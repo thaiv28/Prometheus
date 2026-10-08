@@ -15,7 +15,7 @@ from prometheus.forge import (
     other_league_weight,
 )
 
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 
 
 def test_fold_and_strip_disambiguation():
@@ -528,7 +528,7 @@ def test_edge_record_bets_the_side_with_the_edge_and_scores_return_and_clv():
 
 
 def test_missing_results_finds_settled_matches_after_the_data():
-    now = datetime.datetime(2026, 10, 7, 10, 0, tzinfo=datetime.timezone.utc)
+    now = datetime.datetime(2026, 10, 7, 10, 0, tzinfo=datetime.UTC)
 
     def e(mid, start, winner=1, team1="A", team2="B"):
         return {

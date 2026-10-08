@@ -43,7 +43,13 @@ line-length = 88
 extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
-select = ["E9", "F", "I"]
+# pyflakes, import order and syntax errors, plus bugbear, pyupgrade, comprehensions,
+# perflint and ruff's own rules. Ignored: RUF001-003 (the en dashes, minus signs and
+# multiplication signs in strings and comments are deliberate), B905 (zip over
+# columns known to be the same length), RUF005 and PERF401 (list concatenation and
+# append loops read fine here) and UP042 (StrEnum would change how the enums print).
+select = ["E9", "F", "I", "B", "UP", "C4", "PERF", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003", "B905", "RUF005", "PERF401", "UP042"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["prometheus"]
@@ -52,4 +58,5 @@ known-first-party = ["prometheus"]
 testpaths = ["tests"]
 markers = [
     "e2e: runs the real build steps on a DB (the committed CSV sample by default; PROMETHEUS_E2E_DB=real for db/prometheus.db)",
+    "research: tests of the finished research in scripts/research/ (tests/research/); skip with -m \"not research\"",
 ]

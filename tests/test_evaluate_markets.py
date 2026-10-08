@@ -46,9 +46,7 @@ def test_parse_market_reads_teams_and_converts_eastern_time():
         None,
         True,
     )
-    assert m["start"] == datetime.datetime(
-        2026, 8, 3, 18, 0, tzinfo=datetime.timezone.utc
-    )
+    assert m["start"] == datetime.datetime(2026, 8, 3, 18, 0, tzinfo=datetime.UTC)
 
 
 def test_parse_market_handles_winter_time_maps_and_day_only_rules():
@@ -56,13 +54,9 @@ def test_parse_market_handles_winter_time_maps_and_day_only_rules():
         _market("T1", when="Jan 15, 2026 at 5:00 AM EST", map_no=1)
     )
     assert m["map"] == 1
-    assert m["start"] == datetime.datetime(
-        2026, 1, 15, 10, 0, tzinfo=datetime.timezone.utc
-    )
+    assert m["start"] == datetime.datetime(2026, 1, 15, 10, 0, tzinfo=datetime.UTC)
     day_only = markets.parse_market(_market("T1", when="Apr 2, 2026"))
-    assert day_only["start"] == datetime.datetime(
-        2026, 4, 2, 4, 0, tzinfo=datetime.timezone.utc
-    )
+    assert day_only["start"] == datetime.datetime(2026, 4, 2, 4, 0, tzinfo=datetime.UTC)
 
 
 def test_parse_market_keeps_a_colon_inside_the_event_name():
@@ -109,7 +103,7 @@ def test_quote_at_takes_last_two_sided_quote_by_the_time():
 
 
 def test_market_chance_averages_both_contracts_and_drops_wide_spreads(monkeypatch):
-    start = datetime.datetime(2026, 8, 3, 18, tzinfo=datetime.timezone.utc)
+    start = datetime.datetime(2026, 8, 3, 18, tzinfo=datetime.UTC)
     ts = int(start.timestamp())
     books = {
         "a": [_candle(ts, 0.60, 0.64)],  # T1: 0.62
@@ -148,7 +142,7 @@ def test_series_games_counts_wins_around_the_start():
             "day": [datetime.date(2026, 8, 3)] * 3 + [datetime.date(2026, 8, 20)],
         }
     )
-    start = datetime.datetime(2026, 8, 3, 18, tzinfo=datetime.timezone.utc)
+    start = datetime.datetime(2026, 8, 3, 18, tzinfo=datetime.UTC)
     assert evaluate_markets.series_games(pairs, "T1", "Gen.G", start) == (2, 1)
 
 

@@ -170,7 +170,7 @@ def evaluate(frame):
             # Development learning curves: train-only fitting, RAW 2024 scores.
             # Never fit calibration on the same data used to score this curve.
             sizes = sorted(
-                set([v for v in [100, 200, 400, 600, len(train)] if v <= len(train)])
+                {v for v in [100, 200, 400, 600, len(train)] if v <= len(train)}
             )
             for size in sizes:
                 smaller = train.iloc[:size]

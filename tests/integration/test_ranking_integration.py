@@ -14,18 +14,16 @@ def test_get_glory_ranking_multiyear_integration(mock_get_engine, inmemory_engin
     df = get_glory_ranking(year=years, features=["gpm", "dragon_per_10"])
 
     # There should be one entry per (teamname, year)
-    expected_combinations = set(
-        [
-            ("A", 2022),
-            ("B", 2022),
-            ("C", 2022),
-            ("D", 2022),
-            ("A", 2023),
-            ("B", 2023),
-            ("C", 2023),
-            ("D", 2023),
-        ]
-    )
+    expected_combinations = {
+        ("A", 2022),
+        ("B", 2022),
+        ("C", 2022),
+        ("D", 2022),
+        ("A", 2023),
+        ("B", 2023),
+        ("C", 2023),
+        ("D", 2023),
+    }
     actual_combinations = set(zip(df["teamname"], df["year"]))
     assert actual_combinations == expected_combinations
 

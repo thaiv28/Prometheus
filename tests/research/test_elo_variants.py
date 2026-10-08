@@ -13,7 +13,7 @@ from prometheus.elo import (
     winner_score,
 )
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts" / "research"))
 _spec = importlib.util.spec_from_file_location(
     "elo_variants", ROOT / "scripts" / "research" / "elo_variants.py"

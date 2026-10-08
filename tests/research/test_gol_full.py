@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "scripts" / "research"))
+sys.path.insert(0, str(Path(__file__).parents[2] / "scripts" / "research"))
 import evaluate_gol_full as full
 from test_gol_objectives import cohort
 

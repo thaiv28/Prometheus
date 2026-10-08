@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "research"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "research"))
 import evaluate_elo_champions as ablation
 from test_champion_interactions import games
 

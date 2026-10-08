@@ -218,7 +218,7 @@ def _pct(p):
 def _num(v, digits=0):
     if v is None or pd.isna(v):
         return None
-    return round(float(v), digits) if digits else int(round(float(v)))
+    return round(float(v), digits) if digits else round(float(v))
 
 
 def _compact(d):

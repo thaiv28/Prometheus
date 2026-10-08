@@ -91,7 +91,7 @@ def glory_stats(games, record):
         name: []
         for name in ("glory", "glory_raw", "glory_elo", "glorb", "win_pct", "luck")
     }
-    for year, raw in games.items():
+    for raw in games.values():
         pipeline = fit_glory_pipeline(raw, GLORY_FEATURES)
         scaler = pipeline.steps[0][1]
         variants = {
@@ -101,13 +101,15 @@ def glory_stats(games, record):
         }
         for name, frame in variants.items():
             frame = frame.assign(half=half_of(frame["gameid"]))
-            out[name].append(_by_half(frame, lambda d: _predict(pipeline, d)))
+            out[name].append(
+                _by_half(frame, lambda d, pipeline=pipeline: _predict(pipeline, d))
+            )
         frame = raw.assign(
             half=half_of(raw["gameid"]),
             result=raw["result"].astype(int),
             expected=np.clip(pipeline.predict(raw[GLORY_FEATURES]), 0, 1),
         )
-        out["glorb"].append(_by_half(frame, lambda d: _glorb(scaler, d)))
+        out["glorb"].append(_by_half(frame, lambda d, s=scaler: _glorb(s, d)))
         out["win_pct"].append(
             _by_half(frame, lambda d: d.groupby(KEY)["result"].mean())
         )
@@ -116,10 +118,12 @@ def glory_stats(games, record):
             win=("result", "mean"), raw=("expected", "mean"), n=("result", "size")
         )
         intercept, slope = calibrate_earned(season["win"], season["raw"], season["n"])
-        luck = lambda d: (
-            d.groupby(KEY)["result"].mean()
-            - (intercept + slope * d.groupby(KEY)["expected"].mean())
-        )
+
+        def luck(d, intercept=intercept, slope=slope):
+            return d.groupby(KEY)["result"].mean() - (
+                intercept + slope * d.groupby(KEY)["expected"].mean()
+            )
+
         out["luck"].append(_by_half(frame, luck))
     return {name: pd.concat(parts) for name, parts in out.items()}
 

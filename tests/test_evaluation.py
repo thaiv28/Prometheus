@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from prometheus import evaluation
 from prometheus.evaluation import (
     cross_league_games,
     elo_as_of,
@@ -229,3 +230,30 @@ def test_league_probabilities_use_other_years_only():
     assert p[new.to_numpy()] == pytest.approx(
         1 / (1 + np.exp(-pooled * games.loc[new, "elo_live"].to_numpy()))
     )
+
+
+def test_resamples_draw_rows_or_whole_clusters_reproducibly():
+    rows = list(evaluation.resamples(5, n_resamples=3, seed=1))
+    assert [len(r) for r in rows] == [5, 5, 5]
+    assert all(0 <= i < 5 for r in rows for i in r)
+    again = list(evaluation.resamples(5, n_resamples=3, seed=1))
+    assert all((a == b).all() for a, b in zip(rows, again))
+
+    clusters = [np.array([0, 1]), np.array([2]), np.array([3, 4, 5])]
+    for sample in evaluation.resamples(clusters, n_resamples=20, seed=0):
+        # Every cluster drawn comes with all its rows.
+        counts = np.bincount(sample, minlength=6)
+        assert counts[0] == counts[1] and counts[3] == counts[4] == counts[5]
+
+
+def test_ece_weights_each_bin_by_its_share_of_rows():
+    p = np.array([0.15, 0.15, 0.85, 0.85])
+    won = np.array([0, 0, 1, 1])
+    # Bins at 0.1-0.2 and 0.8-0.9, half the rows each, both off by 0.15.
+    assert evaluation.ece(p, won) == pytest.approx(0.15)
+    assert evaluation.ece([0.5, 0.5], [1, 0]) == pytest.approx(0.0)
+
+
+def test_interval_is_the_middle_95_percent():
+    lo, hi = evaluation.interval(np.arange(1001))
+    assert (lo, hi) == (25.0, 975.0)

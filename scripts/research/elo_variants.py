@@ -66,7 +66,7 @@ from prometheus.types import INTERNATIONAL_LEAGUES
 from prometheus.utils import get_engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import evaluate_metrics as em  # noqa: E402  (scripts/ is not a package)
+import evaluate_metrics as em
 
 # End-of-game team stats from `match_stats` given to margin functions.
 STATS = [
@@ -506,7 +506,7 @@ def compare(inputs, baseline_pre, variant_pre, label, years=None) -> str:
 
 def split_years(years, last_train_year=TUNE_LAST_YEAR):
     """(train, test): seasons up to `last_train_year`, and the later ones."""
-    years = sorted(set(int(y) for y in years))
+    years = sorted({int(y) for y in years})
     train = [y for y in years if y <= last_train_year]
     test = [y for y in years if y > last_train_year]
     if not train or not test:
@@ -740,7 +740,7 @@ def main():
             f"\n## Baseline (game-length margin, current code), every season {years[0]}–{years[-1]}\n"
         )
         print(_summary_table(full))
-        train, test = split_years(years)
+        _train, test = split_years(years)
         held = inputs.baseline_scores(test)
         print(f"\n## Baseline on the held-out seasons {test[0]}–{test[-1]}\n")
         print(_summary_table(held))

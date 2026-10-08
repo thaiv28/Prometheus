@@ -32,7 +32,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import elo_variants as ev  # noqa: E402
+import elo_variants as ev
 
 FEATURES = ["gold", "kills", "towers", "short"]
 SQUASH_GRID = {

@@ -33,13 +33,15 @@ import numpy as np
 import pandas as pd
 
 from prometheus.evaluation import (
+    ece,
     game_losses,
+    interval,
     paired_bootstrap,
     paired_correlation_bootstrap,
+    resamples,
 )
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from evaluate_aura import ece  # noqa: E402  (a sibling script)
 
 # The published forecasts in each section of the forecast backtest (AGENTS.md:
 # domestic and international log loss must not get significantly worse; the
@@ -125,18 +127,11 @@ def _rows_bootstrap(stat, base, head, groups=None, n_resamples=N_RESAMPLES, seed
         np.arange(len(base)) if groups is None else pd.factorize(pd.Series(groups))[0]
     )
     members = [np.flatnonzero(codes == k) for k in range(codes.max() + 1)]
-    rng = np.random.default_rng(seed)
-    diffs = []
-    for _ in range(n_resamples):
-        rows = np.concatenate(
-            [members[i] for i in rng.integers(0, len(members), len(members))]
-        )
-        diffs.append(stat(head[rows]) - stat(base[rows]))
-    return (
-        stat(head) - stat(base),
-        np.percentile(diffs, 2.5),
-        np.percentile(diffs, 97.5),
-    )
+    diffs = [
+        stat(head[rows]) - stat(base[rows])
+        for rows in resamples(members, n_resamples, seed)
+    ]
+    return (stat(head) - stat(base), *interval(diffs))
 
 
 def _corr(x, y):
@@ -149,7 +144,10 @@ def compare_forecasts(base, head, n_resamples=N_RESAMPLES):
     sections = pd.concat([base, head])[["section", "forecast"]].drop_duplicates()
     for section, forecast in sections.itertuples(index=False):
         guarded = (section, forecast) in GUARDED_FORECASTS
-        pick = lambda d: d[(d["section"] == section) & (d["forecast"] == forecast)]
+
+        def pick(d, section=section, forecast=forecast):
+            return d[(d["section"] == section) & (d["forecast"] == forecast)]
+
         both, only = _pair(pick(base), pick(head), FORECAST_KEY)
         if both.empty:
             rows.append(_missing(section, forecast, guarded, only))

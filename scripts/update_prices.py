@@ -64,9 +64,7 @@ def team_pages(url=TEAMS_URL):
 
 def run(log_path, out_dir, alert_path, now=None, fetch=None, pages=None):
     """One update. Returns a summary dict (also printed)."""
-    now = (now or datetime.datetime.now(datetime.timezone.utc)).replace(
-        second=0, microsecond=0
-    )
+    now = (now or datetime.datetime.now(datetime.UTC)).replace(second=0, microsecond=0)
     if os.path.exists(alert_path):
         os.remove(alert_path)
     log = schedule.load_log(log_path)

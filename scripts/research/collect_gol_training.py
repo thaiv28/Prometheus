@@ -229,7 +229,7 @@ def run(args):
     html.mkdir(parents=True, exist_ok=True)
     seed_cache(html)
     progress = {
-        "started_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "started_at_utc": dt.datetime.now(dt.UTC).isoformat(),
         "stop_reason": "in_progress",
         "requests_this_run": 0,
         "discovery_errors": [],

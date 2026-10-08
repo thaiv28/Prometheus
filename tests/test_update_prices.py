@@ -10,7 +10,7 @@ _spec = importlib.util.spec_from_file_location(
 update_prices = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(update_prices)
 
-NOW = datetime.datetime(2026, 10, 6, 10, 0, tzinfo=datetime.timezone.utc)
+NOW = datetime.datetime(2026, 10, 6, 10, 0, tzinfo=datetime.UTC)
 
 
 def _market(side, bid, ask):

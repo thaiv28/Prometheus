@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 
 const require = createRequire(import.meta.url);
-const { fold, slugify, rank } = require("../../site_static/js/names.js");
+const { fold, slugify, rank, esc, leagueMark } = require("../../site_static/js/names.js");
 const slugs = JSON.parse(readFileSync(new URL("./slugs.json", import.meta.url)));
 
 test("slugify matches build_site._slugify", () => {
@@ -37,4 +37,19 @@ test("rank keeps index order on ties and respects the limit", () => {
 test("rank ignores blank queries and accents in the query", () => {
   assert.deepEqual(rank(items(["T1"]), "   ", 8), []);
   assert.deepEqual(rank(items(["Ünited Esports"]), "unit", 8).map((x) => x.n), ["Ünited Esports"]);
+});
+
+test("esc escapes every HTML-special character and blanks null", () => {
+  assert.equal(esc(`<a href="x" title='y'>&</a>`), "&lt;a href=&quot;x&quot; title=&#39;y&#39;&gt;&amp;&lt;/a&gt;");
+  assert.equal(esc(null), "");
+  assert.equal(esc(undefined), "");
+  assert.equal(esc(0), "0");
+});
+
+test("leagueMark shows the code or hides it for screen readers, escaped", () => {
+  assert.equal(
+    leagueMark("LCK", true),
+    '<span class="league" data-league="LCK"><span class="league-mark" aria-hidden="true"></span>LCK</span>',
+  );
+  assert.match(leagueMark('<x"', false), /data-league="&lt;x&quot;".*visually-hidden">&lt;x&quot;</);
 });

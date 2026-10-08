@@ -5,7 +5,7 @@ import pytest
 
 from prometheus import alerts, markets
 
-UTC = datetime.timezone.utc
+UTC = datetime.UTC
 NOW = datetime.datetime(2026, 10, 6, 10, 0, tzinfo=UTC)
 AT = "2026-10-06T10:00Z"
 
@@ -77,7 +77,7 @@ def test_record_keeps_the_first_alert_and_paper_record_scores_it_after_fees():
     assert profit == pytest.approx(1 / 0.54 - 1 - markets.fee(0.54, 1))
 
 
-SLUG = lambda n: n.lower().replace(" ", "-")  # noqa: E731
+SLUG = lambda n: n.lower().replace(" ", "-")
 
 
 def test_update_writes_the_issue_with_links_and_a_comment_for_new_matches():
@@ -173,22 +173,17 @@ def test_buy_costs_take_the_cheaper_route_and_skip_wide_books():
 def test_write_kalshi_alert_writes_the_issue_and_clears_stale_files(
     tmp_path, monkeypatch
 ):
-    import importlib.util
-    from pathlib import Path
 
-    spec = importlib.util.spec_from_file_location(
-        "build_site",
-        Path(__file__).resolve().parent.parent / "scripts" / "build_site.py",
-    )
-    build_site = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(build_site)
+    from prometheus.site import config as site_config
+    from prometheus.site import predictions
+
     monkeypatch.setattr(
-        build_site, "PREDICTIONS_LOG", str(tmp_path / "predictions.json")
+        site_config, "PREDICTIONS_LOG", str(tmp_path / "predictions.json")
     )
     path = tmp_path / "alert.json"
     log = {"m": _entry("m")}
     coverage = {"priced": 1, "at": AT, "data_through": "2026-10-05"}
-    assert build_site.write_kalshi_alert(log, coverage, set(), str(path))["new"] == 1
+    assert predictions.write_kalshi_alert(log, coverage, set(), str(path))["new"] == 1
     issue = json.loads(path.read_text())
     assert issue["day"] == "Kalshi edges for Tue 6 Oct:" and issue["title"].startswith(
         issue["day"]
@@ -197,7 +192,7 @@ def test_write_kalshi_alert_writes_the_issue_and_clears_stale_files(
         "alert" in json.loads((tmp_path / "predictions.json").read_text())["matches"][0]
     )
     # No fresh prices (the fetch failed): nothing is written, and an old file goes.
-    assert build_site.write_kalshi_alert(log, None, set(), str(path)) is None
+    assert predictions.write_kalshi_alert(log, None, set(), str(path)) is None
     assert not path.exists()
 
 

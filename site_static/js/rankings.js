@@ -7,8 +7,7 @@
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
   const readJSON = (id) => { try { return JSON.parse($(id).textContent); } catch (e) { return null; } };
 
-  const ESC = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ESC[c]);
+  const { esc, ROLES, leagueMark, slugify } = PrometheusNames;
   const SVG = "http://www.w3.org/2000/svg";
 
   const rows = readJSON("#rows-data") || [];
@@ -23,8 +22,6 @@
   // Team pages list teams; the player Elo page lists players.
   const entity = config.entity || "team";
   const noun = () => (showingNow() ? `${entity}s` : `${entity}-seasons`);
-  const ROLES = { top: "Top", jng: "Jungle", mid: "Mid", bot: "Bot", sup: "Support" };
-  const { slugify } = PrometheusNames;
   const nameOf = (r) => (entity === "player" ? r.playername : r.teamname);
   const metricName = (document.querySelector("h1")?.firstChild?.textContent || "").trim();
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -145,8 +142,6 @@
   }
 
   // ---- Table -----------------------------------------------------------
-  const leagueMark = (code, showCode) =>
-    `<span class="league" data-league="${esc(code)}"><span class="league-mark" aria-hidden="true"></span>${showCode ? esc(code) : `<span class="visually-hidden">${esc(code)}</span>`}</span>`;
 
   // On narrow screens the league and year columns hide; they reappear under the team name.
   function teamMeta(r) {

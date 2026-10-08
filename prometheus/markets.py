@@ -154,7 +154,7 @@ def parse_market(m, settled=True):
         "team2": rules["team2"].strip(),
         "side": rules["side"].strip(),
         "map": int(rules["map"]) if rules["map"] else None,
-        "start": when.astimezone(datetime.timezone.utc),
+        "start": when.astimezone(datetime.UTC),
         "timed": rules["time"] is not None,
         "open": m["open_time"],
         "close": m["close_time"],
@@ -326,7 +326,7 @@ def published_log(log):
 
 def _parse_start(value):
     return datetime.datetime.strptime(value, "%Y-%m-%dT%H:%MZ").replace(
-        tzinfo=datetime.timezone.utc
+        tzinfo=datetime.UTC
     )
 
 
