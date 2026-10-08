@@ -246,7 +246,7 @@ PREDICTIONS = {
     "question": "Who wins the matches coming up?",
     "description": "Each team's chance of winning every scheduled pro match between teams we rate, and how past calls did.",
     "how_to_read": [
-        "Figures beside the bar: each team's chance of taking the series, in 100. It follows from the one-game chance, so a favourite is a bigger favourite over five games than one.",
+        "Figures beside the bar: each team's chance of taking the series, in 100. It follows from the one-game chance, allowing for form that carries through a series: a favourite is a bigger favourite over five games than one, but less so than if games were independent.",
         "Same league: FORGE, with separate weights outside LCK, LPL, LEC and LCS. Different leagues: Elo, on a curve fit to international games.",
         "Calls refresh daily and freeze at the start. Matches played before the log began carry a call rebuilt from the day before; the weights saw those games, so trust saved calls more.",
         "Log loss: lower is better; a coin flip scores 0.693. Table II scores the one-game chance per game, Table III the series chance per series.",

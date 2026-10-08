@@ -8,7 +8,9 @@ paged requests and backs off when refused.
 Predictions use the published forecasts: FORGE between two teams of the same
 league (with its own weights outside the major leagues), and Elo alone between
 leagues (as the FORGE head to head does).
-A series chance follows from the one-game chance, treating games as independent.
+A series chance follows from the one-game chance through a beta-binomial: each
+series draws its own chance around the call, so a series is more lopsided than
+independent games would make it (`series_probability`, `series_rho`).
 
 Each build updates a prediction log (JSON): a match's prediction is refreshed
 until it starts and then frozen, and its result is filled in once Leaguepedia has
@@ -50,6 +52,10 @@ PAGE_SIZE = 500
 # back in within a few minutes.
 BACKOFF = (20, 40, 60, 90, 120)
 MAJORS = [l.value for l in ALL_MAJOR_LEAGUES]
+# Within-series correlation of game results (the beta-binomial's rho), by whether
+# both teams are from major leagues, fit on 2018–2024 series by
+# scripts/research/series_independence.py (docs/research/series_independence.md).
+SERIES_RHO = {True: 0.054, False: 0.127}
 
 # Leaguepedia's league names mapped to Oracle's Elixir league codes, so a match is
 # shown under the league it is played in. Unmapped events take their league from
@@ -294,12 +300,35 @@ class TeamMatcher:
 # ---------------------------------------------------------------- probabilities
 
 
-def series_probability(p, best_of):
-    """Chance to win a best-of-`best_of` series when each game is won with chance `p`."""
+def series_probability(p, best_of, rho=0.0):
+    """Chance to win a best-of-`best_of` series when each game is won with chance `p`.
+
+    With `rho` > 0 the series' chance is drawn once from a Beta with mean `p` and
+    within-series correlation `rho`, and its games are independent given it; a game
+    won moves the next game's chance from p to p + rho (1 - p). `rho` = 0 is
+    independent games.
+    """
     need = best_of // 2 + 1
-    q = 1 - p
+    total = 0.0
     # Win the deciding game after k losses, for k = 0 .. need - 1.
-    return sum(math.comb(need - 1 + k, k) * p**need * q**k for k in range(need))
+    for k in range(need):
+        if rho <= 0:
+            moment = p**need * (1 - p) ** k
+        else:
+            kappa = 1 / rho - 1
+            a, b = p * kappa, (1 - p) * kappa
+            moment = math.exp(_log_beta(a + need, b + k) - _log_beta(a, b))
+        total += math.comb(need - 1 + k, k) * moment
+    return total
+
+
+def _log_beta(a, b):
+    return math.lgamma(a) + math.lgamma(b) - math.lgamma(a + b)
+
+
+def series_rho(home1, home2):
+    """The within-series correlation for two teams' home leagues (`SERIES_RHO`)."""
+    return SERIES_RHO[home1 in MAJORS and home2 in MAJORS]
 
 
 def team_ratings(forms_now, elos):
@@ -391,7 +420,9 @@ def predict(schedule, ratings, match_team):
             p, method = game_probability(*rated)
             rec.update(
                 p_game=round(p, 4),
-                p_series=round(series_probability(p, rec["best_of"]), 4),
+                p_series=round(
+                    series_probability(p, rec["best_of"], series_rho(*homes)), 4
+                ),
                 method=method,
             )
         out.append(rec)

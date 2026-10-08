@@ -31,7 +31,7 @@ from prometheus.forge import (
 from prometheus.form import league_relative, scores
 from prometheus.form import load_weights as load_form_weights
 from prometheus.player_tables import PlayerTables
-from prometheus.schedule import series_probability
+from prometheus.schedule import series_probability, series_rho
 from prometheus.types import ALL_MAJOR_LEAGUES
 from prometheus.utils import get_engine
 
@@ -81,7 +81,8 @@ def load_player_games(tables=None):
 
 
 def add_calls(games, states, form_weights=None):
-    """Add `p` (chance this team wins the game, from before it) and `method` to `games`.
+    """Add `p` (chance this team wins the game, from before it), `method` and both
+    teams' home leagues (`home`, `opp_home`; "" when unknown) to `games`.
 
     `states` is `form.form_states` output for every game. Form is league-relative
     as FORGE's is (`form.league_relative`); a team-game without a Form state, or
@@ -126,7 +127,7 @@ def add_calls(games, states, form_weights=None):
     unrated = np.isnan(e) | np.isnan(oe)
     p[unrated] = np.nan
     method[unrated] = None
-    return games.assign(p=p, method=method)
+    return games.assign(p=p, method=method, home=h, opp_home=oh)
 
 
 def add_series(games):
@@ -238,7 +239,7 @@ def series_heads(games, pricebook):
         losses = int(totals.at[first.series, "size"]) - wins
         bo = best_of(wins, losses)
         p_series = (
-            series_probability(first.p, bo)
+            series_probability(first.p, bo, series_rho(first.home, first.opp_home))
             if bo is not None and not pd.isna(first.p)
             else None
         )
