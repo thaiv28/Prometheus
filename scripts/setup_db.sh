@@ -2,7 +2,8 @@
 # Rebuild db/prometheus.db from Oracle's Elixir CSVs.
 #
 # Data: CSVs live in data/raw. If it's empty they are downloaded from Google Drive.
-# Set REFRESH_DATA=1 (CI does on main, once a day) to re-download even when CSVs exist; if that download
+# Set REFRESH_DATA=1 (CI does on main, once a day) to download the current year's
+# file even when CSVs exist, or REFRESH_DATA=full for every year's; if a download
 # fails (Drive rate-limits shared files), the existing CSVs are used instead.
 set -euo pipefail
 
@@ -11,41 +12,27 @@ ROOT_DIR="$SCRIPT_DIR/.."
 RAW_DIR="$ROOT_DIR/data/raw"
 DB_PATH="$ROOT_DIR/db/prometheus.db"
 FRESH_MARKER="$ROOT_DIR/data/.fresh-download" # tells CI to back up the new CSVs
-GDRIVE_ID="1gLSw0RLjBbtaNy0dgnGQDAZOHIgCe-HH" # Oracle's Elixir game data folder
 
 mkdir -p "$RAW_DIR"
 rm -f "$FRESH_MARKER"
 have_csvs() { compgen -G "$RAW_DIR/*.csv" > /dev/null; }
 
-# Download into a temp dir and only replace data/raw on full success,
-# so a failed or partial download never mixes with good data.
+# scripts/download_data.py downloads each file on its own and replaces one in
+# data/raw only when it parses and isn't older, so a refused or partial download
+# never mixes with good data. REFRESH_DATA=full downloads every year's file;
+# otherwise only the current year's when the rest are present.
 download() {
-    local tmp
-    tmp="$(mktemp -d)"
-    for attempt in 1 2 3; do
-        echo "Downloading data/raw from Google Drive (attempt $attempt)..."
-        if gdown --folder "https://drive.google.com/drive/folders/$GDRIVE_ID" -O "$tmp" \
-            && compgen -G "$tmp/*.csv" > /dev/null; then
-            for zipfile in "$tmp"/*.zip; do
-                [ -f "$zipfile" ] && unzip -o "$zipfile" -d "$tmp" && rm "$zipfile"
-            done
-            rm -f "$RAW_DIR"/*.csv
-            mv "$tmp"/*.csv "$RAW_DIR"/
-            rm -rf "$tmp"
-            touch "$FRESH_MARKER"
-            return 0
-        fi
-        # Drive's "too many users" refusal lasts hours, so waiting longer doesn't help.
-        [ "$attempt" -lt 3 ] && sleep 10
-    done
-    rm -rf "$tmp"
-    return 1
+    if [ "${REFRESH_DATA:-0}" = "full" ]; then
+        python3 "$SCRIPT_DIR/download_data.py" --full
+    else
+        python3 "$SCRIPT_DIR/download_data.py"
+    fi
 }
 
-if ! have_csvs || [ "${REFRESH_DATA:-0}" = "1" ]; then
+if ! have_csvs || [ "${REFRESH_DATA:-0}" != "0" ]; then
     if ! download; then
         if have_csvs; then
-            echo "::warning::Google Drive download failed; building from cached CSVs."
+            echo "::warning::Google Drive download failed for some files; building from the CSVs at hand."
         else
             echo "::error::Google Drive download failed and no cached CSVs exist." >&2
             exit 1

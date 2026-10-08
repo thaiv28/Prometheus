@@ -678,7 +678,7 @@ wheels = [
 [[package]]
 name = "prometheus"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "gdown" },
     { name = "jinja2" },

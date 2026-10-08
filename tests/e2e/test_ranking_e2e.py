@@ -1,7 +1,9 @@
+import pandas as pd
 import pytest
 
 from prometheus.ranking import get_glory_ranking
 from prometheus.types import ALL_MAJOR_LEAGUES
+from prometheus.utils import get_engine
 
 pytestmark = pytest.mark.e2e
 
@@ -23,13 +25,22 @@ def test_glory_custom_leagues_e2e():
 
 
 def test_glory_min_matches_e2e():
+    # Set the minimum just above the fewest LCS games any team played in 2017:
+    # those teams are ranked with no minimum and dropped with it; the rest stay.
+    games = pd.read_sql(
+        "SELECT teamname, COUNT(*) AS n FROM matches"
+        " WHERE league = 'LCS' AND year = 2017 GROUP BY teamname",
+        get_engine(),
+    ).set_index("teamname")["n"]
+    minimum = int(games.min()) + 1
+    few, many = games[games < minimum].index, games[games >= minimum].index
+    assert len(many)
     all_teams_df = get_glory_ranking(league=["LCS"], year=2017, minimum_matches=0)
-    qualified_teams_df = get_glory_ranking(league=["LCS"], year=2017, minimum_matches=5)
+    qualified_teams_df = get_glory_ranking(
+        league=["LCS"], year=2017, minimum_matches=minimum
+    )
 
-    # Cloud9 Challenger played three games in LCS 2017 (the promotion series), so
-    # it is ranked with no minimum and dropped with a minimum of five.
-    assert not all_teams_df[all_teams_df["teamname"] == "Cloud9 Challenger"].empty
-    assert qualified_teams_df[
-        qualified_teams_df["teamname"] == "Cloud9 Challenger"
-    ].empty
+    assert set(few) <= set(all_teams_df["teamname"])
+    assert not set(few) & set(qualified_teams_df["teamname"])
+    assert set(many) <= set(qualified_teams_df["teamname"])
     assert set(qualified_teams_df["teamname"]) < set(all_teams_df["teamname"])

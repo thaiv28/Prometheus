@@ -32,7 +32,7 @@ LEAGUES = ["LCK", "LPL", "EU LCS", "NA LCS", "LEC", "LCS", "WLDs", "Worlds"]
 STEP = 24  # every 24th game of each league-year
 KEEP_TEAMS = [
     "Cloud9 Challenger"
-]  # under five games in LCS 2017 (minimum_matches test)
+]  # its 2016-17 promotion games (filed under 2017 by Oracle's Elixir)
 
 PLAYER_COLUMNS = ["position", "playerid", "playername", "champion", "earned gpm"]
 COLUMNS = list(

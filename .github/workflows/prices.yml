@@ -28,36 +28,38 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The publish workflow restores the prediction log, rebuilds for several
       # minutes and saves it back; updating the log in between would be overwritten
       # or would overwrite the new calls. Skip this hour while it is queued or running.
       - name: Skip while the site is being published
         id: busy
         run: |
-          n=$(gh run list --workflow publish.yml --limit 10 --json status \
+          n=$(gh run list --workflow publish.yml --branch main --limit 10 --json status \
                 --jq '[.[] | select(.status != "completed")] | length')
           echo "busy=$([ "$n" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           [ "$n" -gt 0 ] && echo "A publish run is in progress; skipping this hour." || true
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.2.0
         if: steps.busy.outputs.busy == 'false'
       - name: Install dependencies
         if: steps.busy.outputs.busy == 'false'
-        run: uv sync --frozen --no-dev && uv pip install -e .
-      - uses: aws-actions/configure-aws-credentials@v4
+        run: uv sync --frozen --no-dev
+      - uses: aws-actions/configure-aws-credentials@v6
         if: steps.busy.outputs.busy == 'false'
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-west-2
       - name: Restore the prediction log
         if: steps.busy.outputs.busy == 'false'
-        run: aws s3 cp "$PREDICTIONS_BACKUP" data/predictions.json --only-show-errors
+        run: bash scripts/prediction_log.sh restore
       - name: Update prices and alerts
         if: steps.busy.outputs.busy == 'false'
         run: uv run python scripts/update_prices.py --log data/predictions.json --out output-prices
+      # Skipped when a publish run wrote the log since the restore above: its new
+      # calls win, and the next hour refreshes the prices again.
       - name: Save the prediction log
         if: steps.busy.outputs.busy == 'false'
-        run: aws s3 cp data/predictions.json "$PREDICTIONS_BACKUP" --only-show-errors
+        run: bash scripts/prediction_log.sh save --if-unchanged
       # No CloudFront invalidation (an hourly one would pass the free 1,000 paths a
       # month): max-age=300 lets the edge serve the new files within 5 minutes.
       - name: Publish prices to the site

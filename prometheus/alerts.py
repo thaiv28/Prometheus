@@ -23,7 +23,7 @@ import datetime
 import urllib.parse
 from zoneinfo import ZoneInfo
 
-from prometheus import markets
+from prometheus import markets, schedule
 from prometheus.types import ALL_MAJOR_LEAGUES
 
 EDGE = 0.05
@@ -41,11 +41,22 @@ def _start(entry):
     )
 
 
+def _stale(log, entry, now):
+    """Whether a team in this call has a settled match its ratings lack: the market
+    has seen that result, so an edge against it is likely the data's age."""
+    through = entry.get("data_through")
+    teams = {entry.get("team1"), entry.get("team2")} - {None}
+    return bool(
+        through and teams and schedule.missing_results(log, now, teams, through)
+    )
+
+
 def select(log, now, edge=EDGE, minor=False):
     """Alert candidates, soonest first: dicts with the entry, the team backed
     (side 1 or 2), FORGE's chance for it, its price and the edge. Only prices read
     at this build (`market.at` is `now`) count. FORGE calls within a major league,
-    or with `minor` within a non-major one (the paper track)."""
+    or with `minor` within a non-major one (the paper track). A call whose ratings
+    lack a team's settled result (`schedule.missing_results`) is skipped."""
     now_s = now.strftime("%Y-%m-%dT%H:%MZ")
     out = []
     for entry in log.values():
@@ -59,6 +70,8 @@ def select(log, now, edge=EDGE, minor=False):
             continue
         hours = (_start(entry) - now).total_seconds() / 3600
         if not MIN_HOURS <= hours <= MAX_HOURS:
+            continue
+        if _stale(log, entry, now):
             continue
         sides = [
             (1, entry["p_series"], market.get("ask1")),

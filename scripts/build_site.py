@@ -1149,6 +1149,20 @@ def update_predictions(states):
         return schedule.load_log(PREDICTIONS_LOG), None
 
 
+def warn_missing_results(log, data_through, now=None):
+    """Print a GitHub Actions warning when the log has settled matches the data
+    should hold but doesn't (the CSV download has failed for days). Returns them."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    missing = schedule.missing_results(log, now, data_through=data_through)
+    if missing:
+        last = max(e["start"] for e in missing)[:10]
+        print(
+            f"::warning::Data is stale: games through {data_through}, but "
+            f"{len(missing)} settled matches up to {last} are missing."
+        )
+    return missing
+
+
 def write_kalshi_alert(log, coverage, team_slugs, path=None):
     """Record this build's alerts in the log and write the day's issue to `path`
     (`alerts.update`). Runs only on fresh prices (this build's fetch worked) and
@@ -1733,7 +1747,10 @@ def main():
     # Form for every team in every league, as of now and at the end of each season.
     states = form_states(opponent_adjust(load_form_games()))
     forms_now, forms_seasons = team_forms(states)
+    games_through = pd.to_datetime(states["date"]).max()
+    env.globals["games_through"] = games_through.strftime("%B %-d, %Y")
     prediction_log, coverage = update_predictions(states)
+    warn_missing_results(prediction_log, str(games_through)[:10])
     form_now = forms_now.rename(columns={"home": "league"}).assign(
         form=lambda d: FORM_POINTS * d["form"]
     )

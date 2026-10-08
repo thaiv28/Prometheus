@@ -31,10 +31,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
       - name: Install dependencies
-        run: uv sync --frozen && uv pip install -e .
+        run: uv sync --frozen
       - name: Format
         run: uv run ruff format --check
       - name: Lint
@@ -42,7 +42,33 @@ jobs:
       - name: Test
         run: uv run pytest -q
 
+  # A PR that touches only docs and Markdown can't change the site's data or
+  # code, so it skips the build (check still runs). Every other event builds.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.diff.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Changed files
+        id: diff
+        run: |
+          if [ "${{ github.event_name }}" != pull_request ] \
+              || git diff --name-only HEAD^1 HEAD | grep -qvE '^(docs/|[^/]+\.md$)'; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Only docs changed; skipping the build."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -51,10 +77,10 @@ jobs:
       PREDICTIONS_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/predictions/predictions.json
       MARKET_PRICES_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/markets/market_prices.json
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
       - name: Install dependencies
-        run: uv sync --frozen && uv pip install -e .
+        run: uv sync --frozen
       # Oracle's Elixir updates its CSVs once a day, before the 10:00 UTC cron, and
       # Google Drive refuses them when they've been downloaded too often ("Too many
       # users"). So they're downloaded at most once per data day (10:00 UTC to
@@ -63,10 +89,12 @@ jobs:
       # nothing, so the next main run tries again, building from the cache meanwhile.
       - name: Data day
         id: day
-        run: echo "day=$(date -u -d '10 hours ago' +%F)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "day=$(date -u -d '10 hours ago' +%F)" >> "$GITHUB_OUTPUT"
+          echo "weekday=$(date -u -d '10 hours ago' +%u)" >> "$GITHUB_OUTPUT"
       - name: Restore cached CSVs
         id: raw-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: data/raw
           key: oracles-elixir-day-${{ steps.day.outputs.day }}
@@ -75,7 +103,7 @@ jobs:
       # fallback (PR builds can't assume the AWS role, so they rely on the cache).
       - name: AWS credentials for the data backup
         if: env.CAN_USE_AWS == 'true'
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-west-2
@@ -87,10 +115,12 @@ jobs:
           aws s3 cp "$DATA_BACKUP" data/raw/ --recursive --only-show-errors
           gunzip -f data/raw/*.csv.gz
       # Download only on main when today's CSVs aren't cached yet (PRs never do:
-      # they can't save to main's cache, and every download counts against Drive).
+      # they can't save to main's cache, and every download counts against Drive):
+      # the current year's file (scripts/download_data.py), and every year's on
+      # Mondays in case Oracle's Elixir corrected an older one.
       - name: Build database
         env:
-          REFRESH_DATA: ${{ env.CAN_USE_AWS == 'true' && steps.raw-cache.outputs.cache-hit != 'true' && '1' || '0' }}
+          REFRESH_DATA: ${{ env.CAN_USE_AWS == 'true' && steps.raw-cache.outputs.cache-hit != 'true' && (steps.day.outputs.weekday == '1' && 'full' || '1') || '0' }}
         run: uv run bash scripts/setup_db.sh
       - name: Back up freshly downloaded CSVs
         if: env.CAN_USE_AWS == 'true' && hashFiles('data/.fresh-download') != ''
@@ -102,39 +132,48 @@ jobs:
       # unused entries expire after a week). PRs read main's.
       - name: Save CSVs to the cache
         if: env.CAN_USE_AWS == 'true' && hashFiles('data/.fresh-download') != ''
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: data/raw
           key: oracles-elixir-day-${{ steps.day.outputs.day }}
-      # The e2e tests again, on today's full DB.
-      - name: Test on the full DB
-        env:
-          PROMETHEUS_E2E_DB: real
-        run: uv run pytest -q -m e2e
-      # Refit the FORGE weights on today's data; warns (does not fail) on a big move.
-      - name: Check FORGE weights
-        run: uv run python scripts/evaluate_metrics.py --check-weights
       # The prediction log (every call saved before its match, and the results) lives
       # in the backup bucket; a build without it (PRs, first run) starts a new one
-      # with a 30-day reconstructed backfill.
+      # with a 30-day reconstructed backfill. Any S3 error other than a missing file
+      # fails the build, so a hiccup can't replace the log (scripts/prediction_log.sh).
       - name: Restore the prediction log
         if: env.CAN_USE_AWS == 'true'
-        run: aws s3 cp "$PREDICTIONS_BACKUP" data/predictions.json --only-show-errors || echo "No saved prediction log yet."
+        run: bash scripts/prediction_log.sh restore
       # Kalshi's last price before each past series, for the game logs on team and
       # player pages (scripts/export_market_prices.py, uploaded by hand). Without it
       # the logs show only the prices saved in the prediction log.
       - name: Restore Kalshi prices
         if: env.CAN_USE_AWS == 'true'
         run: aws s3 cp "$MARKET_PRICES_BACKUP" data/market_prices.json --only-show-errors || echo "No saved Kalshi prices."
-      - name: Build static site
+      # Two read-only checks run alongside the site build (they only read the DB):
+      # the e2e tests again on today's full DB, and a refit of the FORGE weights on
+      # today's data, which warns (does not fail) on a big move. The step fails if
+      # any of the three does.
+      - name: Build static site and check the full DB
         env:
           # Optional bot password (Special:BotPasswords) for a higher Leaguepedia rate limit.
           LEAGUEPEDIA_USER: ${{ secrets.LEAGUEPEDIA_USER }}
           LEAGUEPEDIA_PASSWORD: ${{ secrets.LEAGUEPEDIA_PASSWORD }}
-        run: uv run python scripts/build_site.py
+        run: |
+          PROMETHEUS_E2E_DB=real uv run pytest -q -m e2e > "$RUNNER_TEMP/e2e.log" 2>&1 &
+          e2e=$!
+          uv run python scripts/evaluate_metrics.py --check-weights > "$RUNNER_TEMP/weights.log" 2>&1 &
+          weights=$!
+          status=0
+          uv run python scripts/build_site.py || status=1
+          wait "$e2e" || { status=1; echo "::error::e2e tests on the full DB failed"; }
+          wait "$weights" || { status=1; echo "::error::FORGE weight check failed"; }
+          for log in e2e weights; do
+            echo "::group::$log"; cat "$RUNNER_TEMP/$log.log"; echo "::endgroup::"
+          done
+          exit $status
       - name: Save the prediction log
         if: env.CAN_USE_AWS == 'true' && hashFiles('data/predictions.json') != ''
-        run: aws s3 cp data/predictions.json "$PREDICTIONS_BACKUP" --only-show-errors
+        run: bash scripts/prediction_log.sh save
       # The build writes data/kalshi_alert.json when FORGE beats Kalshi's ask by 5+
       # points on a match 6-36 hours out (prometheus/alerts.py); post it as the day's
       # issue (scripts/post_kalshi_alert.sh). The hourly prices workflow does the same
@@ -146,55 +185,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: bash scripts/post_kalshi_alert.sh
-      - uses: actions/upload-artifact@v4
+      # Only deploy reads it, and deploy never runs on PRs.
+      - uses: actions/upload-artifact@v7
+        if: github.event_name != 'pull_request'
         with:
           name: site
           path: output
           if-no-files-found: error
           retention-days: 7
-
-  # Kalshi's settled markets and candlesticks for the PR benchmark check's market
-  # comparison (benchmarks.yml): fetch what's new (scripts/evaluate_markets.py
-  # --update-cache; no DB) and save an Actions cache entry PRs restore. Off the
-  # deploy path. The first run fills an empty cache (about 4,900 requests, ~45 min);
-  # progress is saved even if it times out, and the next run continues.
-  kalshi-cache:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 80
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - name: Install dependencies
-        run: uv sync --frozen --no-dev && uv pip install -e .
-      - name: Restore the Kalshi cache
-        id: restore
-        uses: actions/cache/restore@v4
-        with:
-          path: data/markets
-          key: kalshi-markets-${{ github.run_id }}
-          restore-keys: kalshi-markets-
-      - name: Fetch new settled markets
-        id: fetch
-        continue-on-error: true
-        timeout-minutes: 70
-        run: uv run python scripts/evaluate_markets.py --update-cache
-      - name: Cache key
-        id: key
-        if: always()
-        run: |
-          if compgen -G "data/markets/*.json" > /dev/null; then
-            echo "key=kalshi-markets-$(cat data/markets/*.json data/markets/candles/*.json 2>/dev/null | sha256sum | cut -c1-40)" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Save the Kalshi cache
-        if: always() && steps.key.outputs.key != '' && steps.key.outputs.key != steps.restore.outputs.cache-matched-key
-        uses: actions/cache/save@v4
-        with:
-          path: data/markets
-          key: ${{ steps.key.outputs.key }}
-      - name: Fail if the fetch failed
-        if: steps.fetch.outcome == 'failure'
-        run: exit 1
 
   # Mirrors thaiv28/project-platform-workflows deploy-static.yml, which builds with npm.
   deploy:
@@ -208,16 +206,16 @@ jobs:
       HEALTH_URL: https://prometheus.thaiv.dev/
     steps:
       # Only the deploy script; the site itself comes from the build's artifact.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           sparse-checkout: scripts/deploy_site.py
           sparse-checkout-cone-mode: false
           path: repo
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: site
           path: output
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-west-2

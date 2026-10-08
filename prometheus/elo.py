@@ -6,7 +6,7 @@ from sqlalchemy import text
 
 from prometheus.player_tables import PlayerTables
 from prometheus.types import INTERNATIONAL_LEAGUES
-from prometheus.utils import get_engine
+from prometheus.utils import get_engine, insert_rows
 
 ELO_METHODS = ("game_length",)
 STARTING_ELO = 1500
@@ -358,7 +358,10 @@ def load_rosters() -> dict:
     players = pd.read_sql(
         "SELECT gameid, teamid, playerid FROM match_players", get_engine()
     )
-    return players.groupby(["gameid", "teamid"])["playerid"].apply(tuple).to_dict()
+    rosters = {}
+    for key in zip(players["gameid"], players["teamid"], players["playerid"]):
+        rosters.setdefault(key[:2], []).append(key[2])
+    return {key: tuple(ids) for key, ids in rosters.items()}
 
 
 def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO) -> None:
@@ -388,9 +391,9 @@ def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO) -> None:
         conn.execute(text(f"DELETE FROM {table}"))
         conn.execute(text(f"DELETE FROM {offsets_table}"))
         conn.execute(text(f"DELETE FROM {_players_table(method)}"))
-        elo_df.to_sql(table, conn, if_exists="append", index=False)
-        offsets_df.to_sql(offsets_table, conn, if_exists="append", index=False)
-        players_df.to_sql(_players_table(method), conn, if_exists="append", index=False)
+        insert_rows(conn, table, elo_df)
+        insert_rows(conn, offsets_table, offsets_df)
+        insert_rows(conn, _players_table(method), players_df)
 
 
 def get_elo_history(
