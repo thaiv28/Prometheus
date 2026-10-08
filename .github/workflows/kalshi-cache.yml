@@ -1,0 +1,59 @@
+name: Kalshi cache
+
+# Kalshi's settled markets and candlesticks for the PR benchmark check's market
+# comparison (benchmarks.yml): fetch what's new (scripts/evaluate_markets.py
+# --update-cache; no DB) and save an Actions cache entry PRs restore. Its own
+# workflow, so its run (up to 80 minutes on a first fill) never holds the publish
+# concurrency group or makes the hourly prices job skip. The first run fills an
+# empty cache (about 4,900 requests, ~45 min); progress is saved even if it times
+# out, and the next run continues.
+on:
+  schedule:
+    - cron: "40 11 * * *" # daily, after the 10:00 UTC publish
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kalshi-cache
+  cancel-in-progress: false
+
+jobs:
+  kalshi-cache:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+      - name: Restore the Kalshi cache
+        id: restore
+        uses: actions/cache/restore@v6
+        with:
+          path: data/markets
+          key: kalshi-markets-${{ github.run_id }}
+          restore-keys: kalshi-markets-
+      - name: Fetch new settled markets
+        id: fetch
+        continue-on-error: true
+        timeout-minutes: 70
+        run: uv run python scripts/evaluate_markets.py --update-cache
+      - name: Cache key
+        id: key
+        if: always()
+        run: |
+          if compgen -G "data/markets/*.json" > /dev/null; then
+            echo "key=kalshi-markets-$(cat data/markets/*.json data/markets/candles/*.json 2>/dev/null | sha256sum | cut -c1-40)" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Save the Kalshi cache
+        if: always() && steps.key.outputs.key != '' && steps.key.outputs.key != steps.restore.outputs.cache-matched-key
+        uses: actions/cache/save@v6
+        with:
+          path: data/markets
+          key: ${{ steps.key.outputs.key }}
+      - name: Fail if the fetch failed
+        if: steps.fetch.outcome == 'failure'
+        run: exit 1

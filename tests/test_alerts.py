@@ -240,3 +240,35 @@ def test_minor_league_forge_edges_are_paper_alerts_never_posted():
     assert alerts.paper_record(log) == (0, 0, 0.0, 0)
     settled, won, staked, _ = alerts.paper_record(log, key="paper_alert")
     assert (settled, won, staked) == (1, 1, 1.0)
+
+
+def test_select_skips_calls_whose_ratings_lack_a_teams_result():
+    def settled(mid, start, team1, team2):
+        return {
+            "match_id": mid,
+            "start": start,
+            "team1": team1,
+            "team2": team2,
+            "winner": 1,
+        }
+
+    teams = {"team1": "JD Gaming", "team2": "LGD Gaming"}
+    log = {
+        "stale": _entry("stale", data_through="2026-10-01", **teams),
+        "fresh": _entry(
+            "fresh",
+            start="2026-10-07T12:00Z",
+            data_through="2026-10-04",
+            team1="Weibo Gaming",
+            team2="Top Esports",
+        ),
+        # JD played on 3 Oct, after the stale call's data: the market knows that result.
+        "played": settled(
+            "played", "2026-10-03T09:00Z", "JD Gaming", "Bilibili Gaming"
+        ),
+        # Within a day and a half of now: Oracle's Elixir's usual lag, not staleness.
+        "recent": settled(
+            "recent", "2026-10-05T09:00Z", "Weibo Gaming", "Ninjas in Pyjamas"
+        ),
+    }
+    assert [a["entry"]["match_id"] for a in alerts.select(log, NOW)] == ["fresh"]

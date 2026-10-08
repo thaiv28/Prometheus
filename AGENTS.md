@@ -35,7 +35,7 @@ Prometheus is a "sabermetrics for League of Legends esports" project. It ingests
 ## Quick commands
 
 ```bash
-uv sync && uv pip install -e .          # install (Python >= 3.12, managed by uv)
+uv sync                                # install (Python >= 3.12, managed by uv)
 uv run bash scripts/setup_db.sh         # download raw CSVs (gdown), rebuild db/prometheus.db from scratch
 uv run python scripts/build_site.py     # render static site to output/
 uv run pytest -q                        # run tests (unit + integration + e2e; e2e builds a small DB from a committed sample)
@@ -59,7 +59,7 @@ Agents work in a separate worktree (see the global `AGENTS.md`). A new one has n
 
 ```bash
 git worktree add ../Prometheus-<branch> -b <branch> <base> && cd ../Prometheus-<branch>
-uv sync && uv pip install -e .
+uv sync
 mkdir -p data && ln -s "$MAIN/data/raw" data/raw    # raw CSVs: read-only, safe to share
 cp "$MAIN/.env" .                                    # Leaguepedia bot login
 cp "$MAIN/data/predictions.json" "$MAIN/data/market_prices.json" data/   # prediction log and Kalshi prices, for site builds
@@ -87,6 +87,8 @@ Use a port other than 8000 for `http.server` if another worktree is serving.
 | `prometheus/gamelog.py`, `scripts/export_market_prices.py` | Game logs on team and player pages: series grouped from games, each game's pre-game call (FORGE or Elo), Kalshi's price per series (`data/market_prices.json`, exported from the market benchmark, plus the prediction log), compact JSON written by `build_site.add_game_logs` |
 | `prometheus/main.py` | Typer CLI entry point (`prometheus` script) |
 | `scripts/NNN_*.sql\|py` | DB build steps. `setup_db.sh` runs them **in numeric order**. |
+| `scripts/download_data.py` | Oracle's Elixir CSVs from Google Drive, one file at a time: the current year's when `data/raw` has the rest, every year's with `--full` (`setup_db.sh`, `REFRESH_DATA=1`/`full`); a file is replaced only by one with newer games |
+| `scripts/prediction_log.sh` | CI's restore and save of the prediction log in the backup bucket: restore fails on any S3 error but a missing file; save refuses a shrinking log, and with `--if-unchanged` (hourly prices job) skips when the backup changed since the restore |
 | `scripts/build_site.py` | Static site generator |
 | `prometheus/player_tables.py` | `PlayerTables`: the player tables, each read once and joined in pandas, shared by `aura.load_aura_games`, `elo.get_player_history` and `gamelog.load_player_games` in the build |
 | `scripts/deploy_site.py` | The publish workflow's upload: only files whose content hash changed go into the bucket's `current/` (manifest at `deploy/manifest.json`); see `docs/steering/deployment.md` |

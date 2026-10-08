@@ -1,8 +1,8 @@
 {
-  "elo_weight": 0.004828,
-  "form_weight": 0.505003,
-  "cross_region_elo_weight": 0.008738,
-  "other_league_elo_weight": 0.012409,
-  "other_league_forge_elo_weight": 0.007756,
-  "other_league_form_weight": 0.520561
+  "elo_weight": 0.004924,
+  "form_weight": 0.493638,
+  "cross_region_elo_weight": 0.008755,
+  "other_league_elo_weight": 0.012478,
+  "other_league_forge_elo_weight": 0.007859,
+  "other_league_form_weight": 0.513117
 }

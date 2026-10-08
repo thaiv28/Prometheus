@@ -525,3 +525,28 @@ def test_edge_record_bets_the_side_with_the_edge_and_scores_return_and_clv():
     # Every match, backing our pick: here the same sides as the value bets.
     assert (rows[("FORGE", None)]["bets"], rows[("FORGE", None)]["won"]) == (2, 1)
     assert rows[("Other", None)]["bets"] == 1
+
+
+def test_missing_results_finds_settled_matches_after_the_data():
+    now = datetime.datetime(2026, 10, 7, 10, 0, tzinfo=datetime.timezone.utc)
+
+    def e(mid, start, winner=1, team1="A", team2="B"):
+        return {
+            "match_id": mid,
+            "start": start,
+            "team1": team1,
+            "team2": team2,
+            "winner": winner,
+        }
+
+    log = {
+        "in_data": e("in_data", "2026-10-01T09:00Z"),
+        "missing": e("missing", "2026-10-03T09:00Z"),
+        "unsettled": e("unsettled", "2026-10-03T12:00Z", winner=None),
+        "lag": e("lag", "2026-10-06T09:00Z"),  # within STALE_HOURS of now
+        "other": e("other", "2026-10-04T09:00Z", team1="C", team2="D"),
+    }
+    found = schedule.missing_results(log, now, data_through="2026-10-01")
+    assert sorted(m["match_id"] for m in found) == ["missing", "other"]
+    found = schedule.missing_results(log, now, teams={"A"}, data_through="2026-10-01")
+    assert [m["match_id"] for m in found] == ["missing"]

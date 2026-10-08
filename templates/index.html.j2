@@ -5,7 +5,7 @@
   <section class="title-page" aria-labelledby="title">
     <h1 id="title">Prometheus</h1>
     <p class="title-sub">League of Legends esports rankings of teams and players, compared across years and regions, 2014 to today.</p>
-    <p class="title-edition"><span>{{ '{:,}'.format(entry_counts.game_length_elo) }} teams rated</span> <span>{{ '{:,}'.format(entry_counts.glory) }} team-seasons</span> <span>Updated {{ last_update }}</span></p>
+    <p class="title-edition"><span>{{ '{:,}'.format(entry_counts.game_length_elo) }} teams rated</span> <span>{{ '{:,}'.format(entry_counts.glory) }} team-seasons</span> <span>Updated {{ last_update }}</span>{% if games_through %} <span>Games through {{ games_through }}</span>{% endif %}</p>
   </section>
 
   <div class="spread spread--home">

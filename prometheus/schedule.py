@@ -425,6 +425,29 @@ def _result(row):
     }
 
 
+# A result missing from the ratings this long after its match means the data is
+# stale, not just Oracle's Elixir's usual day of lag.
+STALE_HOURS = 36
+
+
+def missing_results(log, now, teams=None, data_through=None):
+    """Settled matches the ratings should hold but don't: started after the
+    ratings' `data_through` (each entry's own when not given) and more than
+    `STALE_HOURS` before `now`; only those involving `teams` when given. A call
+    made without them (the Drive download failing for days) is stale."""
+    cutoff = (now - datetime.timedelta(hours=STALE_HOURS)).strftime("%Y-%m-%dT%H:%MZ")
+    out = []
+    for e in log.values():
+        if e.get("winner") not in (1, 2) or e["start"] >= cutoff:
+            continue
+        if teams is not None and not {e.get("team1"), e.get("team2")} & set(teams):
+            continue
+        if data_through is not None and e["start"][:10] <= data_through:
+            continue
+        out.append(e)
+    return out
+
+
 def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
     """Fold today's schedule and predictions into the log, in place.
 

@@ -8,7 +8,7 @@
     <div class="spread-main">
       <header class="section-head">
         <h1>{{ metric.name }} <span class="full-name">{{ metric.full_name }}</span></h1>
-        <p class="lede">{{ metric.description }} Calls freeze at the start.<a class="note-ref" href="#note-3" aria-label="Note 3">3</a></p>
+        <p class="lede">{{ metric.description }} Calls freeze at the start.{% if games_through %} Games through {{ games_through }}.{% endif %}<a class="note-ref" href="#note-3" aria-label="Note 3">3</a></p>
       </header>
 
       {{ filter_line(view) }}
