@@ -7,10 +7,10 @@ import pandas as pd
 
 from prometheus.site import config as site_config
 from prometheus.site.config import ACTIVE_WINDOW, ROLE_ORDER, ROSTER_EXTRAS
-from prometheus.site.render import _slugify, _write, env
+from prometheus.site.render import env, slugify, write
 
 
-def _team_pages(
+def team_pages(
     glory_df,
     forge_seasons,
     forge_now,
@@ -54,7 +54,7 @@ def _team_pages(
     value = lambda v, digits: None if pd.isna(v) else round(float(v), digits)
 
     for team in teams:
-        slug = _slugify(team)
+        slug = slugify(team)
         series = []
         if team in seasons_by_team:
             for row in seasons_by_team[team].sort_values("year").itertuples():
@@ -232,7 +232,7 @@ def write_team_index(pages):
 def render_team_pages(pages):
     template = env.get_template("team.html.j2")
     for page in pages.values():
-        _write(
+        write(
             os.path.join(site_config.OUTPUT_DIR, "teams", f"{page['slug']}.html"),
             template.render(page_key="team", root_path="../", **page),
         )

@@ -66,13 +66,13 @@ from prometheus.site.predictions import (
     write_kalshi_alert,
 )
 from prometheus.site.registers import (
-    _active,
-    _forecast_records,
-    _rankings,
-    _season_page,
+    active,
+    forecast_records,
     forge_register,
+    rankings,
     render_index,
     render_rankings_page,
+    season_page,
 )
 from prometheus.site.render import (
     copy_static,
@@ -82,8 +82,8 @@ from prometheus.site.render import (
     render_sunset,
 )
 from prometheus.site.teams import (
-    _team_pages,
     render_team_pages,
+    team_pages,
     team_rosters,
     write_team_index,
 )
@@ -140,12 +140,10 @@ def season_stats() -> SeasonStats:
     # Read each year's games once and share them across every GLORY variant.
     games = load_glory_games()
     record_all = get_record(load_season_games())
-    glory_df = _rankings(games, 5, True, opponent_adjusted="record", record=record_all)
-    glory_all = _rankings(
-        games, 1, False, opponent_adjusted="record", record=record_all
-    )
-    glory_unadjusted_df = _rankings(games, 5, True)
-    glorb_df = _rankings(games, 5, True, baseline=True)
+    glory_df = rankings(games, 5, True, opponent_adjusted="record", record=record_all)
+    glory_all = rankings(games, 1, False, opponent_adjusted="record", record=record_all)
+    glory_unadjusted_df = rankings(games, 5, True)
+    glorb_df = rankings(games, 5, True, baseline=True)
 
     # Record covers the same team-seasons as GLORY (5+ major-league games), with
     # GLORY's league; its win % and games count every game of the season.
@@ -168,12 +166,12 @@ def season_stats() -> SeasonStats:
         luck_wins=lambda d: d["luck_wins"].round(1),
     )[["teamname", "year", "league", "luck_wins", "win_pct", "expected", "games"]]
 
-    _season_page("glory", glory_df, METRIC_COLUMNS, "score")
-    _season_page("record", record_df, RECORD_COLUMNS, "record")
+    season_page("glory", glory_df, METRIC_COLUMNS, "score")
+    season_page("record", record_df, RECORD_COLUMNS, "record")
     reach = float(np.ceil(luck_df["luck_wins"].abs().max() / 5) * 5)
-    _season_page("luck", luck_df, LUCK_COLUMNS, "luck_wins", domain=[-reach, reach])
-    _season_page("glory_unadjusted", glory_unadjusted_df, METRIC_COLUMNS, "score")
-    _season_page("glorb", glorb_df, METRIC_COLUMNS, "score")
+    season_page("luck", luck_df, LUCK_COLUMNS, "luck_wins", domain=[-reach, reach])
+    season_page("glory_unadjusted", glory_unadjusted_df, METRIC_COLUMNS, "score")
+    season_page("glorb", glorb_df, METRIC_COLUMNS, "score")
     return SeasonStats(glory=glory_df, glory_all=glory_all)
 
 
@@ -186,8 +184,8 @@ def forecasts(majors) -> Forecasts:
     season_elos = get_season_elos(cfg["method"])
     # Every team's current rating is a "now" row, so search finds retired teams;
     # the default view shows only the active ones.
-    team_elo_rows = _forecast_records(
-        latest_elos.assign(active=_active(latest_elos)), season_elos, ("elo",)
+    team_elo_rows = forecast_records(
+        latest_elos.assign(active=active(latest_elos)), season_elos, ("elo",)
     )
     render_rankings_page(
         cfg,
@@ -221,8 +219,8 @@ def forecasts(majors) -> Forecasts:
     )
     render_rankings_page(
         FORECASTS["form"],
-        _forecast_records(
-            form_now.assign(active=_active(form_now)), form_seasons, ("form",)
+        forecast_records(
+            form_now.assign(active=active(form_now)), form_seasons, ("form",)
         ),
         {
             "valueKey": "form",
@@ -351,7 +349,7 @@ def main():
     rosters = team_rosters(
         pl.history, pl.slugs, pl.latest.set_index("playerid")["elo"].to_dict()
     )
-    pages = _team_pages(
+    pages = team_pages(
         seasons.glory_all,
         fc.forge_seasons,
         fc.forge,

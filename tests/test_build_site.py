@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 def test_slugify_matches_the_shared_fixture():
     # tests/js/names.test.mjs checks the JS slugify against the same file.
     for case in json.loads((ROOT / "tests" / "js" / "slugs.json").read_text()):
-        assert render._slugify(case["name"]) == case["slug"]
+        assert render.slugify(case["name"]) == case["slug"]
 
 
 def test_player_slugs_add_the_team_then_a_number_for_shared_names():

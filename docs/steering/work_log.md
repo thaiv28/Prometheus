@@ -2,6 +2,22 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-08 — Benchmark check required on main; site helpers shared across modules lose their underscore
+
+No metric, report or page changes.
+
+- **Benchmark check required:** the `protect` ruleset on `main` now requires the `compare` check (GitHub Actions) as well as its two existing rules; set with `gh api -X PUT .../rulesets/24674659` and confirmed in the response. Documented in deployment.md.
+- `prometheus/site/`: `slugify` and `write` (render), `active`, `forecast_records`, `rankings` and `season_page` (registers), and `team_pages` (teams) are imported by other modules and `scripts/build_site.py`, so they are now public names (the last item from the 2026-10-07 review). No name they took was in use there.
+- Checks: `PREDICTIONS_FETCH=0 build_site.py` before and after on the same DB and prediction log: every file identical but `kalshi.json` (its timestamp). `uv run pytest -q`, `ruff format --check`, `ruff check`.
+
+## 2026-10-08 — Starting lineups for predictions: checked, not built
+
+No code, metric or page changes.
+
+- **Source.** Leaguepedia's Cargo tables have no starters before a match: `MatchSchedule` has no lineup fields, `TournamentPlayers` is the event roster (substitutes included, no starters), and `ScoreboardPlayers` / `MatchScheduleGame` are filled in after each game, after our call freezes at the match start.
+- **Value, best case.** Calls use each team's main roster after its previous game (`main_elo`); the backtest uses the game's real starters (`pre_match_elo`). On major-league games from 2022 (8,967), Elo with the real starters vs the main roster, same fitted slope: the two differ by more than 0.5 points in 11.0% of games (16% in 2022, 8% in 2025–26), by a median of 25 Elo points (p90 74). On those games, log loss is 0.6072 with the main roster and 0.5964 with the starters: a gain of 0.0108, with a bootstrap 95% interval of [−0.0009, 0.0234]. That is 0.0012 over all games. The best case is not significant, and part of it is substitutions made between games of a series, which a series call can't use. Not worth building without a pre-match source.
+- Checks: the Cargo field lists queried with the bot login; the measurement was a throwaway script on a fresh `setup_db.sh` DB, not committed. `uv run pytest -q`.
+
 ## 2026-10-08 — CI DB cache, Elo history cutoff test, build_site.py main() in steps
 
 No metric, report or page changes.
