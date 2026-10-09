@@ -3,17 +3,17 @@
   "carry": 0.5,
   "prior_games": 5,
   "weights": {
-    "gpm": 0.004697,
-    "kills_per_10": -0.050228,
-    "turrets_per_10": 0.876295,
-    "baron_per_10": -0.937729,
-    "dragon_per_10": 0.811875,
-    "atakhans": 0.986823,
-    "heralds_per_10": -0.075154,
-    "firstherald": -0.389579,
-    "firstdragon": -0.477353,
-    "firstbaron": -0.062532,
-    "firsttower": 0.109904,
-    "visionscore_per_10": 0.009589
+    "gpm": 0.004657,
+    "kills_per_10": -0.035763,
+    "turrets_per_10": 0.888817,
+    "baron_per_10": -0.93681,
+    "dragon_per_10": 0.786998,
+    "atakhans": 1.00487,
+    "heralds_per_10": -0.018864,
+    "firstherald": -0.400637,
+    "firstdragon": -0.478178,
+    "firstbaron": -0.045758,
+    "firsttower": 0.123734,
+    "visionscore_per_10": 0.008972
   }
 }

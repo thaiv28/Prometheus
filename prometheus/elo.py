@@ -16,6 +16,15 @@ LEAGUE_SHARE = 0.5
 # A new player starts at the average of players whose last game in the league was
 # within this many days.
 ACTIVE_DAYS = 365
+# A player counts ROOKIE_PENALTY lower in their first game, the discount fading
+# to nothing over ROOKIE_GAMES games (not stored in their rating, so a league's
+# average doesn't drift with turnover), and for their first PROVISIONAL_GAMES
+# games their rating moves PROVISIONAL_FACTOR times the team's change. Tuned on
+# 2014–2021 by scripts/research/elo_new_players.py.
+ROOKIE_PENALTY = 200
+ROOKIE_GAMES = 50
+PROVISIONAL_GAMES = 25
+PROVISIONAL_FACTOR = 2.0
 
 
 def _elo_table(method: str) -> str:
@@ -97,6 +106,11 @@ def compute_elo_records(
     rosters: dict | None = None,
     active_days: int = ACTIVE_DAYS,
     player_records: bool = False,
+    new_player_offset: float = 0.0,
+    provisional_games: int = PROVISIONAL_GAMES,
+    provisional_factor: float = PROVISIONAL_FACTOR,
+    rookie_penalty: float = ROOKIE_PENALTY,
+    rookie_games: int = ROOKIE_GAMES,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
 
@@ -130,6 +144,15 @@ def compute_elo_records(
             league average a new player starts at.
         player_records: Also return each rostered player's rating before and after
             every game (teams without a roster are left out).
+        new_player_offset: A new player starts this many points below the league
+            average (or `starting_elo`).
+        provisional_games, provisional_factor: For a player's first
+            `provisional_games` games, their rating moves by `provisional_factor`
+            times the team's change.
+        rookie_penalty, rookie_games: A player's rating counts this many points
+            lower in their first game, the discount falling linearly to nothing
+            after `rookie_games` games. It is not stored in their rating, so a
+            league's average doesn't drift with turnover.
     Returns:
         (records, offsets). `records` has two rows per game (one per team): gameid,
         teamid, pre_match_elo, post_match_elo, elo_change, home_league (see above;
@@ -159,6 +182,7 @@ def compute_elo_records(
     last_roster = {}
     main_roster = {}
     league_offset = defaultdict(float)
+    played = defaultdict(int)  # player -> games played
 
     def league_average(league, date):
         recent = [
@@ -170,11 +194,17 @@ def compute_elo_records(
         ]
         return sum(recent) / len(recent) if recent else starting_elo
 
+    def eff(player):
+        """A player's rating as it counts toward the team: less the rookie discount."""
+        if rookie_games and played[player] < rookie_games:
+            return own[player] - rookie_penalty * (1 - played[player] / rookie_games)
+        return own[player]
+
     def seat(player, league, date):
         if player not in own:
             own[player] = (
                 league_average(league, date) if league is not None else starting_elo
-            )
+            ) - new_player_offset
             player_league[player] = league
         elif player_league[player] != league:
             # Moving league (a transfer, promotion, a cup) keeps the player's rating.
@@ -213,12 +243,12 @@ def compute_elo_records(
         def rating(side):
             _, team_league, roster = side
             offset = league_offset[team_league] if team_league is not None else 0.0
-            return sum(own[p] for p in roster) / len(roster) + offset
+            return sum(eff(p) for p in roster) / len(roster) + offset
 
         pre = [rating(side) for side in sides]
         if player_records:
             player_pre = {
-                p: own[p]
+                p: eff(p)
                 + (league_offset[team_league] if team_league is not None else 0.0)
                 for _, team_league, roster in sides
                 for p in roster
@@ -231,7 +261,11 @@ def compute_elo_records(
         )
         for (_, _, roster), change in zip(sides, (elo_change, -elo_change)):
             for player in roster:
-                own[player] += change
+                if played[player] < provisional_games:
+                    own[player] += provisional_factor * change
+                else:
+                    own[player] += change
+                played[player] += 1
 
         team_league, opponent_league = sides[0][1], sides[1][1]
         if (
@@ -277,7 +311,7 @@ def compute_elo_records(
                             team,
                             player,
                             player_pre[player],
-                            own[player] + offset_now,
+                            eff(player) + offset_now,
                             team_league,
                             offset_now,
                         )
@@ -285,7 +319,7 @@ def compute_elo_records(
             main = main_roster[team]
             # Each player's own rating plus the offset of the league they sit in now.
             main_elo = sum(
-                own[p]
+                eff(p)
                 + (
                     league_offset[player_league[p]]
                     if player_league[p] is not None
