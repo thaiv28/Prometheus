@@ -266,8 +266,17 @@ def load_elo_timeline():
 
 
 def load_team_elo():
-    """Pre-game Elo with each team as one unit (no player ratings), for comparison."""
-    records, _ = compute_elo_records(load_elo_games(), calculate_game_length_elo_change)
+    """Pre-game Elo with each team as one unit (no player ratings), for comparison.
+
+    Without the rookie discount, which is for new players, not new teams.
+    """
+    records, _ = compute_elo_records(
+        load_elo_games(),
+        calculate_game_length_elo_change,
+        rookie_penalty=0,
+        rookie_games=0,
+        provisional_games=0,
+    )
     return records.set_index(["gameid", "teamid"])["pre_match_elo"]
 
 

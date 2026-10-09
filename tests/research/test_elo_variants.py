@@ -86,8 +86,10 @@ def test_bigger_margin_moves_ratings_more():
 
 def test_replay_passes_k_and_compute_kwargs():
     inputs = _inputs()
-    k20 = ev.replay(inputs, ev.game_length_margin(), records=True)
-    k40 = ev.replay(inputs, ev.game_length_margin(), K=40, records=True)
+    # Without the rookie discount, whose fading also shows in a team's change.
+    off = {"rookie_penalty": 0, "rookie_games": 0, "provisional_games": 0}
+    k20 = ev.replay(inputs, ev.game_length_margin(), records=True, **off)
+    k40 = ev.replay(inputs, ev.game_length_margin(), K=40, records=True, **off)
     assert k40["elo_change"].iloc[0] == pytest.approx(2 * k20["elo_change"].iloc[0])
     no_share = ev.replay(
         inputs, ev.game_length_margin(), league_share=0.0, records=True

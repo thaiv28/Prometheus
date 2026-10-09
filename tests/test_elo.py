@@ -1,11 +1,23 @@
 import pandas as pd
 import pytest
 
+from prometheus import elo
 from prometheus.elo import (
     calculate_game_length_elo_change,
-    compute_elo_records,
     expected_score,
 )
+
+# The rookie discount and faster early moves off, so a test sees one mechanism.
+OFF = {
+    "rookie_penalty": 0,
+    "rookie_games": 0,
+    "provisional_games": 0,
+    "provisional_factor": 1.0,
+}
+
+
+def compute_elo_records(games, *args, **kwargs):
+    return elo.compute_elo_records(games, *args, **{**OFF, **kwargs})
 
 
 def test_equal_ratings_win_and_loss_are_symmetric():
@@ -330,3 +342,95 @@ def test_home_league_moves_to_the_most_played_league():
         "LCK",
         "LCK",
     ]
+
+
+def _two_games():
+    # A beats B, then A (with newcomer x0 for a0) plays B again.
+    games = pd.DataFrame(
+        {
+            "gameid": ["g1", "g2"],
+            "teamid": ["A", "A"],
+            "opponent_teamid": ["B", "B"],
+            "gamelength": [1800] * 2,
+            "result": [1, 1],
+            "league": ["LCK"] * 2,
+            "date": ["2026-01-01", "2026-01-02"],
+        }
+    )
+    rosters = {
+        ("g1", "A"): _five("a"),
+        ("g1", "B"): _five("b"),
+        ("g2", "A"): ("x0",) + _five("a")[1:],
+        ("g2", "B"): _five("b"),
+    }
+    return games, rosters
+
+
+def test_new_player_offset_starts_newcomers_lower():
+    games, rosters = _two_games()
+    base, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    low, _ = compute_elo_records(
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        new_player_offset=100,
+    )
+    # Every player is new in g1 (no active players: 1500 - 100); x0 in g2 starts
+    # 100 below the active average, costing A 100 / 5 more than B.
+    assert _row(low, "g1", "A").pre_match_elo == pytest.approx(1400)
+    a_drop = _row(base, "g2", "A").pre_match_elo - _row(low, "g2", "A").pre_match_elo
+    b_drop = _row(base, "g2", "B").pre_match_elo - _row(low, "g2", "B").pre_match_elo
+    assert a_drop - b_drop == pytest.approx(100 / 5, abs=0.5)
+
+
+def test_rookie_discount_fades_and_is_not_stored():
+    games, rosters = _two_games()
+    base, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    disc, _ = compute_elo_records(
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        rookie_penalty=100,
+        rookie_games=2,
+    )
+    # First game: every player counts 100 lower, so the game itself is unchanged
+    # (the team's rating change also shows the discount halving, 100 to 50).
+    assert _row(disc, "g1", "A").pre_match_elo == pytest.approx(1400)
+    assert _row(disc, "g1", "A").elo_change - 50 == pytest.approx(
+        _row(base, "g1", "A").elo_change
+    )
+    # g2: A's veterans are half way (50 off), x0 is new (100 off), B's all 50 off.
+    # x0 is seated at the active average, which the discount doesn't lower.
+    a2 = _row(disc, "g2", "A").pre_match_elo
+    b2 = _row(disc, "g2", "B").pre_match_elo
+    assert a2 == pytest.approx(_row(base, "g2", "A").pre_match_elo - (4 * 50 + 100) / 5)
+    assert b2 == pytest.approx(_row(base, "g2", "B").pre_match_elo - 50)
+
+
+def test_provisional_players_move_faster():
+    games, rosters = _two_games()
+    base, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    fast, _ = compute_elo_records(
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        provisional_games=1,
+        provisional_factor=2,
+    )
+    change = _row(base, "g1", "A").elo_change
+    assert _row(fast, "g1", "A").post_match_elo == pytest.approx(1500 + 2 * change)
+
+
+def test_published_defaults_discount_rookies():
+    games, rosters = _two_games()
+    df, _ = elo.compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    # Everyone is new in g1: counted ROOKIE_PENALTY below the 1500 start.
+    assert _row(df, "g1", "A").pre_match_elo == pytest.approx(1500 - elo.ROOKIE_PENALTY)
