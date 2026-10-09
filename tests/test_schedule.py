@@ -227,8 +227,10 @@ def test_parse_schedule_types_and_predict():
         and preds[0]["league"] == "LCK"
     )
     assert preds[0]["p_game"] < 0.5 and preds[0]["p_series"] < preds[0]["p_game"]
-    assert preds[0]["p_series"] == round(
-        schedule.series_probability(preds[0]["p_game"], 5, schedule.SERIES_RHO[True]), 4
+    # p_game is rounded to 4 places, so the recomputed series chance can differ by 1e-4.
+    assert preds[0]["p_series"] == pytest.approx(
+        schedule.series_probability(preds[0]["p_game"], 5, schedule.SERIES_RHO[True]),
+        abs=2e-4,
     )
     assert preds[0]["start"] == "2026-10-04T08:00Z"
     assert not preds[1]["matched"] and "p_game" not in preds[1]
