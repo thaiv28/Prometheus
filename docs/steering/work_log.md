@@ -2,16 +2,16 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
-## 2026-10-12 — Market benchmark: alerts by lead time
+## 2026-10-12 — Market benchmark: alerts by lead time; alerts lose their 36-hour cap
 
 Branch `alert-leads`, based on `main` (a2f7d37). Question: is the alerts' 36-hour cap (`alerts.MAX_HOURS`) costing us earlier, better bets?
 
 - **`scripts/evaluate_markets.py`:** new "Alerts by lead time" section (`alert_leads_section`, `call_at`, `at_lead`; `ALERT_LEADS` 12/24/36/48/72 hours and `ALERT_EDGE` 0.05, fixed before the run). At each lead our call is rebuilt from games before the bet's day (the rest of the report uses games before the match day, which for a 48-hour bet would know games played after it), against the market's price and the ask then: Δ log loss, our weight beside the market, value bets above 5 points at the 7% taker fee (ROI, CLV), on each lead's own matches and on the matches priced at every lead to 48 hours. Tests for `call_at` and `at_lead`.
 - **Report rerun** (`docs/market_report.md`, fetching 141 series and 223 map-1 price histories the local cache lacked; the market lists were not refreshed, so matches run to 30 Sep). The rest of the report moved because of the rookie discount and aliases since 6 Oct (2,527 series with a closing quote, from 2,486).
 - **Results, FORGE within a major league, same 460 matches, 12 → 24 → 36 → 48 hours:** Δ log loss +0.0025 → +0.0000 → −0.0012 → −0.0023 (all within noise); our weight beside the market 0.43 → 0.51 → 0.53 → 0.56; value bets 175–192 a lead, ROI after fees +13.8% / +11.8% / +13.2% / +12.4% (every interval spans 0); CLV +1.47 → +2.65 → +2.48 → +3.30 points (all above 0), 59% → 67% beating the close. At 72 hours (416 own matches, near when markets open) ROI +22.6% (+2.6% to +43.6%), CLV +3.43, but it is one cell of many. FORGE within other leagues: CLV rises the same way (+1.01 → +2.41) but ROI stays about −1%. So earlier bets are no worse and their CLV is higher; nothing here says the cap should be 36 hours.
-- **Not changed:** `alerts.MAX_HOURS` stays 36 pending the user's call. Kalshi has a usable quote (spread ≤ 10¢) on 83% of timed series markets 12 hours out, 57% at 36, 50% at 48 and 37% at 72 (median spread 2¢ → 5¢ → 6¢; half the markets open within 77 hours of the start).
+- **Alerts: no upper lead limit** (user's call after these results). `alerts.MAX_HOURS` is gone; `select` takes FORGE calls 6 or more hours out, so a match qualifies as soon as Kalshi quotes it (prices with a spread over 10¢ are never stored, so no alert fires on them). Issue text, workflow comment, `test_alerts.py` (a 72-hour match now qualifies), tech.md, deployment.md and current_state.md updated. Kalshi has a usable quote (spread ≤ 10¢) on 83% of timed series markets 12 hours out, 57% at 36, 50% at 48 and 37% at 72 (median spread 2¢ → 5¢ → 6¢; half the markets open within 77 hours of the start).
 - **Limits:** calls are rebuilt with weights fit on data including these matches; the backtest's call knows every game before the bet's day, while live data (Oracle's Elixir) can lag a few days; the same matches appear at every lead, so the rows are not independent tests.
-- Checks: `uv run pytest -q`; `ruff format` and `ruff check`; the report run twice (offline cache, then fetching); the major-league FORGE rows matched between the two.
+- Checks: `uv run pytest -q` (all pass, after the alert change too); `ruff format` and `ruff check`; the report run twice (offline cache, then fetching); the major-league FORGE rows matched between the two.
 
 ## 2026-10-08 — Elo: rookie discount for new players; forecast rule judges the games a change targets
 
