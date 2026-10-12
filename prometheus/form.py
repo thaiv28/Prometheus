@@ -193,23 +193,38 @@ def form_states(
     return out
 
 
-def fit_form_weights(gaps, won):
-    """Logistic weights (log-odds per unit of stat gap) for blue-minus-red state gaps."""
+def fit_form_weights(gaps, won, C=1e6):
+    """Logistic weights (log-odds per unit of stat gap) for blue-minus-red state gaps.
+
+    `C` is the inverse L2 penalty on the standardised gaps (the default is
+    effectively unpenalised)."""
     x = np.asarray(gaps, dtype=float)
     scale = x.std(axis=0)
     scale[scale == 0] = 1.0
-    model = LogisticRegression(C=1e6, max_iter=1000).fit(
+    model = LogisticRegression(C=C, max_iter=1000).fit(
         x / scale, np.asarray(won, dtype=int)
     )
     return model.coef_[0] / scale
 
 
-def scores(states, weights, prefix="pre_"):
-    """Log-odds strength of each state row: its stats times the Form weights."""
-    cols = [f"{prefix}{f}" for f in weights]
-    return states[cols].to_numpy(dtype=float) @ np.array(
-        list(weights.values()), dtype=float
-    )
+def scores(states, weights, prefix="pre_", other_weights=None, majors=()):
+    """Log-odds strength of each state row: its stats times the Form weights.
+
+    With `other_weights`, rows whose home league isn't in `majors` are scored with
+    those weights instead (Form is league-relative, so each league keeps one set).
+    """
+
+    def score(w):
+        cols = [f"{prefix}{f}" for f in w]
+        return states[cols].to_numpy(dtype=float) @ np.array(
+            list(w.values()), dtype=float
+        )
+
+    out = score(weights)
+    if other_weights is not None:
+        other = ~states["home"].isin(majors).to_numpy()
+        out = np.where(other, score(other_weights), out)
+    return out
 
 
 def league_relative(states, score):

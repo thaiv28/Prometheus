@@ -2,6 +2,15 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-12 — Form's stat weights: ridge, fewer stats, other-league and pooled fits (not shipped)
+
+Branch `form-weights`, based on `main` (a2f7d37).
+
+- **Options** (`prometheus/form.py`, defaults unchanged): `fit_form_weights(..., C=)` (L2 penalty on standardised gaps), `scores(..., other_weights=, majors=)` (rows whose home league isn't a major scored with a second set). Unit tests in `tests/test_form.py`.
+- **Research** (`scripts/research/form_weights_fit.py`, report `docs/research/form_weights_fit.md`): grid fixed in advance (C 1e6/1/0.1/0.01 × all stats / no first-objective flags / gold + per-10 rates × fit on major, other-league or pooled games, plus blends of other-league and major weights at 0.25/0.5/0.75). Tuned on ≤2021 (Form weights and FORGE curves fit only on those seasons), majors chosen by domestic FORGE, then other leagues by FORGE within other leagues. Held out 2022–2026 (weights fit on every other season, as the backtest does), paired bootstrap vs the current fit.
+- **Result.** Every design moves log loss by 0.0003 or less. Ridge 0.0000. Chosen (majors pooled, other leagues pooled without first flags): domestic FORGE +0.0001 (−0.0002 to +0.0004), international 0, domestic Form alone +0.0003 (−0.0004 to +0.0010), within other leagues −0.0003 (−0.0004 to −0.0001); pooled everywhere the same. It passes the rule's letter within other leagues; not shipped for a gain of about 2% of the rookie discount's (left for the combined decision). The negative weights survive ridge.
+- Checks: the research run (about 2.5 min), `uv run pytest -q`, `ruff format`, `ruff check`.
+
 ## 2026-10-08 — Elo: rookie discount for new players; forecast rule judges the games a change targets
 
 Branch `new-player-elo`, based on `series-odds` (6467028).

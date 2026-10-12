@@ -90,3 +90,22 @@ def test_home_league_is_the_most_played_this_season():
     states = form.form_states(_games(rows), ["gpm"])
     # A winter cup does not move it; before its first 2025 domestic game it keeps LPL.
     assert states["home"].tolist() == ["LPL"] * 7
+
+
+def test_fit_form_weights_penalty_shrinks_weights():
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=(400, 2))
+    won = (x[:, 0] + rng.normal(size=400) > 0).astype(int)
+    loose = form.fit_form_weights(x, won)
+    tight = form.fit_form_weights(x, won, C=0.01)
+    assert abs(tight[0]) < abs(loose[0])
+    assert loose[0] > 0
+
+
+def test_scores_use_other_weights_outside_the_majors():
+    states = pd.DataFrame({"home": ["LCK", "LFL"], "pre_gpm": [2.0, 2.0]})
+    assert list(form.scores(states, {"gpm": 1.0})) == [2.0, 2.0]
+    mixed = form.scores(
+        states, {"gpm": 1.0}, other_weights={"gpm": 3.0}, majors={"LCK"}
+    )
+    assert list(mixed) == [2.0, 6.0]
