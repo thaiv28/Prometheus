@@ -434,3 +434,78 @@ def test_published_defaults_discount_rookies():
     )
     # Everyone is new in g1: counted ROOKIE_PENALTY below the 1500 start.
     assert _row(df, "g1", "A").pre_match_elo == pytest.approx(1500 - elo.ROOKIE_PENALTY)
+
+
+def _side_games(sides):
+    # `_two_games` with team A on the given side in each game.
+    games, _ = _two_games()
+    return games.assign(side=sides)
+
+
+def test_side_advantage_off_by_default_and_without_side_column():
+    games, rosters = _two_games()
+    base, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    no_col, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters, side_advantage=30
+    )
+    with_col, _ = compute_elo_records(
+        _side_games(["Blue", "Red"]), calculate_game_length_elo_change, rosters=rosters
+    )
+    pd.testing.assert_frame_equal(base, no_col)
+    pd.testing.assert_frame_equal(base, with_col)
+
+
+def test_blue_win_earns_less_than_red_win():
+    _, rosters = _two_games()
+    blue, _ = compute_elo_records(
+        _side_games(["Blue", "Blue"]),
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        side_advantage=40,
+    )
+    red, _ = compute_elo_records(
+        _side_games(["Red", "Red"]),
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        side_advantage=40,
+    )
+    a_blue, a_red = _row(blue, "g1", "A"), _row(red, "g1", "A")
+    # Stored pre-match ratings stay neutral; only the update sees the side.
+    assert a_blue.pre_match_elo == a_red.pre_match_elo == pytest.approx(1500)
+    assert a_blue.elo_change == pytest.approx(
+        calculate_game_length_elo_change(1540, 1500, 1800, 1)
+    )
+    assert a_red.elo_change == pytest.approx(
+        calculate_game_length_elo_change(1460, 1500, 1800, 1)
+    )
+    assert 0 < a_blue.elo_change < a_red.elo_change
+
+
+def test_side_advantage_by_tier_and_learned_online():
+    _, rosters = _two_games()
+    games = _side_games(["Blue", "Blue"])
+    # LCK is a major: only the "major" tier's points apply.
+    tiered, _ = compute_elo_records(
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        side_advantage={"major": 40, "other": 0},
+    )
+    fixed, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters, side_advantage=40
+    )
+    pd.testing.assert_frame_equal(tiered, fixed)
+    # Learned: starts at 0 (g1 as without a side), then blue's win in g1 raises it,
+    # so g2's blue win earns less than with no side term.
+    learned, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters, side_rate=0.5
+    )
+    base, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    assert _row(learned, "g1", "A").elo_change == pytest.approx(
+        _row(base, "g1", "A").elo_change
+    )
+    assert _row(learned, "g2", "A").elo_change < _row(base, "g2", "A").elo_change

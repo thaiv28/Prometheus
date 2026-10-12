@@ -5,7 +5,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from prometheus.player_tables import PlayerTables
-from prometheus.types import INTERNATIONAL_LEAGUES
+from prometheus.types import ALL_MAJOR_LEAGUES, INTERNATIONAL_LEAGUES
 from prometheus.utils import get_engine, insert_rows
 
 ELO_METHODS = ("game_length",)
@@ -111,6 +111,8 @@ def compute_elo_records(
     provisional_factor: float = PROVISIONAL_FACTOR,
     rookie_penalty: float = ROOKIE_PENALTY,
     rookie_games: int = ROOKIE_GAMES,
+    side_advantage: float | dict = 0.0,
+    side_rate: float = 0.0,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
 
@@ -153,6 +155,13 @@ def compute_elo_records(
             lower in their first game, the discount falling linearly to nothing
             after `rookie_games` games. It is not stored in their rating, so a
             league's average doesn't drift with turnover.
+        side_advantage, side_rate: Elo points the blue side's expected score counts
+            above red's in the update (needs a `side` column: `teamid`'s side). A
+            number, or {"major": points, "other": points} by tier (major and
+            international events vs every other league). With `side_rate` above 0
+            each tier's advantage also moves by `side_rate` times the blue team's
+            change after every game, so it is learned from earlier games only. Stored
+            ratings stay neutral; only the update sees the side.
     Returns:
         (records, offsets). `records` has two rows per game (one per team): gameid,
         teamid, pre_match_elo, post_match_elo, elo_change, home_league (see above;
@@ -183,6 +192,14 @@ def compute_elo_records(
     main_roster = {}
     league_offset = defaultdict(float)
     played = defaultdict(int)  # player -> games played
+    has_side = "side" in games.columns
+    side_on = has_side and (bool(side_advantage) or side_rate > 0)
+    side_points = (
+        dict(side_advantage)
+        if isinstance(side_advantage, dict)
+        else {"major": side_advantage, "other": side_advantage}
+    )
+    major_events = {l.value for l in ALL_MAJOR_LEAGUES} | set(INTERNATIONAL_LEAGUES)
 
     def league_average(league, date):
         recent = [
@@ -253,12 +270,19 @@ def compute_elo_records(
                 for _, team_league, roster in sides
                 for p in roster
             }
+        side_shift = 0.0
+        if side_on:
+            tier = "major" if league in major_events else "other"
+            blue = 1.0 if row.side == "Blue" else -1.0
+            side_shift = blue * side_points[tier]
         elo_change = elo_func(
-            elo=pre[0],
+            elo=pre[0] + side_shift,
             opponent_elo=pre[1],
             game_length=row.gamelength,
             result=row.result,
         )
+        if side_on and side_rate > 0:
+            side_points[tier] += side_rate * blue * elo_change
         for (_, _, roster), change in zip(sides, (elo_change, -elo_change)):
             for player in roster:
                 if played[player] < provisional_games:
@@ -379,7 +403,7 @@ def load_elo_games() -> pd.DataFrame:
     """Every game once, oldest first, in the shape `compute_elo_records` takes."""
     stmt = """
     SELECT m1.gameid, m1.teamid AS teamid, m2.teamid AS opponent_teamid, m1.gamelength,
-           m1.result, m1.league, m1.date
+           m1.result, m1.league, m1.date, m1.side
     FROM matches m1
         JOIN matches m2 ON m1.gameid = m2.gameid AND m1.teamid < m2.teamid
     ORDER BY m1.date ASC, m1.gameid ASC

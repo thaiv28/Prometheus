@@ -2,6 +2,15 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-12 — Blue side in Elo and our calls: tested, not shipped
+
+Branch `blue-side`, based on `main` (a2f7d37).
+
+- **Elo (`prometheus/elo.py`):** `compute_elo_records` options `side_advantage` (points blue's expected score counts above red's in the update; a number or by tier, major leagues and international events vs the rest) and `side_rate` (learn each tier's advantage online from blue's changes), off by default; stored ratings stay neutral. `load_elo_games` now also returns `side`, which the default replay ignores. `scripts/research/elo_variants.py` passes it through.
+- **Research:** `scripts/research/blue_side.py`, report `docs/research/blue_side.md`, tests `tests/research/test_blue_side.py` and three in `tests/test_elo.py`. Grids fixed in advance, tuned on 2014–2021 (domestic + within-other-league Elo log loss), held out 2022–2026 against published Elo (rookie discount on). One advantage (20): Elo domestic −0.0001 (−0.0004 to +0.0002), international +0.0002 (−0.0010 to +0.0014), other leagues +0.0001 (−0.0001 to +0.0003), cross-league +0.0003 (−0.0002 to +0.0008); by tier (30/20) and learned (rate 0.05) the same within ±0.0005, the learned one significantly worse cross-league (+0.0004, +0.0001 to +0.0008). FORGE moves the same way. Fails the forecast rule.
+- **Calls:** game 1's side isn't knowable before a match: Leaguepedia's `team1` was blue in game 1 in 56% of 394 logged matches matched to Oracle's Elixir (LAS 90%, VCS 87%, the rest near half). Later games follow the loser's pick, whose preferred side changes by season (loser on blue in major-league games: 92% in 2025, 21% in 2026), and a side term moves a series chance by under 0.001. No map-1 market test was possible without game 1's side. Nothing changed in calls.
+- Checks: `uv run pytest -q`; `ruff format`, `ruff check`; the replay with defaults is unchanged (`test_side_advantage_off_by_default_and_without_side_column`).
+
 ## 2026-10-08 — Elo: rookie discount for new players; forecast rule judges the games a change targets
 
 Branch `new-player-elo`, based on `series-odds` (6467028).

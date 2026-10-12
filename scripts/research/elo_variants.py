@@ -306,9 +306,9 @@ def replay(inputs, margin_fn, K=K_DEFAULT, international=None, records=False, **
     Returns:
         Series of pre-match Elo indexed by (gameid, teamid), two rows per game.
     """
-    games = inputs.games[ELO_COLUMNS].assign(
-        gamelength=winner_scores(inputs, margin_fn)
-    )
+    # `side` only matters to the side-advantage options (`blue_side.py`).
+    cols = ELO_COLUMNS + (["side"] if "side" in inputs.games.columns else [])
+    games = inputs.games[cols].assign(gamelength=winner_scores(inputs, margin_fn))
     with _international(international):
         out, _ = compute_elo_records(
             games,
