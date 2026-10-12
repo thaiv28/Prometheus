@@ -2,6 +2,14 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-12 — Elo K by tier and time away: tested; time away passes, K doesn't
+
+Branch `elo-k`, based on `main` (a2f7d37). No published metric changed (defaults unchanged, so it can be combined with the other assumption branches).
+
+- **Why.** A team's Elo change over its last 10 games predicts its next result beyond Elo (z +8.9 within other leagues, +2.7 majors, in sample), so ratings looked too slow.
+- **Options (`prometheus/elo.py`, off by default):** `league_factors` (a game's league → multiplier of its players' moves; league offsets still move by `league_share` of the unscaled change) and `away_factor` / `away_days` (a player back after time away moves `1 + away_factor × min(days away / away_days, 1)` times as much, Glicko-style). Tests in `tests/test_elo.py`.
+- **Research (`scripts/research/elo_k_tier.py`, report `docs/research/elo_k_tier.md`).** Baseline is the published Elo (K 20, rookie discount on). Grids fixed in advance, tuned on 2014–2021 (domestic + within-other-league Elo log loss), held out 2022–2026. Uniform K 28: Elo other leagues −0.0014 (−0.0018 to −0.0010), cross-league −0.0034, but FORGE domestic +0.0007 (+0.0002 to +0.0012). K by tier (chose 28 / 28): the same gains, FORGE domestic +0.0007 (+0.0002 to +0.0013) and international +0.0040 (+0.0009 to +0.0070), so it fails. Faster Elo duplicates what Form already adds inside a league. Time away (a = 2.0, the grid's edge): Elo other leagues −0.0006 (−0.0009 to −0.0003), FORGE other leagues −0.0003 (−0.0005 to −0.0000), cross-league −0.0009 (−0.0017 to −0.0001), domestic −0.0001 and international +0.0002 (both not significant). It passes the forecast rule on its target sections, but the gain is small. K by tier + time away fails like K by tier.
+- **Checks:** `uv run pytest -q`, `uv run ruff format`, `uv run ruff check`. Not run: `evaluate_metrics.py` and the market benchmark with time away as the default (left for the combined change), and larger `away_factor` values (outside the fixed grid).
 ## 2026-10-12 — Roster-aware Form: tested, passes within other leagues
 
 Branch `form-roster`, based on `main` (a2f7d37).

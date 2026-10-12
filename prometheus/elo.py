@@ -111,6 +111,9 @@ def compute_elo_records(
     provisional_factor: float = PROVISIONAL_FACTOR,
     rookie_penalty: float = ROOKIE_PENALTY,
     rookie_games: int = ROOKIE_GAMES,
+    league_factors: dict | None = None,
+    away_factor: float = 0.0,
+    away_days: int = 365,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
 
@@ -259,12 +262,19 @@ def compute_elo_records(
             game_length=row.gamelength,
             result=row.result,
         )
+        factor = league_factors.get(league, 1.0) if league_factors else 1.0
         for (_, _, roster), change in zip(sides, (elo_change, -elo_change)):
             for player in roster:
+                step = factor * change
+                if away_factor and date is not None and player in last_seen:
+                    seen = last_seen[player][0]
+                    if seen is not None:
+                        away = min((date - seen).days / away_days, 1.0)
+                        step *= 1 + away_factor * away
                 if played[player] < provisional_games:
-                    own[player] += provisional_factor * change
+                    own[player] += provisional_factor * step
                 else:
-                    own[player] += change
+                    own[player] += step
                 played[player] += 1
 
         team_league, opponent_league = sides[0][1], sides[1][1]

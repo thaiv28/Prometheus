@@ -434,3 +434,43 @@ def test_published_defaults_discount_rookies():
     )
     # Everyone is new in g1: counted ROOKIE_PENALTY below the 1500 start.
     assert _row(df, "g1", "A").pre_match_elo == pytest.approx(1500 - elo.ROOKIE_PENALTY)
+
+
+def test_league_factors_scale_player_moves_but_not_offsets():
+    base, _ = compute_elo_records(
+        _league_games(), calculate_game_length_elo_change, league_share=0.5
+    )
+    fast, _ = compute_elo_records(
+        _league_games(),
+        calculate_game_length_elo_change,
+        league_share=0.5,
+        league_factors={"LCK": 2.0, "Worlds": 3.0},
+    )
+    # An LCK game moves A twice as far; LCS (not listed) is unchanged.
+    assert _row(fast, "g1", "A").elo_change == pytest.approx(
+        2 * _row(base, "g1", "A").elo_change
+    )
+    assert _row(fast, "g2", "C").elo_change == pytest.approx(
+        _row(base, "g2", "C").elo_change
+    )
+    # At Worlds the players move 3 times the change and the offset half of it once.
+    worlds = _row(fast, "g3", "A")
+    assert worlds.league_offset == pytest.approx(0.5 * worlds.elo_change / 3.5)
+
+
+def test_time_away_moves_returning_players_more():
+    games, rosters = _two_games()
+    games["date"] = ["2026-01-01", "2027-06-01"]  # more than `away_days` apart
+    base, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    away, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters, away_factor=1.0
+    )
+    # g1 has no one returning; in g2 B's five are back after over a year: twice the move.
+    assert _row(away, "g1", "A").elo_change == pytest.approx(
+        _row(base, "g1", "A").elo_change
+    )
+    assert _row(away, "g2", "B").elo_change == pytest.approx(
+        2 * _row(base, "g2", "B").elo_change
+    )
