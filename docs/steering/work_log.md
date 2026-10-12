@@ -2,6 +2,14 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-12 — Roster-aware Form: tested, passes within other leagues
+
+Branch `form-roster`, based on `main` (a2f7d37).
+
+- **Option (`prometheus/form.py`):** `form_states(rosters=, roster_power=, roster_at=)` scales a team's carried state (sum and weight) by retained ** p, retained being the share of this game's starters who started its previous game (a game without a roster keeps the last one): at a new season on top of `CARRY` (`"season"`) or also at every lineup change (`"change"`). Off by default; nothing in the build or backtest uses it yet.
+- **Test (`scripts/research/form_roster.py`, report `docs/research/form_roster.md`):** grid fixed in advance (season × carry, season instead of carry, every change; p 0.5, 1, 2), tuned on 2014–2021 on mean FORGE log loss over domestic and within-other-league games, curves and Form weights fit out of year within the period. Chosen: every lineup change, p 0.5 (tuning −0.0008). Held out 2022–2026, paired vs published Form: domestic −0.0004 (−0.0013 to +0.0004), within 10 games of a starter change −0.0003; international +0.0000 (Elo alone); within other leagues −0.0013 (−0.0018 to −0.0006), within 10 games of a change −0.0015 (−0.0022 to −0.0007). Passes the forecast rule on within-other-league games, no section worse.
+- **Not done:** switching it on (build, `evaluate_metrics.py`, game logs) and refitting weights, left for shipping with the other FORGE branches; market benchmark not run. Checks: `uv run pytest -q`, `ruff format`, `ruff check`.
+
 ## 2026-10-12 — PR benchmark comment: betting table by edge
 
 Branch `bench-betting`, rebased on `main` (76e97fe).

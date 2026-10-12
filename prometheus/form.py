@@ -120,11 +120,21 @@ def form_states(
     half_life=HALF_LIFE,
     carry=CARRY,
     prior_games=PRIOR_GAMES,
+    rosters=None,
+    roster_power=1.0,
+    roster_at="season",
 ):
     """Each team's Form state before and after every game.
 
     Args:
         games: Opponent-adjusted `load_form_games` rows, oldest first.
+        rosters: Optional {(gameid, teamid): starters} (`elo.load_rosters`). With it,
+            a team's carried state is also scaled by retained ** `roster_power`,
+            retained being the share of this game's starters who started its
+            previous game (a game without a roster keeps the last one): at a new
+            season only (`roster_at="season"`, on top of `carry`) or at every
+            lineup change (`roster_at="change"`). Research option (see
+            `scripts/research/form_roster.py`); off by default.
     Returns:
         DataFrame aligned with `games`: gameid, teamid, teamname, league, year, date,
         home (the domestic league it has played most this season so far; its last
@@ -140,25 +150,38 @@ def form_states(
     # A missing stat counts as an average game for that stat.
     values = np.where(np.isnan(values), prior_rows, values)
     teams = games["teamid"].to_numpy()
+    gameids = games["gameid"].to_numpy()
     years = games["year"].to_numpy()
     leagues = games["league"].to_numpy()
     domestic = ~games["league"].isin(INTERNATIONAL_LEAGUES).to_numpy()
 
     sums, weights, last_year = {}, {}, {}
     league_games, home_of = {}, {}
+    last_roster = {}
     pre = np.empty_like(values)
     post = np.empty_like(values)
     seen = np.empty(len(games))
     home = np.empty(len(games), dtype=object)
     for i in range(len(games)):
         team = teams[i]
+        keep = 1.0
+        if rosters is not None:
+            previous = last_roster.get(team)
+            roster = rosters.get((gameids[i], team)) or previous
+            if previous and roster:
+                retained = len(set(roster) & set(previous)) / len(roster)
+                keep = retained**roster_power
+            last_roster[team] = roster
         if team not in sums:
             sums[team] = np.zeros(len(features))
             weights[team] = 0.0
         elif last_year[team] != years[i]:
-            sums[team] = sums[team] * carry
-            weights[team] *= carry
+            sums[team] = sums[team] * carry * keep
+            weights[team] *= carry * keep
             league_games[team] = {}
+        elif roster_at == "change" and keep < 1.0:
+            sums[team] = sums[team] * keep
+            weights[team] *= keep
         last_year[team] = years[i]
         # Home league: the domestic league it has played most this season, so a
         # winter cup or an international event doesn't change it.
