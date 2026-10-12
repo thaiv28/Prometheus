@@ -1024,11 +1024,15 @@ def main():
 
 
 DUMP_COLUMNS = ["kind", "event_ticker", "team1", "method", "major", "p", "won1"]
+# Kalshi's prices for the paper bets (series only): each team's contract cost
+# `BET_HOURS` before the start, and team 1's closing chance.
+DUMP_PRICE_COLUMNS = ["cost1", "cost2", "market_close"]
 
 
 def write_dump(series_frame, map_frame, counts, dirname):
     """Our call and the result per scored series (`p_series`) and map 1 (`p_game`)
-    for `compare_benchmarks.py`, plus the counts as `metrics.json`."""
+    for `compare_benchmarks.py`, with the series' bet prices
+    (`DUMP_PRICE_COLUMNS`, empty for map 1), plus the counts as `metrics.json`."""
     out = Path(dirname)
     out.mkdir(parents=True, exist_ok=True)
     calls = pd.concat(
@@ -1036,7 +1040,7 @@ def write_dump(series_frame, map_frame, counts, dirname):
             series_frame.assign(kind="series", p=series_frame["p_series"]),
             map_frame.assign(kind="map1", p=map_frame["p_game"]),
         ]
-    )[DUMP_COLUMNS]
+    ).reindex(columns=DUMP_COLUMNS + DUMP_PRICE_COLUMNS)
     calls.to_csv(out / "calls.csv.gz", index=False)
     (out / "metrics.json").write_text(json.dumps(counts, indent=1))
 
