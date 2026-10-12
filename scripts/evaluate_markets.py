@@ -63,7 +63,7 @@ from sqlalchemy import text
 from prometheus import schedule, utils
 from prometheus.elo import get_latest_elos
 from prometheus.evaluation import ece, game_losses, paired_bootstrap, resamples
-from prometheus.form import form_states, load_form_games, opponent_adjust
+from prometheus.form import load_states
 from prometheus.markets import (
     MAP,
     MARKET_ALIASES,
@@ -925,7 +925,7 @@ def main():
         return _finish(series_frame, map_frame, counts, unmatched, args.out, calls)
 
     _log("loading games and Form states")
-    states = form_states(opponent_adjust(load_form_games()))
+    states = load_states()
     data_end = pd.to_datetime(states["date"]).max().date()
     match_team = schedule.TeamMatcher(
         get_latest_elos("game_length"),

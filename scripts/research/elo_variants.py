@@ -393,7 +393,8 @@ def _with_elo(frame, pre_match):
 def variant_form_states(inputs, pre_match):
     """Form states with the opponent adjustment by `pre_match` Elo, as the site would."""
     return form.form_states(
-        form.opponent_adjust(inputs.form_games, elos=pregame_elos(inputs, pre_match))
+        form.opponent_adjust(inputs.form_games, elos=pregame_elos(inputs, pre_match)),
+        rosters=inputs.rosters,
     )
 
 

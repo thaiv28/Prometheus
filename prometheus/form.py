@@ -47,6 +47,11 @@ ELO_SCALE = 400 / math.log(10)
 HALF_LIFE = 20
 CARRY = 0.5
 PRIOR_GAMES = 5
+# When a team's lineup changes, its carried state is scaled by the share of starters
+# kept ** ROSTER_POWER (at every lineup change and at a new season, on top of CARRY).
+# Tested in scripts/research/form_roster.py.
+ROSTER_POWER = 0.5
+ROSTER_AT = "change"
 
 
 def load_form_games(before=None):
@@ -121,8 +126,8 @@ def form_states(
     carry=CARRY,
     prior_games=PRIOR_GAMES,
     rosters=None,
-    roster_power=1.0,
-    roster_at="season",
+    roster_power=ROSTER_POWER,
+    roster_at=ROSTER_AT,
 ):
     """Each team's Form state before and after every game.
 
@@ -133,8 +138,9 @@ def form_states(
             retained being the share of this game's starters who started its
             previous game (a game without a roster keeps the last one): at a new
             season only (`roster_at="season"`, on top of `carry`) or at every
-            lineup change (`roster_at="change"`). Research option (see
-            `scripts/research/form_roster.py`); off by default.
+            lineup change (`roster_at="change"`, the default). Without
+            rosters (unit tests) the state ignores lineups. `load_states` passes
+            them.
     Returns:
         DataFrame aligned with `games`: gameid, teamid, teamname, league, year, date,
         home (the domestic league it has played most this season so far; its last
@@ -216,6 +222,14 @@ def form_states(
     return out
 
 
+def load_states(before=None):
+    """Every team's Form state before and after every game, as the site builds it:
+    opponent-adjusted stats, carried state scaled by lineup changes."""
+    from prometheus.elo import load_rosters
+
+    return form_states(opponent_adjust(load_form_games(before)), rosters=load_rosters())
+
+
 def fit_form_weights(gaps, won):
     """Logistic weights (log-odds per unit of stat gap) for blue-minus-red state gaps."""
     x = np.asarray(gaps, dtype=float)
@@ -260,6 +274,8 @@ def save_weights(weights, path=WEIGHTS_PATH):
         "half_life": HALF_LIFE,
         "carry": CARRY,
         "prior_games": PRIOR_GAMES,
+        "roster_power": ROSTER_POWER,
+        "roster_at": ROSTER_AT,
         "weights": {f: round(float(w), 6) for f, w in weights.items()},
     }
     Path(path).write_text(json.dumps(data, indent=2) + "\n")

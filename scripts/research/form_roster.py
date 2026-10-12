@@ -135,7 +135,7 @@ def main():
     base_states = form.form_states(adjusted)
 
     base_train = section_losses(frame, other, base_states, train)
-    rows = [("Published Form", "—", objective(base_train))]
+    rows = [("Form without rosters", "—", objective(base_train))]
     best, best_obj = None, np.inf
     for variant in GRID:
         obj = objective(

@@ -32,7 +32,7 @@ from prometheus.elo import (
     get_season_elos,
 )
 from prometheus.forge import FORM_POINTS, team_forms
-from prometheus.form import form_states, load_form_games, opponent_adjust
+from prometheus.form import load_states
 from prometheus.player_tables import PlayerTables
 from prometheus.ranking import load_glory_games
 from prometheus.season import get_luck, get_record, load_season_games
@@ -205,7 +205,7 @@ def forecasts(majors) -> Forecasts:
     )
 
     # Form for every team in every league, as of now and at the end of each season.
-    states = form_states(opponent_adjust(load_form_games()))
+    states = load_states()
     forms_now, forms_seasons = team_forms(states)
     games_through = pd.to_datetime(states["date"]).max()
     env.globals["games_through"] = games_through.strftime("%B %-d, %Y")

@@ -1,11 +1,12 @@
 import datetime
+import math
 from collections import defaultdict
 
 import pandas as pd
 from sqlalchemy import text
 
 from prometheus.player_tables import PlayerTables
-from prometheus.types import INTERNATIONAL_LEAGUES
+from prometheus.types import ALL_MAJOR_LEAGUES, INTERNATIONAL_LEAGUES
 from prometheus.utils import get_engine, insert_rows
 
 ELO_METHODS = ("game_length",)
@@ -21,10 +22,23 @@ ACTIVE_DAYS = 365
 # average doesn't drift with turnover), and for their first PROVISIONAL_GAMES
 # games their rating moves PROVISIONAL_FACTOR times the team's change. Tuned on
 # 2014–2021 by scripts/research/elo_new_players.py.
-ROOKIE_PENALTY = 200
-ROOKIE_GAMES = 50
+ROOKIE_PENALTY = 250
+ROOKIE_GAMES = 200
+# "log": the discount falls with log(1 + games) (scripts/research/elo_experience.py).
+ROOKIE_CURVE = "log"
 PROVISIONAL_GAMES = 25
 PROVISIONAL_FACTOR = 2.0
+# A player back after time away moves 1 + AWAY_FACTOR × min(days away / AWAY_DAYS, 1)
+# times the team's change in their first game back (a Glicko-style uncertainty).
+# Tuned on 2014–2021 by scripts/research/elo_k_tier.py.
+AWAY_FACTOR = 2.0
+AWAY_DAYS = 365
+# A player moving from a major down to another league gains MOVE_DOWN_BONUS points
+# on top of the offset conversion (stored in their rating); moving up costs
+# MOVE_UP_PENALTY. Tuned on 2014–2021 by scripts/research/elo_league_moves_direction.py.
+MOVE_UP_PENALTY = 0.0
+MOVE_DOWN_BONUS = 25.0
+MAJOR_LEAGUES = frozenset(league.value for league in ALL_MAJOR_LEAGUES)
 
 
 def _elo_table(method: str) -> str:
@@ -112,8 +126,15 @@ def compute_elo_records(
     rookie_penalty: float = ROOKIE_PENALTY,
     rookie_games: int = ROOKIE_GAMES,
     league_factors: dict | None = None,
-    away_factor: float = 0.0,
-    away_days: int = 365,
+    away_factor: float = AWAY_FACTOR,
+    away_days: int = AWAY_DAYS,
+    move_up_penalty: float = MOVE_UP_PENALTY,
+    move_down_bonus: float = MOVE_DOWN_BONUS,
+    move_games: int = 0,
+    rookie_curve: str = ROOKIE_CURVE,
+    veteran_penalty: float = 0.0,
+    veteran_games: int = 0,
+    veteran_years: float = 0.0,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
 
@@ -156,6 +177,26 @@ def compute_elo_records(
             lower in their first game, the discount falling linearly to nothing
             after `rookie_games` games. It is not stored in their rating, so a
             league's average doesn't drift with turnover.
+        league_factors: Scales players' moves in a game by its league ({league:
+            factor}, 1 when missing); league offsets still move by `league_share`
+            of the unscaled change. Research option (K by tier), off by default.
+        away_factor, away_days: In a player's first game back after time away,
+            their move is 1 + `away_factor` × min(days away / `away_days`, 1)
+            times the team's change.
+        move_up_penalty, move_down_bonus, move_games: A player who moves from a
+            non-major league into a major (`MAJOR_LEAGUES`) loses `move_up_penalty`
+            points, and one who moves from a major down to another league gains
+            `move_down_bonus`, on top of the offset conversion. With `move_games` 0
+            the change is stored in their rating; otherwise it counts only toward
+            team ratings, fading linearly to nothing over their next `move_games`
+            games, like the rookie discount.
+        rookie_curve: "linear" (above) or "log": the discount falls with
+            log(1 + games) instead, D × (1 − log(1 + g) / log(1 + rookie_games)).
+        veteran_penalty, veteran_games, veteran_years: a late-career discount,
+            counted like the rookie one (never stored). Past `veteran_games` games it
+            grows linearly to `veteran_penalty` at twice that many; past
+            `veteran_years` years since the player's first game it grows to
+            `veteran_penalty` over three more years. Zero turns either off.
     Returns:
         (records, offsets). `records` has two rows per game (one per team): gameid,
         teamid, pre_match_elo, post_match_elo, elo_change, home_league (see above;
@@ -186,6 +227,9 @@ def compute_elo_records(
     main_roster = {}
     league_offset = defaultdict(float)
     played = defaultdict(int)  # player -> games played
+    move_adjust = {}  # player -> (adjustment, games played at the move), when temporary
+    first_seen = {}  # player -> date of their first game
+    current = {"date": None}  # the date of the game being replayed
 
     def league_average(league, date):
         recent = [
@@ -197,11 +241,37 @@ def compute_elo_records(
         ]
         return sum(recent) / len(recent) if recent else starting_elo
 
+    def discount(player):
+        """Points a player counts below their own rating: rookie plus veteran."""
+        games = played[player]
+        off = 0.0
+        if rookie_games and games < rookie_games:
+            if rookie_curve == "log":
+                off += rookie_penalty * (
+                    1 - math.log1p(games) / math.log1p(rookie_games)
+                )
+            else:
+                off += rookie_penalty * (1 - games / rookie_games)
+        if veteran_penalty:
+            if veteran_games and games > veteran_games:
+                off += veteran_penalty * min(1.0, games / veteran_games - 1)
+            start, now = first_seen.get(player), current["date"]
+            if veteran_years and start is not None and now is not None:
+                years = (now - start).days / 365.25
+                if years > veteran_years:
+                    off += veteran_penalty * min(1.0, (years - veteran_years) / 3)
+        return off
+
     def eff(player):
-        """A player's rating as it counts toward the team: less the rookie discount."""
-        if rookie_games and played[player] < rookie_games:
-            return own[player] - rookie_penalty * (1 - played[player] / rookie_games)
-        return own[player]
+        """A player's rating as it counts toward the team: less the discounts, plus
+        a fading league-move adjustment."""
+        rating = own[player] - discount(player)
+        if player in move_adjust:
+            adjustment, start = move_adjust[player]
+            since = played[player] - start
+            if since < move_games:
+                rating += adjustment * (1 - since / move_games)
+        return rating
 
     def seat(player, league, date):
         if player not in own:
@@ -209,9 +279,17 @@ def compute_elo_records(
                 league_average(league, date) if league is not None else starting_elo
             ) - new_player_offset
             player_league[player] = league
+            first_seen[player] = date
         elif player_league[player] != league:
             # Moving league (a transfer, promotion, a cup) keeps the player's rating.
             own[player] += league_offset[player_league[player]] - league_offset[league]
+            adjustment = _move_adjustment(
+                player_league[player], league, move_up_penalty, move_down_bonus
+            )
+            if adjustment and move_games:
+                move_adjust[player] = (adjustment, played[player])
+            elif adjustment:
+                own[player] += adjustment
             player_league[player] = league
 
     elo_records = []
@@ -219,6 +297,7 @@ def compute_elo_records(
     player_rows = []
     for row, league, date in zip(games.itertuples(index=False), leagues, dates):
         domestic = has_league and league not in INTERNATIONAL_LEAGUES
+        current["date"] = date
         sides = []
         for team in (row.teamid, row.opponent_teamid):
             if domestic:
@@ -383,6 +462,19 @@ def compute_elo_records(
         )
         return records, offsets, players
     return records, offsets
+
+
+def _move_adjustment(old, new, up_penalty, down_bonus):
+    """Rating change for a player moving from league `old` to `new` (see
+    `compute_elo_records`): minus `up_penalty` into a major from another league, plus
+    `down_bonus` from a major down to another league, 0 otherwise."""
+    if old is None or new is None:
+        return 0.0
+    if new in MAJOR_LEAGUES and old not in MAJOR_LEAGUES:
+        return -up_penalty
+    if old in MAJOR_LEAGUES and new not in MAJOR_LEAGUES:
+        return down_bonus
+    return 0.0
 
 
 def load_elo_games() -> pd.DataFrame:
