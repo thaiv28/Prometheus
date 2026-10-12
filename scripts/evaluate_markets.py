@@ -85,6 +85,11 @@ BET_HOURS = 12
 EDGES = (0.0, 0.03, 0.05, 0.10)
 # Lead times for the ladder: the market's price this many hours before the start.
 LEAD_HOURS = (6, 12, 18, 24)
+# Alert lead times: bets placed this many hours before the start, with our call
+# rebuilt from games before the bet's day (a call from before the match day would
+# know games played after the bet). The edge is the alerts' bar. Fixed in advance.
+ALERT_LEADS = (12, 24, 36, 48, 72)
+ALERT_EDGE = 0.05
 
 
 # ---------------------------------------------------------------- fetching
@@ -433,6 +438,20 @@ def our_calls(rows, before, match_team):
     return out
 
 
+def call_at(row, before, at):
+    """Our series chance for team1 as a bet at time `at` would see it: ratings
+    from games before `at`'s day, the row's best-of and series correlation. None
+    when a team isn't rated by then."""
+    ratings = before(at.date())
+    ours = [row["ours1"], row["ours2"]]
+    if not all(t in ratings.index for t in ours):
+        return None
+    p, _ = schedule.game_probability(ratings.loc[ours[0]], ratings.loc[ours[1]])
+    return schedule.series_probability(
+        p, row["best_of"], schedule.SERIES_RHO[row["major"]]
+    )
+
+
 def row_is_major(home1, home2):
     """Major-league or international: both teams from major leagues."""
     majors = set(schedule.MAJORS)
@@ -571,6 +590,84 @@ def lead_ladder(s):
                 f"| {name} | {r['market_log_loss']:.4f} | {_fmt_diff(r, 'log_loss')} | {w[0]:.2f} ({w[1]:.2f} to {w[2]:.2f}) |"
             )
         lines.append("")
+    return lines
+
+
+def at_lead(frame, h):
+    """`frame` as a bet `h` hours out sees it: our call then and the costs then,
+    in the columns `bets` reads. Rows with no call at that lead are dropped."""
+    return frame.assign(
+        p_series=frame[f"p_series_{h}h"],
+        cost1=frame[f"cost1_{h}h"],
+        cost2=frame[f"cost2_{h}h"],
+    ).dropna(subset=["p_series"])
+
+
+def alert_leads_section(s):
+    """Alerts by lead time: our call from before the bet's day against the
+    market's price then (log loss), and value bets above `ALERT_EDGE` at the
+    taker fee (ROI, CLV), on each lead's own matches and on the matches priced at
+    every lead to 48 hours."""
+    if f"p_series_{ALERT_LEADS[0]}h" not in s:
+        return []  # frames saved before these columns existed
+    taker = fee_rows()[0]
+    common_leads = [h for h in ALERT_LEADS if h <= 48]
+    common = s.dropna(
+        subset=[f"market_{h}h" for h in common_leads]
+        + [f"p_series_{h}h" for h in common_leads]
+    )
+    lines = [
+        "## Alerts by lead time",
+        "",
+        f"How early an alert can go out. At each lead, our call is rebuilt from games before the day the bet is "
+        f"placed (not the match day, which would know games played after the bet), against the market's price then. "
+        f"Value bets: $1 where our chance beats the cost by more than {100 * ALERT_EDGE:g} points, at the "
+        f"{100 * taker:g}% taker fee; CLV against the closing price. *Own matches* uses every match priced at that "
+        "lead; *same matches* only those priced at every lead to 48 hours, so the rows compare like with like. "
+        "Leads and edge were fixed before looking at the results.",
+        "",
+    ]
+    for subset_name, base in (("own matches", s), ("same matches", common)):
+        for label, part in slices_of(base):
+            if label not in (
+                "All",
+                "FORGE (same major league)",
+                "FORGE (same other league)",
+            ):
+                continue
+            lines += [
+                f"**{label}, {subset_name}**",
+                "",
+                "| Lead | Series | Δ log loss, ours − market (95%) | Our weight beside it (95%) "
+                "| Value bets | ROI (95%) | CLV, points (95%) | Beat close |",
+                "|---|---:|---:|---:|---:|---:|---:|---:|",
+            ]
+            for h in ALERT_LEADS if subset_name == "own matches" else common_leads:
+                frame = at_lead(part, h).dropna(subset=[f"market_{h}h"])
+                if len(frame) < 50:
+                    continue
+                r = compare(frame, "p_series", f"market_{h}h")
+                w = combined_weights(frame, "p_series", f"market_{h}h")["ours"]
+                prof = bet_profits(frame, taker, ALERT_EDGE)
+                clv = bet_clv(frame, ALERT_EDGE)
+                if len(prof) >= 10:
+                    lo, hi = roi_interval(prof)
+                    roi = f"{100 * prof.mean():+.1f}% ({100 * lo:+.1f}% to {100 * hi:+.1f}%)"
+                else:
+                    roi = "—"
+                if len(clv) >= 10:
+                    c_lo, c_hi = roi_interval(clv)
+                    clv_cells = (
+                        f"{100 * clv.mean():+.2f} ({100 * c_lo:+.2f} to {100 * c_hi:+.2f}) | "
+                        f"{100 * (clv > 0).mean():.0f}%"
+                    )
+                else:
+                    clv_cells = "— | —"
+                lines.append(
+                    f"| {h} hours | {len(frame)} | {_fmt_diff(r, 'log_loss')} | "
+                    f"{w[0]:.2f} ({w[1]:.2f} to {w[2]:.2f}) | {len(prof)} | {roi} | {clv_cells} |"
+                )
+            lines.append("")
     return lines
 
 
@@ -737,6 +834,7 @@ def report(series_frame, map_frame, counts, saved=None):
         *([] if saved is None else saved_section(saved)),
         *lead_ladder(s),
         *betting_section(s[s["timed"]]),
+        *alert_leads_section(s[s["timed"]]),
         "## Does our call add to the market?",
         "",
         "Logistic fit of the series result on the market's log-odds at the close and ours, without an intercept. "
@@ -879,12 +977,19 @@ def main():
         for h in LEAD_HOURS:
             at = r["start"] - datetime.timedelta(hours=h)
             r[f"market_{h}h"], _ = market_chance(r["markets"], r["team1"], at)
+        for h in ALERT_LEADS:
+            at = r["start"] - datetime.timedelta(hours=h)
+            r[f"p_series_{h}h"] = call_at(r, before, at)
+            r[f"market_{h}h"], _ = market_chance(r["markets"], r["team1"], at)
+            r[f"cost1_{h}h"], r[f"cost2_{h}h"] = costs_at(r["markets"], r["team1"], at)
         if r["market_close"] is not None:
             rows.append(r)
     series_frame = pd.DataFrame(rows).drop(columns=["markets"])
-    for col in ["market_early", "cost1", "cost2"] + [
-        f"market_{h}h" for h in LEAD_HOURS
-    ]:
+    for col in (
+        ["market_early", "cost1", "cost2"]
+        + [f"market_{h}h" for h in set(LEAD_HOURS) | set(ALERT_LEADS)]
+        + [f"{c}_{h}h" for h in ALERT_LEADS for c in ("p_series", "cost1", "cost2")]
+    ):
         series_frame[col] = series_frame[col].astype(float)
 
     # Map 1, priced at the series' start.

@@ -197,6 +197,40 @@ def test_bets_take_the_value_side_with_profit_after_fees_and_clv():
     assert len(evaluate_markets.bet_clv(frame)) == 2
 
 
+def test_call_at_rates_from_games_before_the_bet_day(monkeypatch):
+    days = []
+
+    def before(day):
+        days.append(day)
+        return pd.DataFrame(index=["T1", "Gen.G"])
+
+    monkeypatch.setattr(
+        evaluate_markets.schedule, "game_probability", lambda a, b: (0.6, "forge")
+    )
+    row = {"ours1": "T1", "ours2": "Gen.G", "best_of": 1, "major": True}
+    at = datetime.datetime(2026, 9, 1, 3, tzinfo=datetime.UTC)
+    assert evaluate_markets.call_at(row, before, at) == pytest.approx(0.6)
+    assert days == [datetime.date(2026, 9, 1)]
+    unrated = {**row, "ours2": "Hanwha Life Esports"}
+    assert evaluate_markets.call_at(unrated, before, at) is None
+
+
+def test_at_lead_reads_the_call_and_costs_at_that_lead():
+    frame = pd.DataFrame(
+        {
+            "p_series": [0.5, 0.5],
+            "cost1": [0.5, 0.5],
+            "cost2": [0.5, 0.5],
+            "p_series_48h": [0.7, np.nan],
+            "cost1_48h": [0.6, 0.6],
+            "cost2_48h": [0.42, 0.42],
+        }
+    )
+    view = evaluate_markets.at_lead(frame, 48)
+    assert len(view) == 1
+    assert view.iloc[0][["p_series", "cost1", "cost2"]].tolist() == [0.7, 0.6, 0.42]
+
+
 def test_backfill_last_quote_takes_the_last_tight_quote_by_the_start():
     import sys
 

@@ -194,7 +194,7 @@ jobs:
         if: env.CAN_USE_AWS == 'true' && hashFiles('data/predictions.json') != ''
         run: bash scripts/prediction_log.sh save
       # The build writes data/kalshi_alert.json when FORGE beats Kalshi's ask by 5+
-      # points on a match 6-36 hours out (prometheus/alerts.py); post it as the day's
+      # points on a match 6+ hours out (prometheus/alerts.py); post it as the day's
       # issue (scripts/post_kalshi_alert.sh). The hourly prices workflow does the same
       # between builds. Never blocks the deploy.
       - name: Post the Kalshi alert

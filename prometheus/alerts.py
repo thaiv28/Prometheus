@@ -1,7 +1,8 @@
 """Daily alerts where FORGE's chance beats Kalshi's price by enough to matter.
 
 After each build has refreshed the prediction log (our calls and Kalshi's prices),
-`select` picks matches that start in the next `MIN_HOURS`–`MAX_HOURS` hours,
+`select` picks matches that start at least `MIN_HOURS` hours from now (no upper
+limit: a match qualifies as soon as Kalshi quotes it),
 called by FORGE (both teams from one major league), where FORGE's chance for a
 team beats what a contract on that team costs now (the ask) by more than `EDGE`.
 That is the slice the market backtest supports (`docs/market_report.md`): calls
@@ -28,7 +29,7 @@ from prometheus.types import ALL_MAJOR_LEAGUES
 
 EDGE = 0.05
 MAJORS = {l.value for l in ALL_MAJOR_LEAGUES}
-MIN_HOURS, MAX_HOURS = 6, 36
+MIN_HOURS = 6
 SITE_URL = "https://prometheus.thaiv.dev"
 REPORT_URL = "https://github.com/thaiv28/Prometheus/blob/main/docs/market_report.md"
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -69,7 +70,7 @@ def select(log, now, edge=EDGE, minor=False):
         ):
             continue
         hours = (_start(entry) - now).total_seconds() / 3600
-        if not MIN_HOURS <= hours <= MAX_HOURS:
+        if hours < MIN_HOURS:
             continue
         if _stale(log, entry, now):
             continue
@@ -261,7 +262,7 @@ def issue(entries, log, now, data_through, slugify, team_slugs):
     body = "\n".join(
         [
             f"**{live} FORGE call{'s' if live != 1 else ''}** {round(100 * EDGE)}+ points above Kalshi's ask, "
-            f"starting within {MAX_HOURS} hours"
+            f"starting {MIN_HOURS}+ hours from now"
             + (
                 f"; {gone} earlier alert{'s' if gone != 1 else ''} no longer qualif{'y' if gone != 1 else 'ies'}"
                 if gone
@@ -279,7 +280,7 @@ def issue(entries, log, now, data_through, slugify, team_slugs):
             "<details><summary>How this is chosen</summary>",
             "",
             f"FORGE calls only (same major league); Elo lost to the market in the [backtest]({REPORT_URL}). "
-            f"Edge over {round(100 * EDGE)} points, {MIN_HOURS}–{MAX_HOURS} hours before the start. Backtest: "
+            f"Edge over {round(100 * EDGE)} points, {MIN_HOURS} or more hours before the start. Backtest: "
             "+12.9% after fees (−5.0% to +31.2%), closing line value +0.95 points (−0.13 to +2.03); "
             "neither significant. A paper test, not advice. Each alert is scored at its first price.",
             "</details>",
