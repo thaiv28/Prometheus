@@ -247,3 +247,82 @@ def test_markets_worse_calls_fail_and_same_calls_pass():
     rows = cb.compare_markets(base, worse, n_resamples=N)
     failed = {r["name"].split(" (")[0] for r in cb.failures(rows)}
     assert failed == {"series log loss, all", "series log loss, forge"}
+
+
+def _priced(calls, seed=2):
+    """Series calls with Kalshi's bet prices: costs near the call, a close nearer
+    the result."""
+    rng = np.random.default_rng(seed)
+    q = np.clip(calls["p"] + rng.normal(0, 0.08, len(calls)), 0.05, 0.95)
+    return calls.assign(
+        cost1=np.round(q + 0.01, 2),
+        cost2=np.round(1 - q + 0.01, 2),
+        market_close=np.clip(q + rng.normal(0, 0.03, len(calls)), 0.02, 0.98),
+    )
+
+
+def test_betting_same_calls_zero_difference_and_never_guarded():
+    base = _priced(_calls("series", n=600))
+    rows, note = cb.compare_betting(base, base.copy(), n_resamples=N)
+    assert note is None and rows
+    assert {r["slice"] for r in rows} == {"All", "FORGE"}
+    assert [r["edge"] for r in rows if r["slice"] == "All"] == list(
+        cb.schedule.BET_EDGES
+    )
+    for r in rows:
+        assert r["bets"][0] == r["bets"][1] and not r["guarded"]
+        if r["roi_diff"] is not None:
+            assert r["roi_diff"] == (0.0, 0.0, 0.0)
+    assert not cb.failures(rows)
+
+
+def test_betting_matches_the_predictions_page():
+    calls = _priced(_calls("series", n=400, method="elo", major=False))
+    rows, _ = cb.compare_betting(calls, calls.copy(), n_resamples=N)
+    entries = [
+        {
+            "matched": True,
+            "winner": 1 if r.won1 else 2,
+            "method": "elo",
+            "home1": "LFL",
+            "start": "2026-01-01T12:00Z",
+            "market_12h": {"ours": r.p, "ask1": r.cost1, "ask2": r.cost2},
+            "market": {"p": r.market_close, "at": "2026-01-01T11:00Z"},
+        }
+        for r in calls.itertuples()
+    ]
+    page = [
+        x
+        for x in cb.schedule.edge_record(entries, rate=cb.BET_RATE)
+        if (x["label"], x["source"]) == ("Other", "saved")
+    ]
+    ours = [r for r in rows if r["slice"] == "All"]
+    for mine, theirs in zip(ours, page, strict=True):
+        assert mine["edge"] == theirs["edge"]
+        assert mine["bets"][1] == theirs["bets"]
+        assert np.isclose(mine["roi"][1], theirs["roi"])
+        assert np.isclose(mine["clv"][1], theirs["clv"])
+        assert np.isclose(mine["beat"][1], theirs["beat"])
+
+
+def test_betting_old_base_borrows_prices_and_none_skips(tmp_path):
+    head = _priced(_calls("series", n=600))
+    old = head.drop(columns=cb.PRICE_COLUMNS).assign(p=lambda d: 1 - d["p"])
+    rows, note = cb.compare_betting(old, head, n_resamples=N)
+    assert note is None and rows[0]["bets"][0] > 0
+    rows, note = cb.compare_betting(old, old.copy(), n_resamples=N)
+    assert rows == [] and note.startswith("Betting: neither dump")
+
+    for side, frame in (("base", old), ("head", head)):
+        (tmp_path / side / "markets").mkdir(parents=True)
+        frame.to_csv(tmp_path / side / "markets" / "calls.csv.gz", index=False)
+    sections, notes = cb.compare_dirs(tmp_path / "base", tmp_path / "head", N)
+    assert [t for t, _ in sections] == ["Markets", "Betting"]
+    report = cb.render(sections, notes)
+    assert "#### Betting (report only)" in report
+    assert "| All (600) | Any |" in report
+    # Betting rows never change the verdict or the exit code.
+    markets = dict(sections)["Markets"]
+    assert cb.failures([r for _, part in sections for r in part]) == cb.failures(
+        markets
+    )

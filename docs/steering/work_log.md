@@ -2,6 +2,16 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-12 — PR benchmark comment: betting table by edge
+
+Branch `bench-betting`, rebased on `main` (76e97fe).
+
+- **`schedule.paper_bets`**: one match's paper bets (our pick; the side with the larger edge), profit after the fee and CLV, moved out of `edge_record` (unchanged behaviour; its tests pass) so the PR check scores bets exactly as the Predictions page's Table IV.
+- **`evaluate_markets.py --dump`**: `calls.csv.gz` also carries `cost1`, `cost2` (contract cost 12 hours out) and `market_close` for series; the report is unchanged.
+- **`compare_benchmarks.py`**: a report-only "Betting" table in the sticky comment: per slice (all, FORGE within a major league, other) and edge (Any, > 0, 3, 5, 10 points), bets, return per $1 after the 7% fee, CLV and share beating the close for base and head, head minus base return and CLV with a 95% interval over series. Never guarded; the exit code is unchanged. A base dump from before this change borrows the head's prices (same Kalshi cache); with neither, a note.
+- Checks: `uv run pytest -q`; `ruff format`, `ruff check`; new tests (same dumps give zero differences, the table matches `edge_record` on the same calls, an old-format base borrows prices, neither skips with a note, the verdict ignores betting rows). Local run: base dump from the saved `frames.pkl` (`--reuse`) against a fresh `--offline` run on this worktree's DB, identical calls, all differences 0, exit 0; and against a copy with calls shrunk 20% toward 50%, value-bet return −7.7 to −10.9 points with intervals excluding 0.
+- Limit: not run in CI yet (workflow unchanged; the next PR's comment shows it). The difference of returns compares different bet sets when the calls differ, so it answers "which version bets better", not a per-bet pairing.
+
 ## 2026-10-12 — Market benchmark: alerts by lead time; alerts lose their 36-hour cap
 
 Branch `alert-leads`, based on `main` (a2f7d37). Question: is the alerts' 36-hour cap (`alerts.MAX_HOURS`) costing us earlier, better bets?
