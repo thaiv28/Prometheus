@@ -2,6 +2,12 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-13 — Fix hourly props log backup parsing
+
+- The Kalshi prices workflow's `props-lines` job failed at save after collecting lines (run 38437402399): its downloaded JSONL backup had an extensionless `mktemp` name, so `count` tried to parse multiple records as one JSON object. `prop_data.sh` now selects the backup's format from the original file path. Both JSONL lines and JSON object keys retain the shrinking-backup guard.
+- Six local-S3 regression cases cover shorter, equal and growing backups in both formats. Measured added test cost: 0.27 s locally, no new workflow job or dependency. The production change adds only one shell argument and no requests; hourly runtime is unchanged apart from successfully reaching the upload.
+- Checks: `uv run pytest -q` (388 passed in 15.53 s), targeted regression tests (6 passed in 0.27 s), `bash -n scripts/prop_data.sh`, `ruff format --check` and `ruff check` (passed). Live S3 upload awaits the first main run after merge.
+
 ## 2026-10-13 — Duration curve: reconcile current main before PR merge
 
 Current main b4e3681 includes PR #49’s roster-aware Form, time-away updates, move-down bonus and log rookie discount, plus alert/benchmark maintenance. Merged those changes into `elo-duration-curve`, keeping all work-log entries and current behavior. Rebuilt both private DBs from the same raw CSVs and refitted candidate weights. `rebuild_cached_markets.py` now uses `form.load_states()` so it includes current roster-aware Form.
