@@ -35,7 +35,8 @@ CREATE TABLE match_stats(
 );
 
 -- Each team's five starters in every game. Unlike player_stats, a row needs no
--- snapshot stats, so every game is covered (player Elo is built from this).
+-- snapshot stats, so every game is covered (player Elo and prop projections are
+-- built from this).
 CREATE TABLE match_players (
     gameid             TEXT NOT NULL,
     teamid             TEXT NOT NULL,
@@ -43,6 +44,12 @@ CREATE TABLE match_players (
     playerid           TEXT NOT NULL,       -- OE player id; "name:<playername>|<teamid>" when OE has none,
                                             -- "dup:<gameid>|<teamid>|<position>" when OE repeats an id in a game
     playername         TEXT NOT NULL,
+    champion           TEXT NULL,
+    -- full-game totals, the stats player props are settled on
+    kills              INT NULL,
+    deaths             INT NULL,
+    assists            INT NULL,
+    cs                 INT NULL,            -- OE's "total cs" (minions and monsters)
 
     PRIMARY KEY(gameid, teamid, position),
     FOREIGN KEY(gameid, teamid) REFERENCES matches(gameid, teamid)

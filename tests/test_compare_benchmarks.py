@@ -333,3 +333,30 @@ def test_floating_point_noise_is_within_noise():
     assert cb._verdict(-3e-15, -1e-15, lower_is_better=True) == "within noise"
     assert cb._verdict(1e-4, 3e-4, lower_is_better=True) == "worse"
     assert cb._verdict(-3e-4, -1e-4, lower_is_better=True) == "better"
+
+
+def _prop_scores(shift=0.0, n=3000, seed=0):
+    rng = np.random.default_rng(seed)
+    loss = rng.gamma(4.0, 0.5, n)
+    return pd.DataFrame(
+        {
+            "measure": "map kills",
+            "unit": [f"g{i}|p" for i in range(n)],
+            "match": [f"m{i // 10}" for i in range(n)],
+            "loss": loss + shift,
+        }
+    )
+
+
+def test_props_worse_scores_fail_and_same_scores_pass():
+    same = cb.compare_props(_prop_scores(), _prop_scores(), N)
+    assert same[0]["result"] == "within noise"
+    worse = cb.compare_props(_prop_scores(), _prop_scores(shift=0.05), N)
+    assert worse[0]["result"] == "worse" and worse[0]["guarded"]
+    assert cb.failures(worse)
+    # A measure only one side has is reported, not compared.
+    head = pd.concat(
+        [_prop_scores(), _prop_scores().assign(measure="Bo5 maps 1-3 kills")]
+    )
+    rows = cb.compare_props(_prop_scores(), head, N)
+    assert [r["result"] for r in rows] == ["not paired", "within noise"]

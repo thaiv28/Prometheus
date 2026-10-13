@@ -29,6 +29,7 @@
     <nav class="sections" aria-label="Sections">
       <a href="{{ _root }}index.html"{% if page_key == 'index' %} aria-current="page"{% endif %}>Home</a>
       <a href="{{ _root }}predictions.html"{% if page_key == 'predictions' %} aria-current="page"{% endif %}>Predictions</a>
+      <a href="{{ _root }}props.html"{% if page_key == 'props' %} aria-current="page"{% endif %}>Props</a>
       {#- One menu per entity. It is marked current on any of its stat pages, and on
           team, player, sunset and retired-metric pages for the menu that leads there. -#}
       {% for group in nav %}

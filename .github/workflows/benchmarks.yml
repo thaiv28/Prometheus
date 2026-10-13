@@ -1,11 +1,12 @@
 name: Benchmarks
 
-# On pull requests: run the forecast backtest, season-stat report and AURA report on
+# On pull requests: run the forecast backtest, season-stat report, AURA report and
+# prop projections' held-out scores on
 # the PR (head: the merge commit) and on its base (the commit it merges onto), each
 # on its own DB built from the same CSVs, plus the market benchmark on the same
 # cached Kalshi markets, and compare them (scripts/compare_benchmarks.py). Head and
 # base, and the core benchmarks and the market one, run as parallel jobs (the core
-# job runs its three scripts at once); the base's dumps are cached by base commit
+# job runs its four scripts at once); the base's dumps are cached by base commit
 # and inputs, so later pushes to a PR rerun only the head. Posts one sticky comment and fails when a
 # guarded value is significantly worse, unless the PR has the `benchmark-override`
 # label. A label change reuses the verdict for the same commit instead of rerunning.
@@ -181,14 +182,21 @@ jobs:
       - name: Build the database
         if: steps.dumps.outputs.cache-hit != 'true' && steps.db.outputs.cache-hit != 'true'
         run: uv run bash scripts/setup_db.sh
-      # The three scripts only read the DB, so they run at once (4 cores); each
-      # log is printed, and the step fails if any script does.
+      # The scripts only read the DB, so they run at once, one per core (4); each
+      # log is printed, and the step fails if any script does. The props benchmark
+      # takes the fourth core (a side whose evaluate_props.py can't dump skips it,
+      # and the comparison notes it), so it adds no wall time as long as it stays
+      # shorter than the slowest of the other three.
       - name: Core benchmarks
         if: steps.dumps.outputs.cache-hit != 'true' && matrix.group == 'core'
         run: |
           mkdir -p dumps
           pids=()
-          for name in metrics:evaluate_metrics season:evaluate_season_stats aura:evaluate_aura; do
+          names="metrics:evaluate_metrics season:evaluate_season_stats aura:evaluate_aura"
+          if grep -q -- '--dump' scripts/evaluate_props.py 2>/dev/null; then
+            names="$names props:evaluate_props"
+          fi
+          for name in $names; do
             uv run python "scripts/${name#*:}.py" --dump "dumps/${name%%:*}" > "dumps/${name%%:*}.log" 2>&1 &
             pids+=($!)
           done

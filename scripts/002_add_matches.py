@@ -60,7 +60,11 @@ def preprocess_player_raw_stats(df):
 def preprocess_match_players(df, matches):
     """Each team's starters in every kept game, with a fallback id when OE has none."""
     df = df[df["position"] != "team"]
-    df = df[["gameid", "teamid", "position", "playerid", "playername"]].copy()
+    totals = ["champion", "kills", "deaths", "assists", "total cs"]
+    df = df.reindex(
+        columns=["gameid", "teamid", "position", "playerid", "playername"] + totals
+    )
+    df = df.rename(columns={"total cs": "cs"})
     df["playername"] = df["playername"].fillna("unknown").astype(str)
     df["playerid"] = df["playerid"].where(
         df["playerid"].notna(),
@@ -124,7 +128,7 @@ COLUMNS = set(
     + MATCH_RAW_FEATURES
     + PLAYER_RAW_FEATURES
     + PLAYER_GAME_FEATURES
-    + ["position", "playerid", "playername", "champion", "earned gpm"]
+    + ["position", "playerid", "playername", "champion", "earned gpm", "total cs"]
 )
 
 
