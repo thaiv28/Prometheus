@@ -1,5 +1,7 @@
 # Conditional tempo validation
 
+Historical research before integration, on production baseline a2f7d37. Reproduce these original results from commit 99f3d6a; see the subsequent [fixed-curve adoption comparison](duration_curve_adoption.md) and the baseline-independent [completion gates](duration_curve_gates.md).
+
 Frozen amplitude .175 selected only through 2021; no extra settings tuned. No defaults changed.
 
 ## Same residual curve, fixed 30-minute center versus published baseline

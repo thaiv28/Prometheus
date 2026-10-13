@@ -1,5 +1,7 @@
 # Conditional tempo surprise Elo
 
+Historical research before integration, on production baseline a2f7d37. Reproduce these original results from commit 99f3d6a; see the subsequent [fixed-curve adoption comparison](duration_curve_adoption.md) and the baseline-independent [completion gates](duration_curve_gates.md).
+
 Opt-in research on base `a2f7d37`; no published defaults or DB scripts changed.
 Source corpus: 205,701 team-match rows (102,857 distinct games), dated 2014-01-14
 through 2026-10-11; 205,688 paired rated team-games enter the replay.

@@ -1,75 +1,75 @@
-## Metric backtest (2026-10-08)
+## Metric backtest (2026-10-12)
 
-### Domestic: 16,802 games, 2014–2026
+### Domestic: 16,810 games, 2014–2026
 
 | Metric | Accuracy | Brier | Log loss | Log loss vs win % (95% CI) |
 |---|---:|---:|---:|---|
-| Blue side wins | 53.7% | 0.2487 | 0.6906 | +0.0425 (+0.0383 to +0.0466) |
+| Blue side wins | 53.7% | 0.2487 | 0.6906 | +0.0425 (+0.0382 to +0.0465) |
 | Win % so far | 62.8% | 0.2282 | 0.6480 | baseline |
-| Elo (as of cutoff) | 63.3% | 0.2244 | 0.6396 | -0.0084 (-0.0113 to -0.0058) |
-| Elo (live) | 64.2% | 0.2208 | 0.6315 | -0.0165 (-0.0198 to -0.0134) |
-| Team Elo, no player ratings (live) | 64.2% | 0.2222 | 0.6347 | -0.0133 (-0.0165 to -0.0103) |
-| Form (live) | 64.1% | 0.2218 | 0.6341 | -0.0140 (-0.0170 to -0.0109) |
-| FORGE (live) | 64.7% | 0.2196 | 0.6290 | -0.0190 (-0.0221 to -0.0160) |
+| Elo (as of cutoff) | 63.3% | 0.2244 | 0.6396 | -0.0084 (-0.0113 to -0.0055) |
+| Elo (live) | 64.4% | 0.2207 | 0.6313 | -0.0168 (-0.0202 to -0.0134) |
+| Team Elo, no player ratings (live) | 64.1% | 0.2221 | 0.6346 | -0.0135 (-0.0166 to -0.0104) |
+| Form (live) | 64.0% | 0.2218 | 0.6341 | -0.0139 (-0.0168 to -0.0110) |
+| FORGE (live) | 64.7% | 0.2195 | 0.6289 | -0.0191 (-0.0222 to -0.0161) |
 
-- FORGE (live) vs Elo (live): log loss -0.0025 (-0.0036 to -0.0014)
-- Form (live) vs Elo (live): log loss +0.0025 (-0.0000 to +0.0049)
-- Elo (live) vs Team Elo, no player ratings (live): log loss -0.0032 (-0.0054 to -0.0010)
+- FORGE (live) vs Elo (live): log loss -0.0024 (-0.0035 to -0.0012)
+- Form (live) vs Elo (live): log loss +0.0028 (+0.0001 to +0.0055)
+- Elo (live) vs Team Elo, no player ratings (live): log loss -0.0033 (-0.0056 to -0.0011)
 
-### International: 1,004 games, 2014–2026
+### International: 1,024 games, 2014–2026
 
 | Metric | Accuracy | Brier | Log loss | Log loss vs win % (95% CI) |
 |---|---:|---:|---:|---|
-| Blue side wins | 53.3% | 0.2490 | 0.6912 | +0.0032 (-0.0068 to +0.0131) |
-| Win % so far | 54.5% | 0.2474 | 0.6880 | baseline |
-| Elo (as of cutoff) | 64.7% | 0.2238 | 0.6381 | -0.0498 (-0.0662 to -0.0332) |
-| Elo (live) | 65.3% | 0.2194 | 0.6283 | -0.0596 (-0.0777 to -0.0420) |
-| Team Elo, no player ratings (live) | 65.0% | 0.2200 | 0.6296 | -0.0583 (-0.0773 to -0.0396) |
-| Form (live) | 58.2% | 0.2392 | 0.6708 | -0.0171 (-0.0275 to -0.0068) |
-| FORGE (live) | 65.3% | 0.2194 | 0.6283 | -0.0596 (-0.0777 to -0.0420) |
+| Blue side wins | 53.2% | 0.2491 | 0.6913 | +0.0034 (-0.0066 to +0.0136) |
+| Win % so far | 54.2% | 0.2474 | 0.6879 | baseline |
+| Elo (as of cutoff) | 64.0% | 0.2227 | 0.6357 | -0.0522 (-0.0701 to -0.0331) |
+| Elo (live) | 65.5% | 0.2175 | 0.6238 | -0.0641 (-0.0832 to -0.0448) |
+| Team Elo, no player ratings (live) | 66.3% | 0.2182 | 0.6255 | -0.0624 (-0.0818 to -0.0416) |
+| Form (live) | 57.4% | 0.2395 | 0.6716 | -0.0163 (-0.0264 to -0.0058) |
+| FORGE (live) | 65.5% | 0.2175 | 0.6238 | -0.0641 (-0.0832 to -0.0448) |
 
 - FORGE (live) vs Elo (live): log loss +0.0000 (+0.0000 to +0.0000)
-- Form (live) vs Elo (live): log loss +0.0425 (+0.0282 to +0.0563)
-- Elo (live) vs Team Elo, no player ratings (live): log loss -0.0013 (-0.0073 to +0.0045)
+- Form (live) vs Elo (live): log loss +0.0478 (+0.0316 to +0.0633)
+- Elo (live) vs Team Elo, no player ratings (live): log loss -0.0017 (-0.0077 to +0.0040)
 
 ### Player-built Elo vs team Elo, where rosters matter
 
 | Domestic games | Games | Team Elo log loss | Elo log loss | Difference (95% CI) |
 |---|---:|---:|---:|---|
-| All | 16,802 | 0.6347 | 0.6315 | -0.0032 (-0.0054 to -0.0010) |
-| Either team in its first 10 games of the season | 347 | 0.6335 | 0.6069 | -0.0265 (-0.0499 to -0.0032) |
-| Either team within 10 games of a starter change | 10,313 | 0.6311 | 0.6283 | -0.0028 (-0.0059 to +0.0002) |
+| All | 16,810 | 0.6346 | 0.6313 | -0.0033 (-0.0056 to -0.0011) |
+| Either team in its first 10 games of the season | 347 | 0.6338 | 0.6073 | -0.0264 (-0.0493 to -0.0038) |
+| Either team within 10 games of a starter change | 10,313 | 0.6308 | 0.6278 | -0.0030 (-0.0060 to +0.0000) |
 
 Lower Brier and log loss are better. A negative log-loss delta means the metric beats win % so far; an interval that excludes 0 is a real difference.
-### Cross-league, every league: 10,057 games, 2014–2026
+### Cross-league, every league: 10,184 games, 2014–2026
 
 Elo (live) on games between teams from two home leagues at any event; the home is the league a team played most that season.
 
 | Teams | Games | Accuracy | Brier | Log loss |
 |---|---:|---:|---:|---:|
-| All | 10,057 | 67.5% | 0.2074 | 0.6019 |
-| Major v major | 1,032 | 63.5% | 0.2227 | 0.6364 |
-| Major v other | 1,896 | 68.6% | 0.2036 | 0.5907 |
-| Other v other | 7,129 | 67.7% | 0.2062 | 0.5999 |
-| At an international event | 2,180 | 65.0% | 0.2145 | 0.6164 |
-| At any other event (EMEA Masters, cups, promotion) | 7,877 | 68.1% | 0.2054 | 0.5979 |
+| All | 10,184 | 67.5% | 0.2065 | 0.5999 |
+| Major v major | 1,052 | 63.7% | 0.2204 | 0.6308 |
+| Major v other | 1,920 | 68.1% | 0.2022 | 0.5876 |
+| Other v other | 7,212 | 68.0% | 0.2057 | 0.5987 |
+| At an international event | 2,219 | 64.5% | 0.2134 | 0.6135 |
+| At any other event (EMEA Masters, cups, promotion) | 7,965 | 68.4% | 0.2046 | 0.5961 |
 
-### Within other leagues: 69,603 games, 2014–2026
+### Within other leagues: 69,736 games, 2014–2026
 
 Elo on games inside one non-major league: the standard 400-point curve, one curve fit on the other seasons, and a curve per league fit the same way (each league's slope shrunk toward the pooled one by its sampling error).
 
 | Games | n | Standard | One curve | Per league | One curve vs standard (95% CI) | Per league vs one curve (95% CI) |
 |---|---:|---:|---:|---:|---|---|
-| All | 69,603 | 0.6277 | 0.6140 | 0.6129 | -0.0137 (-0.0148 to -0.0125) | -0.0012 (-0.0015 to -0.0007) |
-| 2022 on | 37,115 | 0.6237 | 0.6087 | 0.6075 | -0.0150 (-0.0165 to -0.0135) | -0.0013 (-0.0018 to -0.0007) |
+| All | 69,736 | 0.6252 | 0.6122 | 0.6110 | -0.0130 (-0.0142 to -0.0118) | -0.0012 (-0.0016 to -0.0008) |
+| 2022 on | 37,248 | 0.6200 | 0.6061 | 0.6050 | -0.0138 (-0.0154 to -0.0122) | -0.0012 (-0.0017 to -0.0006) |
 
-#### FORGE within other leagues: 69,603 games (0 without Form left out)
+#### FORGE within other leagues: 69,736 games (0 without Form left out)
 
 Elo + Form on one curve fit on the other seasons, with Form's stat weights fit on major-league games of the other seasons (as in the domestic backtest).
 
 | Games | n | Elo, one curve | Elo, per league | FORGE | Accuracy, per league | Accuracy, FORGE | FORGE vs per league (95% CI) | FORGE vs one curve (95% CI) |
 |---|---:|---:|---:|---:|---:|---:|---|---|
-| All | 69,603 | 0.6140 | 0.6129 | 0.6102 | 65.6% | 65.9% | -0.0027 (-0.0034 to -0.0019) | -0.0038 (-0.0045 to -0.0032) |
-| 2022 on | 37,115 | 0.6087 | 0.6075 | 0.6044 | 66.1% | 66.5% | -0.0030 (-0.0042 to -0.0020) | -0.0043 (-0.0053 to -0.0034) |
+| All | 69,736 | 0.6122 | 0.6110 | 0.6090 | 65.6% | 66.0% | -0.0020 (-0.0026 to -0.0013) | -0.0032 (-0.0037 to -0.0026) |
+| 2022 on | 37,248 | 0.6061 | 0.6050 | 0.6027 | 66.0% | 66.7% | -0.0023 (-0.0033 to -0.0012) | -0.0035 (-0.0043 to -0.0026) |
 
-FORGE weights (log-odds per point): elo_weight = 0.00502, form_weight = 0.46644, cross_region_elo_weight = 0.00854, other_league_elo_weight = 0.01036, other_league_forge_elo_weight = 0.00803, other_league_form_weight = 0.36290. Form: half-life 20 games, carry 0.5, prior 5 games.
+FORGE weights (log-odds per point): elo_weight = 0.00515, form_weight = 0.45487, cross_region_elo_weight = 0.00858, other_league_elo_weight = 0.01013, other_league_forge_elo_weight = 0.00802, other_league_form_weight = 0.33520. Form: half-life 20 games, carry 0.5, prior 5 games.

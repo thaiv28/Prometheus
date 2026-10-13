@@ -1,5 +1,7 @@
 # Fixed-center duration curve follow-up
 
+Historical research before integration, on production baseline a2f7d37. Reproduce these original results from commit 99f3d6a; see the subsequent [fixed-curve adoption comparison](duration_curve_adoption.md) and the baseline-independent [completion gates](duration_curve_gates.md).
+
 This candidate was noticed in the conditional-tempo attribution ablation after inspecting historical 2022+ results. It is retrospectively explored, not a new prospective confirmation. Exact constants stay frozen (.825, .175, 1800 seconds, 300 seconds); no grid or new tuning. Published defaults remain unchanged.
 
 Development domestic Elo (2014–2021, no tuning): 0.639133.

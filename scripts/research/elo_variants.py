@@ -88,7 +88,8 @@ GAME_LENGTH_DEFAULTS = {
     "upper_bound": 1.0,
     "lower_bound": 0.65,
     "center": 30 * 60,
-    "steepness": 3,
+    "steepness": None,
+    "transition": 5 * 60,
 }
 K_DEFAULT = 20
 # Tune on seasons up to this one; report on the later ones.

@@ -10,7 +10,7 @@ Season stats:
 - **Luck** (sunset): wins above what a team's play earned.
 
 Forecasts:
-- **Game-length Elo**: a rating for every team in every region, built from player ratings (a team's Elo is the average of its five starters, so ratings follow players through roster moves). A new player counts 200 points lower in their first game, fading out over 50 games, because teams with new players lose more than an average start predicts. Fast wins move it more, and international results move a shared league offset, so a whole region rises or falls with how its teams do abroad.
+- **Game-length Elo**: a rating for every team in every region, built from player ratings (a team's Elo is the average of its five starters, so ratings follow players through roster moves). A new player counts 200 points lower in their first game, fading out over 50 games, because teams with new players lose more than an average start predicts. Fast wins move it more: a fixed curve around 30 minutes makes a 25-minute win count as about 0.96 of a win and a 40-minute win as about 0.66. International results move a shared league offset, so a whole region rises or falls with how its teams do abroad.
 - **Player Elo**: the player ratings behind team Elo, on their own register and one page per player (Elo after every game, career by team). Teammates move together, so it follows a player's teams through a career rather than splitting credit within a team.
 - **FORGE** (Form + Elo, formerly GlorELO+): the headline forecast of who wins the next game. Elo plus Form, a team's recent, opponent-adjusted stats weighted to predict the next game and compared with its own league.
 
@@ -90,24 +90,17 @@ To account for this, Prometheus calculates stats based on a per-season basis. Ea
 
 Prometheus also includes z-scores to compare the strength of a team relative to other teams in its region. We can calculate which teams were most "dominant" in specific eras. 
 #### GLORY - Global League Offensive Rankings Yield
-GLORY is prometheus' flagship stat for team performance. At a high level, it is a weighted sum of basic per-game stats listed below.
+GLORY is Prometheus’ team-season performance stat. Its twelve features are defined in [prometheus/types.py](prometheus/types.py) and produced by `match_glory_stats`:
 
 ```
-- GPM = team_gold / game_length_minutes
-- GDPM = (team_gold - opponent_gold) / game_length_minutes
-- Turrets_per_10 = turrets_taken / (game_length_minutes/10)
-- Baron_per_10 = barons_taken / (game_length_minutes/10)
-- Dragon_per_10 = dragons_taken / (game_length_minutes/10)
-- Objective_conversion_rate = objectives_taken / contested_objectives
+- Gold per minute
+- Kills, towers, barons, dragons and heralds per 10 minutes
+- Atakhans taken
+- First herald, first dragon, first baron and first tower indicators
+- Vision score per 10 minutes
 ```
 
-We also include slightly more advanced metrics in this calculation:
-
-```
-- Kill_conversion = fraction of team kills that directly preceded (within X seconds) an objective take
-```
-
-In GLORY, weights are calculated using logistic regression with the winning team as a prediction target. 
+Each year, `StandardScaler → LinearRegression` fits these per-game features to the game’s win/loss result. The fitted weights then score team-season averages after opponent adjustment. Gold differential, objective-conversion rate and kill-conversion features are not inputs to the published model.
 #### GLORB - Global League Offensive Rankings Baseline
 GLORB is very similar to GLORY, except all categories are weighted equally. It provides a baseline to compare GLORY against and is much easier to implement. **Sunset:** in the backtest GLORB predicts winners no better than a team's win % so far, so it is no longer developed. Its site page stays up under "Sunset stats".
 #### Opponent adjustment (formerly GLORY+)
@@ -120,7 +113,7 @@ Averaging a team's per-game stats without asking who they came against flatters 
 Controlling for the team's own strength keeps the opponent coefficient from absorbing the fact that strong teams post big stats. Until October 2026 this was a separate stat, GLORY+, which measured opponents by their Elo going into each game. Using the opponent's season Record keeps GLORY a season stat that depends only on that season; it is as stable as GLORY+ was (split-half reliability 0.91) and agrees with Record at 0.97.
 
 #### Record - results adjusted for schedule
-A Bradley-Terry model fit over every game of the season in every league, including international events (the only games that link regions). Each game counts as a soft result: a fast win is close to a full win and a 50-minute win about two-thirds of one, as in game-length Elo. A mild prior keeps teams with few games from extreme ratings. Published as the chance to beat the average major-league team that year.
+A Bradley-Terry model fit over every game of the season in every league, including international events (the only games that link regions). Each game counts as a soft result: a fast win is close to a full win and a 50-minute win about two-thirds of one. Record retains its original power duration curve; the sharper Elo forecast curve is evaluated separately. A mild prior keeps teams with few games from extreme ratings. Published as the chance to beat the average major-league team that year.
 
 #### Luck - wins above what play earned
 GLORY's per-game model turns each game's stats into an expected result. A team-season's average of those, calibrated across that season's teams (the per-game model pulls everyone toward 50%), is the win % its play earned. Luck is actual minus earned, in wins. It repeats only a little between halves of a season (reliability 0.34), so most of it is luck.
@@ -129,7 +122,7 @@ GLORY's per-game model turns each game's stats into an expected result. A team-s
 For every team, a running average of its recent per-game stats, each game adjusted for the opponent's Elo going into it: recent games count most (a game's weight halves every 20 games), a new season starts from half of last season's weight, and small samples are pulled toward the season's average team. Weights fit on past games (logistic) turn the stat gap between two teams into a chance to win the next game. Stats don't compare across regions, so Form is shown relative to the team's own league.
 
 #### FORGE - the headline forecast
-Between teams from the same league: a logistic curve on their Elo gap and Form gap, shown as a rating (Elo plus Form in Elo points). Between leagues: Elo alone, because Form only compares a team with its league; adding it made cross-region forecasts worse in the backtest.
+Between teams from the same league: a logistic curve on their Elo gap and Form gap, shown as a rating (Elo plus Form in Elo points). Between leagues: Elo alone, because Form only compares a team with its league; adding it made cross-region forecasts worse in the backtest. Its weights are refitted after changing the underlying Elo duration curve.
 ### Predictions
 [prometheus.thaiv.dev/predictions.html](https://prometheus.thaiv.dev/predictions.html) calls every scheduled pro match between two teams Prometheus rates. The schedule comes from Leaguepedia's Cargo API (`prometheus/schedule.py`); names are matched to Oracle's Elixir teams, and each match gets FORGE odds within a league (outside the major leagues with weights fit on games there; Elo on the league's fitted curve for a team without Form), Elo odds across leagues, turned into a series chance for best-of-3 and best-of-5 that allows for form carrying through a series (a beta-binomial; see `docs/research/series_independence.md`). Calls are saved in a log, refreshed daily until the match starts and then frozen, and scored against the results (series and games picked, log loss). In the terminal:
 
@@ -142,7 +135,7 @@ Where Kalshi, a prediction market, lists the match, the page also shows the mark
 ### How accurate are the metrics?
 `scripts/evaluate_metrics.py` backtests the forecasts. Each game is predicted from earlier games only: from ratings at the start of the month, or from each team's rating going into the game ("live"). Results are scored by accuracy, Brier score and log loss, and compared with a simple baseline (win % so far this season) using a paired bootstrap. International games between teams from different major regions are scored separately, because they are the only direct test of cross-region strength. Latest results: [docs/metric_backtest.md](docs/metric_backtest.md).
 
-On 16,802 major-league games, FORGE picks the winner 64.7% of the time with log loss 0.6290, against Elo's 64.2% and 0.6315 (and 0.6347 for team Elo without player ratings); on 1,004 cross-region international games it equals Elo (65.3%, 0.6283). Inside non-major leagues (69,603 games), Elo on each league's fitted curve has log loss 0.6129, against 0.6140 for one curve for all of them and 0.6277 for the textbook 400-point curve; FORGE, with its own weights there, has 0.6102 (−0.0027 against the per-league curves, −0.0034 to −0.0019), so it makes those calls. On 10,057 games between teams from different leagues at any event (EMEA Masters, cups, promotion and international), Elo's log loss is 0.6019.
+On 16,810 major-league games, FORGE picks the winner 64.7% of the time with log loss 0.6289, against Elo’s 64.4% and 0.6313 (and 0.6346 for team Elo without player ratings); on 1,024 cross-region international games it equals Elo (65.5%, 0.6238). Inside non-major leagues (69,736 games), Elo on each league’s fitted curve has log loss 0.6110, against 0.6122 for one curve for all of them and 0.6252 for the textbook 400-point curve; FORGE, with its own weights there, has 0.6090 (−0.0020 against the per-league curves, −0.0026 to −0.0013), so it makes those calls. On 10,184 games between teams from different leagues at any event (EMEA Masters, cups, promotion and international), Elo’s log loss is 0.5999.
 
 Season stats are judged separately by `scripts/evaluate_season_stats.py` ([docs/season_stats_report.md](docs/season_stats_report.md)): each team-season's games are split into two random halves, and a stat is reliable when the halves agree. It also reports how well each stat matches that season's win % and Record.
 
