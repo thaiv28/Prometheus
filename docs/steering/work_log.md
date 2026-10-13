@@ -2,6 +2,16 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-12 — Conditional tempo and fixed duration curve experiments (research)
+
+Branch `elo-tempo-surprise`, based on `main` at a2f7d37. Added opt-in research runners for online duration expectations, a bounded symmetric update curve, attribution controls, chronological calibration and offline market reconstruction. K, rookie treatment, regional links, published computation and weights remain unchanged. Reports: [conditional experiment](../research/elo_tempo_surprise.md), [attribution and validation](../research/elo_tempo_validation.md), [fixed curve follow-up](../research/elo_tempo_fixed.md).
+
+- Conditional tempo improves 2022+ other-league FORGE by −0.000823 [−0.001177, −0.000483], but loses to an identical curve with a fixed 30-minute center by +0.000722 [+0.000532, +0.000913]. The evidence supports curve shape rather than conditional tempo.
+- The frozen fixed curve is `0.825 + 0.175 * tanh((1800 - seconds) / 300)`. Earlier-only 2022+ evaluation improves other-league Elo −0.002372 [−0.002844, −0.001940], FORGE −0.001702 [−0.002111, −0.001315], international −0.005098 [−0.008978, −0.000848], and cross-league −0.001431 [−0.002637, −0.000183]; domestic changes are inconclusive. All-season guard comparisons have no significant regressions.
+- On 2,398 cached 2025+ market series, with both methods' weights frozen through 2024, fixed versus baseline is −0.001033 [−0.002711, +0.000659]; no market slice is significantly worse. Current-code reconstruction agrees with direct routing within 1.87e−14; cached old predictions are unused.
+- Checks: private DB rebuilt from read-only raw inputs (205,701 match rows), baseline replay exactly reproduced 205,688 rated team-games; seven chronology, symmetry, control, bounds and routing tests; full suite independently rerun after handoff: 327 passed in 5.39s; repository Ruff format/check, 19 local Markdown links and `git diff --check` passed.
+- Limits: retrospective ablation-origin candidate, not untouched prospective confirmation; inherited annual-file imputation and early state initialization limits remain. Fixed-curve intervals use game resampling; conditional clustering does not establish fixed-curve clustering. Cached market series were checked, but map-1 markets, production weight refresh and a candidate site build were not. No defaults adopted or deployment performed.
+
 ## 2026-10-08 — Elo: rookie discount for new players; forecast rule judges the games a change targets
 
 Branch `new-player-elo`, based on `series-odds` (6467028).
