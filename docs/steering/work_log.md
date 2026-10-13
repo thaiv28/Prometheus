@@ -2,6 +2,14 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-13 — Props page: shorter copy, lines-only by default, no role column
+
+Branch `props` (PR #52).
+
+- **Copy:** the page broke the owner's standing rule that every word be necessary (it lived only in agent memory). Cut the lede, full name, the five margin notes (to one line each), the fact line (league, Bo, series pair), the table captions ("Kills, maps 1–3."), the record section's prose and caption, and the cell tooltips. The rule is now in `docs/steering/ui.md` (*Copy*, moved out of *Known gaps* and made concrete) and `AGENTS.md` Conventions.
+- **Default:** "with lines only" is checked by default and server-rendered (matches without lines for kills carry `hidden`, so no-JS visitors see the same); `?lines=all` shows every match.
+- **Role column removed** (and the folded role under the name on narrow screens).
+- Checks: `uv run pytest -q` (a new test that a match without lines starts hidden); `ruff format --check`, `ruff check`; site build; screenshots at 1440px and 390px.
 ## 2026-10-13 — Kalshi alert: a rebuild no longer re-alerts the same match
 
 Branch `alert-repeat`, based on `main` (3da95b3).

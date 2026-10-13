@@ -54,8 +54,11 @@ Type: one family, **Source Serif 4** (self-hosted variable woff2, OFL, licence i
 - Navigation uses real `<a>` links.
 - Check both 1440px and 390px widths after any change. Headless Chrome won't render narrower than 500px; load the page in a 390px iframe to test mobile.
 
+## Copy
+
+Every word on the site must be necessary; more text is not better (the owner, 2026-10-06 and 2026-10-08). For any lede, caption, label, margin note, tooltip or status line: draft it, cut it by about half, then check each remaining phrase. Is it said elsewhere on the page? Does a column head, key or tooltip already cover it? Prefer a number or a label to a sentence. Keep method detail in the README and the reports, not on the page; keep the one caveat that matters. No book-metaphor wording ("register", "edition", "errata") in visible text.
+
 ## Known gaps
 
 - Light only; there is no dark mode.
-- Copy is plain and direct. Each line should explain a number, a concept, or where to go next; no book-metaphor wording ("register", "edition", "errata") in visible text.
 - Phone rows are two lines tall (team, then league and year), so a phone shows about 20 rows per screen.

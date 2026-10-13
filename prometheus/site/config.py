@@ -257,17 +257,17 @@ PREDICTIONS = {
 PROPS = {
     "key": "props",
     "name": "Props",
-    "full_name": "What each starter should do, against the pick'em lines",
+    "full_name": "Projections against the pick'em lines",
     "question": "Over or under?",
-    "description": "Our projection of every starter's kills, assists, deaths and CS in the next major and international matches (and any other the apps post lines for), beside the lines Underdog, PrizePicks and DraftKings Pick6 post, and how those lines have settled.",
+    "description": "Each starter's kills, assists, deaths and CS against the Underdog, PrizePicks and Pick6 lines.",
     "how_to_read": [
-        "Ours: the middle of our projection over the maps the line counts, with the range we expect 8 times in 10. It weighs the player's recent games (the latest count most), their team's and the opponent's, and the chance each map is won.",
-        "Last 10: the player's average over their last 10 maps, times the maps counted. A line far from both is worth a look; a line far from only ours may be our recent-form weighting.",
-        "Bar: our chance the player goes over, in 100, with a tick at the line's break-even. A two-pick entry paying 3× needs each pick to win 58 times in 100; an app's multiplier on a side moves that.",
-        "Pick: the side we favour among those the app offers (some lines take only the over), and our chance it wins; set in bold when it clears the break-even. Underdog also states its own chance for the over, shown in the cell's tooltip.",
-        "Lines count the first maps of the series: Maps 1–3 are all guaranteed in a best-of-five. A player who plays none of them voids the line.",
+        "Ours: our median over the maps the line counts; the range holds 8 times in 10.",
+        "Last 10: the player's average over their last 10 maps, times the maps counted.",
+        "Bar: our chance of the over. The ticks mark break-even, 58 in 100 for a two-pick entry paying 3×.",
+        "Pick: the better side the app offers, and our chance it wins; bold when it clears break-even.",
+        "A player who plays none of the counted maps voids the line.",
     ],
-    "caveats": "Starters are each team's last lineup. Projections were tested on past games, not yet against these lines: no app publishes old lines, so the record starts from 12 October 2026. Not betting advice.",
+    "caveats": "Starters are each team's last lineup. Not yet tested against these lines; the record starts 12 October 2026.",
 }
 # The home page lists this many upcoming major-league and international matches,
 # within this many days.

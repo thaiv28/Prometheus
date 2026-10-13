@@ -16,13 +16,6 @@ from prometheus.site.render import env, slugify, write
 
 APPS = (("underdog", "Underdog"), ("prizepicks", "PrizePicks"), ("pick6", "Pick6"))
 STATS = (("kills", "Kills"), ("assists", "Assists"), ("deaths", "Deaths"), ("cs", "CS"))
-ROLE_NAMES = {
-    "top": "Top",
-    "jng": "Jungle",
-    "mid": "Mid",
-    "bot": "Bot",
-    "sup": "Support",
-}
 RECENT_MAPS = 10
 
 
@@ -124,7 +117,6 @@ def match_view(fixture, rows, priced, recent, team_slugs, player_slugs):
                         cells[app] = line_cell(line)
                 players.append(
                     {
-                        "role": ROLE_NAMES.get(r["position"], r["position"]),
                         "name": r["playername"],
                         "slug": player_slugs.get(r["playerid"]),
                         "median": s["median"],
@@ -231,6 +223,8 @@ def build_props(games, prediction_log, latest_elos, team_slugs, player_slugs, no
     return {
         "matches": matches,
         "lines_total": int(sum(m["n_lines"] for m in matches)),
+        # Matches with lines for the default stat show without JS.
+        "first_stat_lines": any(m["stats"][0]["n_lines"] for m in matches),
         "lines_since": None if reads.empty else reads.min().strftime("%Y-%m-%d"),
         "lines_read": None if reads.empty else reads.max().strftime("%Y-%m-%dT%H:%MZ"),
         "scorecard": scorecard_rows(settled),

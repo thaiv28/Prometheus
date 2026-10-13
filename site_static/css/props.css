@@ -60,13 +60,6 @@
 }
 .register--props tbody:last-of-type tr:last-child th[scope="row"] { border-bottom: 2px solid var(--rule); }
 .register--props tbody tr:hover th[scope="row"] { background: var(--paper-wash); }
-.pp-role {
-  width: 4.5rem;
-  color: var(--ink-3);
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.05em;
-}
-.pp-role-inline { display: none; }
 .pp-player { width: 100%; }
 .pp-player a { font-weight: 500; text-decoration-color: var(--hairline-soft); }
 .pp-recent { color: var(--ink-2); width: 4.5rem; }
@@ -137,13 +130,9 @@
   .pp-meter { width: 2.25rem; }
 }
 @media (max-width: 1100px) and (min-width: 1001px) {
-  .pp-role { display: none; }
-  .pp-role-inline { display: inline; margin-left: 6px; color: var(--ink-3); font-size: 0.875em; font-variant-caps: all-small-caps; letter-spacing: 0.05em; }
   .pp-meter { width: 2.25rem; }
 }
 @media (max-width: 720px) {
-  .register--props .pp-role { display: none; }
-  .pp-role-inline { display: inline; margin-left: 6px; color: var(--ink-3); font-size: 0.875em; font-variant-caps: all-small-caps; letter-spacing: 0.05em; }
   .pp-match-head { font-size: 1.1875rem; }
   .pp-recent { display: none; }
   .pp-meter { display: none; }

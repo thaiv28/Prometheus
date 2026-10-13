@@ -1,6 +1,6 @@
-// The Props page: switch the stat shown in every match, hide matches without
-// lines on request, and set match times in the visitor's time zone. The choice
-// is kept in the URL (?stat=, ?lines=1).
+// The Props page: switch the stat shown in every match, show only matches with
+// lines for it (the default; ?lines=all shows every match), and set match times
+// in the visitor's time zone. The choice is kept in the URL (?stat=, ?lines=all).
 (function () {
   "use strict";
   var filters = document.querySelector(".filter-line");
@@ -33,7 +33,7 @@
     only.checked = lines;
     var q = new URLSearchParams(location.search);
     if (stat === radios[0].value) q.delete("stat"); else q.set("stat", stat);
-    if (lines) q.set("lines", "1"); else q.delete("lines");
+    if (lines) q.delete("lines"); else q.set("lines", "all");
     var s = q.toString();
     history.replaceState(null, "", location.pathname + (s ? "?" + s : "") + location.hash);
   }
@@ -59,7 +59,7 @@
 
   var wanted = params.get("stat");
   var valid = radios.some(function (r) { return r.value === wanted; });
-  apply(valid ? wanted : radios[0].value, params.get("lines") === "1");
+  apply(valid ? wanted : radios[0].value, params.get("lines") !== "all");
 
   // Local times: "Thursday 15 October, 20:00".
   var days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];

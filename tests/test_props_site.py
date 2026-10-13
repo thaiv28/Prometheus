@@ -76,7 +76,9 @@ def test_render_props_page(tmp_path, monkeypatch):
     assert "Cloud9" in html and 'href="teams/cloud9.html"' in html
     assert 'href="players/yike.html"' in html
     assert "pp-line--clears" in html and ">12.5<" in html
-    assert "Underdog says 48" in html
+    assert "Underdog 48" in html
+    assert "Jungle" not in html and "pp-role" not in html
+    assert 'id="pp-only" checked' in html
     # One register per stat; only the first is shown without JS.
     assert html.count('class="register-figure pp-stat"') == 4
     assert html.count('data-stat="kills">') == 1
@@ -86,3 +88,16 @@ def test_render_props_page(tmp_path, monkeypatch):
 
 def test_default_maps():
     assert [site_props.default_maps(b) for b in (1, 3, 5)] == [1, 2, 3]
+
+
+def test_matches_without_lines_start_hidden(tmp_path, monkeypatch):
+    monkeypatch.setattr(site_config, "OUTPUT_DIR", str(tmp_path))
+    view = _view()
+    bare = {**view["matches"][0], "id": "m2", "n_lines": 0}
+    bare["stats"] = [{**s, "n_lines": 0} for s in bare["stats"]]
+    view["matches"].append(bare)
+    site_props.render_props(view)
+    html = (tmp_path / "props.html").read_text()
+    assert '<article class="pp-match" data-match="m1"' in html
+    m2 = html[html.index('data-match="m2"') :].split(">", 1)[0]
+    assert m2.endswith("hidden")

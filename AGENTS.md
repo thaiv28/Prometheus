@@ -132,6 +132,7 @@ Use a port other than 8000 for `http.server` if another worktree is serving.
 - League names are normalized at ingest (`002_add_matches.py`): NA LCS / LTA N → `LCS`, EU LCS → `LEC`.
 - Formatting and linting: `ruff` (`ruff format`; `ruff check` with pyflakes, import sorting and syntax errors), configured in `pyproject.toml` and run by CI's `check` job before the data download. It is in the `dev` dependency group with `pytest` (`uv sync` installs it; the hourly prices job uses `--no-dev`).
 - Frontend: no build step and no framework. Design tokens are in `site_static/css/tokens.css`, and league color comes only from `[data-league]`. Charts are hand-drawn SVG; there are no third-party scripts. JS that writes HTML must escape values with `esc()` in `rankings.js`.
+- **Site copy is minimal:** every word must be necessary (see `docs/steering/ui.md`, *Copy*). Draft, cut by half, and drop anything a heading, column head, key or tooltip already says.
 - Visual direction is "The Almanac": the site is set like a printed sabermetrics annual, with booktabs registers, margin notes and small printed figures on paper. See `DESIGN.md`, `.impeccable/surfaces/` and `docs/steering/ui.md` before changing the look.
 
 ## Gotchas
