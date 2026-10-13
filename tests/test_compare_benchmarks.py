@@ -326,3 +326,10 @@ def test_betting_old_base_borrows_prices_and_none_skips(tmp_path):
     assert cb.failures([r for _, part in sections for r in part]) == cb.failures(
         markets
     )
+
+
+def test_floating_point_noise_is_within_noise():
+    assert cb._verdict(1e-15, 3e-15, lower_is_better=True) == "within noise"
+    assert cb._verdict(-3e-15, -1e-15, lower_is_better=True) == "within noise"
+    assert cb._verdict(1e-4, 3e-4, lower_is_better=True) == "worse"
+    assert cb._verdict(-3e-4, -1e-4, lower_is_better=True) == "better"
