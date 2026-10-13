@@ -17,7 +17,8 @@ uri="${3:?s3 uri}"
 
 # Entries: lines of a JSON-lines file, keys of a JSON object.
 count() {
-    case "$1" in
+    # A downloaded backup has a temporary name; use the original file's format.
+    case "${2:-$1}" in
     *.jsonl) grep -c . "$1" || true ;;
     *) python3 -c 'import json, sys; print(len(json.load(open(sys.argv[1]))))' "$1" ;;
     esac
@@ -39,7 +40,7 @@ save)
     [ -f "$file" ] || { echo "No $file to save."; exit 0; }
     tmp=$(mktemp)
     if aws s3 cp "$uri" "$tmp" --only-show-errors 2>/dev/null; then
-        before=$(count "$tmp")
+        before=$(count "$tmp" "$file")
         after=$(count "$file")
         if [ "$after" -lt "$before" ]; then
             echo "::error::Not saving $file: $after entries, the backup has $before." >&2
