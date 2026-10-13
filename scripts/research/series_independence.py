@@ -36,7 +36,7 @@ from scipy.optimize import minimize, minimize_scalar
 from scipy.special import betaln, expit, gammaln, logit
 
 from prometheus import gamelog
-from prometheus.form import form_states, load_form_games, opponent_adjust
+from prometheus.form import load_states
 from prometheus.types import ALL_MAJOR_LEAGUES
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -194,7 +194,7 @@ def fearless_labels(series):
 
 def load(con):
     """(games, series): one side of every series (the alphabetically first team)."""
-    states = form_states(opponent_adjust(load_form_games()))
+    states = load_states()
     g = gamelog.add_series(gamelog.add_calls(gamelog.load_team_games(), states))
     home = states[["gameid", "teamid", "home"]].drop_duplicates(["gameid", "teamid"])
     g = g.merge(home, on=["gameid", "teamid"], how="left").merge(

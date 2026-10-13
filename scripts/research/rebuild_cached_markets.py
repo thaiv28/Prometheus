@@ -41,7 +41,7 @@ def main():
     parser.add_argument("--dump", type=Path, required=True)
     args = parser.parse_args()
     series, maps, counts, _ = pd.read_pickle(args.cache)
-    states = form.form_states(form.opponent_adjust(form.load_form_games()))
+    states = form.load_states()
     before = schedule.RatingsBefore(states)
     print(f"Rebuilding {len(series)} series and {len(maps)} map-1 calls", flush=True)
     series = rebuild(series, before, True)

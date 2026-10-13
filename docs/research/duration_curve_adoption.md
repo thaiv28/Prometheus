@@ -1,12 +1,12 @@
-# Fixed duration curve adoption checks (2026-10-12)
+# Fixed duration curve: current-main adoption checks (2026-10-13)
 
-The integration branch `elo-duration-curve` builds on research commit 99f3d6a and compares against production baseline a2f7d37, using the same 205,701 team-game rows. Elo now uses `0.825 + 0.175 * tanh((1800 - seconds) / 300)`; K, rookie treatment and regional links retain their existing definitions. Record explicitly retains the original power curve, so published GLORY's opponent adjustment is unchanged. Form, FORGE and league slopes are refitted on the rebuilt candidate database.
+Baseline: main b4e3681, including roster-aware Form, time-away updates, the move-down bonus and log rookie curve from PR #49. Both databases use the same 205,701 team-game rows. The only production algorithm difference is Elo’s frozen `0.825 + 0.175 * tanh((1800 - seconds) / 300)` curve; current K, experience, league-move and roster handling are retained. Record explicitly keeps its original power curve. Candidate Form/FORGE weights and league slopes are refitted.
 
-The forecast gain meets the repository rule on international, cross-league and other-league games with no protected regression. [Completion gates](duration_curve_gates.md) additionally show that the gains survive earlier-only calibration and team-pair/day clustering; frozen-through-2024 map-1 calls are inconclusive rather than significantly worse. The curve originated from a retrospective attribution ablation, so this is historical evidence, not an untouched prospective result.
+The native full-history comparison below improves international, cross-league and within-other-league forecasts significantly and passes every protected guard. [Completion gates](duration_curve_gates.md), rerun on the same current-model defaults, confirm international and other-league gains with earlier-only fits and team-pair/day clustering; the 2022+ cross-league difference is inside noise under those stricter checks. Frozen-through-2024 map-1 calls show no significant regression. All evidence remains retrospective because the candidate originated in an attribution ablation on already examined years.
 
-The ordinary offline market command cannot score this local candle cache (no priced rows). The market section below therefore uses the exact same saved cohort of 2,398 priced series and 1,444 map-1 markets on both sides. `scripts/research/rebuild_cached_markets.py` recalculates every published call from each database and its tracked weights; cached old predictions are unused, and prices/outcomes are preserved. The legacy GLORY+ season statistic loses some fit to the other half's win percentage; it is sunset and unguarded. Published GLORY, Record, Luck and AURA's guarded values are unchanged.
+Markets use a fixed saved priced cohort of 2,398 series and 1,444 map-1 markets. Every prediction is rebuilt with `form.load_states()` and each version’s database/tracked weights; cached predictions are unused and prices/outcomes are preserved. The incomplete local candle cache cannot support a fresh ordinary offline market run, so no new prices were fetched. Protected GLORY, Record and AURA values are unchanged; sunset GLORY+ loses some other-half fit (unguarded).
 
-Verification: private DB rebuilt; required forecast/season reports regenerated; weights refreshed and `--check-weights` passed without warnings; all four benchmark dumps compared; 329 tests and repository Ruff checks passed; offline static site built with saved log/prices. No merge or live deployment has been performed.
+Checks: both databases rebuilt, all four benchmark dumps compared, weights refitted and checked, 351 tests, Ruff formatting/lint, local site build with saved log/prices. CI checks gate the requested PR merge; no override is planned. Original a2f7d37 results remain in the dated research reports and earlier work-log entries.
 
 **Benchmarks: no guarded value is significantly worse.**
 
@@ -16,23 +16,23 @@ Verification: private DB rebuilt; required forecast/season reports regenerated; 
 |---|---|---:|---:|---|---|---:|
 | Domestic | blue_side log loss (16,810 games) | 0.6906 | 0.6906 | +0.0000 (+0.0000 to +0.0000) | within noise | 0 / 0 |
 | Domestic | win_pct log loss (16,810 games) | 0.6480 | 0.6480 | +0.0000 (+0.0000 to +0.0000) | within noise | 0 / 0 |
-| Domestic | elo log loss (16,810 games) | 0.6396 | 0.6396 | +0.0000 (-0.0005 to +0.0006) | within noise | 0 / 0 |
-| Domestic | **elo_live log loss (16,810 games)** | 0.6316 | 0.6313 | -0.0003 (-0.0009 to +0.0004) | within noise | 0 / 0 |
+| Domestic | elo log loss (16,810 games) | 0.6395 | 0.6394 | -0.0000 (-0.0006 to +0.0005) | within noise | 0 / 0 |
+| Domestic | **elo_live log loss (16,810 games)** | 0.6315 | 0.6312 | -0.0003 (-0.0010 to +0.0003) | within noise | 0 / 0 |
 | Domestic | team_elo_live log loss (16,810 games) | 0.6348 | 0.6346 | -0.0002 (-0.0008 to +0.0004) | within noise | 0 / 0 |
-| Domestic | form log loss (16,810 games) | 0.6341 | 0.6341 | +0.0001 (-0.0000 to +0.0002) | within noise | 0 / 0 |
-| Domestic | **forge log loss (16,810 games)** | 0.6291 | 0.6289 | -0.0002 (-0.0005 to +0.0002) | within noise | 0 / 0 |
+| Domestic | form log loss (16,810 games) | 0.6345 | 0.6345 | +0.0001 (-0.0001 to +0.0002) | within noise | 0 / 0 |
+| Domestic | **forge log loss (16,810 games)** | 0.6286 | 0.6285 | -0.0001 (-0.0005 to +0.0003) | within noise | 0 / 0 |
 | International | blue_side log loss (1,024 games) | 0.6913 | 0.6913 | +0.0000 (+0.0000 to +0.0000) | within noise | 0 / 0 |
 | International | win_pct log loss (1,024 games) | 0.6879 | 0.6879 | +0.0000 (+0.0000 to +0.0000) | within noise | 0 / 0 |
-| International | elo log loss (1,024 games) | 0.6375 | 0.6357 | -0.0018 (-0.0047 to +0.0011) | within noise | 0 / 0 |
-| International | **elo_live log loss (1,024 games)** | 0.6283 | 0.6238 | -0.0045 (-0.0074 to -0.0015) | better | 0 / 0 |
+| International | elo log loss (1,024 games) | 0.6386 | 0.6369 | -0.0016 (-0.0045 to +0.0013) | within noise | 0 / 0 |
+| International | **elo_live log loss (1,024 games)** | 0.6289 | 0.6244 | -0.0044 (-0.0074 to -0.0014) | better | 0 / 0 |
 | International | team_elo_live log loss (1,024 games) | 0.6293 | 0.6255 | -0.0038 (-0.0067 to -0.0006) | better | 0 / 0 |
-| International | form log loss (1,024 games) | 0.6720 | 0.6716 | -0.0004 (-0.0011 to +0.0003) | within noise | 0 / 0 |
-| International | **forge log loss (1,024 games)** | 0.6283 | 0.6238 | -0.0045 (-0.0074 to -0.0015) | better | 0 / 0 |
-| Cross-league | **elo_live log loss (10,184 games)** | 0.6015 | 0.5999 | -0.0016 (-0.0025 to -0.0006) | better | 0 / 0 |
-| Within other leagues | elo_standard log loss (69,736 games) | 0.6276 | 0.6252 | -0.0024 (-0.0026 to -0.0022) | better | 0 / 0 |
-| Within other leagues | elo_one_curve log loss (69,736 games) | 0.6139 | 0.6122 | -0.0017 (-0.0020 to -0.0014) | better | 0 / 0 |
-| Within other leagues | **elo_per_league log loss (69,736 games)** | 0.6127 | 0.6110 | -0.0017 (-0.0021 to -0.0014) | better | 0 / 0 |
-| Within other leagues | **forge log loss (69,736 games)** | 0.6101 | 0.6090 | -0.0010 (-0.0013 to -0.0008) | better | 0 / 0 |
+| International | form log loss (1,024 games) | 0.6700 | 0.6697 | -0.0003 (-0.0010 to +0.0004) | within noise | 0 / 0 |
+| International | **forge log loss (1,024 games)** | 0.6289 | 0.6244 | -0.0044 (-0.0074 to -0.0014) | better | 0 / 0 |
+| Cross-league | **elo_live log loss (10,184 games)** | 0.5940 | 0.5925 | -0.0014 (-0.0024 to -0.0004) | better | 0 / 0 |
+| Within other leagues | elo_standard log loss (69,736 games) | 0.6263 | 0.6240 | -0.0024 (-0.0026 to -0.0021) | better | 0 / 0 |
+| Within other leagues | elo_one_curve log loss (69,736 games) | 0.6124 | 0.6107 | -0.0016 (-0.0020 to -0.0013) | better | 0 / 0 |
+| Within other leagues | **elo_per_league log loss (69,736 games)** | 0.6111 | 0.6094 | -0.0017 (-0.0020 to -0.0014) | better | 0 / 0 |
+| Within other leagues | **forge log loss (69,736 games)** | 0.6085 | 0.6076 | -0.0009 (-0.0012 to -0.0007) | better | 0 / 0 |
 
 #### Season stats
 
@@ -44,8 +44,8 @@ Verification: private DB rebuilt; required forecast/season reports regenerated; 
 | Season stats | **glory r with other half's win % (547 team-seasons)** | 0.695 | 0.695 | +0.000 (+0.000 to +0.000) | within noise | 0 / 0 |
 | Season stats | glory_raw split-half r (547 team-seasons) | 0.762 | 0.762 | +0.000 (+0.000 to +0.000) | within noise | 0 / 0 |
 | Season stats | glory_raw r with other half's win % (547 team-seasons) | 0.717 | 0.717 | +0.000 (+0.000 to +0.000) | within noise | 0 / 0 |
-| Season stats | glory_elo split-half r (547 team-seasons) | 0.827 | 0.829 | +0.002 (+0.001 to +0.003) | better | 0 / 0 |
-| Season stats | glory_elo r with other half's win % (547 team-seasons) | 0.694 | 0.690 | -0.004 (-0.005 to -0.002) | worse | 0 / 0 |
+| Season stats | glory_elo split-half r (547 team-seasons) | 0.824 | 0.826 | +0.002 (+0.001 to +0.004) | better | 0 / 0 |
+| Season stats | glory_elo r with other half's win % (547 team-seasons) | 0.698 | 0.693 | -0.004 (-0.006 to -0.003) | worse | 0 / 0 |
 | Season stats | glorb split-half r (547 team-seasons) | 0.752 | 0.752 | +0.000 (+0.000 to +0.000) | within noise | 0 / 0 |
 | Season stats | glorb r with other half's win % (547 team-seasons) | 0.691 | 0.691 | +0.000 (+0.000 to +0.000) | within noise | 0 / 0 |
 | Season stats | record split-half r (545 team-seasons) | 0.811 | 0.811 | +0.000 (+0.000 to +0.000) | within noise | 0 / 0 |
@@ -69,10 +69,32 @@ Verification: private DB rebuilt; required forecast/season reports regenerated; 
 
 | Section | Measure | Base | Head | Head − base (95% CI) | Result | Unpaired (base / head) |
 |---|---|---:|---:|---|---|---:|
-| Markets | **series log loss, all (2,398)** | 0.5711 | 0.5701 | -0.0010 (-0.0027 to +0.0007) | within noise | 0 / 0 |
-| Markets | **series log loss, forge (major) (788)** | 0.5903 | 0.5885 | -0.0018 (-0.0039 to +0.0001) | within noise | 0 / 0 |
-| Markets | series log loss, forge (other league) (1,263) | 0.5555 | 0.5548 | -0.0007 (-0.0030 to +0.0017) | within noise | 0 / 0 |
-| Markets | series log loss, other (347) | 0.5843 | 0.5841 | -0.0002 (-0.0069 to +0.0062) | within noise | 0 / 0 |
-| Markets | **map1 log loss, all (1,444)** | 0.6142 | 0.6142 | +0.0001 (-0.0015 to +0.0017) | within noise | 0 / 0 |
+| Markets | **series log loss, all (2,398)** | 0.5680 | 0.5671 | -0.0010 (-0.0026 to +0.0008) | within noise | 0 / 0 |
+| Markets | **series log loss, forge (major) (788)** | 0.5886 | 0.5868 | -0.0018 (-0.0039 to +0.0003) | within noise | 0 / 0 |
+| Markets | series log loss, forge (other league) (1,263) | 0.5554 | 0.5548 | -0.0006 (-0.0029 to +0.0019) | within noise | 0 / 0 |
+| Markets | series log loss, other (347) | 0.5672 | 0.5668 | -0.0004 (-0.0071 to +0.0061) | within noise | 0 / 0 |
+| Markets | **map1 log loss, all (1,444)** | 0.6148 | 0.6147 | -0.0001 (-0.0017 to +0.0016) | within noise | 0 / 0 |
+
+#### Betting (report only)
+
+$1 on our side 12 hours before the start, as the Predictions page's Table IV: our pick in every series (Any), or where our chance beat Kalshi's price by more than the edge. Return is per $1 after the 7% fee; CLV is the closing price minus the price paid, in points. Never fails the check.
+
+| Calls | Edge | Bets (base / head) | Return % (base / head) | Head − base (95% CI) | CLV (base / head) | Head − base (95% CI) | Beat close % (base / head) |
+|---|---:|---:|---:|---|---:|---|---:|
+| All (2,398) | Any | 2,093 / 2,093 | -0.2 / +0.1 | +0.3 (-0.9 to +1.6) | +0.1 / +0.3 | +0.1 (-0.0 to +0.3) | 45.8 / 45.9 |
+| All (2,398) | > 0 | 1,933 / 1,943 | +4.0 / +5.9 | +1.8 (-0.5 to +4.2) | +0.4 / +0.5 | +0.1 (-0.0 to +0.2) | 49.7 / 49.8 |
+| All (2,398) | > 3 | 1,365 / 1,398 | +6.6 / +8.0 | +1.4 (-0.9 to +4.0) | +0.7 / +0.8 | +0.0 (-0.1 to +0.2) | 53.1 / 53.6 |
+| All (2,398) | > 5 | 1,048 / 1,078 | +9.2 / +11.4 | +2.2 (-0.9 to +5.3) | +1.0 / +1.2 | +0.2 (-0.0 to +0.4) | 55.9 / 57.2 |
+| All (2,398) | > 10 | 542 / 572 | +17.5 / +18.8 | +1.3 (-3.0 to +5.7) | +1.8 / +1.8 | +0.1 (-0.2 to +0.4) | 62.0 / 60.5 |
+| FORGE (788) | Any | 756 / 756 | -1.5 / -1.0 | +0.5 (-1.6 to +2.6) | -0.7 / -0.7 | -0.0 (-0.1 to +0.0) | 40.1 / 39.6 |
+| FORGE (788) | > 0 | 708 / 706 | +7.3 / +12.2 | +4.9 (+1.0 to +9.0) | +0.0 / +0.1 | +0.0 (-0.1 to +0.2) | 48.3 / 47.9 |
+| FORGE (788) | > 3 | 451 / 463 | +15.3 / +14.0 | -1.3 (-5.6 to +3.1) | +0.3 / +0.4 | +0.1 (-0.1 to +0.3) | 52.5 / 52.9 |
+| FORGE (788) | > 5 | 321 / 332 | +18.4 / +18.2 | -0.2 (-6.1 to +5.6) | +0.3 / +0.5 | +0.2 (-0.2 to +0.6) | 56.7 / 56.3 |
+| FORGE (788) | > 10 | 137 / 146 | +26.5 / +24.7 | -1.9 (-9.6 to +5.5) | +0.2 / +0.4 | +0.2 (-0.2 to +0.9) | 63.5 / 61.0 |
+| Other (1,610) | Any | 1,337 / 1,337 | +0.5 / +0.7 | +0.2 (-1.3 to +1.7) | +0.6 / +0.8 | +0.2 (+0.0 to +0.4) | 49.1 / 49.5 |
+| Other (1,610) | > 0 | 1,225 / 1,237 | +2.2 / +2.2 | +0.1 (-2.8 to +3.0) | +0.6 / +0.8 | +0.1 (-0.0 to +0.3) | 50.5 / 50.9 |
+| Other (1,610) | > 3 | 914 / 935 | +2.3 / +5.1 | +2.8 (-0.4 to +5.9) | +0.9 / +0.9 | +0.0 (-0.2 to +0.2) | 53.4 / 53.9 |
+| Other (1,610) | > 5 | 727 / 746 | +5.2 / +8.4 | +3.3 (-0.3 to +7.0) | +1.4 / +1.5 | +0.2 (-0.1 to +0.5) | 55.6 / 57.6 |
+| Other (1,610) | > 10 | 405 / 426 | +14.5 / +16.8 | +2.3 (-2.7 to +7.3) | +2.3 / +2.3 | +0.0 (-0.3 to +0.4) | 61.5 / 60.3 |
 
 Bold measures are guarded: the check fails when one is significantly worse (its interval entirely on the bad side) or AURA's ECE is above 0.01. Lower log loss and higher r are better.

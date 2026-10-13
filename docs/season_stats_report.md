@@ -5,7 +5,7 @@
 | Win % | 0.70 (0.65 to 0.74) | 0.82 | 16 | 0.70 | — | 0.89 |
 | GLORY (opponent-adjusted by Record) | 0.83 (0.80 to 0.85) | 0.91 | 8 | 0.69 | 0.87 | 0.97 |
 | GLORY, unadjusted (old GLORY) | 0.76 (0.72 to 0.80) | 0.87 | 11 | 0.72 | 0.96 | 0.86 |
-| GLORY, adjusted by pre-game Elo (old GLORY+) | 0.83 (0.80 to 0.85) | 0.91 | 8 | 0.69 | 0.87 | 0.93 |
+| GLORY, adjusted by pre-game Elo (old GLORY+) | 0.83 (0.80 to 0.85) | 0.91 | 8 | 0.69 | 0.88 | 0.93 |
 | GLORB | 0.75 (0.71 to 0.79) | 0.86 | 12 | 0.69 | 0.91 | 0.84 |
 | Record | 0.81 (0.78 to 0.84) | 0.90 | 10 | 0.70 | 0.89 | — |
 | Luck | 0.21 (0.13 to 0.29) | 0.34 | 139 | 0.05 | 0.25 | 0.22 |

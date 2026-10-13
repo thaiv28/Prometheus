@@ -14,6 +14,9 @@ paired-bootstrap interval:
   and each snapshot's calibration ECE.
 - Kalshi markets: log loss of our series and map-1 calls on the same settled
   markets, head minus base (Kalshi's prices are the same on both sides).
+- Betting (report only, never guarded): the Predictions page's Table IV paper
+  bets (`schedule.paper_bets`, $1 12 hours out, 7% fee) by edge, base and head on
+  the same series, with head minus base return and CLV over markets.
 
 A line is "better" or "worse" when its interval lies entirely on one side of 0,
 otherwise "within noise". The exit code is 1 when a guarded value is significantly
@@ -32,6 +35,7 @@ import sys
 import numpy as np
 import pandas as pd
 
+from prometheus import schedule
 from prometheus.evaluation import (
     ece,
     game_losses,
@@ -63,6 +67,10 @@ ECE_LIMIT = 0.01
 GUARDED_MARKETS = {("series", "all"), ("series", "forge (major)"), ("map1", "all")}
 MARKET_KEY = ["kind", "event_ticker", "team1"]
 N_RESAMPLES = 2000
+# Base and head run on different machines, so identical code can differ by about
+# 1e-16 per row (floating point); over thousands of rows every resample then lands
+# on one side of 0. A difference counts only when its interval clears this.
+TOLERANCE = 1e-6
 FORECAST_KEY = ["section", "forecast", "gameid", "teamid"]
 SEASON_KEY = ["teamname", "year"]
 PLAYER_KEY = ["playerid", "year", "position"]
@@ -72,9 +80,9 @@ ROSTER_KEY = ["teamname", "year", "half"]
 def _verdict(lo, hi, lower_is_better):
     if lower_is_better:
         lo, hi = -hi, -lo
-    if lo > 0:
+    if lo > TOLERANCE:
         return "better"
-    if hi < 0:
+    if hi < -TOLERANCE:
         return "worse"
     return "within noise"
 
@@ -381,6 +389,164 @@ def compare_markets(base, head, n_resamples=N_RESAMPLES):
     return rows
 
 
+# The Predictions page's paper bets: its edges and fee (`schedule.edge_record`).
+BET_RATE = 0.07
+PRICE_COLUMNS = ["cost1", "cost2", "market_close"]
+
+
+def _prices(both):
+    """Kalshi's bet prices per paired series. They are the same market data on
+    both sides, so either side's columns serve (the head's first): a base from
+    before the dump carried prices still gets its bets scored."""
+    out = {}
+    for c in PRICE_COLUMNS:
+        for name in (f"{c}_head", c, f"{c}_base"):
+            if name in both.columns:
+                out[c] = pd.to_numeric(both[name], errors="coerce").to_numpy()
+                break
+        else:
+            return None
+    return out
+
+
+def _bet_arrays(p, won1, prices, edges):
+    """Per series and edge, the paper bet's profit, CLV and whether it beat the
+    close (NaN where no bet), as Table IV makes them."""
+    n = len(p)
+    profit = {e: np.full(n, np.nan) for e in edges}
+    clv = {e: np.full(n, np.nan) for e in edges}
+    nan = lambda x: None if x != x else float(x)
+    for i in range(n):
+        made = schedule.paper_bets(
+            float(p[i]),
+            (nan(prices["cost1"][i]), nan(prices["cost2"][i])),
+            1 if won1[i] else 2,
+            nan(prices["market_close"][i]),
+            BET_RATE,
+        )
+        if made is None:
+            continue
+        for e in edges:
+            bet = made["pick"] if e is None else made["value"]
+            if bet is None or (e is not None and not bet["edge"] > e):
+                continue
+            profit[e][i] = bet["profit"]
+            if bet["clv"] is not None:
+                clv[e][i] = bet["clv"]
+    return profit, clv
+
+
+def _mean(x):
+    return float(np.nanmean(x)) if np.isfinite(x).any() else np.nan
+
+
+def _diff_interval(b, h, draws):
+    """Head minus base of the mean over bets made, and its 95% interval over
+    resampled series (both sides drawn together)."""
+    diffs = [_mean(h[i]) - _mean(b[i]) for i in draws]
+    diffs = [d for d in diffs if np.isfinite(d)]
+    if not np.isfinite(_mean(h) - _mean(b)) or len(diffs) < len(draws) / 2:
+        return None
+    return (_mean(h) - _mean(b), *interval(diffs))
+
+
+def compare_betting(base, head, n_resamples=N_RESAMPLES, edges=schedule.BET_EDGES):
+    """Table IV's paper bets on the series both dumps scored, per slice (all,
+    FORGE within a major league, other; the head's method) and edge: bets, mean
+    return per $1 and CLV for base and head, and head minus base with a 95%
+    interval over series. Returns (rows, note); rows are never guarded."""
+    both, only = _pair(
+        base[base["kind"] == "series"], head[head["kind"] == "series"], MARKET_KEY
+    )
+    if both.empty:
+        return [], "Betting: no series both dumps scored, not compared."
+    prices = _prices(both)
+    if prices is None:
+        return [], (
+            "Betting: neither dump carries Kalshi's bet prices (an older "
+            "`evaluate_markets.py`), not compared."
+        )
+    won1 = both["won1_head"].astype(bool).to_numpy()
+    sides = {
+        s: _bet_arrays(both[f"p_{s}"].to_numpy(), won1, prices, edges)
+        for s in ("base", "head")
+    }
+    head_rows = both.rename(columns={"method_head": "method", "major_head": "major"})
+    slices = _market_slice(head_rows)
+    slices = np.where(slices == "forge (major)", "FORGE", "Other")
+    rows = []
+    for name in ("All", "FORGE", "Other"):
+        pick = np.ones(len(both), bool) if name == "All" else slices == name
+        if not pick.any():
+            continue
+        draws = list(resamples(int(pick.sum()), n_resamples, seed=0))
+        for e in edges:
+            (bp, bc), (hp, hc) = (
+                (sides[s][0][e][pick], sides[s][1][e][pick]) for s in ("base", "head")
+            )
+            rows.append(
+                {
+                    "section": "Betting",
+                    "slice": name,
+                    "series": int(pick.sum()),
+                    "edge": e,
+                    "bets": (int(np.isfinite(bp).sum()), int(np.isfinite(hp).sum())),
+                    "roi": (_mean(bp), _mean(hp)),
+                    "roi_diff": _diff_interval(bp, hp, draws),
+                    "clv": (_mean(bc), _mean(hc)),
+                    "clv_diff": _diff_interval(bc, hc, draws),
+                    "beat": tuple(
+                        _mean(np.where(np.isfinite(c), c > 0, np.nan)) for c in (bc, hc)
+                    ),
+                    "guarded": False,
+                    "unpaired": only,
+                }
+            )
+    return rows, None
+
+
+def _pct(v, signed=True):
+    return (
+        "—"
+        if v is None or not np.isfinite(v)
+        else f"{100 * v:{'+' if signed else ''}.1f}"
+    )
+
+
+def _pct_interval(d):
+    if d is None:
+        return "—"
+    return f"{100 * d[0]:+.1f} ({100 * d[1]:+.1f} to {100 * d[2]:+.1f})"
+
+
+def render_betting(rows):
+    """Markdown for the betting rows: one table, slices as row groups."""
+    if not rows:
+        return []
+    lines = [
+        "",
+        "#### Betting (report only)",
+        "",
+        "$1 on our side 12 hours before the start, as the Predictions page's Table IV: our pick in "
+        "every series (Any), or where our chance beat Kalshi's price by more than the edge. Return "
+        "is per $1 after the 7% fee; CLV is the closing price minus the price paid, in points. "
+        "Never fails the check.",
+        "",
+        "| Calls | Edge | Bets (base / head) | Return % (base / head) | Head − base (95% CI) "
+        "| CLV (base / head) | Head − base (95% CI) | Beat close % (base / head) |",
+        "|---|---:|---:|---:|---|---:|---|---:|",
+    ]
+    for r in rows:
+        edge = "Any" if r["edge"] is None else f"> {100 * r['edge']:g}"
+        lines.append(
+            f"| {r['slice']} ({r['series']:,}) | {edge} | {r['bets'][0]:,} / {r['bets'][1]:,} "
+            f"| {_pct(r['roi'][0])} / {_pct(r['roi'][1])} | {_pct_interval(r['roi_diff'])} "
+            f"| {_pct(r['clv'][0])} / {_pct(r['clv'][1])} | {_pct_interval(r['clv_diff'])} "
+            f"| {_pct(r['beat'][0], False)} / {_pct(r['beat'][1], False)} |"
+        )
+    return lines
+
+
 def failures(rows):
     """Guarded rows that are significantly worse, or an ECE over the limit."""
     return [
@@ -405,7 +571,7 @@ def render(sections, notes=()):
         lines = ["**Benchmarks: no guarded value is significantly worse.**"]
     lines += list(notes)
     for title, part in sections:
-        if not part:
+        if not part or title == "Betting":
             continue
         digits = 4 if title in ("Forecasts", "Markets") else 3
         lines += [
@@ -430,6 +596,7 @@ def render(sections, notes=()):
                 f"| {_fmt(r.get('head'), digits)} | {interval} | {result} "
                 f"| {r['unpaired'][0]:,} / {r['unpaired'][1]:,} |"
             )
+    lines += render_betting(dict(sections).get("Betting", []))
     lines += [
         "",
         "Bold measures are guarded: the check fails when one is significantly worse "
@@ -491,6 +658,11 @@ def compare_dirs(base_dir, head_dir, n_resamples=N_RESAMPLES):
     b, h = (_read(sub(d, "markets"), "calls.csv.gz") for d in (base_dir, head_dir))
     if b is not None and h is not None:
         sections.append(("Markets", compare_markets(b, h, n_resamples)))
+        betting, note = compare_betting(b, h, n_resamples)
+        if betting:
+            sections.append(("Betting", betting))
+        if note:
+            notes.append(note)
     else:
         notes.append(
             "Market benchmark: missing from one side (no Kalshi cache in CI yet, "

@@ -8,7 +8,7 @@ from rich.table import Table
 from prometheus import forge, form
 from prometheus.elo import get_latest_elos, get_season_elos
 from prometheus.forge import FORM_POINTS, forge_ratings, team_forms
-from prometheus.form import form_states, load_form_games, opponent_adjust
+from prometheus.form import load_states
 from prometheus.ranking import get_glory_ranking, load_glory_games
 from prometheus.season import get_luck, get_record, load_season_games
 from prometheus.types import League, Metric, ScoreCols
@@ -20,7 +20,7 @@ console = Console()
 
 def _forecast(metric, years, leagues):
     """FORGE or Form for today's teams, or at the end of each season in `years`."""
-    now, seasons = team_forms(form_states(opponent_adjust(load_form_games())))
+    now, seasons = team_forms(load_states())
     forms = now if years is None else seasons[seasons["year"].isin(years)]
     forms = forms[forms["home"].isin([l.value for l in leagues])]
     if metric == Metric.form:
@@ -143,7 +143,7 @@ def predict(
     except Exception as e:  # network or rate limit
         typer.echo(f"Couldn't read the schedule from Leaguepedia: {e}")
         raise typer.Exit(code=1) from e
-    ratings = schedule.current_ratings(form_states(opponent_adjust(load_form_games())))
+    ratings = schedule.current_ratings(load_states())
     preds = schedule.predict(
         fixtures[fixtures["start"] > now],
         ratings,

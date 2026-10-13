@@ -44,14 +44,14 @@ def _entry(
     }
 
 
-def test_select_takes_forge_edges_in_the_window_with_fresh_prices():
+def test_select_takes_forge_edges_6_or_more_hours_out_with_fresh_prices():
     log = {
         "edge": _entry("edge"),  # 61 - 54 = +7
         "small": _entry("small", ask1=0.58),  # +3: below the bar
         "elo": _entry("elo", method="elo"),  # not FORGE
         "minor": _entry("minor", home1="LDL", home2="LDL"),  # FORGE outside the majors
         "soon": _entry("soon", start="2026-10-06T14:00Z"),  # 4 hours out
-        "late": _entry("late", start="2026-10-08T10:00Z"),  # 48 hours out
+        "late": _entry("late", start="2026-10-09T10:00Z"),  # 72 hours out: no cap
         "stale": _entry("stale", at="2026-10-05T10:00Z"),  # yesterday's price
         "other": _entry("other", p=0.30, ask2=0.62),  # backs team 2: 70 - 62 = +8
     }
@@ -59,6 +59,7 @@ def test_select_takes_forge_edges_in_the_window_with_fresh_prices():
     assert [(a["entry"]["match_id"], a["side"]) for a in chosen] == [
         ("edge", 1),
         ("other", 2),
+        ("late", 1),
     ]
     assert chosen[0]["edge"] == pytest.approx(0.07)
 

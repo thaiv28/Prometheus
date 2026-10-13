@@ -479,11 +479,16 @@ def missing_results(log, now, teams=None, data_through=None):
     return out
 
 
+# Alert records on a log entry (prometheus/alerts.py), kept when a build refreshes it.
+ALERT_KEYS = ("alert", "paper_alert")
+
+
 def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
     """Fold today's schedule and predictions into the log, in place.
 
     - A match that hasn't started gets today's prediction (replacing any earlier one),
-      stamped with `data_through` (the newest game behind the ratings).
+      stamped with `data_through` (the newest game behind the ratings). It keeps its
+      Kalshi prices until newer ones replace them, and its alert records.
     - A match that has started keeps the prediction it had; if it never had one, it
       gets `reconstruct(match_row)` (a prediction from the ratings the day before),
       marked reconstructed.
@@ -507,6 +512,11 @@ def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
             if old is not None and pred.get("matched"):
                 # Until a newer price replaces them.
                 for key in ("market", "market_12h"):
+                    if key in old:
+                        entry[key] = old[key]
+            if old is not None:
+                # A match is alerted once, at its first price (alerts.record).
+                for key in ALERT_KEYS:
                     if key in old:
                         entry[key] = old[key]
         elif old is not None and old.get("matched"):
@@ -798,6 +808,45 @@ def market_scorecard(entries, min_n=MARKET_MIN_SERIES):
 BET_EDGES = (None, 0.0, 0.03, 0.05, 0.10)
 
 
+def paper_bets(ours, costs, winner, close=None, rate=0.07):
+    """The paper bets on one match, as Table IV makes them: `ours` is our chance
+    for team 1, `costs` what a team-1 and a team-2 contract cost (None when
+    unpriced), `winner` 1 or 2, `close` the market's last chance for team 1 before
+    the start (None when unknown).
+
+    Returns None when neither side has a price, else {"value": the bet on the
+    side whose chance beats its cost by more (taken when that edge clears a
+    row's bar), "pick": the bet on our pick (None when its side is unpriced)}.
+    Each bet has edge (our chance minus cost), won, profit per $1 after Kalshi's
+    fee at `rate`, and clv (the closing chance for that side minus the cost, None
+    without a close).
+    """
+    options = {}
+    for side, cost in zip((1, 2), costs):
+        if cost is None or cost != cost or not 0 < cost < 1:
+            continue
+        options[side] = ((ours if side == 1 else 1 - ours) - cost, cost)
+    if not options:
+        return None
+
+    def bet(side):
+        edge, cost = options[side]
+        won = winner == side
+        shut = close if close is None or side == 1 else 1 - close
+        return {
+            "edge": edge,
+            "won": won,
+            "profit": (1 / cost - 1 if won else -1) - markets.fee(cost, 1, rate),
+            "clv": None if shut is None else shut - cost,
+        }
+
+    pick = 1 if ours >= 0.5 else 2
+    return {
+        "value": bet(max(options, key=lambda side: options[side][0])),
+        "pick": bet(pick) if pick in options else None,
+    }
+
+
 def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
     """Paper bets on settled matches, `markets.BET_LEAD` before the start: $1 on
     our pick in every match (edge None, the row Table III's matches line up
@@ -821,37 +870,15 @@ def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
             continue
         if early.get("ours") is None:
             continue
-        options = {}
-        for side in (1, 2):
-            cost = early.get(f"ask{side}")
-            if cost is None or not 0 < cost < 1:
-                continue
-            ours = early["ours"] if side == 1 else 1 - early["ours"]
-            options[side] = (ours - cost, cost)
-        if not options:
-            continue
-
-        def bet(side, options=options, e=e, close=close):
-            edge, cost = options[side]
-            won = e["winner"] == side
-            shut = close.get("p")
-            if shut is not None and side == 2:
-                shut = 1 - shut
-            return {
-                "edge": edge,
-                "won": won,
-                "profit": (1 / cost - 1 if won else -1) - markets.fee(cost, 1, rate),
-                "clv": None if shut is None else shut - cost,
-            }
-
-        pick = 1 if early["ours"] >= 0.5 else 2
-        bets.append(
-            {
-                "group": _group(e),
-                "value": bet(max(options, key=lambda side: options[side][0])),
-                "pick": bet(pick) if pick in options else None,
-            }
+        made = paper_bets(
+            early["ours"],
+            (early.get("ask1"), early.get("ask2")),
+            e["winner"],
+            close.get("p"),
+            rate,
         )
+        if made is not None:
+            bets.append({"group": _group(e), **made})
 
     def interval(values):
         if len(values) < min_n:

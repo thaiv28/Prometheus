@@ -19,7 +19,7 @@ from pathlib import Path
 import pandas as pd
 
 from prometheus import schedule
-from prometheus.form import form_states, load_form_games, opponent_adjust
+from prometheus.form import load_states
 
 
 def fetch_months(since, until, cache):
@@ -95,7 +95,7 @@ def main():
     )
     sched = fetch_months(since, until, args.schedule_cache)
     print(f"{len(sched)} scheduled matches from {since} to {until}")
-    states = form_states(opponent_adjust(load_form_games()))
+    states = load_states()
     added = extend(log, sched, states, now)
     rated = sum(1 for e in log.values() if e.get("matched"))
     print(f"Added {added} matches; the log now holds {len(log)} ({rated} rated).")

@@ -276,6 +276,9 @@ def load_team_elo():
         rookie_penalty=0,
         rookie_games=0,
         provisional_games=0,
+        away_factor=0,
+        move_down_bonus=0,
+        move_up_penalty=0,
     )
     return records.set_index(["gameid", "teamid"])["pre_match_elo"]
 
@@ -371,7 +374,7 @@ def backtest(games, results, elo_timeline, years):
 
 def form_states():
     """Every team's pre-game Form state for every game (opponent-adjusted stats)."""
-    return form.form_states(form.opponent_adjust(form.load_form_games()))
+    return form.load_states()
 
 
 def _state_gaps(frame, states):

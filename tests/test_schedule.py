@@ -417,6 +417,26 @@ def test_update_log_keeps_the_market_price_until_a_newer_one():
     assert log["m1"]["market_12h"]["p"] == 0.54
 
 
+def test_update_log_keeps_alerts_so_a_rebuild_doesnt_alert_again():
+    log = {}
+    sched = _schedule(
+        [{"match_id": "m1", "start": "2026-10-04 08:00:00", "team1": "A", "team2": "B"}]
+    )
+    first = datetime.datetime(2026, 10, 3, 10, tzinfo=UTC)
+    schedule.update_log(
+        log, sched, [_pred("m1", "2026-10-04T08:00Z")], first, "2026-10-02"
+    )
+    alert = {"side": 1, "p": 0.6, "price": 0.5, "edge": 0.1, "at": "2026-10-03T10:00Z"}
+    log["m1"]["alert"] = alert
+    log["m1"]["paper_alert"] = alert
+    second = datetime.datetime(2026, 10, 3, 20, tzinfo=UTC)
+    schedule.update_log(
+        log, sched, [_pred("m1", "2026-10-04T08:00Z", 0.7)], second, "2026-10-03"
+    )
+    assert log["m1"]["p_game"] == 0.7
+    assert log["m1"]["alert"] == alert and log["m1"]["paper_alert"] == alert
+
+
 def test_attach_market_prices_never_fails_the_build(monkeypatch):
     def boom():
         raise OSError("down")
