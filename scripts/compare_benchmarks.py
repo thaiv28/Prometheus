@@ -67,6 +67,10 @@ ECE_LIMIT = 0.01
 GUARDED_MARKETS = {("series", "all"), ("series", "forge (major)"), ("map1", "all")}
 MARKET_KEY = ["kind", "event_ticker", "team1"]
 N_RESAMPLES = 2000
+# Base and head run on different machines, so identical code can differ by about
+# 1e-16 per row (floating point); over thousands of rows every resample then lands
+# on one side of 0. A difference counts only when its interval clears this.
+TOLERANCE = 1e-6
 FORECAST_KEY = ["section", "forecast", "gameid", "teamid"]
 SEASON_KEY = ["teamname", "year"]
 PLAYER_KEY = ["playerid", "year", "position"]
@@ -76,9 +80,9 @@ ROSTER_KEY = ["teamname", "year", "half"]
 def _verdict(lo, hi, lower_is_better):
     if lower_is_better:
         lo, hi = -hi, -lo
-    if lo > 0:
+    if lo > TOLERANCE:
         return "better"
-    if hi < 0:
+    if hi < -TOLERANCE:
         return "worse"
     return "within noise"
 

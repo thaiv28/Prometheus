@@ -479,11 +479,16 @@ def missing_results(log, now, teams=None, data_through=None):
     return out
 
 
+# Alert records on a log entry (prometheus/alerts.py), kept when a build refreshes it.
+ALERT_KEYS = ("alert", "paper_alert")
+
+
 def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
     """Fold today's schedule and predictions into the log, in place.
 
     - A match that hasn't started gets today's prediction (replacing any earlier one),
-      stamped with `data_through` (the newest game behind the ratings).
+      stamped with `data_through` (the newest game behind the ratings). It keeps its
+      Kalshi prices until newer ones replace them, and its alert records.
     - A match that has started keeps the prediction it had; if it never had one, it
       gets `reconstruct(match_row)` (a prediction from the ratings the day before),
       marked reconstructed.
@@ -507,6 +512,11 @@ def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
             if old is not None and pred.get("matched"):
                 # Until a newer price replaces them.
                 for key in ("market", "market_12h"):
+                    if key in old:
+                        entry[key] = old[key]
+            if old is not None:
+                # A match is alerted once, at its first price (alerts.record).
+                for key in ALERT_KEYS:
                     if key in old:
                         entry[key] = old[key]
         elif old is not None and old.get("matched"):
