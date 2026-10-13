@@ -2,6 +2,7 @@ import datetime
 import math
 from collections import defaultdict
 
+import numpy as np
 import pandas as pd
 from sqlalchemy import text
 
@@ -67,17 +68,40 @@ def expected_score(elo: float, opponent_elo: float) -> float:
     return 1 / (1 + 10 ** ((opponent_elo - elo) / 400))
 
 
-def winner_score(
+def power_winner_score(
     game_length, upper_bound=1.0, lower_bound=0.65, center=30 * 60, steepness=3
 ):
-    """The winner's "actual score" for a game of `game_length` seconds.
-
-    Ranges from `lower_bound` (very long games) to `upper_bound` (very short games);
-    the loser gets 1 minus it. Works on scalars and arrays.
-    """
+    """Original duration curve, retained for Record and historical experiments."""
     return lower_bound + (upper_bound - lower_bound) / (
         1 + (game_length / center) ** steepness
     )
+
+
+def winner_score(
+    game_length,
+    upper_bound=1.0,
+    lower_bound=0.65,
+    center=30 * 60,
+    steepness=None,
+    transition=5 * 60,
+):
+    """Elo's duration evidence: a steep transition around 30 minutes.
+
+    Very short wins approach 1; very long wins approach .65. The loser receives
+    the complement. Scalars and arrays are supported. An explicit `steepness`
+    retains the historical power curve for existing research configurations.
+    Record calls `power_winner_score` directly to preserve its season definition.
+    """
+    if steepness is not None:
+        return power_winner_score(
+            game_length, upper_bound, lower_bound, center, steepness
+        )
+    if transition <= 0:
+        raise ValueError("Duration transition must be positive")
+    midpoint = (upper_bound + lower_bound) / 2
+    amplitude = (upper_bound - lower_bound) / 2
+    squash = math.tanh if np.isscalar(game_length) else np.tanh
+    return midpoint + amplitude * squash((center - game_length) / transition)
 
 
 def calculate_game_length_elo_change(
@@ -88,8 +112,9 @@ def calculate_game_length_elo_change(
     upper_bound=1.0,
     lower_bound=0.65,
     center=30 * 60,
-    steepness=3,
+    steepness=None,
     K=20,
+    transition=5 * 60,
 ):
     """Calculate the Elo change for a team based on game length.
 
@@ -106,7 +131,9 @@ def calculate_game_length_elo_change(
     Returns:
         Elo change for the team. The opponent's change is the negation.
     """
-    score = winner_score(game_length, upper_bound, lower_bound, center, steepness)
+    score = winner_score(
+        game_length, upper_bound, lower_bound, center, steepness, transition
+    )
     actual = score if result else 1 - score
 
     return K * (actual - expected_score(elo, opponent_elo))

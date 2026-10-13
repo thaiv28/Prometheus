@@ -24,7 +24,7 @@ from scipy import sparse
 from sklearn.linear_model import LogisticRegression
 from sqlalchemy import text
 
-from prometheus.elo import winner_score
+from prometheus.elo import power_winner_score
 from prometheus.regression import fit_glory_pipeline
 from prometheus.types import ALL_MAJOR_LEAGUES, GLORY_FEATURES, INTERNATIONAL_LEAGUES
 from prometheus.utils import get_engine
@@ -109,7 +109,7 @@ def fit_record(games, prior_sd=RECORD_PRIOR_SD):
         ),
         shape=(n, len(teams)),
     )
-    score = winner_score(games["gamelength"].to_numpy(dtype=float))
+    score = power_winner_score(games["gamelength"].to_numpy(dtype=float))
     soft = np.where(games["result"].to_numpy() == 1, score, 1 - score)
     model = LogisticRegression(C=prior_sd**2, fit_intercept=False, max_iter=1000)
     model.fit(

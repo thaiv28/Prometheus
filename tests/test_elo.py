@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -23,6 +24,23 @@ OFF = {
 
 def compute_elo_records(games, *args, **kwargs):
     return elo.compute_elo_records(games, *args, **{**OFF, **kwargs})
+
+
+def test_duration_curve_has_frozen_midpoint_and_transition():
+    # Guard the approved evidence curve, including vector/scalar parity.
+    lengths = np.array([1200, 1500, 1800, 2100, 2400])
+    expected = [0.9937048265, 0.9582789773, 0.825, 0.6917210227, 0.6562951735]
+    np.testing.assert_allclose(elo.winner_score(lengths), expected, atol=1e-9)
+    assert elo.winner_score(1800) == pytest.approx(0.825)
+    assert elo.winner_score(1500) + elo.winner_score(2100) == pytest.approx(1.65)
+    with pytest.raises(ValueError, match="positive"):
+        elo.winner_score(1800, transition=0)
+
+
+def test_original_curve_remains_explicit_for_season_stats_and_research():
+    assert elo.power_winner_score(1200) == pytest.approx(0.92)
+    assert elo.winner_score(1200, steepness=3) == pytest.approx(0.92)
+    assert elo.winner_score(1200) > elo.power_winner_score(1200)
 
 
 def test_equal_ratings_win_and_loss_are_symmetric():
