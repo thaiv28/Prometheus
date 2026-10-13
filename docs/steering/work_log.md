@@ -2,6 +2,28 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-12 — Research records: Form stat weights and blue side
+
+Branch `research-records`, based on `main` (19014c9). Docs only: the two tests from the 2026-10-12 assumption review that shipped nothing, `docs/research/form_weights_fit.md` and `docs/research/blue_side.md`, with their Status lines and work-log entries (below). Their scripts and off-by-default options stay on branches `form-weights` and `blue-side` (pushed, not merged), so `elo.py` and `form.py` don't carry unused options. Checks: `uv run pytest -q`, links in the two Status lines checked.
+
+## 2026-10-12 — Blue side in Elo and our calls: tested, not shipped
+
+Branch `blue-side`, based on `main` (a2f7d37).
+
+- **Elo (`prometheus/elo.py`):** `compute_elo_records` options `side_advantage` (points blue's expected score counts above red's in the update; a number or by tier, major leagues and international events vs the rest) and `side_rate` (learn each tier's advantage online from blue's changes), off by default; stored ratings stay neutral. `load_elo_games` now also returns `side`, which the default replay ignores. `scripts/research/elo_variants.py` passes it through.
+- **Research:** `scripts/research/blue_side.py`, report `docs/research/blue_side.md`, tests `tests/research/test_blue_side.py` and three in `tests/test_elo.py`. Grids fixed in advance, tuned on 2014–2021 (domestic + within-other-league Elo log loss), held out 2022–2026 against published Elo (rookie discount on). One advantage (20): Elo domestic −0.0001 (−0.0004 to +0.0002), international +0.0002 (−0.0010 to +0.0014), other leagues +0.0001 (−0.0001 to +0.0003), cross-league +0.0003 (−0.0002 to +0.0008); by tier (30/20) and learned (rate 0.05) the same within ±0.0005, the learned one significantly worse cross-league (+0.0004, +0.0001 to +0.0008). FORGE moves the same way. Fails the forecast rule.
+- **Calls:** game 1's side isn't knowable before a match: Leaguepedia's `team1` was blue in game 1 in 56% of 394 logged matches matched to Oracle's Elixir (LAS 90%, VCS 87%, the rest near half). Later games follow the loser's pick, whose preferred side changes by season (loser on blue in major-league games: 92% in 2025, 21% in 2026), and a side term moves a series chance by under 0.001. No map-1 market test was possible without game 1's side. Nothing changed in calls.
+- Checks: `uv run pytest -q`; `ruff format`, `ruff check`; the replay with defaults is unchanged (`test_side_advantage_off_by_default_and_without_side_column`).
+
+## 2026-10-12 — Form's stat weights: ridge, fewer stats, other-league and pooled fits (not shipped)
+
+Branch `form-weights`, based on `main` (a2f7d37).
+
+- **Options** (`prometheus/form.py`, defaults unchanged): `fit_form_weights(..., C=)` (L2 penalty on standardised gaps), `scores(..., other_weights=, majors=)` (rows whose home league isn't a major scored with a second set). Unit tests in `tests/test_form.py`.
+- **Research** (`scripts/research/form_weights_fit.py`, report `docs/research/form_weights_fit.md`): grid fixed in advance (C 1e6/1/0.1/0.01 × all stats / no first-objective flags / gold + per-10 rates × fit on major, other-league or pooled games, plus blends of other-league and major weights at 0.25/0.5/0.75). Tuned on ≤2021 (Form weights and FORGE curves fit only on those seasons), majors chosen by domestic FORGE, then other leagues by FORGE within other leagues. Held out 2022–2026 (weights fit on every other season, as the backtest does), paired bootstrap vs the current fit.
+- **Result.** Every design moves log loss by 0.0003 or less. Ridge 0.0000. Chosen (majors pooled, other leagues pooled without first flags): domestic FORGE +0.0001 (−0.0002 to +0.0004), international 0, domestic Form alone +0.0003 (−0.0004 to +0.0010), within other leagues −0.0003 (−0.0004 to −0.0001); pooled everywhere the same. It passes the rule's letter within other leagues; not shipped for a gain of about 2% of the rookie discount's (left for the combined decision). The negative weights survive ridge.
+- Checks: the research run (about 2.5 min), `uv run pytest -q`, `ruff format`, `ruff check`.
+
 ## 2026-10-12 — FORGE: roster-aware Form, time-away moves, move-down bonus and log rookie curve shipped together
 
 Branch `forge-combined`, based on `main` (a2f7d37), with the commits of `form-roster`, `elo-k`, `league-move-direction` and `elo-experience` (their entries below).
