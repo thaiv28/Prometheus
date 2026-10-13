@@ -153,6 +153,67 @@ Each bet buys $1 of a team's contract 12 hours before the scheduled start at the
 | Value, edge > 0.10 | Taker 7% | 250 | 147 | +25.86 | +10.3% (-4.2% to +24.6%) | +3.26 (+1.75 to +4.71) | 68% |
 | Value, edge > 0.10 | None (also resting orders) | 250 | 147 | +35.69 | +14.3% (-0.2% to +28.5%) | +3.26 (+1.75 to +4.71) | 68% |
 
+## Alerts by lead time
+
+How early an alert can go out. At each lead, our call is rebuilt from games before the day the bet is placed (not the match day, which would know games played after the bet), against the market's price then. Value bets: $1 where our chance beats the cost by more than 5 points, at the 7% taker fee; CLV against the closing price. *Own matches* uses every match priced at that lead; *same matches* only those priced at every lead to 48 hours, so the rows compare like with like. Leads and edge were fixed before looking at the results.
+
+**All, own matches**
+
+| Lead | Series | Δ log loss, ours − market (95%) | Our weight beside it (95%) | Value bets | ROI (95%) | CLV, points (95%) | Beat close |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 12 hours | 1781 | +0.0133 (+0.0011 to +0.0246) | 0.31 (0.12 to 0.54) | 908 | +2.3% (-6.9% to +11.4%) | +0.97 (+0.26 to +1.63) | 57% |
+| 24 hours | 1376 | +0.0095 (-0.0029 to +0.0228) | 0.35 (0.10 to 0.59) | 678 | +2.2% (-7.8% to +12.3%) | +2.08 (+1.29 to +2.88) | 62% |
+| 36 hours | 1256 | +0.0072 (-0.0056 to +0.0202) | 0.38 (0.16 to 0.61) | 609 | -1.1% (-11.0% to +8.9%) | +2.31 (+1.48 to +3.11) | 63% |
+| 48 hours | 1113 | +0.0067 (-0.0073 to +0.0208) | 0.38 (0.14 to 0.63) | 529 | -1.3% (-11.6% to +9.2%) | +2.75 (+1.84 to +3.66) | 66% |
+| 72 hours | 831 | -0.0149 (-0.0290 to -0.0012) | 0.84 (0.53 to 1.17) | 385 | +11.5% (-0.5% to +23.5%) | +2.95 (+1.84 to +4.01) | 64% |
+
+**FORGE (same major league), own matches**
+
+| Lead | Series | Δ log loss, ours − market (95%) | Our weight beside it (95%) | Value bets | ROI (95%) | CLV, points (95%) | Beat close |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 12 hours | 564 | +0.0066 (-0.0095 to +0.0238) | 0.30 (-0.15 to 0.79) | 239 | +8.5% (-10.5% to +27.1%) | +0.17 (-0.84 to +1.20) | 57% |
+| 24 hours | 502 | -0.0042 (-0.0212 to +0.0124) | 0.64 (0.10 to 1.18) | 211 | +10.7% (-7.7% to +29.3%) | +2.55 (+1.41 to +3.77) | 66% |
+| 36 hours | 496 | -0.0012 (-0.0184 to +0.0171) | 0.53 (0.07 to 0.98) | 208 | +7.7% (-10.8% to +28.9%) | +2.00 (+0.86 to +3.13) | 61% |
+| 48 hours | 470 | -0.0033 (-0.0220 to +0.0151) | 0.59 (0.11 to 1.11) | 197 | +9.7% (-9.0% to +31.3%) | +2.99 (+1.65 to +4.30) | 68% |
+| 72 hours | 417 | -0.0215 (-0.0401 to -0.0020) | 1.08 (0.53 to 1.57) | 177 | +19.7% (-0.2% to +39.5%) | +3.42 (+1.93 to +4.99) | 66% |
+
+**FORGE (same other league), own matches**
+
+| Lead | Series | Δ log loss, ours − market (95%) | Our weight beside it (95%) | Value bets | ROI (95%) | CLV, points (95%) | Beat close |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 12 hours | 979 | +0.0103 (-0.0056 to +0.0262) | 0.30 (0.03 to 0.60) | 508 | +0.5% (-9.0% to +10.0%) | +1.65 (+0.74 to +2.49) | 60% |
+| 24 hours | 762 | +0.0152 (-0.0017 to +0.0327) | 0.17 (-0.13 to 0.49) | 395 | -2.8% (-13.3% to +7.4%) | +1.91 (+0.90 to +2.91) | 63% |
+| 36 hours | 676 | +0.0071 (-0.0111 to +0.0257) | 0.34 (0.03 to 0.64) | 346 | -3.9% (-14.6% to +6.8%) | +2.89 (+1.76 to +4.12) | 66% |
+| 48 hours | 592 | +0.0087 (-0.0125 to +0.0292) | 0.32 (-0.03 to 0.67) | 297 | -4.4% (-15.8% to +7.6%) | +2.73 (+1.42 to +3.99) | 68% |
+| 72 hours | 386 | -0.0096 (-0.0296 to +0.0104) | 0.62 (0.24 to 1.10) | 192 | +4.4% (-9.7% to +18.6%) | +2.43 (+1.07 to +3.79) | 64% |
+
+**All, same matches**
+
+| Lead | Series | Δ log loss, ours − market (95%) | Our weight beside it (95%) | Value bets | ROI (95%) | CLV, points (95%) | Beat close |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 12 hours | 1067 | +0.0126 (-0.0005 to +0.0253) | 0.23 (-0.09 to 0.54) | 516 | -5.3% (-15.6% to +5.5%) | +0.95 (+0.08 to +1.82) | 57% |
+| 24 hours | 1067 | +0.0090 (-0.0048 to +0.0230) | 0.32 (0.01 to 0.63) | 510 | -0.8% (-11.2% to +10.5%) | +1.98 (+1.09 to +2.89) | 64% |
+| 36 hours | 1067 | +0.0067 (-0.0070 to +0.0212) | 0.38 (0.10 to 0.67) | 512 | -1.9% (-12.6% to +9.3%) | +2.32 (+1.36 to +3.27) | 63% |
+| 48 hours | 1067 | +0.0048 (-0.0097 to +0.0206) | 0.42 (0.14 to 0.71) | 510 | -0.2% (-10.4% to +10.0%) | +2.72 (+1.77 to +3.67) | 66% |
+
+**FORGE (same major league), same matches**
+
+| Lead | Series | Δ log loss, ours − market (95%) | Our weight beside it (95%) | Value bets | ROI (95%) | CLV, points (95%) | Beat close |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 12 hours | 461 | -0.0007 (-0.0169 to +0.0161) | 0.55 (-0.01 to 1.14) | 192 | +8.1% (-11.1% to +30.1%) | +0.44 (-0.66 to +1.54) | 55% |
+| 24 hours | 461 | -0.0035 (-0.0208 to +0.0140) | 0.63 (0.08 to 1.22) | 192 | +10.7% (-9.6% to +30.7%) | +2.46 (+1.18 to +3.73) | 65% |
+| 36 hours | 461 | -0.0031 (-0.0212 to +0.0155) | 0.60 (0.09 to 1.14) | 196 | +8.2% (-12.9% to +29.9%) | +2.04 (+0.88 to +3.24) | 61% |
+| 48 hours | 461 | -0.0042 (-0.0237 to +0.0158) | 0.62 (0.13 to 1.17) | 195 | +10.1% (-8.7% to +31.6%) | +3.01 (+1.63 to +4.38) | 68% |
+
+**FORGE (same other league), same matches**
+
+| Lead | Series | Δ log loss, ours − market (95%) | Our weight beside it (95%) | Value bets | ROI (95%) | CLV, points (95%) | Beat close |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 12 hours | 556 | +0.0164 (-0.0013 to +0.0357) | 0.11 (-0.27 to 0.49) | 290 | -8.3% (-20.2% to +3.5%) | +1.40 (+0.14 to +2.57) | 59% |
+| 24 hours | 556 | +0.0152 (-0.0034 to +0.0353) | 0.14 (-0.23 to 0.50) | 285 | -4.7% (-16.4% to +6.7%) | +1.45 (+0.20 to +2.64) | 64% |
+| 36 hours | 556 | +0.0094 (-0.0106 to +0.0300) | 0.29 (-0.09 to 0.64) | 284 | -5.0% (-16.7% to +6.8%) | +2.43 (+1.16 to +3.67) | 65% |
+| 48 hours | 556 | +0.0063 (-0.0147 to +0.0280) | 0.35 (-0.01 to 0.72) | 281 | -3.0% (-14.8% to +8.7%) | +2.58 (+1.19 to +3.87) | 68% |
+
 ## Does our call add to the market?
 
 Logistic fit of the series result on the market's log-odds at the close and ours, without an intercept. A weight of 1 on the market and 0 on ours means we add nothing it doesn't already price.
