@@ -2,7 +2,7 @@
 compare_benchmarks.py: Compare two benchmark dumps (base and head) on the same units.
 
 Reads the `--dump` output of `evaluate_metrics.py`, `evaluate_season_stats.py`,
-`evaluate_aura.py` and `evaluate_markets.py` for two versions of the code, pairs them on shared keys (games,
+`evaluate_aura.py`, `evaluate_markets.py` and `evaluate_props.py` for two versions of the code, pairs them on shared keys (games,
 team-seasons, player-seasons) and reports each headline difference with a 95%
 paired-bootstrap interval:
 
@@ -17,6 +17,8 @@ paired-bootstrap interval:
 - Betting (report only, never guarded): the Predictions page's Table IV paper
   bets (`schedule.paper_bets`, $1 12 hours out, 7% fee) by edge, base and head on
   the same series, with head minus base return and CLV over markets.
+- Props: held-out log score of the prop projections per measure (one map per
+  stat, series kills and assists), head minus base, resampling matches.
 
 A line is "better" or "worse" when its interval lies entirely on one side of 0,
 otherwise "within noise". The exit code is 1 when a guarded value is significantly
@@ -66,6 +68,8 @@ ECE_LIMIT = 0.01
 # series, FORGE within a major league (the calls the alerts use), and map 1.
 GUARDED_MARKETS = {("series", "all"), ("series", "forge (major)"), ("map1", "all")}
 MARKET_KEY = ["kind", "event_ticker", "team1"]
+# Prop projections (on the Props page): every measure evaluate_props.py dumps.
+PROPS_KEY = ["measure", "unit"]
 N_RESAMPLES = 2000
 # Base and head run on different machines, so identical code can differ by about
 # 1e-16 per row (floating point); over thousands of rows every resample then lands
@@ -547,6 +551,35 @@ def render_betting(rows):
     return lines
 
 
+def compare_props(base, head, n_resamples=N_RESAMPLES):
+    """Log score per measure on the units both dumps scored, resampling matches."""
+    rows = []
+    for measure in sorted(set(base["measure"]) | set(head["measure"])):
+        both, only = _pair(
+            base[base["measure"] == measure],
+            head[head["measure"] == measure],
+            PROPS_KEY,
+        )
+        if both.empty:
+            rows.append(_missing("Props", f"{measure} log score", True, only))
+            continue
+        b = both["loss_base"].to_numpy()[:, None]
+        h = both["loss_head"].to_numpy()[:, None]
+        rows.append(
+            _row(
+                "Props",
+                f"{measure} log score ({len(both):,})",
+                b.mean(),
+                h.mean(),
+                _rows_bootstrap(np.mean, b, h, both["match_head"], n_resamples),
+                True,
+                True,
+                only,
+            )
+        )
+    return rows
+
+
 def failures(rows):
     """Guarded rows that are significantly worse, or an ECE over the limit."""
     return [
@@ -573,7 +606,7 @@ def render(sections, notes=()):
     for title, part in sections:
         if not part or title == "Betting":
             continue
-        digits = 4 if title in ("Forecasts", "Markets") else 3
+        digits = 4 if title in ("Forecasts", "Markets", "Props") else 3
         lines += [
             "",
             f"#### {title}",
@@ -601,7 +634,7 @@ def render(sections, notes=()):
         "",
         "Bold measures are guarded: the check fails when one is significantly worse "
         "(its interval entirely on the bad side) or AURA's ECE is above "
-        f"{ECE_LIMIT}. Lower log loss and higher r are better.",
+        f"{ECE_LIMIT}. Lower log loss and log score and higher r are better.",
     ]
     return "\n".join(lines)
 
@@ -668,13 +701,20 @@ def compare_dirs(base_dir, head_dir, n_resamples=N_RESAMPLES):
             "Market benchmark: missing from one side (no Kalshi cache in CI yet, "
             "or the base can't dump it), not compared."
         )
+
+    b, h = (_read(sub(d, "props"), "scores.csv.gz") for d in (base_dir, head_dir))
+    if b is not None and h is not None:
+        sections.append(("Props", compare_props(b, h, n_resamples)))
+    else:
+        notes.append("Prop projections: missing from one side, not compared.")
     return sections, notes
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
-        "base", help="Base dump directory (metrics/, season/, aura/, markets/ inside)"
+        "base",
+        help="Base dump directory (metrics/, season/, aura/, markets/, props/ inside)",
     )
     parser.add_argument("head", help="Head dump directory (same layout)")
     parser.add_argument("--out", help="Also write the report to this Markdown file")

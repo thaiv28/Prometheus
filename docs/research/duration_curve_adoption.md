@@ -1,12 +1,12 @@
-# Fixed duration curve: current-main adoption checks (2026-10-13)
+# Fixed duration curve: latest-main adoption checks (2026-10-13)
 
-Baseline: main b4e3681, including roster-aware Form, time-away updates, the move-down bonus and log rookie curve from PR #49. Both databases use the same 205,701 team-game rows. The only production algorithm difference is Elo’s frozen `0.825 + 0.175 * tanh((1800 - seconds) / 300)` curve; current K, experience, league-move and roster handling are retained. Record explicitly keeps its original power curve. Candidate Form/FORGE weights and league slopes are refitted.
+Baseline: main 3b0e33f, including the combined FORGE/Elo changes and new player props. Both databases were rebuilt with the current schema on 205,701 team-game rows. Forecast/season/AURA/market results below were generated against b4e3681; PR #52 adds player-total columns and props without changing those algorithms. Its freshly rebuilt props scores are also paired below, and all five protected benchmark groups pass. Candidate Form/FORGE weights and league slopes are refitted; Record keeps its original power curve.
 
-The native full-history comparison below improves international, cross-league and within-other-league forecasts significantly and passes every protected guard. [Completion gates](duration_curve_gates.md), rerun on the same current-model defaults, confirm international and other-league gains with earlier-only fits and team-pair/day clustering; the 2022+ cross-league difference is inside noise under those stricter checks. Frozen-through-2024 map-1 calls show no significant regression. All evidence remains retrospective because the candidate originated in an attribution ablation on already examined years.
+International, cross-league and other-league gains are significant in the full native forecast benchmark. [Completion gates](duration_curve_gates.md) on the combined model confirm international and other-league gains under earlier-only fitting and team-pair/day clustering; the 2022+ cross-league difference is within noise there. Map-1 markets and the new prop projections have no significant regression. These are retrospective findings, not a newly untouched holdout.
 
-Markets use a fixed saved priced cohort of 2,398 series and 1,444 map-1 markets. Every prediction is rebuilt with `form.load_states()` and each version’s database/tracked weights; cached predictions are unused and prices/outcomes are preserved. The incomplete local candle cache cannot support a fresh ordinary offline market run, so no new prices were fetched. Protected GLORY, Record and AURA values are unchanged; sunset GLORY+ loses some other-half fit (unguarded).
+Markets use the same saved cohort of 2,398 priced series / 1,444 maps, rebuilding every prediction through roster-aware `form.load_states()` and each version’s database/weights. Cached predictions are unused. Local candle inputs are incomplete; no new prices are fetched. Published GLORY/Record/AURA guards are unchanged; sunset GLORY+ other-half fit worsens (unguarded).
 
-Checks: both databases rebuilt, all four benchmark dumps compared, weights refitted and checked, 351 tests, Ruff formatting/lint, local site build with saved log/prices. CI checks gate the requested PR merge; no override is planned. Original a2f7d37 results remain in the dated research reports and earlier work-log entries.
+Verification includes DB rebuilds, all five benchmark groups, 382 tests after PR #52, Ruff formatting/lint and local site builds. Scalar `math.tanh` avoids NumPy scalar propagation through player ratings: measured full replay 3.535s power versus 3.502s candidate on 102,844 games (before that optimization, tanh 3.915s). No new benchmark or workflow step is added. CI is required before the requested merge.
 
 **Benchmarks: no guarded value is significantly worse.**
 
@@ -75,6 +75,19 @@ Checks: both databases rebuilt, all four benchmark dumps compared, weights refit
 | Markets | series log loss, other (347) | 0.5672 | 0.5668 | -0.0004 (-0.0071 to +0.0061) | within noise | 0 / 0 |
 | Markets | **map1 log loss, all (1,444)** | 0.6148 | 0.6147 | -0.0001 (-0.0017 to +0.0016) | within noise | 0 / 0 |
 
+#### Props
+
+| Section | Measure | Base | Head | Head − base (95% CI) | Result | Unpaired (base / head) |
+|---|---|---:|---:|---|---|---:|
+| Props | **Bo3 maps 1-2 assists log score (16,741)** | 3.1604 | 3.1598 | -0.0006 (-0.0018 to +0.0005) | within noise | 0 / 0 |
+| Props | **Bo3 maps 1-2 kills log score (16,741)** | 2.4407 | 2.4404 | -0.0003 (-0.0008 to +0.0002) | within noise | 0 / 0 |
+| Props | **Bo5 maps 1-3 assists log score (4,792)** | 3.4471 | 3.4470 | -0.0001 (-0.0032 to +0.0028) | within noise | 0 / 0 |
+| Props | **Bo5 maps 1-3 kills log score (4,792)** | 2.6989 | 2.6989 | -0.0000 (-0.0015 to +0.0014) | within noise | 0 / 0 |
+| Props | **map assists log score (64,050)** | 2.7403 | 2.7399 | -0.0004 (-0.0009 to +0.0001) | within noise | 0 / 0 |
+| Props | **map cs log score (64,050)** | 5.1860 | 5.1860 | +0.0000 (-0.0000 to +0.0000) | within noise | 0 / 0 |
+| Props | **map deaths log score (64,050)** | 1.9674 | 1.9672 | -0.0003 (-0.0006 to +0.0001) | within noise | 0 / 0 |
+| Props | **map kills log score (64,050)** | 1.9996 | 1.9995 | -0.0002 (-0.0004 to +0.0000) | within noise | 0 / 0 |
+
 #### Betting (report only)
 
 $1 on our side 12 hours before the start, as the Predictions page's Table IV: our pick in every series (Any), or where our chance beat Kalshi's price by more than the edge. Return is per $1 after the 7% fee; CLV is the closing price minus the price paid, in points. Never fails the check.
@@ -97,4 +110,4 @@ $1 on our side 12 hours before the start, as the Predictions page's Table IV: ou
 | Other (1,610) | > 5 | 727 / 746 | +5.2 / +8.4 | +3.3 (-0.3 to +7.0) | +1.4 / +1.5 | +0.2 (-0.1 to +0.5) | 55.6 / 57.6 |
 | Other (1,610) | > 10 | 405 / 426 | +14.5 / +16.8 | +2.3 (-2.7 to +7.3) | +2.3 / +2.3 | +0.0 (-0.3 to +0.4) | 61.5 / 60.3 |
 
-Bold measures are guarded: the check fails when one is significantly worse (its interval entirely on the bad side) or AURA's ECE is above 0.01. Lower log loss and higher r are better.
+Bold measures are guarded: the check fails when one is significantly worse (its interval entirely on the bad side) or AURA's ECE is above 0.01. Lower log loss and log score and higher r are better.

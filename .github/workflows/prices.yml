@@ -73,3 +73,31 @@ jobs:
         if: steps.busy.outputs.busy == 'false' && hashFiles('data/kalshi_alert.json') != ''
         continue-on-error: true
         run: bash scripts/post_kalshi_alert.sh
+
+  # The pick'em apps' LoL prop lines (scripts/collect_props.py), appended to a log in
+  # the backup bucket. Its own job: it writes only its own file, so it runs even
+  # while the site is being published, and a source refusing never fails the run.
+  props-lines:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: prop-lines
+      cancel-in-progress: false
+    env:
+      PROP_LINES_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/props/prop_lines.jsonl
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+      - name: Restore the lines log
+        run: bash scripts/prop_data.sh restore data/prop_lines.jsonl "$PROP_LINES_BACKUP"
+      - name: Read the apps' lines
+        run: uv run --no-dev python scripts/collect_props.py --log data/prop_lines.jsonl
+      - name: Save the lines log
+        run: bash scripts/prop_data.sh save data/prop_lines.jsonl "$PROP_LINES_BACKUP"

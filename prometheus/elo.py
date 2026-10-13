@@ -100,7 +100,8 @@ def winner_score(
         raise ValueError("Duration transition must be positive")
     midpoint = (upper_bound + lower_bound) / 2
     amplitude = (upper_bound - lower_bound) / 2
-    return midpoint + amplitude * np.tanh((center - game_length) / transition)
+    squash = math.tanh if np.isscalar(game_length) else np.tanh
+    return midpoint + amplitude * squash((center - game_length) / transition)
 
 
 def calculate_game_length_elo_change(

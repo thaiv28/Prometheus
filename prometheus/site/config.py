@@ -254,6 +254,21 @@ PREDICTIONS = {
     ],
     "caveats": "Schedule from Leaguepedia; teams Oracle's Elixir doesn't cover aren't shown. Calls ignore side selection, roster changes and new patches. Times are local.",
 }
+PROPS = {
+    "key": "props",
+    "name": "Props",
+    "full_name": "Projections against the pick'em lines",
+    "question": "Over or under?",
+    "description": "Each starter's kills, assists, deaths and CS against the Underdog, PrizePicks and Pick6 lines.",
+    "how_to_read": [
+        "Ours: our median over the maps the line counts; the range holds 8 times in 10.",
+        "Last 10: the player's average over their last 10 maps, times the maps counted.",
+        "Bar: our chance of the over. The ticks mark break-even, 58 in 100 for a two-pick entry paying 3×.",
+        "Pick: the better side the app offers, and our chance it wins; bold when it clears break-even.",
+        "A player who plays none of the counted maps voids the line.",
+    ],
+    "caveats": "Starters are each team's last lineup. Not yet tested against these lines; the record starts 12 October 2026.",
+}
 # The home page lists this many upcoming major-league and international matches,
 # within this many days.
 HOME_FIXTURES = 10
@@ -520,3 +535,10 @@ AURA_COLUMNS = [
 ROLE_ORDER = ["top", "jng", "mid", "bot", "sup"]
 # Past-roster cells list the main starter and at most this many others.
 ROSTER_EXTRAS = 3
+# Pick'em lines read by scripts/collect_props.py, and our saved calls on them.
+PROP_LINES = os.environ.get(
+    "PROP_LINES", os.path.join(ROOT_DIR, "data", "prop_lines.jsonl")
+)
+PROP_CALLS = os.environ.get(
+    "PROP_CALLS", os.path.join(ROOT_DIR, "data", "prop_calls.json")
+)

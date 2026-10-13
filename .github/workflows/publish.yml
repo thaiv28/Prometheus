@@ -75,6 +75,8 @@ jobs:
       CAN_USE_AWS: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
       DATA_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/oracles-elixir/
       PREDICTIONS_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/predictions/predictions.json
+      PROP_LINES_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/props/prop_lines.jsonl
+      PROP_CALLS_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/props/prop_calls.json
       MARKET_PRICES_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/markets/market_prices.json
     steps:
       - uses: actions/checkout@v7
@@ -165,6 +167,13 @@ jobs:
       # Kalshi's last price before each past series, for the game logs on team and
       # player pages (scripts/export_market_prices.py, uploaded by hand). Without it
       # the logs show only the prices saved in the prediction log.
+      # The pick'em lines log (read hourly by the prices workflow) and our saved calls
+      # on those lines, for the Props page (scripts/prop_data.sh).
+      - name: Restore the props data
+        if: env.CAN_USE_AWS == 'true'
+        run: |
+          bash scripts/prop_data.sh restore data/prop_lines.jsonl "$PROP_LINES_BACKUP"
+          bash scripts/prop_data.sh restore data/prop_calls.json "$PROP_CALLS_BACKUP"
       - name: Restore Kalshi prices
         if: env.CAN_USE_AWS == 'true'
         run: aws s3 cp "$MARKET_PRICES_BACKUP" data/market_prices.json --only-show-errors || echo "No saved Kalshi prices."
@@ -193,6 +202,9 @@ jobs:
       - name: Save the prediction log
         if: env.CAN_USE_AWS == 'true' && hashFiles('data/predictions.json') != ''
         run: bash scripts/prediction_log.sh save
+      - name: Save the props calls
+        if: env.CAN_USE_AWS == 'true' && hashFiles('data/prop_calls.json') != ''
+        run: bash scripts/prop_data.sh save data/prop_calls.json "$PROP_CALLS_BACKUP"
       # The build writes data/kalshi_alert.json when FORGE beats Kalshi's ask by 5+
       # points on a match 6+ hours out (prometheus/alerts.py); post it as the day's
       # issue (scripts/post_kalshi_alert.sh). The hourly prices workflow does the same
