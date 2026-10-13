@@ -47,6 +47,11 @@ ELO_SCALE = 400 / math.log(10)
 HALF_LIFE = 20
 CARRY = 0.5
 PRIOR_GAMES = 5
+# When a team's lineup changes, its carried state is scaled by the share of starters
+# kept ** ROSTER_POWER (at every lineup change and at a new season, on top of CARRY).
+# Tested in scripts/research/form_roster.py.
+ROSTER_POWER = 0.5
+ROSTER_AT = "change"
 
 
 def load_form_games(before=None):
@@ -120,11 +125,22 @@ def form_states(
     half_life=HALF_LIFE,
     carry=CARRY,
     prior_games=PRIOR_GAMES,
+    rosters=None,
+    roster_power=ROSTER_POWER,
+    roster_at=ROSTER_AT,
 ):
     """Each team's Form state before and after every game.
 
     Args:
         games: Opponent-adjusted `load_form_games` rows, oldest first.
+        rosters: Optional {(gameid, teamid): starters} (`elo.load_rosters`). With it,
+            a team's carried state is also scaled by retained ** `roster_power`,
+            retained being the share of this game's starters who started its
+            previous game (a game without a roster keeps the last one): at a new
+            season only (`roster_at="season"`, on top of `carry`) or at every
+            lineup change (`roster_at="change"`, the default). Without
+            rosters (unit tests) the state ignores lineups. `load_states` passes
+            them.
     Returns:
         DataFrame aligned with `games`: gameid, teamid, teamname, league, year, date,
         home (the domestic league it has played most this season so far; its last
@@ -140,25 +156,38 @@ def form_states(
     # A missing stat counts as an average game for that stat.
     values = np.where(np.isnan(values), prior_rows, values)
     teams = games["teamid"].to_numpy()
+    gameids = games["gameid"].to_numpy()
     years = games["year"].to_numpy()
     leagues = games["league"].to_numpy()
     domestic = ~games["league"].isin(INTERNATIONAL_LEAGUES).to_numpy()
 
     sums, weights, last_year = {}, {}, {}
     league_games, home_of = {}, {}
+    last_roster = {}
     pre = np.empty_like(values)
     post = np.empty_like(values)
     seen = np.empty(len(games))
     home = np.empty(len(games), dtype=object)
     for i in range(len(games)):
         team = teams[i]
+        keep = 1.0
+        if rosters is not None:
+            previous = last_roster.get(team)
+            roster = rosters.get((gameids[i], team)) or previous
+            if previous and roster:
+                retained = len(set(roster) & set(previous)) / len(roster)
+                keep = retained**roster_power
+            last_roster[team] = roster
         if team not in sums:
             sums[team] = np.zeros(len(features))
             weights[team] = 0.0
         elif last_year[team] != years[i]:
-            sums[team] = sums[team] * carry
-            weights[team] *= carry
+            sums[team] = sums[team] * carry * keep
+            weights[team] *= carry * keep
             league_games[team] = {}
+        elif roster_at == "change" and keep < 1.0:
+            sums[team] = sums[team] * keep
+            weights[team] *= keep
         last_year[team] = years[i]
         # Home league: the domestic league it has played most this season, so a
         # winter cup or an international event doesn't change it.
@@ -191,6 +220,14 @@ def form_states(
         axis=1,
     )
     return out
+
+
+def load_states(before=None):
+    """Every team's Form state before and after every game, as the site builds it:
+    opponent-adjusted stats, carried state scaled by lineup changes."""
+    from prometheus.elo import load_rosters
+
+    return form_states(opponent_adjust(load_form_games(before)), rosters=load_rosters())
 
 
 def fit_form_weights(gaps, won):
@@ -237,6 +274,8 @@ def save_weights(weights, path=WEIGHTS_PATH):
         "half_life": HALF_LIFE,
         "carry": CARRY,
         "prior_games": PRIOR_GAMES,
+        "roster_power": ROSTER_POWER,
+        "roster_at": ROSTER_AT,
         "weights": {f: round(float(w), 6) for f, w in weights.items()},
     }
     Path(path).write_text(json.dumps(data, indent=2) + "\n")

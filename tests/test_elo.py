@@ -7,12 +7,17 @@ from prometheus.elo import (
     expected_score,
 )
 
-# The rookie discount and faster early moves off, so a test sees one mechanism.
+# The rookie discount, faster early and after-break moves and the league-move bonus
+# off (and the linear rookie curve), so a test sees one mechanism.
 OFF = {
     "rookie_penalty": 0,
     "rookie_games": 0,
+    "rookie_curve": "linear",
     "provisional_games": 0,
     "provisional_factor": 1.0,
+    "away_factor": 0.0,
+    "move_up_penalty": 0.0,
+    "move_down_bonus": 0.0,
 }
 
 
@@ -434,3 +439,194 @@ def test_published_defaults_discount_rookies():
     )
     # Everyone is new in g1: counted ROOKIE_PENALTY below the 1500 start.
     assert _row(df, "g1", "A").pre_match_elo == pytest.approx(1500 - elo.ROOKIE_PENALTY)
+
+
+def test_league_factors_scale_player_moves_but_not_offsets():
+    base, _ = compute_elo_records(
+        _league_games(), calculate_game_length_elo_change, league_share=0.5
+    )
+    fast, _ = compute_elo_records(
+        _league_games(),
+        calculate_game_length_elo_change,
+        league_share=0.5,
+        league_factors={"LCK": 2.0, "Worlds": 3.0},
+    )
+    # An LCK game moves A twice as far; LCS (not listed) is unchanged.
+    assert _row(fast, "g1", "A").elo_change == pytest.approx(
+        2 * _row(base, "g1", "A").elo_change
+    )
+    assert _row(fast, "g2", "C").elo_change == pytest.approx(
+        _row(base, "g2", "C").elo_change
+    )
+    # At Worlds the players move 3 times the change and the offset half of it once.
+    worlds = _row(fast, "g3", "A")
+    assert worlds.league_offset == pytest.approx(0.5 * worlds.elo_change / 3.5)
+
+
+def test_time_away_moves_returning_players_more():
+    games, rosters = _two_games()
+    games["date"] = ["2026-01-01", "2027-06-01"]  # more than `away_days` apart
+    base, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    away, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters, away_factor=1.0
+    )
+    # g1 has no one returning; in g2 B's five are back after over a year: twice the move.
+    assert _row(away, "g1", "A").elo_change == pytest.approx(
+        _row(base, "g1", "A").elo_change
+    )
+    assert _row(away, "g2", "B").elo_change == pytest.approx(
+        2 * _row(base, "g2", "B").elo_change
+    )
+
+
+def _move_games(first_league, second_league):
+    # C plays D in `first_league`; then c0 starts for A against B in `second_league`
+    # twice.
+    games = pd.DataFrame(
+        {
+            "gameid": ["g1", "g2", "g3"],
+            "teamid": ["C", "A", "A"],
+            "opponent_teamid": ["D", "B", "B"],
+            "gamelength": [1800] * 3,
+            "result": [1, 1, 1],
+            "league": [first_league, second_league, second_league],
+            "date": ["2026-01-01", "2026-01-02", "2026-01-03"],
+        }
+    )
+    rosters = {
+        ("g1", "C"): _five("c"),
+        ("g1", "D"): _five("d"),
+        ("g2", "A"): ("c0",) + _five("a")[1:],
+        ("g2", "B"): _five("b"),
+        ("g3", "A"): ("c0",) + _five("a")[1:],
+        ("g3", "B"): _five("b"),
+    }
+    return games, rosters
+
+
+@pytest.mark.parametrize(
+    "first, second, expected",
+    [("LCKC", "LCK", -50), ("LCK", "LCKC", 30), ("LCKC", "LFL", 0), ("LEC", "LCK", 0)],
+)
+def test_league_move_adjustment_by_direction(first, second, expected):
+    games, rosters = _move_games(first, second)
+    base, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    moved, _ = compute_elo_records(
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        move_up_penalty=50,
+        move_down_bonus=30,
+    )
+    diff = _row(moved, "g2", "A").pre_match_elo - _row(base, "g2", "A").pre_match_elo
+    assert diff == pytest.approx(expected / 5)
+    # Stored in c0's rating: still there a game later (less the game's own change).
+    diff3 = _row(moved, "g3", "A").pre_match_elo - _row(base, "g3", "A").pre_match_elo
+    assert diff3 == pytest.approx(expected / 5, abs=1)
+
+
+def test_temporary_league_move_adjustment_fades():
+    games, rosters = _move_games("LCKC", "LCK")
+    base, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    moved, _ = compute_elo_records(
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        move_up_penalty=50,
+        move_games=2,
+    )
+    diff2 = _row(moved, "g2", "A").pre_match_elo - _row(base, "g2", "A").pre_match_elo
+    diff3 = _row(moved, "g3", "A").pre_match_elo - _row(base, "g3", "A").pre_match_elo
+    assert diff2 == pytest.approx(-50 / 5)
+    # One of two games since the move: half the adjustment, and none stored.
+    assert diff3 == pytest.approx(-25 / 5, abs=1)
+
+
+def test_log_rookie_curve_falls_with_log_games():
+    games, rosters = _two_games()
+    base, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    disc, _ = compute_elo_records(
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        rookie_penalty=100,
+        rookie_games=3,
+        rookie_curve="log",
+    )
+    # First game: the full 100. g2: veterans have 1 game, 100 × (1 − log 2 / log 4)
+    # = 50 off; x0 is new (100 off).
+    assert _row(disc, "g1", "A").pre_match_elo == pytest.approx(1400)
+    a2 = _row(disc, "g2", "A").pre_match_elo
+    assert a2 == pytest.approx(_row(base, "g2", "A").pre_match_elo - (4 * 50 + 100) / 5)
+
+
+def test_veteran_discount_grows_with_games():
+    games, rosters = _two_games()
+    base, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    vet, _ = compute_elo_records(
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        veteran_penalty=40,
+        veteran_games=1,
+    )
+    # g1: nobody has played. g2: B's five have 1 game (not past 1); off by nothing.
+    assert _row(vet, "g2", "B").pre_match_elo == pytest.approx(
+        _row(base, "g2", "B").pre_match_elo
+    )
+    # After g2 they have 2 games = 2 × veteran_games: the full 40 off the team's
+    # rating, while the game's change (from equal pre-game ratings) is the same.
+    after = _row(vet, "g2", "B").post_match_elo
+    assert after == pytest.approx(_row(base, "g2", "B").post_match_elo - 40)
+
+
+def test_veteran_discount_by_years():
+    games, rosters = _two_games()
+    games = games.assign(date=pd.to_datetime(["2014-01-01", "2020-01-01"]))
+    base, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    vet, _ = compute_elo_records(
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        veteran_penalty=30,
+        veteran_years=2,
+    )
+    # Six years after their first game, B's players are past 2 + 3 years: full 30.
+    assert _row(vet, "g2", "B").pre_match_elo == pytest.approx(
+        _row(base, "g2", "B").pre_match_elo - 30
+    )
+
+
+def test_published_defaults_use_time_away_and_the_move_down_bonus():
+    games, rosters = _two_games()
+    published, _ = elo.compute_elo_records(
+        games, calculate_game_length_elo_change, rosters=rosters
+    )
+    explicit, _ = elo.compute_elo_records(
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        rookie_curve="log",
+        away_factor=elo.AWAY_FACTOR,
+        away_days=elo.AWAY_DAYS,
+        move_down_bonus=elo.MOVE_DOWN_BONUS,
+        move_up_penalty=elo.MOVE_UP_PENALTY,
+    )
+    pd.testing.assert_frame_equal(published, explicit)
+    assert (elo.AWAY_FACTOR, elo.MOVE_DOWN_BONUS, elo.ROOKIE_CURVE) == (
+        2.0,
+        25.0,
+        "log",
+    )

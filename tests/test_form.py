@@ -37,6 +37,58 @@ def test_new_season_carries_part_of_the_weight():
     assert states["form_games"].iloc[-1] == pytest.approx(5.0)
 
 
+def _roster_games():
+    """Team A: ten games with one five, then a new season with three of them kept."""
+    rows = [(f"2024-01-{d:02d}", 2024, "LCK", "A", 2000.0) for d in range(1, 11)]
+    rows += [("2025-01-01", 2025, "LCK", "A", 2000.0)]
+    games = _games(rows)
+    old, new = ("a", "b", "c", "d", "e"), ("a", "b", "c", "x", "y")
+    rosters = {(g, "A"): old for g in games["gameid"][:10]}
+    rosters[(games["gameid"].iloc[10], "A")] = new
+    return games, rosters
+
+
+def test_roster_option_off_by_default():
+    games, rosters = _roster_games()
+    kwargs = {"features": ["gpm"], "half_life": 1e9, "carry": 0.5, "prior_games": 5}
+    plain = form.form_states(games, **kwargs)
+    same = form.form_states(games, rosters=rosters, roster_power=0.0, **kwargs)
+    pd.testing.assert_frame_equal(plain, same)
+
+
+@pytest.mark.parametrize("roster_at", ["season", "change"])
+def test_new_season_carry_scaled_by_starters_kept(roster_at):
+    games, rosters = _roster_games()
+    states = form.form_states(
+        games,
+        ["gpm"],
+        half_life=1e9,
+        carry=0.5,
+        prior_games=5,
+        rosters=rosters,
+        roster_power=1.0,
+        roster_at=roster_at,
+    )
+    # Ten games, half carried, three of five starters kept.
+    assert states["form_games"].iloc[-1] == pytest.approx(10 * 0.5 * 0.6)
+
+
+def test_lineup_change_mid_season_only_with_change():
+    rows = [(f"2024-01-{d:02d}", 2024, "LCK", "A", 2000.0) for d in range(1, 12)]
+    games = _games(rows)
+    rosters = {(g, "A"): ("a", "b", "c", "d", "e") for g in games["gameid"][:10]}
+    # A sub in game 10; game 11 has no roster of its own, so it keeps game 10's.
+    rosters[(games["gameid"].iloc[9], "A")] = ("a", "b", "c", "d", "z")
+    kwargs = {"half_life": 1e9, "carry": 0.5, "prior_games": 5, "rosters": rosters}
+    season = form.form_states(games, ["gpm"], roster_at="season", **kwargs)
+    change = form.form_states(
+        games, ["gpm"], roster_at="change", roster_power=1.0, **kwargs
+    )
+    assert season["form_games"].iloc[-1] == pytest.approx(10)
+    # Game 10 (one of five changed) keeps 0.8 of nine games; game 11 keeps it all.
+    assert change["form_games"].iloc[-1] == pytest.approx(9 * 0.8 + 1)
+
+
 def test_home_league_ignores_international_events():
     rows = [
         ("2024-01-01", 2024, "LCK", "A", 1.0),

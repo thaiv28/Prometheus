@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from prometheus import elo, schedule, utils
-from prometheus.form import form_states, load_form_games, opponent_adjust
+from prometheus.form import load_states
 
 pytestmark = pytest.mark.e2e
 
@@ -45,7 +45,7 @@ def test_latest_elos_matches_get_latest_elos_on_every_cutoff(days):
 
 
 def test_ratings_before_class_matches_the_function(days):
-    states = form_states(opponent_adjust(load_form_games()))
+    states = load_states()
     before = schedule.RatingsBefore(states)
     for day in days[1:]:
         expected = schedule.ratings_before(states, day)
