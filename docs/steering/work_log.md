@@ -2,6 +2,15 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-13 — Kalshi alert: a rebuild no longer re-alerts the same match
+
+Branch `alert-repeat`, based on `main` (3da95b3).
+
+- **Bug.** `schedule.update_log` rebuilt every match that hadn't started from the day's prediction, carrying over Kalshi's prices but not the `alert` / `paper_alert` records (`alerts.record`). So each publish run's alert step saw an already-alerted match as new: it commented "New: 1 match" on the day's issue again and re-recorded the alert at the current price, breaking "alerted once, at its first price". Seen on issues #28 (Shopify Rebellion v FlyQuest, three repeats on 7 Oct) and #45 / #48 (BNK FEARX v KT Rolster, a repeat after each of the three merges to main on 12 Oct). The hourly prices job never calls `update_log`, so it didn't repeat.
+- **Fix.** `update_log` keeps both records (`schedule.ALERT_KEYS`) on a match it refreshes. Test `test_update_log_keeps_alerts_so_a_rebuild_doesnt_alert_again` fails without the fix.
+- **Left:** alerts already re-recorded keep their later price (BNK FEARX v KT Rolster: first alerted at 35¢, +9.5, on 12 Oct; the log now holds 36¢, +8.2, from 13 Oct 02:24). The paper record scores them at that price; not corrected by hand.
+- Checks: `uv run pytest -q`; `ruff format`, `ruff check`.
+
 ## 2026-10-12 — Research records: Form stat weights and blue side
 
 Branch `research-records`, based on `main` (19014c9). Docs only: the two tests from the 2026-10-12 assumption review that shipped nothing, `docs/research/form_weights_fit.md` and `docs/research/blue_side.md`, with their Status lines and work-log entries (below). Their scripts and off-by-default options stay on branches `form-weights` and `blue-side` (pushed, not merged), so `elo.py` and `form.py` don't carry unused options. Checks: `uv run pytest -q`, links in the two Status lines checked.
