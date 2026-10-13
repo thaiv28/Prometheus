@@ -1,0 +1,152 @@
+{% extends 'base.html.j2' %}
+{% from '_marks.html.j2' import league %}
+{% block title %}Props · Prometheus{% endblock %}
+{% block description %}{{ metric.description }}{% endblock %}
+{% block canonical_path %}props.html{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{{ asset('css/props.css') }}" />{% endblock %}
+{%- macro line_cell(cell, app_label, player) -%}
+{%- if cell -%}
+<td class="pp-line{% if cell.clears %} pp-line--clears{% endif %}" title="Over: ours {{ cell.over }}{% if cell.app_over %}, {{ app_label }} {{ cell.app_over }}{% endif %}{% if cell.one_sided %}. Over only{% endif %}">
+  <span class="pp-line-num">{{ cell.line }}</span>
+  <span class="pp-meter" style="--p: {{ cell.over }}; --be: {{ cell.break_even or 58 }}" aria-hidden="true"></span>
+  <span class="pp-pick">{% if cell.side %}<span class="pp-side">{{ 'O' if cell.side == 'over' else 'U' }}</span>&#8201;{{ cell.p_side }}{% else %}<span class="muted">—</span>{% endif %}</span>
+  <span class="visually-hidden">{% if cell.side %}: {{ cell.side }}, {{ cell.p_side }} in 100{% endif %}</span>
+</td>
+{%- else -%}
+<td class="pp-line pp-line--none"><span class="muted" aria-label="No {{ app_label }} line">—</span></td>
+{%- endif -%}
+{%- endmacro -%}
+{% block content %}
+  <div class="spread">
+    <div class="spread-main">
+      <header class="section-head">
+        <h1>{{ metric.name }} <span class="full-name">{{ metric.full_name }}</span></h1>
+        <p class="lede">{{ metric.description }}{% if view.lines_read %} Lines as of <time class="pp-read" datetime="{{ view.lines_read | replace('Z', ':00Z') }}">{{ view.lines_read | replace('T', ' ') | replace('Z', ' UTC') }}</time>.{% endif %}<a class="note-ref" href="#note-dagger" aria-label="Caveat">†</a></p>
+      </header>
+
+      <div class="filter-line" role="group" aria-label="Filters" hidden>
+        <span class="filter-lead">Showing</span>
+        <details class="picker" data-filter="stat">
+          <summary><span class="picker-label">stat</span> <span class="picker-value">Kills</span></summary>
+          <fieldset class="picker-panel picker-panel--stat">
+            <legend class="picker-legend">Stat</legend>
+            <div class="picker-options picker-options--list">
+              {% for s in view.stats %}
+              <label><input type="radio" name="pp-stat" value="{{ s.key }}"{% if loop.first %} checked{% endif %} /> {{ s.label }}</label>
+              {% endfor %}
+            </div>
+          </fieldset>
+        </details>
+        <label class="pp-only"><input type="checkbox" id="pp-only" checked /> <span class="picker-label">with lines only</span></label>
+      </div>
+
+      <section class="fixtures-block" aria-labelledby="coming-heading">
+        <div class="block-head">
+          <h2 id="coming-heading">Coming up</h2>
+        </div>
+        {% if not view.matches %}
+        <p class="empty fx-empty">No matches in the next week.</p>
+        {% endif %}
+        {% for m in view.matches %}
+        {% set table_no = loop.index %}
+        <article class="pp-match" data-match="{{ m.id }}"{% for s in m.stats %} data-lines-{{ s.key }}="{{ s.n_lines }}"{% endfor %} aria-labelledby="pp-cap-{{ loop.index }}"{% if not m.stats[0].n_lines %} hidden{% endif %}>
+          <h3 class="pp-match-head" id="pp-cap-{{ loop.index }}">
+            <span class="pp-when"><time datetime="{{ m.start | replace('Z', ':00Z') }}" data-start="{{ m.start }}">{{ m.day }}, {{ m.time }} UTC</time></span>
+            <span class="pp-teams">{% if m.slug1 %}<a href="teams/{{ m.slug1 }}.html">{{ m.team1 }}</a>{% else %}{{ m.team1 }}{% endif %} <i class="pp-v">v</i> {% if m.slug2 %}<a href="teams/{{ m.slug2 }}.html">{{ m.team2 }}</a>{% else %}{{ m.team2 }}{% endif %}</span>
+          </h3>
+          <p class="pp-facts">{{ league(m.league) }}<span class="pp-dot" aria-hidden="true"> · </span><span title="{{ m.event }}">Bo{{ m.best_of }}</span>{% if m.pct1 is not none %}<span class="pp-dot" aria-hidden="true"> · </span><span title="Series chance">{{ m.pct1 }}–{{ 100 - m.pct1 }}</span>{% endif %}</p>
+          {% for s in m.stats %}
+          <figure class="register-figure pp-stat" data-stat="{{ s.key }}"{% if not loop.first %} hidden{% endif %}>
+            <figcaption class="table-caption">Table {{ table_no }}{{ 'abcd'[loop.index0] }}. {{ s.label }}, maps 1{% if m.maps > 1 %}–{{ m.maps }}{% endif %}.</figcaption>
+            <div class="table-scroll">
+              <table class="register register--props">
+                <thead>
+                  <tr>
+                    <th scope="col" class="pp-player">Player</th>
+                    <th scope="col" class="num pp-recent">Last 10<sup class="th-note" aria-hidden="true">2</sup></th>
+                    <th scope="col" class="num pp-ours">Ours<sup class="th-note" aria-hidden="true">1</sup></th>
+                    {% for app in view.apps %}
+                    <th scope="col" class="pp-app">{{ app.label }}<sup class="th-note" aria-hidden="true">{{ 3 if loop.first else '' }}</sup></th>
+                    {% endfor %}
+                  </tr>
+                </thead>
+                {% for t in s.teams %}
+                <tbody>
+                  <tr class="pp-team-row"><th scope="rowgroup" colspan="{{ 3 + view.apps | length }}">{{ t.name }}</th></tr>
+                  {% for p in t.players %}
+                  <tr>
+                    <th scope="row" class="pp-player">{% if p.slug %}<a href="players/{{ p.slug }}.html">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}</th>
+                    <td class="num pp-recent">{% if p.recent is not none %}{{ '%.1f' | format(p.recent) }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                    <td class="num pp-ours"><span class="pp-median">{{ p.median }}</span> <span class="pp-range">{{ p.p10 }}–{{ p.p90 }}</span></td>
+                    {% for app in view.apps %}{{ line_cell(p.lines.get(app.key), app.label, p.name) }}{% endfor %}
+                  </tr>
+                  {% endfor %}
+                </tbody>
+                {% endfor %}
+              </table>
+            </div>
+          </figure>
+          {% endfor %}
+        </article>
+        {% endfor %}
+        <p class="empty fx-empty pp-none"{% if view.first_stat_lines or not view.matches %} hidden{% endif %}>No lines yet.</p>
+      </section>
+
+      <section class="fixtures-block" aria-labelledby="record-heading">
+        <div class="block-head">
+          <h2 id="record-heading">How the lines have done</h2>
+        </div>
+        {% if not view.settled %}<p class="section-prose">No line has settled yet.</p>{% endif %}
+        <figure class="register-figure" aria-labelledby="record-cap">
+          <figcaption id="record-cap" class="table-caption">Table {{ view.matches | length + 1 }}. Our side on settled lines, before the start; pushes and voids left out. Log loss: lower is better.</figcaption>
+          <div class="table-scroll">
+            <table class="register register--record">
+              <thead>
+                <tr>
+                  <th scope="col">App</th>
+                  <th scope="col" class="num">Lines</th>
+                  <th scope="col" class="num">Our side won</th>
+                  <th scope="col" class="num phone-hide">Break-even</th>
+                  <th scope="col" class="num">Log loss</th>
+                  <th scope="col" class="num phone-hide">Underdog’s</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in view.scorecard %}
+                <tr{% if loop.last %} class="record-total"{% endif %}>
+                  <th scope="row">{{ row.label }}</th>
+                  <td class="num">{{ row.n }}</td>
+                  {% if row.n %}
+                  <td class="num value">{{ (100 * row.hit_rate) | round(1) }}<span class="of"> %</span></td>
+                  <td class="num phone-hide">{{ (100 * row.break_even) | round(1) }}<span class="of"> %</span></td>
+                  <td class="num">{{ '%.3f' | format(row.log_loss) }}</td>
+                  <td class="num phone-hide">{% if row.market_n %}{{ '%.3f' | format(row.market_log_loss_theirs) }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                  {% else %}
+                  <td class="num"><span class="muted">—</span></td>
+                  <td class="num phone-hide"><span class="muted">—</span></td>
+                  <td class="num"><span class="muted">—</span></td>
+                  <td class="num phone-hide"><span class="muted">—</span></td>
+                  {% endif %}
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </figure>
+      </section>
+    </div>
+
+    <aside class="margin notes" id="about" aria-labelledby="about-heading">
+      <h2 id="about-heading" class="margin-head">How to read the props</h2>
+      <ol class="notes-list">
+        {% for line in metric.how_to_read %}
+        <li id="note-{{ loop.index }}"><span class="note-mark" aria-hidden="true">{{ loop.index }}</span>{{ line }}</li>
+        {% endfor %}
+        <li id="note-dagger" class="caveat"><span class="note-mark" aria-hidden="true">†</span><span class="visually-hidden">Caveat: </span>{{ metric.caveats }}</li>
+      </ol>
+    </aside>
+  </div>
+{% endblock %}
+{% block scripts %}
+  <script src="{{ asset('js/props.js') }}" defer></script>
+{% endblock %}

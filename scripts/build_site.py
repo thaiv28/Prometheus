@@ -23,7 +23,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from prometheus import aura, markets
+from prometheus import aura, markets, props
 from prometheus.elo import (
     get_elo_history,
     get_latest_elos,
@@ -65,6 +65,7 @@ from prometheus.site.predictions import (
     warn_missing_results,
     write_kalshi_alert,
 )
+from prometheus.site.props import build_props, render_props
 from prometheus.site.registers import (
     active,
     forecast_records,
@@ -334,6 +335,27 @@ def predictions_pages(fc: Forecasts, teams) -> dict:
     return predictions
 
 
+def props_page(fc: Forecasts, teams, pl) -> None:
+    """The Props page: projections for the coming matches against the pick'em
+    lines read by scripts/collect_props.py, from the player tables the build has
+    already read. A failure leaves the page out rather than stopping the build."""
+    try:
+        view = build_props(
+            props.games_from_tables(pl.tables),
+            fc.prediction_log,
+            fc.latest_elos,
+            teams,
+            pl.slugs,
+        )
+    except Exception as err:
+        print(f"::warning::Props page skipped: {err}")
+        return
+    render_props(view)
+    print(
+        f"Props: {len(view['matches'])} matches, {view['lines_total']} lines, {view['settled']} settled"
+    )
+
+
 def main():
     os.makedirs(site_config.OUTPUT_DIR, exist_ok=True)
     copy_static()
@@ -383,6 +405,7 @@ def main():
         pl.aura_games,
         pl.tables,
     )
+    props_page(fc, set(pages), pl)
     render_team_pages(pages)
     write_team_index(pages)
     render_player_pages(pl.pages)

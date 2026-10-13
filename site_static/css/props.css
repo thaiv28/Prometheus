@@ -1,0 +1,150 @@
+/* The Almanac: the Props page. One register per match, both teams' starters,
+   our projection, and each app's line on a small printed meter. */
+
+/* ---- A match: heading set like a fixture, then its stat registers ----- */
+.pp-match { margin: 0 0 44px; }
+.pp-match + .pp-match { padding-top: 4px; }
+.pp-match-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+  margin: 0 0 2px;
+  font-size: 1.625rem;
+  font-weight: 400;
+  line-height: 1.15;
+}
+.pp-when {
+  order: 2;
+  font-size: var(--fs-label);
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.06em;
+  font-variant-numeric: lining-nums;
+  color: var(--ink-2);
+}
+.pp-teams { order: 1; }
+.pp-teams a { color: var(--ink); text-decoration-color: var(--hairline-soft); }
+.pp-teams a:hover { color: var(--spot); text-decoration-color: var(--spot); }
+.pp-v { font-size: 0.8em; color: var(--ink-3); padding: 0 0.1em; }
+.pp-facts {
+  margin: 0 0 12px;
+  font-size: var(--fs-caption);
+  color: var(--ink-3);
+  font-variant-numeric: lining-nums;
+}
+.pp-facts .league { color: var(--ink-2); }
+.pp-dot { color: var(--hairline); }
+
+/* ---- The register --------------------------------------------------- */
+.register--props { table-layout: auto; }
+.register--props tbody tr:nth-child(5n):not(:last-child) td { border-bottom: 0; }
+.register--props .pp-team-row th {
+  padding: 10px 10px 3px;
+  border-top: 0;
+  border-bottom: var(--hair) solid var(--hairline);
+  color: var(--ink);
+  font-weight: 600;
+}
+.register--props tbody:first-of-type .pp-team-row th { padding-top: 6px; }
+.register--props tbody tr.pp-team-row:hover th { background: var(--paper); }
+.register--props tbody:not(:last-of-type) tr:last-child td { border-bottom: 0; }
+.register--props tbody tr th[scope="row"] {
+  border: 0;
+  padding: 4px 10px;
+  font-variant-caps: normal;
+  letter-spacing: 0;
+  font-size: var(--fs-table);
+  color: var(--ink);
+  vertical-align: baseline;
+  background: transparent;
+}
+.register--props tbody:last-of-type tr:last-child th[scope="row"] { border-bottom: 2px solid var(--rule); }
+.register--props tbody tr:hover th[scope="row"] { background: var(--paper-wash); }
+.pp-player { width: 100%; }
+.pp-player a { font-weight: 500; text-decoration-color: var(--hairline-soft); }
+.pp-recent { color: var(--ink-2); width: 4.5rem; }
+.pp-ours { width: 6.5rem; }
+.pp-median { font-weight: 600; color: var(--ink); }
+.pp-range { color: var(--ink-3); font-size: 0.875em; }
+.register--props th.pp-app { text-align: left; padding-left: 14px; }
+
+/* An app's line: the number, a meter of our chance of the over with the two
+   break-even ticks (the band between them is no edge either way), our pick. */
+.pp-line { width: 9.5rem; padding-left: 14px !important; }
+.pp-line > * { vertical-align: baseline; }
+.pp-line-num { display: inline-block; min-width: 2.6rem; color: var(--ink); text-align: right; padding-right: 8px; }
+.pp-meter {
+  position: relative;
+  display: inline-block;
+  width: 3rem;
+  height: 5px;
+  background: var(--paper-deep);
+  transform: translateY(-1px);
+}
+.pp-meter::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--p, 50) * 1%);
+  background: var(--ink-3);
+}
+.pp-meter::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  left: calc((100 - var(--be, 58)) * 1%);
+  width: calc((2 * var(--be, 58) - 100) * 1%);
+  border-left: var(--hair) solid var(--ink-3);
+  border-right: var(--hair) solid var(--ink-3);
+}
+.pp-pick { display: inline-block; min-width: 2.6rem; padding-left: 8px; color: var(--ink-3); }
+.pp-side { font-variant-caps: all-small-caps; letter-spacing: 0.05em; }
+.pp-line--clears .pp-line-num, .pp-line--clears .pp-pick { font-weight: 600; color: var(--ink); }
+.pp-line--clears .pp-meter::before { background: var(--ink); }
+.register--props tbody tr:hover .pp-line--clears .pp-meter::before { background: var(--spot); }
+.pp-line--none { color: var(--ink-3); }
+.pp-line--none .muted { display: inline-block; min-width: 2.6rem; text-align: right; }
+
+/* ---- Filters -------------------------------------------------------- */
+.picker-panel--stat { width: 12rem; }
+.picker-options--list { grid-template-columns: 1fr; }
+.pp-only { display: inline-flex; align-items: center; gap: 6px; padding: 3px 0; cursor: pointer; }
+.pp-only input {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  cursor: pointer;
+}
+.pp-only input:checked { background: var(--ink); box-shadow: inset 0 0 0 2px var(--paper); }
+.pp-only input:focus-visible { outline: 2px solid var(--spot); outline-offset: 2px; }
+.pp-only:hover .picker-label { color: var(--spot); }
+
+/* ---- Narrow ---------------------------------------------------------- */
+.table-scroll:has(> .register--props) { container-type: inline-size; }
+@container (max-width: 760px) {
+  .pp-line { width: auto; }
+  .pp-meter { width: 2.25rem; }
+}
+@media (max-width: 1100px) and (min-width: 1001px) {
+  .pp-meter { width: 2.25rem; }
+}
+@media (max-width: 720px) {
+  .pp-match-head { font-size: 1.1875rem; }
+  .pp-recent { display: none; }
+  .pp-meter { display: none; }
+  .pp-line { padding-left: 8px !important; }
+  .pp-line-num { min-width: 0; padding-right: 4px; }
+  .pp-pick { min-width: 0; padding-left: 2px; }
+  .pp-range { display: block; }
+  .register--props th.pp-app { padding-left: 8px; }
+}
+@media (max-width: 480px) {
+  .register--props td, .register--props th { padding-left: 6px; padding-right: 6px; }
+  .pp-line { padding-left: 6px !important; }
+  .pp-line-num { display: block; text-align: left; }
+  .pp-pick { display: block; padding-left: 0; font-size: 0.875em; }
+}

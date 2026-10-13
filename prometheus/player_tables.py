@@ -1,10 +1,11 @@
-"""The player tables, each read once and shared by AURA, player Elo history and game logs.
+"""The player tables, each read once and shared by AURA, player Elo history, game logs and prop projections.
 
 SQLite has no index for the joins between `player_stats`, `match_players`,
 `matches` and the player Elo table, so joining them in SQL is slow. Reading each
 table's columns once and merging in pandas is several times faster, and the site
 build passes one `PlayerTables` to `aura.load_aura_games`,
-`elo.get_player_history` and `gamelog.load_player_games` so no table is read twice.
+`elo.get_player_history`, `gamelog.load_player_games` and `props.games_from_tables`
+so no table is read twice.
 """
 
 from functools import cached_property
@@ -39,6 +40,16 @@ class PlayerTables:
         )
 
     @cached_property
+    def totals(self):
+        """match_players' full-game totals: gameid, teamid, position, kills, deaths,
+        assists, cs (prop projections)."""
+        return pd.read_sql(
+            """SELECT gameid, teamid, position, kills, deaths, assists, cs
+               FROM match_players WHERE kills IS NOT NULL AND cs IS NOT NULL""",
+            get_engine(),
+        )
+
+    @cached_property
     def stats(self):
         """player_stats: gameid, teamid, position, champion and the lane gaps."""
         return pd.read_sql(
@@ -60,8 +71,8 @@ class PlayerTables:
 
     @cached_property
     def matches(self):
-        """matches: gameid, teamid, date, year, league, teamname, side, result."""
+        """matches: gameid, teamid, date, year, league, teamname, side, result, gamelength."""
         return pd.read_sql(
-            "SELECT gameid, teamid, date, year, league, teamname, side, result FROM matches",
+            "SELECT gameid, teamid, date, year, league, teamname, side, result, gamelength FROM matches",
             get_engine(),
         )
