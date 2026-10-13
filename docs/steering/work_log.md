@@ -2,6 +2,15 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-13 — Props lines backup: the hourly save failed after its first run
+
+Branch `fix-prop-data`, based on `main` (3b0e33f).
+
+- **Bug:** `scripts/prop_data.sh save` downloads the backup to a temporary file to compare entry counts, and chose JSON-lines or JSON by that file's name, which has no extension, so it parsed the lines log as one JSON object and failed. The first `props-lines` run (03:17 UTC) had no backup to compare and saved 275 lines; the 04:17 run failed at "Save the lines log". The format now follows the target file's name.
+- **Collection works from GitHub's runners:** the 04:17 run read Underdog 90, Pick6 40 and PrizePicks 145 lines before the save.
+- **Why the live page had no lines:** the only publish since the merge ran at 03:15, before the first lines run; the page refreshes only with a publish (daily, or on a push to `main`).
+- Checks: `tests/test_prop_data.py` (new: save over a backup, refuse to shrink, restore, a missing backup, the calls file; fails without the fix), `uv run pytest -q`, `ruff format --check`, `ruff check`.
+
 ## 2026-10-13 — Props page: shorter copy, lines-only by default, no role column
 
 Branch `props` (PR #52).

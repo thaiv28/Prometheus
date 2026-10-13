@@ -15,9 +15,11 @@ cmd="${1:-}"
 file="${2:?file}"
 uri="${3:?s3 uri}"
 
-# Entries: lines of a JSON-lines file, keys of a JSON object.
+# Entries in a copy of FILE: lines of a JSON-lines file, keys of a JSON object.
+# The format follows FILE's name, not the copy's (the backup is downloaded to a
+# temporary file without the extension).
 count() {
-    case "$1" in
+    case "$file" in
     *.jsonl) grep -c . "$1" || true ;;
     *) python3 -c 'import json, sys; print(len(json.load(open(sys.argv[1]))))' "$1" ;;
     esac
