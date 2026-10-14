@@ -1,6 +1,7 @@
 // The Props page: switch the stat shown in every match, show only matches with
-// lines for it (the default; ?lines=all shows every match), and set match times
-// in the visitor's time zone. The choice is kept in the URL (?stat=, ?lines=all).
+// lines for it (the default; ?lines=all shows every match), set match times in
+// the visitor's time zone, and apply the hourly props-lines.json over the lines
+// built into the page. The choice is kept in the URL (?stat=, ?lines=all).
 (function () {
   "use strict";
   var filters = document.querySelector(".filter-line");
@@ -70,9 +71,61 @@
     if (isNaN(d)) return;
     t.textContent = days[d.getDay()] + " " + d.getDate() + " " + months[d.getMonth()] + ", " + pad(d.getHours()) + ":" + pad(d.getMinutes());
   });
+  // The hourly job rewrites props-lines.json: the newest lines priced against the
+  // build's projections. Rebuild each line cell from it (the same markup as
+  // line_cell in _props.html.j2), then each match's counts and the filters.
+  var esc = PrometheusNames.esc;
+  function cellHtml(c, app) {
+    if (!c) {
+      return '<td class="pp-line pp-line--none" data-app="' + esc(app) + '"><span class="muted">—</span></td>';
+    }
+    var title = "Over: ours " + c.over + (c.app_over != null ? ", " + c.label + " " + c.app_over : "") + (c.one_sided ? ". Over only" : "");
+    var pick = c.side
+      ? '<span class="pp-side">' + (c.side === "over" ? "O" : "U") + "</span>&#8201;" + esc(c.p_side)
+      : '<span class="muted">—</span>';
+    return '<td class="pp-line' + (c.clears ? " pp-line--clears" : "") + '" data-app="' + esc(app) + '" title="' + esc(title) + '">' +
+      '<span class="pp-line-num">' + esc(c.line) + "</span>" +
+      '<span class="pp-meter" style="--p: ' + Number(c.over) + "; --be: " + Number(c.break_even || 58) + '" aria-hidden="true"></span>' +
+      '<span class="pp-pick">' + pick + "</span>" +
+      '<span class="visually-hidden">' + (c.side ? ": " + esc(c.side) + ", " + esc(c.p_side) + " in 100" : "") + "</span></td>";
+  }
+  function applyLines(data) {
+    if (!data || !data.lines) return;
+    var byKey = {};
+    data.lines.forEach(function (c) { byKey[[c.match, c.stat, c.player, c.app].join("|")] = c; });
+    matches.forEach(function (m) {
+      var id = m.getAttribute("data-match");
+      m.querySelectorAll(".pp-stat").forEach(function (f) {
+        var stat = f.getAttribute("data-stat");
+        var n = 0;
+        f.querySelectorAll("tr[data-player]").forEach(function (tr) {
+          tr.querySelectorAll("td[data-app]").forEach(function (td) {
+            var app = td.getAttribute("data-app");
+            var c = byKey[[id, stat, tr.getAttribute("data-player"), app].join("|")];
+            if (c) n += 1;
+            td.outerHTML = cellHtml(c, app);
+          });
+        });
+        m.setAttribute("data-lines-" + stat, String(n));
+      });
+    });
+    if (read && data.at) {
+      read.setAttribute("datetime", data.at.replace("Z", ":00Z"));
+      setRead();
+    }
+    apply(current(), only.checked);
+  }
+
   var read = document.querySelector(".pp-read");
-  if (read) {
+  function setRead() {
     var r = new Date(read.getAttribute("datetime"));
     if (!isNaN(r)) read.textContent = r.getDate() + " " + months[r.getMonth()] + ", " + pad(r.getHours()) + ":" + pad(r.getMinutes());
+  }
+  if (read) setRead();
+  if (matches.length) {
+    fetch("props-lines.json", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(applyLines)
+      .catch(function () {});
   }
 })();

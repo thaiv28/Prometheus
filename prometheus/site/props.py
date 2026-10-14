@@ -11,7 +11,7 @@ import pandas as pd
 
 from prometheus import props, props_live
 from prometheus.site import config as site_config
-from prometheus.site.config import PROPS, ROLE_ORDER
+from prometheus.site.config import PROPS, RECENT_RESULT_DAYS, ROLE_ORDER
 from prometheus.site.render import env, slugify, write
 
 APPS = (("underdog", "Underdog"), ("prizepicks", "PrizePicks"), ("pick6", "Pick6"))
@@ -22,6 +22,12 @@ RECENT_MAPS = 10
 def default_maps(best_of):
     """The maps a line usually counts: three of a Bo5, two of a Bo3, one of a Bo1."""
     return {5: 3, 3: 2}.get(best_of, 1)
+
+
+def write_json(name, data):
+    os.makedirs(site_config.OUTPUT_DIR, exist_ok=True)
+    with open(os.path.join(site_config.OUTPUT_DIR, name), "w") as f:
+        json.dump(data, f, separators=(",", ":"))
 
 
 def _load_calls(path):
@@ -117,6 +123,7 @@ def match_view(fixture, rows, priced, recent, team_slugs, player_slugs):
                         cells[app] = line_cell(line)
                 players.append(
                     {
+                        "playerid": r["playerid"],
                         "name": r["playername"],
                         "slug": player_slugs.get(r["playerid"]),
                         "median": s["median"],
@@ -202,13 +209,16 @@ def build_props(games, prediction_log, latest_elos, team_slugs, player_slugs, no
     priced = pd.DataFrame()
     if not matched.empty and not rows.empty:
         priced = props_live.price_lines(model, matched, rows, fixtures)
+    # The hourly job saves the calls (scripts/update_props.py); the build only
+    # reads them, so the two never overwrite each other.
     calls = _load_calls(site_config.PROP_CALLS)
-    if not priced.empty:
-        props_live.update_calls(calls, priced, fixtures, now)
-        os.makedirs(os.path.dirname(site_config.PROP_CALLS) or ".", exist_ok=True)
-        with open(site_config.PROP_CALLS, "w") as f:
-            json.dump(calls, f, indent=1)
     settled = props_live.settle_lines(calls, games, now) if calls else pd.DataFrame()
+    if not rows.empty:
+        write_json(
+            "props-dist.json", props_live.spread_table(model, rows, fixtures, now)
+        )
+    reads = lines["read_at"] if not lines.empty else None
+    write_json("props-lines.json", lines_payload(priced, reads))
     recent = recent_means(games)
     matches = []
     for f in fixtures:
@@ -220,6 +230,8 @@ def build_props(games, prediction_log, latest_elos, team_slugs, player_slugs, no
     reads = (
         lines["read_at"] if not lines.empty else pd.Series(dtype="datetime64[ns, UTC]")
     )
+    results = result_rows(settled, player_slugs) if not settled.empty else []
+    since = now - pd.Timedelta(days=RECENT_RESULT_DAYS)
     return {
         "matches": matches,
         "lines_total": int(sum(m["n_lines"] for m in matches)),
@@ -234,7 +246,137 @@ def build_props(games, prediction_log, latest_elos, team_slugs, player_slugs, no
         "apps": [{"key": k, "label": label} for k, label in APPS],
         "stats": [{"key": k, "label": label} for k, label in STATS],
         "break_even": _pct(props_live.BREAK_EVEN),
+        "recent": by_match([r for r in results if pd.Timestamp(r["start"]) >= since]),
+        "recent_days": RECENT_RESULT_DAYS,
+        "months": result_months(results),
     }
+
+
+def lines_payload(priced, reads):
+    """`props-lines.json`: every priced line as the page's cells show it, for
+    `props.js` to apply between builds (the hourly job rewrites it)."""
+    at = (
+        None
+        if reads is None or len(reads) == 0
+        else reads.max().strftime("%Y-%m-%dT%H:%MZ")
+    )
+    cells = []
+    if not priced.empty:
+        mine = priced.assign(_alt=priced["side"].isna() | priced["under_mult"].isna())
+        mine = mine.sort_values("_alt", kind="mergesort")
+        seen = set()
+        for line in mine.to_dict("records"):
+            key = (line["match_id"], line["playerid"], line["stat"], line["source"])
+            if key in seen:
+                continue  # PrizePicks' standard line before its demon and goblin lines
+            seen.add(key)
+            cells.append(
+                {
+                    "match": key[0],
+                    "player": key[1],
+                    "stat": key[2],
+                    "app": key[3],
+                    "label": dict(APPS)[key[3]],
+                    **line_cell(line),
+                }
+            )
+    return {"at": at, "lines": cells}
+
+
+def _call(row):
+    """Our pick's outcome on a settled line."""
+    if row["result"] in ("push", "void"):
+        return row["result"]
+    if not row.get("side"):
+        return None
+    return "right" if row["side"] == row["result"] else "missed"
+
+
+def result_rows(settled, player_slugs):
+    """Settled lines as results: one row per match, player and stat (each app's
+    line, our pick and how it went), newest match first."""
+    rows = []
+    labels = dict(STATS)
+    order = settled.sort_values(
+        ["start", "match_id"], ascending=[False, True], kind="mergesort"
+    )
+    for (match, player, stat), grp in order.groupby(
+        ["match_id", "playerid", "stat"], sort=False
+    ):
+        first = grp.iloc[0]
+        start = pd.Timestamp(first["start"])
+        cells = {}
+        for r in grp.to_dict("records"):
+            cells[r["source"]] = {
+                "line": f"{r['line']:g}",
+                "side": r.get("side"),
+                "p_side": _pct(r["p_side"]) if r.get("p_side") is not None else None,
+                "call": _call(r),
+            }
+        actual = first["actual"]
+        rows.append(
+            {
+                "match": match,
+                "start": start.strftime("%Y-%m-%dT%H:%MZ"),
+                "label": f"{start.day} {start.strftime('%b')} · {first['team']} v {first['opp']}",
+                "player": first["player"],
+                "slug": player_slugs.get(player),
+                "stat": labels.get(stat, stat),
+                "maps": first["maps"],
+                "actual": None if actual is None or pd.isna(actual) else f"{actual:g}",
+                "cells": cells,
+            }
+        )
+    return rows
+
+
+def by_match(rows):
+    """[{label, rows}] in the order the rows come."""
+    out = []
+    for r in rows:
+        if not out or out[-1]["match"] != r["match"]:
+            out.append({"match": r["match"], "label": r["label"], "rows": []})
+        out[-1]["rows"].append(r)
+    return out
+
+
+def result_months(rows):
+    """One results page per month with settled lines, newest first."""
+    months = {}
+    for r in rows:
+        months.setdefault(r["start"][:7], []).append(r)
+    out = []
+    for key, mine in months.items():
+        first = datetime.date.fromisoformat(key + "-01")
+        out.append(
+            {
+                "key": key,
+                "label": f"{first.strftime('%B')} {first.year}",
+                "count": len(mine),
+                "matches": by_match(mine),
+            }
+        )
+    return out
+
+
+def render_prop_results(view):
+    """One page per month (`props-results/YYYY-MM.html`), linked either side."""
+    folder = os.path.join(site_config.OUTPUT_DIR, "props-results")
+    os.makedirs(folder, exist_ok=True)
+    months = view["months"]
+    template = env.get_template("props_results.html.j2")
+    for i, month in enumerate(months):
+        write(
+            os.path.join(folder, f"{month['key']}.html"),
+            template.render(
+                page_key="props",
+                root_path="../",
+                view=view,
+                month=month,
+                newer=months[i - 1] if i > 0 else None,
+                older=months[i + 1] if i + 1 < len(months) else None,
+            ),
+        )
 
 
 def _entries(log, fixtures):

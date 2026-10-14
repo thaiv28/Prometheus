@@ -1,0 +1,28 @@
+{% extends 'base.html.j2' %}
+{% from '_props.html.j2' import results %}
+{% block title %}Prop results, {{ month.label }} · Prometheus{% endblock %}
+{% block description %}Every settled prop line for {{ month.label }} and our pick.{% endblock %}
+{% block canonical_path %}props-results/{{ month.key }}.html{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{{ root_path }}{{ asset('css/props.css') }}" />{% endblock %}
+{% block content %}
+  <div class="spread">
+    <div class="spread-main">
+      <header class="section-head">
+        <h1>Prop results <span class="full-name">{{ month.label }}</span></h1>
+        <p class="lede">Settled lines and our picks. <a href="../props.html">Props</a> has what's coming up.</p>
+      </header>
+      <section class="fixtures-block" aria-labelledby="month-heading">
+        <h2 id="month-heading" class="visually-hidden">{{ month.label }}</h2>
+        <figure class="register-figure register-figure--main" aria-labelledby="month-cap">
+          <figcaption id="month-cap" class="table-caption">{{ month.label }}, newest first.</figcaption>
+          <div class="table-scroll">{{ results(month.matches, view.apps, root='../') }}</div>
+        </figure>
+        <p class="month-index">{% if newer %}<a href="{{ newer.key }}.html" rel="prev">← {{ newer.label }}</a>{% endif %}{% if newer and older %} · {% endif %}{% if older %}<a href="{{ older.key }}.html" rel="next">{{ older.label }} →</a>{% endif %}</p>
+      </section>
+    </div>
+    <aside class="margin notes" aria-labelledby="about-heading">
+      <h2 id="about-heading" class="margin-head">Reading the results</h2>
+      <p class="margin-note">Each app's line and our pick before the start, with our chance; bold when the pick won. <a href="../props.html#about">More</a>.</p>
+    </aside>
+  </div>
+{% endblock %}

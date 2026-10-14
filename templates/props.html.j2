@@ -1,21 +1,10 @@
 {% extends 'base.html.j2' %}
 {% from '_marks.html.j2' import league %}
+{% from '_props.html.j2' import line_cell, results %}
 {% block title %}Props · Prometheus{% endblock %}
 {% block description %}{{ metric.description }}{% endblock %}
 {% block canonical_path %}props.html{% endblock %}
 {% block head_extra %}<link rel="stylesheet" href="{{ asset('css/props.css') }}" />{% endblock %}
-{%- macro line_cell(cell, app_label, player) -%}
-{%- if cell -%}
-<td class="pp-line{% if cell.clears %} pp-line--clears{% endif %}" title="Over: ours {{ cell.over }}{% if cell.app_over %}, {{ app_label }} {{ cell.app_over }}{% endif %}{% if cell.one_sided %}. Over only{% endif %}">
-  <span class="pp-line-num">{{ cell.line }}</span>
-  <span class="pp-meter" style="--p: {{ cell.over }}; --be: {{ cell.break_even or 58 }}" aria-hidden="true"></span>
-  <span class="pp-pick">{% if cell.side %}<span class="pp-side">{{ 'O' if cell.side == 'over' else 'U' }}</span>&#8201;{{ cell.p_side }}{% else %}<span class="muted">—</span>{% endif %}</span>
-  <span class="visually-hidden">{% if cell.side %}: {{ cell.side }}, {{ cell.p_side }} in 100{% endif %}</span>
-</td>
-{%- else -%}
-<td class="pp-line pp-line--none"><span class="muted" aria-label="No {{ app_label }} line">—</span></td>
-{%- endif -%}
-{%- endmacro -%}
 {% block content %}
   <div class="spread">
     <div class="spread-main">
@@ -74,11 +63,11 @@
                 <tbody>
                   <tr class="pp-team-row"><th scope="rowgroup" colspan="{{ 3 + view.apps | length }}">{{ t.name }}</th></tr>
                   {% for p in t.players %}
-                  <tr>
+                  <tr data-player="{{ p.playerid }}">
                     <th scope="row" class="pp-player">{% if p.slug %}<a href="players/{{ p.slug }}.html">{{ p.name }}</a>{% else %}{{ p.name }}{% endif %}</th>
                     <td class="num pp-recent">{% if p.recent is not none %}{{ '%.1f' | format(p.recent) }}{% else %}<span class="muted">—</span>{% endif %}</td>
                     <td class="num pp-ours"><span class="pp-median">{{ p.median }}</span> <span class="pp-range">{{ p.p10 }}–{{ p.p90 }}</span></td>
-                    {% for app in view.apps %}{{ line_cell(p.lines.get(app.key), app.label, p.name) }}{% endfor %}
+                    {% for app in view.apps %}{{ line_cell(p.lines.get(app.key), app) }}{% endfor %}
                   </tr>
                   {% endfor %}
                 </tbody>
@@ -133,6 +122,23 @@
             </table>
           </div>
         </figure>
+      </section>
+
+      <section class="fixtures-block" aria-labelledby="results-heading">
+        <div class="block-head">
+          <h2 id="results-heading">Results</h2>
+        </div>
+        {% if view.recent %}
+        <figure class="register-figure register-figure--main" aria-labelledby="results-cap">
+          <figcaption id="results-cap" class="table-caption">Table {{ view.matches | length + 2 }}. The last {{ view.recent_days }} days, newest first.</figcaption>
+          <div class="table-scroll">{{ results(view.recent, view.apps) }}</div>
+        </figure>
+        {% else %}
+        <p class="section-prose">No settled lines in the last {{ view.recent_days }} days.</p>
+        {% endif %}
+        {% if view.months %}
+        <p class="month-index"><span class="month-index-lead">By month</span> {% for m in view.months %}<a href="props-results/{{ m.key }}.html">{{ m.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+        {% endif %}
       </section>
     </div>
 

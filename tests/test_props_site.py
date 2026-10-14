@@ -101,3 +101,129 @@ def test_matches_without_lines_start_hidden(tmp_path, monkeypatch):
     assert '<article class="pp-match" data-match="m1"' in html
     m2 = html[html.index('data-match="m2"') :].split(">", 1)[0]
     assert m2.endswith("hidden")
+
+
+def _settled():
+    import pandas as pd
+
+    base = {
+        "match_id": "m1",
+        "start": "2026-10-15T18:00Z",
+        "team": "Karmine Corp",
+        "opp": "Cloud9",
+        "player": "Yike",
+        "playerid": "p1",
+        "stat": "kills",
+        "maps": "1-3",
+        "actual": 7,
+    }
+    return pd.DataFrame(
+        [
+            {
+                **base,
+                "source": "underdog",
+                "line": 12.5,
+                "side": "under",
+                "p_side": 0.84,
+                "result": "under",
+            },
+            {
+                **base,
+                "source": "prizepicks",
+                "line": 6.5,
+                "side": "under",
+                "p_side": 0.55,
+                "result": "over",
+            },
+            {
+                **base,
+                "source": "pick6",
+                "line": 7.0,
+                "side": "over",
+                "p_side": 0.5,
+                "result": "push",
+            },
+        ]
+    )
+
+
+def test_result_rows_months_and_pages(tmp_path, monkeypatch):
+    rows = site_props.result_rows(_settled(), {"p1": "yike"})
+    assert len(rows) == 1
+    cells = rows[0]["cells"]
+    assert (
+        cells["underdog"]["call"],
+        cells["prizepicks"]["call"],
+        cells["pick6"]["call"],
+    ) == ("right", "missed", "push")
+    assert (
+        rows[0]["actual"] == "7"
+        and rows[0]["label"] == "15 Oct · Karmine Corp v Cloud9"
+    )
+    months = site_props.result_months(rows)
+    assert [m["key"] for m in months] == ["2026-10"] and months[0]["count"] == 1
+
+    monkeypatch.setattr(site_config, "OUTPUT_DIR", str(tmp_path))
+    view = _view()
+    view["recent"] = site_props.by_match(rows)
+    view["recent_days"] = 3
+    view["months"] = months
+    site_props.render_props(view)
+    site_props.render_prop_results(view)
+    page = (tmp_path / "props.html").read_text()
+    assert 'href="props-results/2026-10.html"' in page and "pp-res--right" in page
+    month = (tmp_path / "props-results" / "2026-10.html").read_text()
+    assert (
+        'href="../players/yike.html"' in month
+        and "pp-res--missed" in month
+        and ">push<" in month
+    )
+
+
+def test_lines_payload_keeps_the_standard_line_first():
+    import pandas as pd
+
+    common = {
+        "match_id": "m1",
+        "playerid": "p1",
+        "stat": "kills",
+        "source": "prizepicks",
+        "p_over": 0.3,
+        "p_under": 0.7,
+        "over_prob": None,
+    }
+    priced = pd.DataFrame(
+        [
+            {
+                **common,
+                "line": 13.5,
+                "over_mult": None,
+                "under_mult": None,
+                "side": None,
+                "p_side": None,
+                "edge": None,
+            },
+            {
+                **common,
+                "line": 9.5,
+                "over_mult": 1.0,
+                "under_mult": 1.0,
+                "side": "under",
+                "p_side": 0.7,
+                "edge": 0.12,
+            },
+        ]
+    )
+    reads = pd.Series(
+        pd.to_datetime(["2026-10-14T09:00Z", "2026-10-14T10:17Z"], utc=True)
+    )
+    payload = site_props.lines_payload(priced, reads)
+    assert payload["at"] == "2026-10-14T10:17Z"
+    assert len(payload["lines"]) == 1
+    cell = payload["lines"][0]
+    assert (cell["line"], cell["side"], cell["label"], cell["clears"]) == (
+        "9.5",
+        "under",
+        "PrizePicks",
+        True,
+    )

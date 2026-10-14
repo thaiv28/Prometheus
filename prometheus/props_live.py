@@ -340,6 +340,36 @@ def match_lines(lines, index, fixtures, tolerance=SERIES_GAP):
     return out
 
 
+def _usable(line):
+    """Whether we price this line at all: a stat we project over maps 1-N."""
+    if line.get("stat") not in LINE_STATS or _maps(line.get("maps")) is None:
+        return False
+    if line.get("line") is None or pd.isna(line.get("line")):
+        return False
+    # Only Pick6's fantasy scoring is known.
+    return line["stat"] != "fantasy" or line["source"] == "pick6"
+
+
+def price_line(line, over, under, push, spread):
+    """One line's call: our chances, the pick among the sides the app offers (the
+    larger edge over its break-even) and the edge over the app's own chance."""
+    decided = max(over + under, 1e-9)
+    out = {**line, **spread, "p_over": over, "p_under": under, "p_push": push}
+    offered = {}
+    for side, p in (("over", over), ("under", under)):
+        mult = line.get(f"{side}_mult")
+        if mult is not None and not pd.isna(mult):
+            offered[side] = (p / decided, p / decided - BREAK_EVEN / mult)
+    if offered:
+        side = max(offered, key=lambda k: offered[k][1])
+        out.update(side=side, p_side=offered[side][0], edge=offered[side][1])
+    else:
+        out.update(side=None, p_side=None, edge=None)
+    if line.get("over_prob") is not None and not pd.isna(line.get("over_prob")):
+        out["edge_market"] = over / decided - line["over_prob"]
+    return out
+
+
 def price_lines(model, lines, projected, fixtures):
     """Our chances for every matched line of a stat we project."""
     by_fixture = {f["match_id"]: f for f in fixtures}
@@ -347,45 +377,156 @@ def price_lines(model, lines, projected, fixtures):
     rows = []
     for line in lines.to_dict("records"):
         key = (line.get("match_id"), line.get("playerid"))
-        maps = _maps(line.get("maps"))
-        if (
-            key not in proj
-            or line.get("stat") not in LINE_STATS
-            or maps is None
-            or line.get("line") is None
-        ):
+        if key not in proj or not _usable(line):
             continue
-        if line["stat"] == "fantasy" and line["source"] != "pick6":
-            continue  # only Pick6's fantasy scoring is known
         f = by_fixture[line["match_id"]]
-        dist = distribution(
-            model, proj[key], line["stat"], f["best_of"], min(maps, f["best_of"])
-        )
-        over, under, push = chances(dist, line["line"])
-        decided = max(over + under, 1e-9)
-        out = {
-            **line,
-            **summary(dist),
-            "p_over": over,
-            "p_under": under,
-            "p_push": push,
-        }
-        # Only a side the app offers can be picked; of those, the one with the larger
-        # edge over its break-even.
-        offered = {}
-        for side, p in (("over", over), ("under", under)):
-            mult = line.get(f"{side}_mult")
-            if mult is not None and not pd.isna(mult):
-                offered[side] = (p / decided, p / decided - BREAK_EVEN / mult)
-        if offered:
-            side = max(offered, key=lambda k: offered[k][1])
-            out.update(side=side, p_side=offered[side][0], edge=offered[side][1])
-        else:
-            out.update(side=None, p_side=None, edge=None)
-        if line.get("over_prob") is not None and not pd.isna(line.get("over_prob")):
-            out["edge_market"] = over / decided - line["over_prob"]
-        rows.append(out)
+        maps = min(_maps(line["maps"]), f["best_of"])
+        dist = distribution(model, proj[key], line["stat"], f["best_of"], maps)
+        rows.append(price_line(line, *chances(dist, line["line"]), summary(dist)))
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------- the hourly refresh
+#
+# The daily build publishes every projected player's spread (`spread_table`,
+# `props-dist.json`); the hourly job (`scripts/update_props.py`, no database)
+# matches the newest lines to those players and prices them from it
+# (`price_from_table`), saves the calls and writes `props-lines.json` for the page.
+
+CDF_TAIL = 0.0005  # a spread keeps the counts between these tails of its cdf
+COUNT_STATS = ("kills", "assists", "deaths", "cs")
+
+
+def map_counts(best_of):
+    """The map counts a line may use for a best-of: maps 1-2 and 1-3 of a Bo3 or
+    Bo5, the one map of a Bo1."""
+    return [1] if best_of == 1 else [2, 3]
+
+
+def compact_cdf(pmf):
+    """A pmf as {"lo": first count kept, "cdf": cumulative chances from it}, the
+    tails beyond `CDF_TAIL` cut (below lo the cdf is 0, past the end 1)."""
+    cdf = np.cumsum(pmf)
+    lo = int(np.searchsorted(cdf, CDF_TAIL))
+    hi = int(np.searchsorted(cdf, 1 - CDF_TAIL))
+    return {"lo": lo, "cdf": [round(float(c), 4) for c in cdf[lo : hi + 1]]}
+
+
+def cdf_at(spread, k):
+    """P(X <= k) from a compact cdf."""
+    if k < spread["lo"]:
+        return 0.0
+    i = int(k) - spread["lo"]
+    return 1.0 if i >= len(spread["cdf"]) else spread["cdf"][i]
+
+
+def cdf_chances(spread, line):
+    """(P(over), P(under), P(push)) at `line` from a compact cdf."""
+    floor = math.floor(line)
+    if floor == line:
+        under = cdf_at(spread, line - 1)
+        push = cdf_at(spread, line) - under
+    else:
+        under, push = cdf_at(spread, floor), 0.0
+    return 1.0 - under - push, under, push
+
+
+def cdf_summary(spread):
+    """Median and 10th and 90th percentiles of a compact cdf."""
+    cdf = np.asarray(spread["cdf"])
+    q = lambda x: spread["lo"] + int(np.searchsorted(cdf, x))
+    return {"median": q(0.5), "p10": q(0.1), "p90": q(0.9)}
+
+
+def spread_table(model, rows, fixtures, now):
+    """Every projected starter's spreads over the map counts lines may use, with
+    what matching needs (name key, team, the match): the `props-dist.json` file."""
+    by_fixture = {f["match_id"]: f for f in fixtures}
+    matches = {}
+    for r in rows.to_dict("records"):
+        f = by_fixture[r["match_id"]]
+        m = matches.setdefault(
+            f["match_id"],
+            {
+                "match_id": f["match_id"],
+                "start": f["start"].strftime("%Y-%m-%dT%H:%MZ"),
+                "team1": f["team1"],
+                "team2": f["team2"],
+                "best_of": f["best_of"],
+                "players": [],
+            },
+        )
+        spreads = {
+            stat: {
+                str(maps): compact_cdf(distribution(model, r, stat, f["best_of"], maps))
+                for maps in map_counts(f["best_of"])
+            }
+            for stat in COUNT_STATS
+        }
+        m["players"].append(
+            {
+                "playerid": r["playerid"],
+                "name": r["playername"],
+                "team": r["teamname"],
+                "spreads": spreads,
+            }
+        )
+    return {"at": now.strftime("%Y-%m-%dT%H:%MZ"), "matches": list(matches.values())}
+
+
+def table_fixtures(table):
+    return [
+        {
+            **{k: m[k] for k in ("match_id", "team1", "team2", "best_of")},
+            "start": pd.Timestamp(m["start"]),
+        }
+        for m in table["matches"]
+    ]
+
+
+def table_index(table):
+    """`player_index` for the players in a spread table."""
+    rows = [
+        {
+            "playerid": p["playerid"],
+            "playername": p["name"],
+            "teamname": p["team"],
+            "date": pd.Timestamp(m["start"]),
+        }
+        for m in table["matches"]
+        for p in m["players"]
+    ]
+    index = pd.DataFrame(rows, columns=["playerid", "playername", "teamname", "date"])
+    index["key"] = index["playername"].map(fold)
+    return index.drop_duplicates("playerid", keep="last")
+
+
+def price_from_table(lines, table):
+    """Match the newest lines to the table's players and price them from their
+    spreads. Returns (priced lines, the table's fixtures)."""
+    fixtures = table_fixtures(table)
+    if lines.empty or not fixtures:
+        return pd.DataFrame(), fixtures
+    matched = match_lines(lines, table_index(table), fixtures)
+    spreads = {
+        (m["match_id"], p["playerid"]): p["spreads"]
+        for m in table["matches"]
+        for p in m["players"]
+    }
+    by_fixture = {f["match_id"]: f for f in fixtures}
+    rows = []
+    for line in matched.to_dict("records"):
+        key = (line.get("match_id"), line.get("playerid"))
+        if key not in spreads or not _usable(line) or line["stat"] not in COUNT_STATS:
+            continue
+        maps = min(_maps(line["maps"]), by_fixture[line["match_id"]]["best_of"])
+        spread = spreads[key][line["stat"]].get(str(maps))
+        if spread is None:
+            continue
+        rows.append(
+            price_line(line, *cdf_chances(spread, line["line"]), cdf_summary(spread))
+        )
+    return pd.DataFrame(rows), fixtures
 
 
 # ---------------------------------------------------------------- settlement
@@ -456,14 +597,24 @@ def _clean(v):
 def settle_lines(calls, games, now):
     """Saved calls whose series is in our games, each with `actual` and `result`
     ("over", "under", "push" or "void": the player played none of its maps)."""
+    due = [c for c in calls.values() if pd.Timestamp(c["start"]) <= now]
+    if not due:
+        return pd.DataFrame()
+    # Only the games around the calls' matches, and each match side's totals once:
+    # scanning every game per call made settling the slowest part of the build.
+    starts = pd.to_datetime([c["start"] for c in due]).tz_localize(None)
+    window = (games["date"] >= starts.min() - SERIES_GAP) & (
+        games["date"] <= starts.max() + SERIES_GAP
+    )
+    near = games[window]
+    cache = {}
     rows = []
-    for call in calls.values():
+    for call in due:
         start = pd.Timestamp(call["start"])
-        if start > now:
-            continue
-        totals = series_totals(
-            games, call["team"], call["opp"], start, _maps(call["maps"])
-        )
+        key = (call["team"], call["opp"], call["start"], _maps(call["maps"]))
+        if key not in cache:
+            cache[key] = series_totals(near, *key[:2], start, key[3])
+        totals = cache[key]
         if not totals:
             continue
         mine = totals.get(call["playerid"])

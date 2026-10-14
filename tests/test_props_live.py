@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from prometheus import props_live
+from prometheus import props, props_live
 
 
 def test_chances_split_push_on_whole_lines():
@@ -245,3 +245,97 @@ def test_calls_freeze_at_the_start_and_settle():
     assert card["market_n"] == 1 and card["market_log_loss_theirs"] == pytest.approx(
         math.log(2)
     )
+
+
+def test_compact_cdf_prices_like_the_full_pmf():
+    pmf = props.series_pmf(
+        props.nb_pmf([3.5], [0.1], 40),
+        props.nb_pmf([2.0], [0.1], 40),
+        np.array([0.6]),
+        5,
+        3,
+    )[0]
+    spread = props_live.compact_cdf(pmf)
+    for line in (4.5, 7.5, 8, 12.5, 30.5):
+        assert props_live.cdf_chances(spread, line) == pytest.approx(
+            props_live.chances(pmf, line), abs=2e-3
+        )
+    full = props_live.summary(pmf)
+    assert props_live.cdf_summary(spread) == {
+        k: full[k] for k in ("median", "p10", "p90")
+    }
+
+
+def _table():
+    pmf = props.nb_pmf([9.0], [0.05], 60)[0]
+    spread = props_live.compact_cdf(pmf)
+    return {
+        "at": "2026-10-14T10:00Z",
+        "matches": [
+            {
+                "match_id": "m1",
+                "start": "2026-10-15T18:00Z",
+                "team1": "Cloud9",
+                "team2": "Karmine Corp",
+                "best_of": 5,
+                "players": [
+                    {
+                        "playerid": "p1",
+                        "name": "Yike",
+                        "team": "Karmine Corp",
+                        "spreads": {
+                            s: {"2": spread, "3": spread}
+                            for s in props_live.COUNT_STATS
+                        },
+                    },
+                ],
+            }
+        ],
+    }
+
+
+def test_price_from_table_matches_and_prices_lines():
+    start = pd.Timestamp("2026-10-15 18:00", tz="UTC")
+    lines = pd.DataFrame(
+        [
+            {
+                "source": "underdog",
+                "line_id": "1",
+                "player": "Yike",
+                "team": "KC",
+                "stat": "kills",
+                "maps": "1-3",
+                "line": 12.5,
+                "over_mult": 1.0,
+                "under_mult": 1.0,
+                "over_prob": 0.5,
+                "start": start,
+            },
+            {
+                "source": "underdog",
+                "line_id": "2",
+                "player": "Nobody",
+                "team": "KC",
+                "stat": "kills",
+                "maps": "1-3",
+                "line": 5.5,
+                "over_mult": 1.0,
+                "under_mult": 1.0,
+                "over_prob": 0.5,
+                "start": start,
+            },
+        ]
+    )
+    priced, fixtures = props_live.price_from_table(lines, _table())
+    assert [f["match_id"] for f in fixtures] == ["m1"]
+    assert list(priced["line_id"]) == ["1"]
+    row = priced.iloc[0]
+    assert (
+        row["playerid"] == "p1"
+        and row["teamname"] == "Karmine Corp"
+        and row["side"] == "under"
+    )
+    assert row["median"] == 9
+    # Saving the call works from the table's fixtures alone.
+    calls = props_live.update_calls({}, priced, fixtures, start - pd.Timedelta(hours=3))
+    assert calls["underdog|1"]["opp"] == "Cloud9"
