@@ -106,6 +106,15 @@
 .pp-line--none { color: var(--ink-3); }
 .pp-line--none .muted { display: inline-block; min-width: 2.6rem; text-align: right; }
 
+/* ---- Results: each app's line and our pick, set by how the pick went ---- */
+.register--props-results .pp-stat-name { color: var(--ink-2); font-variant-caps: all-small-caps; letter-spacing: 0.05em; }
+.register--props-results .pp-actual { font-weight: 600; color: var(--ink); }
+.pp-res { width: 7rem; }
+.pp-res .pp-pick { color: var(--ink-3); }
+.pp-res--right .pp-line-num, .pp-res--right .pp-pick { font-weight: 600; color: var(--ink); }
+.pp-res--missed .pp-pick { font-style: italic; }
+.pp-res-note { margin-left: 6px; color: var(--ink-3); font-style: italic; font-size: 0.875em; }
+
 /* ---- Filters -------------------------------------------------------- */
 .picker-panel--stat { width: 12rem; }
 .picker-options--list { grid-template-columns: 1fr; }

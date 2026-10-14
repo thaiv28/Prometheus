@@ -75,8 +75,11 @@ jobs:
         run: bash scripts/post_kalshi_alert.sh
 
   # The pick'em apps' LoL prop lines (scripts/collect_props.py), appended to a log in
-  # the backup bucket. Its own job: it writes only its own file, so it runs even
-  # while the site is being published, and a source refusing never fails the run.
+  # the backup bucket, then priced against the last build's projections
+  # (scripts/update_props.py): our calls saved until each start, and props-lines.json
+  # for the live Props page. Its own job: it writes only its own files (the build
+  # only reads them), so it runs even while the site is being published, and a
+  # source refusing never fails the run.
   props-lines:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -86,6 +89,8 @@ jobs:
       cancel-in-progress: false
     env:
       PROP_LINES_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/props/prop_lines.jsonl
+      PROP_CALLS_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/props/prop_calls.json
+      BUCKET: ${{ vars.DEPLOYMENT_BUCKET }}
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -101,3 +106,19 @@ jobs:
         run: uv run --no-dev python scripts/collect_props.py --log data/prop_lines.jsonl
       - name: Save the lines log
         run: bash scripts/prop_data.sh save data/prop_lines.jsonl "$PROP_LINES_BACKUP"
+      - name: Restore the props calls
+        run: bash scripts/prop_data.sh restore data/prop_calls.json "$PROP_CALLS_BACKUP"
+      # The last build's projections, from the site bucket (no database here).
+      - name: Price the lines
+        run: |
+          aws s3 cp "s3://$BUCKET/current/props-dist.json" data/props-dist.json --only-show-errors \
+            || echo "No projections published yet."
+          uv run --no-dev python scripts/update_props.py --dist data/props-dist.json --out output-props
+      - name: Save the props calls
+        run: bash scripts/prop_data.sh save data/prop_calls.json "$PROP_CALLS_BACKUP"
+      # Same 5-minute edge cache as kalshi.json (no invalidation).
+      - name: Publish the lines to the site
+        if: env.BUCKET != '' && hashFiles('output-props/props-lines.json') != ''
+        run: |
+          aws s3 cp output-props/props-lines.json "s3://$BUCKET/current/props-lines.json" --only-show-errors \
+            --content-type application/json --cache-control "max-age=300"

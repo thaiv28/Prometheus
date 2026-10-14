@@ -1,0 +1,48 @@
+{#- Props page pieces, shared by props.html and the monthly results pages. props.js
+    builds the same line cell from props-lines.json; keep the two in step. -#}
+{% macro line_cell(cell, app) -%}
+{%- if cell -%}
+<td class="pp-line{% if cell.clears %} pp-line--clears{% endif %}" data-app="{{ app.key }}" title="Over: ours {{ cell.over }}{% if cell.app_over %}, {{ app.label }} {{ cell.app_over }}{% endif %}{% if cell.one_sided %}. Over only{% endif %}">
+  <span class="pp-line-num">{{ cell.line }}</span>
+  <span class="pp-meter" style="--p: {{ cell.over }}; --be: {{ cell.break_even or 58 }}" aria-hidden="true"></span>
+  <span class="pp-pick">{% if cell.side %}<span class="pp-side">{{ 'O' if cell.side == 'over' else 'U' }}</span>&#8201;{{ cell.p_side }}{% else %}<span class="muted">—</span>{% endif %}</span>
+  <span class="visually-hidden">{% if cell.side %}: {{ cell.side }}, {{ cell.p_side }} in 100{% endif %}</span>
+</td>
+{%- else -%}
+<td class="pp-line pp-line--none" data-app="{{ app.key }}"><span class="muted" aria-label="No {{ app.label }} line">—</span></td>
+{%- endif -%}
+{%- endmacro %}
+
+{#- Settled lines, one group per match: each player and stat with the actual total
+    and, per app, the line and our pick, set by how it went. -#}
+{% macro results(matches, apps, root='') -%}
+<table class="register register--props register--props-results">
+  <thead>
+    <tr>
+      <th scope="col" class="pp-player">Player</th>
+      <th scope="col">Stat</th>
+      <th scope="col" class="num">Actual</th>
+      {% for app in apps %}<th scope="col" class="pp-app">{{ app.label }}</th>{% endfor %}
+    </tr>
+  </thead>
+  {% for m in matches %}
+  <tbody>
+    <tr class="pp-team-row"><th scope="rowgroup" colspan="{{ 3 + apps | length }}">{{ m.label }}</th></tr>
+    {% for r in m.rows %}
+    <tr>
+      <th scope="row" class="pp-player">{% if r.slug %}<a href="{{ root }}players/{{ r.slug }}.html">{{ r.player }}</a>{% else %}{{ r.player }}{% endif %}</th>
+      <td class="pp-stat-name">{{ r.stat }}</td>
+      <td class="num pp-actual">{{ r.actual if r.actual is not none else '—' }}</td>
+      {% for app in apps %}{% set c = r.cells.get(app.key) %}
+      {% if c %}
+      <td class="pp-line pp-res pp-res--{{ c.call or 'none' }}"><span class="pp-line-num">{{ c.line }}</span><span class="pp-pick">{% if c.side %}<span class="pp-side">{{ 'O' if c.side == 'over' else 'U' }}</span>&#8201;{{ c.p_side }}{% endif %}</span>{% if c.call in ['push', 'void'] %}<span class="pp-res-note">{{ c.call }}</span>{% endif %}<span class="visually-hidden">{% if c.call %}: {{ c.call }}{% endif %}</span></td>
+      {% else %}
+      <td class="pp-line pp-line--none"><span class="muted">—</span></td>
+      {% endif %}
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+  {% endfor %}
+</table>
+{%- endmacro %}

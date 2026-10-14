@@ -2,6 +2,16 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-14 — Props: results by month, and lines refreshed hourly
+
+Branch `props-results`, based on `main` (fa08240). (#54, my fix for the hourly lines save, was closed: #55 had fixed the same bug.)
+
+- **Results:** settled calls become results (`site.props.result_rows`): per match, player and stat, each app's line, our pick and right / missed / push / void. The Props page lists the last 3 days with a *By month* line; `props-results/YYYY-MM.html` has every month (`props_results.html.j2`, the register shared through `_props.html.j2`).
+- **Hourly lines:** the build writes `props-dist.json` (each projected starter's compact cdf for maps 1–2 and 1–3; about 350 KB) and `props-lines.json`. The `props-lines` job now also prices the newest lines against the published spreads (`scripts/update_props.py`, no DB, about 1 s), saves the calls and uploads `props-lines.json` with a 5-minute cache; `props.js` rebuilds the line cells, counts and "Lines as of" from it. On 14 Oct's lines the build and the hourly path gave the same 96 cells.
+- **One writer for calls:** the hourly job alone saves `prop_calls.json`; the publish build only reads it (its "Save the props calls" step is gone), so a line posted after the daily build still gets a call before its start and the workflows can't overwrite each other.
+- **CI time:** the build's props step stayed at about 8–10 s locally: the spread table's cost was paid for by settling faster (filtering the games to the calls' dates once and totalling each match side once took settlement from 5.7 s to near zero). The hourly job adds about a second plus an S3 copy each way.
+- Checks: `uv run pytest -q` (new: compact cdf against the full pmf, pricing from a table, results rows, months and pages, the line payload, `update_props.py` end to end); `ruff format --check`, `ruff check`; site build with today's lines and the live prediction log; the hourly script against the build's `props-dist.json`; the page with an edited `props-lines.json` (the change showed); a sample month page. Not run: the workflow steps in CI. Local game data stops at 11 Oct (Drive refused the download), so nothing settled locally.
+
 ## 2026-10-13 — Fix hourly props log backup parsing
 
 - The Kalshi prices workflow's `props-lines` job failed at save after collecting lines (run 38437402399): its downloaded JSONL backup had an extensionless `mktemp` name, so `count` tried to parse multiple records as one JSON object. `prop_data.sh` now selects the backup's format from the original file path. Both JSONL lines and JSON object keys retain the shrinking-backup guard.
