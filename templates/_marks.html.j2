@@ -59,7 +59,7 @@
       {% set name = r['name' ~ side] %}{% set slug = r['slug' ~ side] %}
       {% set cls = 'fx-fav' if r.fav == side else ('fx-dog' if r.fav else '') %}
       {% if side == 2 %}
-      <td class="fx-bar-col" aria-hidden="true" title="Called by {{ r.method }}{{ ' alone, across leagues' if r.cross }}{% if r.mkt1 %}; Kalshi {{ r.mkt1 }}–{{ r.mkt2 }}, {{ r.mkt_at }}{% endif %}"><span class="fx-bar" style="--p: {{ r.pct1 }}">{% if r.mkt1 %}<span class="fx-mkt" style="--m: {{ r.mkt1 }}"></span>{% endif %}</span></td>
+      <td class="fx-bar-col" aria-hidden="true" title="Called by {{ r.method }}{{ ' with regional calibration' if r.calibrated else (' alone, across leagues' if r.cross else '') }}{% if r.mkt1 %}; Kalshi {{ r.mkt1 }}–{{ r.mkt2 }}, {{ r.mkt_at }}{% endif %}"><span class="fx-bar" style="--p: {{ r.pct1 }}">{% if r.mkt1 %}<span class="fx-mkt" style="--m: {{ r.mkt1 }}"></span>{% endif %}</span></td>
       {% endif %}
       {% if side == 1 %}
       <td class="fx-team fx-team--1 {{ cls }}{% if r.winner == 1 %} fx-won{% endif %}" title="{{ name }}">{% if slug %}<a href="{{ root }}teams/{{ slug }}.html">{{ name }}</a>{% else %}{{ name }}{% endif %}</td>
@@ -72,7 +72,7 @@
       {% if not results %}<td class="fx-bo">Bo{{ r.best_of }}</td>{% endif %}
       {% if not results %}<td class="num phone-hide fx-opt fx-game">{% if r.best_of > 1 %}{{ r.game1 }}–{{ r.game2 }}{% else %}<span class="muted">same</span>{% endif %}</td>{% endif %}
       {% if not results %}<td class="num phone-hide fx-market"{% if r.mkt1 %} title="As of {{ r.mkt_at }}; opens the match on Kalshi"{% endif %}>{% if r.mkt1 and r.mkt_url %}<a href="{{ r.mkt_url }}" aria-label="Kalshi’s market for {{ r.name1 }} against {{ r.name2 }}: {{ r.mkt1 }}–{{ r.mkt2 }}">{{ r.mkt1 }}–{{ r.mkt2 }}</a>{% elif r.mkt1 %}{{ r.mkt1 }}–{{ r.mkt2 }}{% else %}<span class="muted" title="No Kalshi market, or too thin a quote">—</span>{% endif %}</td>{% endif %}
-      {% if by %}<td class="wide-only fx-opt fx-by">{{ r.method }}{% if r.cross %}<span class="fx-cross" title="Teams from different leagues: Elo alone"> across</span>{% endif %}</td>{% endif %}
+      {% if by %}<td class="wide-only fx-opt fx-by">{{ r.method }}{% if r.cross %}<span class="fx-cross" title="{{ 'Elo with regional calibration' if r.calibrated else 'Teams from different leagues: Elo alone' }}"> across</span>{% endif %}</td>{% endif %}
       {% if results %}
       <td class="num phone-hide fx-close fx-market"{% if r.mkt1 %} title="Kalshi’s last price before the start ({{ r.mkt_at }}); opens the match on Kalshi"{% endif %}>{% if r.mkt1 and r.mkt_url %}<a href="{{ r.mkt_url }}" aria-label="Kalshi’s closing line for {{ r.name1 }} against {{ r.name2 }}: {{ r.mkt1 }}–{{ r.mkt2 }}">{{ r.mkt1 }}–{{ r.mkt2 }}</a>{% elif r.mkt1 %}{{ r.mkt1 }}–{{ r.mkt2 }}{% else %}<span class="muted" title="No Kalshi market, or too thin a quote">—</span>{% endif %}</td>
       <td class="num fx-score" title="Best of {{ r.best_of }}">{{ r.score or '—' }}</td>

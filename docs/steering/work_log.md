@@ -6,6 +6,8 @@ Append one dated entry for each substantive agent work session, newest first. Re
 
 User authorized PR, merge after successful checks, deployment and live verification. Branch `international-market-diagnostic` still builds on main `36a1e6e` (also current origin/main at review). Reviewed event/title exclusions, availability strictly after training dates, event-frozen snapshots, runtime/benchmark routing and preservation of started saved calls. No blocking code finding; original settings/artifact retained, latest training cutoff Oct 2 is intentional. Runtime is enabled by default in this release, with the documented environment rollback. No automatic refit or workflow change.
 
+Initial PR #57 CI caught three already-tested UI files omitted from the first commit (head-to-head JavaScript and two method-label templates); included them in the follow-up commit. The failed check expected calibrated 80/20 but received the old 69/31 path. No model or benchmark change. Local full suite before first push: 435 passed in 7.91 s; formatting/lint clean.
+
 Local pre-release checks and historical evidence are in the preceding entry. PR CI, runner timings, merge and live verification are pending when this release commit is prepared; final results will be recorded on the PR and reported to the user. The change makes no claim to beat Kalshi.
 
 ## 2026-10-14 — Validate and prepare two-layer international calibration

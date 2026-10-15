@@ -1,7 +1,7 @@
 // FORGE page: the head-to-head box. Between teams from the same league the chance
 // that A beats B on a neutral side is 1 / (1 + e^(-w * (A - B))) on FORGE ratings,
 // with w that league's slope (each league has its own scale). Between leagues Form
-// doesn't compare, so it comes from the Elo gap alone, on its own curve. The weights
+// doesn't compare; international matchups add frozen regional calibration to Elo. The weights
 // are embedded in the page config by build_site.py.
 (function () {
   "use strict";
@@ -26,10 +26,19 @@
 
   function chance(x, y) {
     const sameLeague = x.league === y.league;
-    if (note) note.hidden = sameLeague;
+    const calibration = weights.internationalCalibration;
+    if (note) {
+      note.hidden = sameLeague;
+      note.textContent = calibration
+        ? "International matchup: Elo with regional calibration."
+        : "These teams play in different leagues, so the odds come from Elo alone.";
+    }
     const gap = sameLeague
       ? (weights.leagues?.[x.league] ?? weights.elo) * (Number(x.forge) - Number(y.forge))
-      : weights.crossRegionElo * (Number(x.elo) - Number(y.elo));
+      : calibration
+        ? calibration.slope * (Number(x.elo) - Number(y.elo))
+          + (calibration.effects[x.league] ?? 0) - (calibration.effects[y.league] ?? 0)
+        : weights.crossRegionElo * (Number(x.elo) - Number(y.elo));
     return 1 / (1 + Math.exp(-gap));
   }
 
