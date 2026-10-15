@@ -164,6 +164,11 @@ jobs:
       - name: Restore the prediction log
         if: env.CAN_USE_AWS == 'true'
         run: bash scripts/prediction_log.sh restore
+      # One-time recovery of the original notification's exact terms from the
+      # versioned backup; a no-op after its audit is saved with the log.
+      - name: Restore the original legacy alert
+        if: env.CAN_USE_AWS == 'true'
+        run: uv run python scripts/oneoff/restore_alert_history.py --backup "$PREDICTIONS_BACKUP" --apply
       # The pick'em lines log and our saved calls on those lines, for the Props page
       # (scripts/prop_data.sh). Both are written only by the hourly prices workflow;
       # the build reads them.

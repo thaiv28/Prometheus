@@ -520,6 +520,57 @@ def missing_results(log, now, teams=None, data_through=None):
 ALERT_KEYS = ("alert", "paper_alert")
 
 
+def _team_pair(entry):
+    return tuple(entry.get(f"ours{i}") or entry.get(f"team{i}") for i in (1, 2))
+
+
+def carry_records(old, entry):
+    """Carry original alert terms and prices in the refreshed fixture's ordering."""
+    old_pair, pair = _team_pair(old), _team_pair(entry)
+    swapped = old_pair != pair and old_pair == pair[::-1]
+    same_pair = old_pair == pair or swapped
+    carried = {}
+    if same_pair and entry.get("matched"):
+        for key in ("market", "market_12h"):
+            if key not in old:
+                continue
+            value = dict(old[key])
+            if swapped:
+                for name in ("p", "ours"):
+                    if value.get(name) is not None:
+                        value[name] = round(1 - value[name], 4)
+                if "ask1" in value or "ask2" in value:
+                    value["ask1"], value["ask2"] = value.get("ask2"), value.get("ask1")
+            carried[key] = value
+    for key in ALERT_KEYS:
+        if key in old:
+            value = dict(old[key])
+            team = value.get("team") or old_pair[value["side"] - 1]
+            if swapped or value.get("team"):
+                value["team"] = team
+                if team in pair:
+                    value["side"] = pair.index(team) + 1
+            carried[key] = value
+    return carried
+
+
+def aligned_result(row, entry):
+    result = _result(row)
+    # Result rows carry Leaguepedia names; saved entries retain those same names.
+    pair = (row.get("team1"), row.get("team2"))
+    target = (entry.get("team1"), entry.get("team2"))
+    if pair != target and pair == target[::-1] and result:
+        result["winner"] = 3 - result["winner"]
+        result["score1"], result["score2"] = result["score2"], result["score1"]
+    elif pair != target:
+        return {}
+    return result
+
+
+def _fixture_key(entry):
+    return (frozenset(_team_pair(entry)), entry.get("start"), entry.get("league"))
+
+
 def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
     """Fold today's schedule and predictions into the log, in place.
 
@@ -533,12 +584,30 @@ def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
     Schedule changes (a team named, a time moved) are taken until the match starts.
     """
     by_id = {p["match_id"]: p for p in predictions}
+    incoming = {}
+    for p in predictions:
+        key = _fixture_key(p)
+        incoming[key] = incoming.get(key, 0) + 1
+    fixtures = {}
+    for e in log.values():
+        if e.get("matched"):
+            fixtures.setdefault(_fixture_key(e), []).append(e["match_id"])
     now_s = now.strftime("%Y-%m-%dT%H:%MZ")
     for row in schedule.to_dict(orient="records"):
         mid = row["match_id"]
         pred = by_id.get(mid)
         old = log.get(mid)
-        started = pred["start"] <= now_s
+        if old is None:
+            # Provider round labels/IDs may change; a unique exact fixture keeps
+            # its original call and first alert under its existing identity.
+            same = fixtures.get(_fixture_key(pred), [])
+            if len(same) == 1 and incoming.get(_fixture_key(pred)) == 1:
+                mid = same[0]
+                old = log[mid]
+                pred = {**pred, "match_id": mid}
+        started = pred["start"] <= now_s or bool(
+            old and old.get("matched") and old["start"] <= now_s
+        )
         if not started:
             entry = {
                 **pred,
@@ -546,26 +615,30 @@ def update_log(log, schedule, predictions, now, data_through, reconstruct=None):
                 "data_through": data_through,
                 "reconstructed": False,
             }
-            if old is not None and pred.get("matched"):
-                # Until a newer price replaces them.
-                for key in ("market", "market_12h"):
-                    if key in old:
-                        entry[key] = old[key]
             if old is not None:
-                # A match is alerted once, at its first price (alerts.record).
-                for key in ALERT_KEYS:
-                    if key in old:
-                        entry[key] = old[key]
+                entry.update(carry_records(old, entry))
         elif old is not None and old.get("matched"):
             entry = old
         else:
             entry = reconstruct(row) if reconstruct else {**pred, "matched": False}
             entry = {**entry, "reconstructed": True}
-        entry = {
-            k: v for k, v in entry.items() if k not in ("winner", "score1", "score2")
-        }
-        entry.update(_result(row))
+        result = aligned_result(row, entry)
+        if result:
+            entry = {
+                k: v
+                for k, v in entry.items()
+                if k not in ("winner", "score1", "score2")
+            }
+            entry.update(result)
         log[mid] = entry
+        if old is not None and _fixture_key(old) != _fixture_key(entry):
+            previous = fixtures.get(_fixture_key(old), [])
+            if mid in previous:
+                previous.remove(mid)
+        if entry.get("matched"):
+            ids = fixtures.setdefault(_fixture_key(entry), [])
+            if mid not in ids:
+                ids.append(mid)
     return log
 
 
