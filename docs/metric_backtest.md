@@ -1,4 +1,4 @@
-## Metric backtest (2026-10-12)
+## Metric backtest (2026-10-14)
 
 ### Domestic: 16,810 games, 2014–2026
 
@@ -23,14 +23,14 @@
 | Blue side wins | 53.2% | 0.2491 | 0.6913 | +0.0034 (-0.0066 to +0.0136) |
 | Win % so far | 54.2% | 0.2474 | 0.6879 | baseline |
 | Elo (as of cutoff) | 65.1% | 0.2232 | 0.6369 | -0.0510 (-0.0691 to -0.0323) |
-| Elo (live) | 65.0% | 0.2178 | 0.6244 | -0.0635 (-0.0825 to -0.0441) |
+| Elo (live) | 64.9% | 0.2166 | 0.6222 | -0.0657 (-0.0904 to -0.0396) |
 | Team Elo, no player ratings (live) | 66.3% | 0.2182 | 0.6255 | -0.0624 (-0.0818 to -0.0416) |
 | Form (live) | 58.3% | 0.2385 | 0.6697 | -0.0182 (-0.0290 to -0.0064) |
-| FORGE (live) | 65.0% | 0.2178 | 0.6244 | -0.0635 (-0.0825 to -0.0441) |
+| FORGE (live) | 64.9% | 0.2166 | 0.6222 | -0.0657 (-0.0904 to -0.0396) |
 
 - FORGE (live) vs Elo (live): log loss +0.0000 (+0.0000 to +0.0000)
-- Form (live) vs Elo (live): log loss +0.0452 (+0.0294 to +0.0606)
-- Elo (live) vs Team Elo, no player ratings (live): log loss -0.0010 (-0.0069 to +0.0053)
+- Form (live) vs Elo (live): log loss +0.0475 (+0.0248 to +0.0700)
+- Elo (live) vs Team Elo, no player ratings (live): log loss -0.0033 (-0.0136 to +0.0073)
 
 ### Player-built Elo vs team Elo, where rosters matter
 
@@ -47,11 +47,11 @@ Elo (live) on games between teams from two home leagues at any event; the home i
 
 | Teams | Games | Accuracy | Brier | Log loss |
 |---|---:|---:|---:|---:|
-| All | 10,184 | 68.2% | 0.2035 | 0.5925 |
-| Major v major | 1,052 | 64.0% | 0.2203 | 0.6304 |
-| Major v other | 1,920 | 69.6% | 0.1998 | 0.5820 |
-| Other v other | 7,212 | 68.5% | 0.2021 | 0.5898 |
-| At an international event | 2,219 | 65.9% | 0.2107 | 0.6072 |
+| All | 10,184 | 68.5% | 0.2026 | 0.5906 |
+| Major v major | 1,052 | 64.9% | 0.2175 | 0.6239 |
+| Major v other | 1,920 | 69.6% | 0.1996 | 0.5811 |
+| Other v other | 7,212 | 68.8% | 0.2013 | 0.5882 |
+| At an international event | 2,219 | 67.4% | 0.2067 | 0.5981 |
 | At any other event (EMEA Masters, cups, promotion) | 7,965 | 68.9% | 0.2015 | 0.5885 |
 
 ### Within other leagues: 69,736 games, 2014–2026

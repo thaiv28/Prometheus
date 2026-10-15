@@ -137,7 +137,7 @@ FORECASTS = {
         "description": "Who would win a game today. Each team's Elo plus its Form, the recent play that Elo misses, weighted by what best predicted past games.",
         "how_to_read": [
             "Rating: Elo plus Form, both in Elo points, on the team's league's own scale; the four majors share one. Form is how much better than its own league a team has played lately, from its recent gold and objective stats, each game adjusted for the opponent's Elo. Recent games count most: a game's weight halves every 20 games.",
-            "Head to head turns two ratings into a chance to win one game. Between teams from different leagues it uses Elo alone, because Form only compares a team with its own league. It ignores side; blue side wins about 54% of games.",
+            "Head to head turns two ratings into a chance to win one game. Between leagues it uses Elo; international matchups add regional forecast calibration. Form stays within a league. It ignores side; blue side wins about 54% of games.",
             "Tested on every major-league game since 2014, using only earlier games each time: it picks the winner 64.8% of the time within a league, and its odds are more accurate than Elo's alone.",
             "The table opens on major-league teams that have played in the last six months. Pick a league to see its teams, or a season for ratings at the end of that year.",
         ],

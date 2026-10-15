@@ -205,9 +205,18 @@ def test_call_at_rates_from_games_before_the_bet_day(monkeypatch):
         return pd.DataFrame(index=["T1", "Gen.G"])
 
     monkeypatch.setattr(
-        evaluate_markets.schedule, "game_probability", lambda a, b: (0.6, "forge")
+        evaluate_markets.schedule,
+        "game_probability",
+        lambda a, b, **kwargs: (0.6, "forge"),
     )
-    row = {"ours1": "T1", "ours2": "Gen.G", "best_of": 1, "major": True}
+    row = {
+        "ours1": "T1",
+        "ours2": "Gen.G",
+        "best_of": 1,
+        "major": True,
+        "event": "LCK 2026",
+        "start": datetime.datetime(2026, 9, 2, tzinfo=datetime.UTC),
+    }
     at = datetime.datetime(2026, 9, 1, 3, tzinfo=datetime.UTC)
     assert evaluate_markets.call_at(row, before, at) == pytest.approx(0.6)
     assert days == [datetime.date(2026, 9, 1)]

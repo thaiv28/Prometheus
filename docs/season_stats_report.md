@@ -1,4 +1,4 @@
-## Season-stat report (2026-10-12)
+## Season-stat report (2026-10-14)
 
 | Stat | Split-half r (95% CI) | Full-season reliability | Games to 0.5 | r with other half's win % | r with win % | r with Record |
 |---|---|---:|---:|---:|---:|---:|

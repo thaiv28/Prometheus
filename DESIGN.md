@@ -322,3 +322,7 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 - **Don't** use a league ink or ledger blue as a fill or for emphasis.
 - **Don't** put a label or eyebrow above a heading.
 - **Don't** animate anything other than the re-rank and the season switch.
+
+### International forecast method (2026-10-14)
+
+The head-to-head note calls cross-league comparisons an international matchup and names regional calibration. Fixture tooltips name calibration only when the saved call records its version; existing calls retain their original method label. Team/player game-log explanation mentions the international calibration. These are copy changes within the existing Almanac typography and layout; no new column or control.

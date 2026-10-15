@@ -420,7 +420,11 @@ def our_calls(rows, before, match_team):
         if not all(t in ratings.index for t in ours):
             continue
         p, method = schedule.game_probability(
-            ratings.loc[ours[0]], ratings.loc[ours[1]]
+            ratings.loc[ours[0]],
+            ratings.loc[ours[1]],
+            title=row["event"],
+            at=day,
+            event_day=row["start"],
         )
         major = row_is_major(
             ratings.loc[ours[0]]["league"], ratings.loc[ours[1]]["league"]
@@ -446,7 +450,13 @@ def call_at(row, before, at):
     ours = [row["ours1"], row["ours2"]]
     if not all(t in ratings.index for t in ours):
         return None
-    p, _ = schedule.game_probability(ratings.loc[ours[0]], ratings.loc[ours[1]])
+    p, _ = schedule.game_probability(
+        ratings.loc[ours[0]],
+        ratings.loc[ours[1]],
+        title=row["event"],
+        at=at,
+        event_day=row["start"],
+    )
     return schedule.series_probability(
         p, row["best_of"], schedule.SERIES_RHO[row["major"]]
     )

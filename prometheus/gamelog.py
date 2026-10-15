@@ -21,6 +21,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from prometheus import regional_calibration
 from prometheus.forge import (
     CROSS_REGION_ELO_WEIGHT,
     ELO_WEIGHT,
@@ -121,6 +122,24 @@ def add_calls(games, states, form_weights=None):
             1 / (1 + np.exp(-np.array([other_league_weight(l) for l in h]) * (e - oe))),
         ),
     )
+    if "league" in games and "date" in games:
+        mask = (
+            cross
+            & games["league"]
+            .isin(regional_calibration.INTERNATIONAL_LEAGUES)
+            .to_numpy()
+        )
+        for i in np.flatnonzero(mask):
+            row = games.iloc[i]
+            p[i] = regional_calibration.probability(
+                p[i],
+                e[i] - oe[i],
+                h[i],
+                oh[i],
+                at=row["date"],
+                event=row["league"],
+                event_day=row["date"],
+            )
     method = np.where(cross, "elo-cross", np.where(forge, "forge", "elo")).astype(
         object
     )

@@ -44,7 +44,7 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sqlalchemy import text
 
-from prometheus import form
+from prometheus import form, regional_calibration
 from prometheus.elo import (
     calculate_game_length_elo_change,
     compute_elo_records,
@@ -127,7 +127,7 @@ def load_games():
 def load_pair_games():
     """Every game once (sides in team-id order) with the pre-game Elo gap."""
     stmt = """
-    SELECT m1.gameid, m1.year, m1.league, m1.teamid, m2.teamid AS opponent_teamid,
+    SELECT m1.gameid, m1.date, m1.year, m1.league, m1.teamid, m2.teamid AS opponent_teamid,
            m1.result AS won, e1.pre_match_elo - e2.pre_match_elo AS elo_live
     FROM matches m1
     JOIN matches m2 ON m2.gameid = m1.gameid AND m1.teamid < m2.teamid
@@ -143,7 +143,7 @@ def summarize_other_leagues(games):
     """Elo within non-major leagues: the standard 400-point curve, one fitted curve,
     and a fitted curve per league."""
     standard = game_losses(1 / (1 + 10 ** (-games["elo_live"] / 400)), games["won"])
-    fitted = game_losses(out_of_year_probabilities(games, "elo_live"), games["won"])
+    fitted = game_losses(cross_league_probabilities(games), games["won"])
     per_league = game_losses(out_of_year_league_probabilities(games), games["won"])
     lines = [
         f"\n### Within other leagues: {len(games):,} games, {games['year'].min()}–{games['year'].max()}\n",
@@ -215,9 +215,17 @@ def summarize_other_league_forge(games, fitted, per_league):
     return "\n".join(lines) + "\n"
 
 
+def cross_league_probabilities(games):
+    return regional_calibration.apply_frame(
+        games,
+        out_of_year_probabilities(games, "elo_live"),
+        homes=("home", "opponent_home"),
+    )
+
+
 def summarize_cross_league(games):
     """Elo (live) on every cross-league game, by which leagues met."""
-    losses = game_losses(out_of_year_probabilities(games, "elo_live"), games["won"])
+    losses = game_losses(cross_league_probabilities(games), games["won"])
     lines = [
         f"\n### Cross-league, every league: {len(games):,} games, {games['year'].min()}–{games['year'].max()}\n",
         "Elo (live) on games between teams from two home leagues at any event; "
@@ -445,7 +453,7 @@ def forge_probabilities(frame):
     p = out_of_year_probabilities(frame, "elo_live")
     within = frame[same].reset_index(drop=True)
     p[same] = out_of_year_probabilities(within, ["elo_live", "form"]).to_numpy()
-    return p
+    return regional_calibration.apply_frame(frame, p)
 
 
 def score(frame):
@@ -457,6 +465,8 @@ def score(frame):
             if inputs == FORGE
             else out_of_year_probabilities(frame, inputs)
         )
+        if key == "elo_live":
+            p = regional_calibration.apply_frame(frame, p)
         losses[key] = game_losses(p, frame["won"])
     return losses
 
@@ -683,7 +693,7 @@ def write_dump(out_dir, frame, losses, cross, other):
             "Cross-league",
             "elo_live",
             cross,
-            game_losses(out_of_year_probabilities(cross, "elo_live"), cross["won"]),
+            game_losses(cross_league_probabilities(cross), cross["won"]),
             "teamid",
         )
     )
