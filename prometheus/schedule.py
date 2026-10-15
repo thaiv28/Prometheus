@@ -517,7 +517,7 @@ def missing_results(log, now, teams=None, data_through=None):
 
 
 # Alert records on a log entry (prometheus/alerts.py), kept when a build refreshes it.
-ALERT_KEYS = ("alert", "paper_alert")
+ALERT_KEYS = ("alert", "paper_alert", "international_paper_alert")
 
 
 def _team_pair(entry):
