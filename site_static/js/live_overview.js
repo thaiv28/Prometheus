@@ -1,0 +1,135 @@
+// The Live home: every match in progress as one register, from live/index.json
+// (the collector's latest numbers, not held back: nothing is being watched
+// here). Each match's row opens it on watch.html. Text goes in through
+// textContent, never innerHTML.
+(function () {
+  "use strict";
+
+  const root = document.getElementById("live-overview");
+  if (!root) return;
+  const L = PrometheusLive;
+  const $ = (id) => document.getElementById(id);
+  const h = (tag, attrs, ...kids) => {
+    const node = document.createElement(tag);
+    for (const k in attrs || {}) {
+      if (k === "class") node.className = attrs[k];
+      else if (k in node) node[k] = attrs[k];
+      else node.setAttribute(k, attrs[k]);
+    }
+    for (const kid of kids) if (kid != null) node.append(kid);
+    return node;
+  };
+
+  const POLL_MS = 5000;
+  const QUIET_MS = 60000;
+  const RETRY_MS = 15000;
+  const STALE_MS = 45000;
+  const MAJORS = ["LCK", "LPL", "LEC", "LCS"];
+
+  const table = $("matches");
+  const empty = $("matches-empty");
+  let index = null;
+  let failed = false;
+  let skew = 0;
+  let timer = null;
+
+  async function poll() {
+    clearTimeout(timer);
+    try {
+      const res = await fetch(root.dataset.index, { cache: "no-store" });
+      const date = Date.parse(res.headers.get("Date"));
+      if (!Number.isNaN(date)) skew = date - Date.now();
+      if (res.status === 404 || res.status === 403) index = { matches: [] };
+      else if (!res.ok) throw new Error(res.status);
+      else index = await res.json();
+      failed = false;
+    } catch (e) {
+      failed = true;
+    }
+    render();
+    const live = index && L.liveMatches(index).length;
+    if (!document.hidden) timer = setTimeout(poll, failed ? RETRY_MS : live ? POLL_MS : QUIET_MS);
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) clearTimeout(timer);
+    else poll();
+  });
+
+  const watchUrl = (m) => `watch.html?match=${encodeURIComponent(m.id)}`;
+  const ago = (ms) => {
+    const s = Math.max(0, Math.round(ms / 1000));
+    return s < 90 ? `${s} s ago` : `${Math.round(s / 60)} min ago`;
+  };
+  const muted = (text) => h("span", { class: "muted" }, text);
+
+  // Rows are rebuilt on each read; the status line also every second.
+  function render(rows = true) {
+    if (!index) {
+      if (failed) $("matches-caption").textContent = "Feed unreachable.";
+      return;
+    }
+    const matches = L.liveMatches(index, MAJORS);
+    const age = Date.now() + skew - (L.time(index.published_at) || 0);
+    const n = matches.length;
+    const stale = failed || (n > 0 && age > STALE_MS);
+    $("matches-caption").textContent = [
+      n ? `${n === 1 ? "One match" : `${n} matches`} in progress` : "Matches in progress",
+      failed ? "; feed unreachable." : stale ? `; stalled, last update ${ago(age)}.` : n ? `, updated ${ago(age)}.` : ".",
+      index.note ? ` ${index.note}` : "",
+    ].join("");
+    $("matches-cap").classList.toggle("is-stale", stale);
+    if (!rows) return;
+    table.hidden = !n;
+    empty.hidden = !!n;
+    [...table.tBodies].forEach((b) => b.remove());
+    for (const m of matches) table.appendChild(row(m));
+  }
+
+  // One match: a tbody with its row, and a second line of figures for phones.
+  function row(m) {
+    const g = m.game || {};
+    const t = g.teams || [];
+    const call = L.summaryCall(g);
+    const q = g.market ? L.quoteAt([g.market], Infinity) : null;
+    const p = call ? L.in100(call.p) : null;
+    const fav = p == null ? 0 : p > 50 ? 1 : p < 50 ? 2 : 0;
+    // Team names are the row's links, so the match opens from the keyboard too.
+    const team = (i) => h("a", { class: "lm-name", href: watchUrl(m), title: (m.teams[i] && m.teams[i].name) || "" }, (m.teams[i] && m.teams[i].name) || "?");
+    const clock = g.ended_at ? "Ended" : L.clock(g.clock ?? g.clock_estimate) ?? "—";
+    const bar = h("span", { class: "fx-bar", style: `--p:${p ?? 50}` }, q ? h("span", { class: "fx-mkt", style: `--m:${L.in100(q.mid)}` }) : null);
+    if (p == null) bar.classList.add("is-empty");
+    bar.title = [call ? `Ours ${p}–${100 - p}, ${call.note}` : "No call yet", q ? `Kalshi ${L.in100(q.mid)}–${100 - L.in100(q.mid)}` : "No Kalshi price"].join("; ");
+    const stats = [
+      ["Gold", L.goldLeader(t, m.teams)],
+      ["Kills", L.pair(t[0] && t[0].kills, t[1] && t[1].kills)],
+      ["Towers", L.pair(t[0] && t[0].towers, t[1] && t[1].towers)],
+      ["Dragons", L.pair(t[0] && t[0].dragons, t[1] && t[1].dragons)],
+      ["Barons", L.pair(t[0] && t[0].barons, t[1] && t[1].barons)],
+    ];
+    const statCell = ([, v], i) => h("td", { class: `num lm-stat${i >= 2 ? " lm-wide" : ""}` }, v ?? muted("—"));
+    const score = Array.isArray(m.score) ? `${m.score[0]}–${m.score[1]}` : "—";
+    const main = h("tr", { class: "lm" },
+      h("td", { class: "lm-clock" }, h("span", { class: "lm-time" }, clock), h("span", { class: "lm-map" }, `Map ${g.number ?? "?"}`)),
+      h("td", { class: "lm-league wide-only" }, h("span", { class: "league", "data-league": m.league }, h("span", { class: "league-mark", "aria-hidden": "true" }), m.league)),
+      h("td", { class: `lm-team lm-team--1${fav === 1 ? " fav" : ""}` }, team(0)),
+      h("td", { class: `num lm-p${fav === 1 ? " fav" : ""}` }, p == null ? muted("—") : String(p)),
+      h("td", { class: "lm-bar-col" }, bar),
+      h("td", { class: `num lm-p lm-p--2${fav === 2 ? " fav" : ""}` }, p == null ? muted("—") : String(100 - p)),
+      h("td", { class: `lm-team lm-team--2${fav === 2 ? " fav" : ""}` }, team(1)),
+      h("td", { class: "num lm-opt lm-kalshi" }, q ? String(L.in100(q.mid)) : muted("—")),
+      h("td", { class: "num lm-series", title: m.best_of ? `Best of ${m.best_of}` : "" }, score),
+      ...stats.map(statCell),
+    );
+    // Phones: one line of figures under the match.
+    const line = h("tr", { class: "lm-line" }, h("td", { colspan: "14" },
+      h("span", { class: "lm-k" }, "Series"), ` ${score}`,
+      ...(q ? [" · ", h("span", { class: "lm-k" }, "Kalshi"), ` ${L.in100(q.mid)}`] : []),
+      ...stats.flatMap(([k, v]) => [" · ", h("span", { class: "lm-k" }, k), " ", v ?? "—"])));
+    const body = h("tbody", { class: "lm-match", "data-league": m.league }, main, line);
+    body.addEventListener("click", (e) => { if (!e.target.closest("a")) location.href = watchUrl(m); });
+    return body;
+  }
+
+  setInterval(() => { if (!document.hidden && index) render(false); }, 1000);
+  poll();
+})();

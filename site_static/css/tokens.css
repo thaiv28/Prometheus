@@ -31,6 +31,10 @@
   --spot: #2342a0;
   --spot-wash: #dfe2ee;
 
+  /* Ink veils over video: the full-screen bar and odds, the bar's dividers. */
+  --veil: rgb(27 25 20 / 0.72);
+  --veil-rule: rgb(243 238 227 / 0.22);
+
   /* League inks: small league marks and chart lines only. */
   --ink-lck: #146a6c;
   --ink-lpl: #9a2a2a;

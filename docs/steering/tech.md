@@ -227,3 +227,27 @@ Daily issues show an explicitly experimental international table (first chance/a
 ## Alert history page
 
 `site.alert_history.history_view` reads the original saved log, never current-model replay. It resolves each pinned team with `alerts.alert_side`, reuses `settled_alerts` for first-ask fee/profit/CLV accounting and `site.predictions.alert_record(..., key=)` for per-track summaries/unchanged interval rules. Every recorded domestic/international/minor pick is included, including pending or unresolvable calls without invented settlement. `alerts.html.j2` and scoped `alerts.css` extend the existing register. `predictions_pages` renders it before exporting; `update_prices.run` refreshes the same HTML from its saved log. Hourly upload is gated by `saved=true`, served as HTML with the other live files' five-minute cache. No new data load or fit. Tests cover saved-vs-current odds, separate profits, pending exclusion, identity/order changes, escaping, navigation and MIME/cache headers.
+## Live pages
+
+`live.html` (every match in progress) and `watch.html?match=<id>` (one match with its stream) are built like any page (`render_live` in `prometheus/site/predictions.py`; the stream list `LIVE_STREAMS` and the notes `LIVE` in `prometheus/site/config.py`; and the home page's next fixtures for between games). Everything live comes from `live/index.json` and one file per match, which the build never writes: the collector (planned in the lol-live repo) publishes them next to the site, and `scripts/live_demo.py` writes four synthetic matches into `output/live/` for previews. Both pages read the index every 5 s while a match is on (`cache: "no-store"`; once a minute with no match or no file, a 404 or 403 meaning no game rather than a failure; 15 s after an error; paused in a hidden tab). The watch page also reads the chosen match's file, corrects for the visitor's clock from the response's `Date` header, and draws only what `live_state.js` releases: items whose `at` is at least the viewer's stream delay old. The overview and the other matches in the watch page's strip show the index's latest numbers (nothing there is being watched). Choosing a match (strip, or the bar's Match select in full screen) switches the stream to that league's official one unless a co-stream is on; choosing a league's official stream brings up that league's match if one is on.
+
+`live/index.json`: `{schema, published_at, note, matches: [...]}`, one entry per match in progress: `id`, `url` (its file, `live/<id>.json`; the pages accept only that pattern), `league`, `event`, `best_of`, `teams` (`[{name, code}]`; `code` is the short name in the strip), `score`, `status`, and `game` with the latest `number`, `blue`, `clock`, `at`, `pregame` `{p, by}`, `call` (the newest checkpoint call), `market` (Kalshi's newest map quote), `teams` (the newest totals), `winner`, `ended_at`. A match leaves the index when it's over; an empty list means no game on.
+
+Each match's file:
+
+Format, schema 1 (all times ISO 8601 UTC; every chance is for `match.teams[0]`, in 0–1; any number may be `null`):
+
+| Field | Meaning |
+|---|---|
+| `schema`, `published_at` | Format version; when the collector wrote the file (the page calls it stalled after 45 s) |
+| `status` | `live`, `paused`, `between_games`, `idle` (no game: the page shows the next fixtures) or `unavailable` |
+| `note` | Optional line shown in the status (the demo labels itself here) |
+| `match` | `id`, `league` (picks the default stream), `event`, `best_of`, `teams` (`[{name}]`, Oracle's Elixir names, linked through `teams.json`), `score`, `series` (`ours`, `by`, `kalshi` `{at, bid, ask}`, `kalshi_url`) |
+| `game.number`, `game.id`, `game.blue` | Map number, source game ID, index of the team on blue side |
+| `game.pregame` | `{p, by, market}`: the call before the map (FORGE) and Kalshi's last map price before it started (`{at, bid, ask}`) |
+| `game.calls` | `[{minute, p, by, at}]`: frozen calls at 10, 15 and 20 minutes, released at `at` |
+| `game.frames` | `[{at, clock, teams: [{gold, kills, towers, dragons, barons, inhibitors}] × 2}]`: the feed's totals, oldest first; `clock` is game seconds when verified, else `null` (the figure then counts time from the first frame) |
+| `game.market`, `game.market_url` | `[{at, bid, ask}]`: Kalshi's map market (`KXLOLMAP`) for the first team; quotes wider than 10 points are skipped. `market_url` is the market's page on Kalshi: both Kalshi rows in the odds link to it, and so does the bid and offer |
+| `game.winner`, `game.ended_at` | Shown only once `ended_at` is released |
+
+Tests: `tests/js/live_state.test.mjs` (release, clock mapping through a pause, quotes, formats, match order, file paths, summaries) and `test_build_site.py` (both pages, stream list, the demo feed's shape).

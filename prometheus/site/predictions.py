@@ -248,6 +248,29 @@ def alert_record(entries, key="alert"):
     }
 
 
+def render_live(fixtures):
+    """live.html (every match in progress) and watch.html (one match, with its stream).
+
+    JS fills both from live/index.json and live/<match>.json, written by the live
+    collector, not by this build; `fixtures` (the next matches) show between games
+    and without JS.
+    """
+    for name, template in [
+        ("live.html", "live.html.j2"),
+        ("watch.html", "watch.html.j2"),
+    ]:
+        write(
+            os.path.join(site_config.OUTPUT_DIR, name),
+            env.get_template(template).render(
+                page_key="live",
+                root_path="",
+                metric=site_config.LIVE,
+                streams=site_config.LIVE_STREAMS,
+                fixtures=fixtures,
+            ),
+        )
+
+
 def render_predictions(view, coverage):
     write(
         os.path.join(site_config.OUTPUT_DIR, "predictions.html"),

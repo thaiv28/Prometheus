@@ -2,9 +2,11 @@
 templates and the search index. No database: frames are built by hand."""
 
 import datetime
+import importlib.util
 import json
 import math
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -720,3 +722,58 @@ def test_forge_register_lists_every_league_on_its_own_scale():
         float(forge.other_league_forge_probability(50.0, forge.FORM_POINTS)), abs=1e-3
     )
     assert config["leagueScales"] and config["majorLeagues"] == ["LCK", "LPL"]
+
+
+def test_live_pages_render_streams_and_fixtures(tmp_path, monkeypatch):
+    monkeypatch.setattr(site_config, "OUTPUT_DIR", str(tmp_path))
+    view = predictions.predictions_view(
+        _log(), {"t1"}, datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.UTC)
+    )
+    predictions.render_live(view["home"])
+    overview = (tmp_path / "live.html").read_text()
+    html = (tmp_path / "watch.html").read_text()
+    for page in (overview, html):
+        assert 'aria-current="page">Live' in page
+        assert 'data-index="live/index.json"' in page
+        assert "register--fixtures" in page
+    assert 'id="matches"' in overview and "js/live_overview.js?v=" in overview
+    assert 'id="match-strip"' in html and 'href="live.html">All matches' in html
+    # Official streams first, then co-streams, each a choice in the picker.
+    assert html.index('label="Official"') < html.index('label="Co-streams"')
+    for s in site_config.LIVE_STREAMS:
+        assert f'value="{s["key"]}"' in html
+    streams = json.loads(html.split('id="live-streams">')[1].split("</script>")[0])
+    assert streams == site_config.LIVE_STREAMS
+    assert "js/live.js?v=" in html
+    assert all(s.get("youtube") or s.get("twitch") for s in site_config.LIVE_STREAMS)
+    predictions.render_live([])
+    empty = (tmp_path / "live.html").read_text()
+    assert "None in the next four days." in empty
+    assert "js/predictions.js" not in empty
+
+
+def test_live_demo_feed_matches_the_pages(tmp_path):
+    spec = importlib.util.spec_from_file_location(
+        "live_demo", Path(__file__).parent.parent / "scripts" / "live_demo.py"
+    )
+    demo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(demo)
+    args = SimpleNamespace(
+        minute=21, speed=1.0, status="live", no_clock=False, matches=4
+    )
+    files = demo.feed(args, 1_800_000_000.0)
+    index = files["index.json"]
+    assert len(index["matches"]) == 4
+    first = index["matches"][0]
+    state = files[first["url"].removeprefix("live/")]
+    game = state["game"]
+    assert state["schema"] == 1 and state["match"]["id"] == first["id"]
+    assert [c["minute"] for c in game["calls"]] == [10, 15, 20]
+    assert game["frames"][-1]["clock"] == 21 * 60
+    assert all(q["bid"] <= q["ask"] for q in game["market"])
+    # The index carries each match's latest numbers.
+    assert first["game"]["clock"] == 21 * 60
+    assert first["game"]["call"]["minute"] == 20
+    assert first["game"]["teams"] == game["frames"][-1]["teams"]
+    idle = demo.feed(SimpleNamespace(status="idle"), 1_800_000_000.0)
+    assert idle == {"index.json": {**idle["index.json"], "matches": []}}

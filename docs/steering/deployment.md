@@ -77,6 +77,10 @@ When the data falls behind anyway, the site says so: the home page's title line 
 
 `s3://$DATA_BACKUP_BUCKET/prometheus/markets/market_prices.json` holds Kalshi's last price before each past series, for the game logs on team and player pages. Main builds restore it before `build_site.py` (read-only; the build never writes it). It is refreshed by hand: run `scripts/evaluate_markets.py` (slow, fetches Kalshi), then `scripts/export_market_prices.py`, then `aws s3 cp data/market_prices.json s3://$DATA_BACKUP_BUCKET/prometheus/markets/market_prices.json`. Without it, logs show only the prices saved in the prediction log.
 
+## Live feed files (planned)
+
+`live.html` and `watch.html` read `live/index.json` and `live/<match>.json` from the site (see tech.md, "Live pages"). Nothing publishes it yet, and the build doesn't write it. Before a collector writes them to `s3://$DEPLOYMENT_BUCKET/current/live/`: give `/live/*` a CloudFront behaviour that honours a short `max-age` (the default policy's 1-day default would freeze it), upload with `Cache-Control: max-age=2`, and make `deploy_site.py` skip `live/` so a deploy's delete pass doesn't remove them.
+
 ## Notes
 
 - **Rolling back.** Within 7 days (the artifact's retention), re-run the `deploy` job of the earlier run (Actions → that run → Re-run jobs → `deploy`, or `gh run rerun <run id> --job <deploy job id>`): it uploads the differences between that run's site and the manifest, then invalidates. Older than that, revert the commit and let the publish rebuild (today's data, the old code), or restore objects from S3 versions (the bucket is versioned) and then delete `deploy/manifest.json` so the next deploy uploads everything. Do the same after any change to `current/` made outside `deploy_site.py`, including re-running a deploy from before 2026-10-07 (it used `releases/`).

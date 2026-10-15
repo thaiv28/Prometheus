@@ -1,0 +1,166 @@
+{% extends 'base.html.j2' %}
+{% from '_marks.html.j2' import fixtures as fixtures_table %}
+{% block title %}Watch · Live · Prometheus{% endblock %}
+{% block description %}{{ metric.description }}{% endblock %}
+{% block canonical_path %}watch.html{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{{ asset('css/live.css') }}" />{% endblock %}
+{% block content %}
+  {#- live.js fills this page from live/index.json and the chosen match's file
+      (`?match=`; written by the live collector,
+      not by the build) and keeps it current. Without JS, or between games, only
+      the head, the next matches and the notes show. -#}
+  <div class="live live--watch" id="live" data-index="live/index.json" data-teams="teams.json">
+    {#- The title shows only without JS; once live.js runs, the header's "Live"
+        names the page and the stream starts right under it. -#}
+    <header class="live-head">
+      <h1>{{ metric.name }}</h1>
+      <noscript><p class="live-status">This page needs JavaScript to follow a game.</p></noscript>
+    </header>
+
+
+    {#- Every match in progress, always in view: a strip of matches, each with its
+        clock and both odds; choosing one swaps the odds, scoreline and figure (and
+        the stream, to that league's own, unless a co-stream is on). -#}
+    <nav class="match-strip" id="match-strip" aria-label="Matches in progress" hidden>
+      <a class="match-all" href="live.html">All matches</a>
+      <ol class="match-list" id="match-list"></ol>
+    </nav>
+
+    {#- The stream (sized by live.js to fit the window) beside one column: the
+        series' maps, the odds and the scoreline; Figure 1 spans the page under
+        them. Under 1000px the column follows the stream. Full screen shows only the
+        stage. Shown by live.js, with or without a game in the feed. -#}
+    <div class="live-spread" id="live-game" hidden>
+      <section class="live-watch" aria-label="Stream">
+        <figure class="plate">
+          {#- The stage: the control bar on the stream's top edge, the stream, and
+              (in full screen) a clear layer that catches the pointer, since the
+              video's frame swallows its events, and the odds floating on the right.
+              Both fade in on any movement and out after a few idle seconds. The
+              layer stops above the player's own control strip. -#}
+          <div class="stage" id="stage">
+            <div class="stage-bar" id="stage-bar">
+              <label class="bar-pick bar-match"><span class="bar-label">Match</span>
+                <select id="match-pick" class="bar-select"></select>
+              </label>
+              <label class="bar-pick"><span class="bar-label">Watching</span>
+              <select id="stream-pick" class="bar-select">
+                {% for group in streams | groupby('group') | sort(attribute='grouper', reverse=True) %}
+                <optgroup label="{{ group.grouper }}">
+                  {% for s in group.list %}<option value="{{ s.key }}">{{ s.name }}</option>{% endfor %}
+                </optgroup>
+                {% endfor %}
+              </select>
+              </label>
+              <span class="bar-views">
+                <button type="button" class="view-btn view-btn--full" data-view="full" aria-pressed="false" title="Full screen"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="icon-enter" d="M1.5 5.5v-4h4M10.5 1.5h4v4M14.5 10.5v4h-4M5.5 14.5h-4v-4"/><path class="icon-exit" d="M5.5 1.5v4h-4M14.5 5.5h-4v-4M10.5 14.5v-4h4M1.5 10.5h4v4"/></svg><span class="visually-hidden">Full screen</span></button>
+              </span>
+            </div>
+            <div class="plate-frame" id="stream-frame"></div>
+            <div class="stage-glass" id="stage-glass" aria-hidden="true"></div>
+            <aside class="stage-odds" id="stage-odds" aria-label="Odds"><div id="stage-odds-body"></div></aside>
+          </div>
+        </figure>
+      </section>
+
+      {#- What is playing, and how fresh the numbers are: under the stream. -#}
+      <div class="live-meta">
+        <p class="live-facts" id="live-facts" hidden></p>
+        <p class="live-status" id="live-status" role="status"></p>
+      </div>
+
+      {#- Beside the stream: this map's odds, then the scoreline at the estimated
+          game time. Figure 1 runs the full width under both. -#}
+      <div class="live-side">
+        <p class="live-maps" id="live-maps" hidden></p>
+        <section class="live-odds" aria-label="Win chance">
+          {#- Each team's chance to win this map: live (our in-game call, Kalshi now)
+              first and largest, then before the map (FORGE, Kalshi's last price). -#}
+          <p class="odds-quiet">No live game.</p>
+          <figure class="live-reading" aria-labelledby="odds-cap">
+            <figcaption id="odds-cap" class="visually-hidden">Each team's chance to win this map, in 100</figcaption>
+            <p class="odds-result" id="odds-result" hidden></p>
+            <table class="odds" id="odds">
+              <colgroup><col class="odds-c-label" /><col class="odds-c-p" /><col /><col /><col class="odds-c-p" /></colgroup>
+              <thead>
+                <tr>
+                  <th scope="col"><span class="visually-hidden">Source</span></th>
+                  <th scope="col" class="odds-team odds-team--1" colspan="2" id="odds-team-1"></th>
+                  <th scope="col" class="odds-team odds-team--2" colspan="2" id="odds-team-2"></th>
+                </tr>
+              </thead>
+              <tbody class="odds-live"></tbody>
+              <tbody class="odds-pre"></tbody>
+              <tbody class="odds-series"></tbody>
+            </table>
+          </figure>
+        </section>
+        <section class="live-board" aria-labelledby="board-cap">
+          <figure class="register-figure">
+            <figcaption id="board-cap" class="visually-hidden">Table I. <span id="board-when">Scoreline now</span>.</figcaption>
+            <div class="table-scroll">
+              <table class="register register--live" id="board">
+                <thead>
+                  <tr>
+                    <th scope="col">Side</th>
+                    <th scope="col">Team</th>
+                    <th scope="col" class="num">Gold</th>
+                    <th scope="col" class="num">Kills</th>
+                    <th scope="col" class="num"><span class="th-long">Towers</span><abbr class="th-short" title="Towers">Twr</abbr></th>
+                    <th scope="col" class="num"><span class="th-long">Dragons</span><abbr class="th-short" title="Dragons">Drg</abbr></th>
+                    <th scope="col" class="num"><span class="th-long">Barons</span><abbr class="th-short" title="Barons">Bar</abbr></th>
+                    <th scope="col" class="num phone-hide"><span class="th-long">Inhibitors</span><abbr class="th-short" title="Inhibitors">Inh</abbr></th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </figure>
+        </section>
+      </div>
+
+
+      <section class="live-chart" aria-label="Win chance over the game">
+        <figure class="chance-figure" aria-labelledby="chance-cap">
+          <figcaption id="chance-cap" class="figure-caption"><b class="fig-num">Figure 1.</b> <span id="chance-caption"></span></figcaption>
+          <div class="chance-plot" id="chance-plot" tabindex="0" role="img" aria-label="Win chance over the game"></div>
+          <p class="chance-key" aria-hidden="true">
+            <span><svg viewBox="0 0 18 10"><path class="k-ours" d="M0 5H18"/><circle class="k-call" cx="9" cy="5" r="3"/></svg>Our call</span>
+            <span><svg viewBox="0 0 18 10"><rect class="k-band" x="0" y="2" width="18" height="6"/><path class="k-mkt" d="M0 5H18"/></svg>Kalshi</span>
+            <span><svg viewBox="0 0 18 10"><rect class="k-gold" x="4" y="2" width="2" height="8"/><rect class="k-gold" x="8" y="0" width="2" height="10"/><rect class="k-gold" x="12" y="4" width="2" height="6"/></svg>Gold lead</span>
+          </p>
+          <p class="visually-hidden" id="chance-readout" aria-live="polite"></p>
+        </figure>
+      </section>
+    </div>
+
+    <section class="live-idle fixtures-block" id="live-idle" aria-labelledby="idle-heading">
+      <div class="block-head">
+        <h2 id="idle-heading">Coming up</h2>
+        <a class="more" href="predictions.html">Every prediction</a>
+      </div>
+      <figure class="register-figure fixtures-home" aria-labelledby="idle-cap">
+        <figcaption id="idle-cap" class="table-caption">Table II. {% if fixtures %}Next major-league and international matches.{% else %}None in the next four days.{% endif %}</figcaption>
+        {% if fixtures %}
+        <div class="table-scroll">{{ fixtures_table(fixtures, compact=True) }}</div>
+        {% endif %}
+      </figure>
+    </section>
+
+    <aside class="live-notes notes" aria-labelledby="notes-heading">
+      <h2 id="notes-heading" class="margin-head">Notes</h2>
+      <ol class="notes-list">
+        {% for line in metric.how_to_read %}
+        <li id="note-{{ loop.index }}"><span class="note-mark" aria-hidden="true">{{ loop.index }}</span>{{ line }}</li>
+        {% endfor %}
+        <li id="note-dagger" class="caveat"><span class="note-mark" aria-hidden="true">†</span><span class="visually-hidden">Caveat: </span>{{ metric.caveats }}</li>
+      </ol>
+    </aside>
+  </div>
+  <script type="application/json" id="live-streams">{{ streams | tojson }}</script>
+{% endblock %}
+{% block scripts %}
+  {% if fixtures %}<script src="{{ asset('js/predictions.js') }}" defer></script>{% endif %}
+  <script src="{{ asset('js/live_state.js') }}" defer></script>
+  <script src="{{ asset('js/live.js') }}" defer></script>
+{% endblock %}
