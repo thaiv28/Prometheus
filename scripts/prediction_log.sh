@@ -7,7 +7,9 @@
 #
 # Restore fails on any error except a missing file, so an S3 hiccup can't start a
 # new log that the save would then write over the real one. Save refuses a log with
-# fewer matches than the backup (the log only grows). The hourly prices job saves
+# fewer matches than the backup (the log only grows). Every write is conditional
+# on the observed ETag (or nonexistence), so a race never replaces newer history.
+# The hourly prices job saves
 # with --if-unchanged: a publish run that wrote in between keeps its new calls, and
 # the prices job tries again next hour.
 set -euo pipefail
@@ -35,6 +37,12 @@ etag() {
     fi
 }
 
+saved() {
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+        echo "saved=$1" >> "$GITHUB_OUTPUT"
+    fi
+}
+
 case "${1:-}" in
 restore)
     mkdir -p data
@@ -49,15 +57,17 @@ restore)
     echo "Restored the prediction log: $(count "$LOG") matches."
     ;;
 save)
-    [ -f "$LOG" ] || { echo "No prediction log to save."; exit 0; }
+    [ -f "$LOG" ] || { echo "No prediction log to save."; saved false; exit 0; }
     restored=$(cat "$STATE" 2>/dev/null || true)
     current=$(etag)
     if [ "$current" != "$restored" ]; then
         if [ "${2:-}" = "--if-unchanged" ]; then
             echo "::warning::The prediction log changed since it was restored; not saving (next run retries)."
+            saved false
             exit 0
         fi
-        echo "::warning::The prediction log changed since it was restored; this run's log replaces it."
+        echo "::error::The prediction log changed since restore; refusing to overwrite newer saved calls or alerts. Rerun this build."
+        exit 1
     fi
     if [ -n "$current" ]; then
         tmp=$(mktemp)
@@ -70,7 +80,12 @@ save)
             exit 1
         fi
     fi
-    aws s3 cp "$LOG" "$uri" --only-show-errors --content-type application/json
+    # S3 checks this condition atomically, including a writer racing after head.
+    condition=(--if-none-match '*')
+    [ -z "$current" ] || condition=(--if-match "$current")
+    aws s3api put-object --bucket "$bucket" --key "$key" --body "$LOG" \
+        --content-type application/json "${condition[@]}" >/dev/null
+    saved true
     echo "Saved the prediction log: $(count "$LOG") matches."
     ;;
 *)

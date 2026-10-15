@@ -58,19 +58,20 @@ jobs:
       # Skipped when a publish run wrote the log since the restore above: its new
       # calls win, and the next hour refreshes the prices again.
       - name: Save the prediction log
+        id: save_prediction_log
         if: steps.busy.outputs.busy == 'false'
         run: bash scripts/prediction_log.sh save --if-unchanged
       # No CloudFront invalidation (an hourly one would pass the free 1,000 paths a
       # month): max-age=300 lets the edge serve the new files within 5 minutes.
       - name: Publish prices to the site
-        if: steps.busy.outputs.busy == 'false' && env.BUCKET != ''
+        if: steps.busy.outputs.busy == 'false' && steps.save_prediction_log.outputs.saved == 'true' && env.BUCKET != ''
         run: |
           for f in kalshi.json predictions.json; do
             aws s3 cp "output-prices/$f" "s3://$BUCKET/current/$f" --only-show-errors \
               --content-type application/json --cache-control "max-age=300"
           done
       - name: Post the Kalshi alert
-        if: steps.busy.outputs.busy == 'false' && hashFiles('data/kalshi_alert.json') != ''
+        if: steps.busy.outputs.busy == 'false' && steps.save_prediction_log.outputs.saved == 'true' && hashFiles('data/kalshi_alert.json') != ''
         continue-on-error: true
         run: bash scripts/post_kalshi_alert.sh
 
