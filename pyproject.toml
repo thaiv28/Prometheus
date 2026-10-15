@@ -26,7 +26,7 @@ build-backend = "setuptools.build_meta"
 packages = ["prometheus"]
 
 [tool.setuptools.package-data]
-prometheus = ["forge_weights.json", "form_weights.json", "league_curves.json", "props_weights.json", "team_aliases.json"]
+prometheus = ["forge_weights.json", "form_weights.json", "league_curves.json", "props_weights.json", "team_aliases.json", "regional_calibration.json"]
 
 [dependency-groups]
 dev = [

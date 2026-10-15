@@ -7,7 +7,8 @@ paged requests and backs off when refused.
 
 Predictions use the published forecasts: FORGE between two teams of the same
 league (with its own weights outside the major leagues), and Elo alone between
-leagues (as the FORGE head to head does).
+leagues, with regional forecast calibration at international events. Elo's regional
+rating offsets and player updates are unchanged.
 A series chance follows from the one-game chance through a beta-binomial: each
 series draws its own chance around the call, so a series is more lopsided than
 independent games would make it (`series_probability`, `series_rho`).
@@ -33,7 +34,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from prometheus import markets
+from prometheus import markets, regional_calibration
 from prometheus.elo import LatestElos, get_latest_elos
 from prometheus.forge import (
     CROSS_REGION_ELO_WEIGHT,
@@ -350,11 +351,20 @@ def team_ratings(forms_now, elos):
     return df.set_index("teamname")
 
 
-def game_probability(a, b):
+def game_probability(a, b, *, event=None, title="", at=None, event_day=None):
     """(chance team `a` wins one game, method) for two `team_ratings` rows."""
     if a["league"] != b["league"]:
-        return 1 / (
-            1 + math.exp(-CROSS_REGION_ELO_WEIGHT * (a["elo"] - b["elo"]))
+        gap = a["elo"] - b["elo"]
+        base = 1 / (1 + math.exp(-CROSS_REGION_ELO_WEIGHT * gap))
+        return regional_calibration.probability(
+            base,
+            gap,
+            a["league"],
+            b["league"],
+            at=at,
+            event=event,
+            title=title,
+            event_day=event_day,
         ), "elo-cross"
     if a["league"] in MAJORS:
         return 1 / (1 + math.exp(-ELO_WEIGHT * (a["forge"] - b["forge"]))), "forge"
@@ -390,7 +400,7 @@ def event_league(row, home1, home2):
     return home1 or home2 or "Other"
 
 
-def predict(schedule, ratings, match_team):
+def predict(schedule, ratings, match_team, *, at=None):
     """Predictions for every scheduled match whose two teams we can rate.
 
     Returns one dict per match with the schedule fields plus our team names, leagues,
@@ -417,7 +427,34 @@ def predict(schedule, ratings, match_team):
             "matched": all(r is not None for r in rated) and ours[0] != ours[1],
         }
         if rec["matched"]:
-            p, method = game_probability(*rated)
+            forecast_day = (
+                at or ratings.attrs.get("as_of") or datetime.datetime.now(datetime.UTC)
+            )
+            p, method = game_probability(
+                *rated,
+                event=rec["league"],
+                title=rec["event"],
+                at=forecast_day,
+                event_day=row["start"],
+            )
+            model = (
+                regional_calibration.snapshot(
+                    forecast_day,
+                    regional_calibration.event_code(rec["league"], rec["event"]),
+                    row["start"],
+                )
+                if homes[0] != homes[1]
+                and regional_calibration.eligible(
+                    rec["league"], rec["event"], row["start"]
+                )
+                else None
+            )
+            if model and os.environ.get("REGIONAL_CALIBRATION", "1") != "0":
+                rec["calibration"] = {
+                    "version": regional_calibration.VERSION,
+                    "model": model["available_from"],
+                    "trained_through": model["trained_through"],
+                }
             rec.update(
                 p_game=round(p, 4),
                 p_series=round(
@@ -572,6 +609,7 @@ class RatingsBefore:
             self.cache[day] = team_ratings(
                 forms_now, self._elos(day - datetime.timedelta(days=1))
             )
+        self.cache[day].attrs["as_of"] = day
         return self.cache[day]
 
     def __len__(self):
@@ -605,13 +643,13 @@ def build_predictions(
     ratings = current_ratings(states)
     match_team = TeamMatcher(ratings.reset_index())
     data_through = str(pd.to_datetime(states["date"]).max())[:10]
-    predictions = predict(schedule, ratings, match_team)
+    predictions = predict(schedule, ratings, match_team, at=now)
 
     before = RatingsBefore(states)
 
     def reconstruct(row):
         day = row["start"].date()
-        rec = predict(pd.DataFrame([row]), before(day), match_team)[0]
+        rec = predict(pd.DataFrame([row]), before(day), match_team, at=day)[0]
         return {
             **rec,
             "predicted": None,

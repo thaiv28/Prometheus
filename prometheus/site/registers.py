@@ -5,6 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 
+from prometheus import regional_calibration
 from prometheus.forge import (
     CROSS_REGION_ELO_WEIGHT,
     ELO_WEIGHT,
@@ -192,6 +193,9 @@ def forge_register(forms_now, forms_seasons, latest_elos, season_elos, majors):
         "weights": {
             "elo": ELO_WEIGHT,
             "crossRegionElo": CROSS_REGION_ELO_WEIGHT,
+            "internationalCalibration": regional_calibration.snapshot()
+            if os.environ.get("REGIONAL_CALIBRATION", "1") != "0"
+            else None,
             "leagues": {l: float(slopes[l]) for l in sorted(slopes.index)},
         },
     }

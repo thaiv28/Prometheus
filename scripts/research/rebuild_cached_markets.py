@@ -22,7 +22,11 @@ def rebuild(frame, before, series):
     for row in frame.itertuples(index=False):
         ratings = before(row.start.date())
         probability, method = schedule.game_probability(
-            ratings.loc[row.ours1], ratings.loc[row.ours2]
+            ratings.loc[row.ours1],
+            ratings.loc[row.ours2],
+            title=row.event,
+            at=row.start.date(),
+            event_day=row.start,
         )
         probabilities.append(probability)
         methods.append(method)

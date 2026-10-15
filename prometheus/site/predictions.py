@@ -47,6 +47,7 @@ def fixture_row(entry, team_slugs):
         "fav": 1 if entry["p_series"] > 0.5 else 2 if entry["p_series"] < 0.5 else 0,
         "method": "FORGE" if entry["method"] == "forge" else "Elo",
         "cross": entry["method"] == "elo-cross",
+        "calibrated": bool(entry.get("calibration")),
         "reconstructed": bool(entry.get("reconstructed")),
         "winner": entry.get("winner"),
     }
