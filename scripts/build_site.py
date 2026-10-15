@@ -23,7 +23,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from prometheus import aura, markets, props
+from prometheus import aura, markets, prediction_backtest, props
 from prometheus.elo import (
     get_elo_history,
     get_latest_elos,
@@ -326,7 +326,19 @@ def predictions_pages(fc: Forecasts, teams) -> dict:
     log = fc.prediction_log
     write_kalshi_alert(log, fc.coverage, teams)
     now = datetime.datetime.now(datetime.UTC)
-    predictions = predictions_view(log, teams, now)
+    backtest_log = prediction_backtest.rebuild(log, fc.states)
+    write_json(
+        "backtest.json",
+        {
+            "matches": [
+                e
+                for e in backtest_log.values()
+                if e.get("reconstructed") and e.get("matched")
+            ]
+        },
+        ensure_ascii=False,
+    )
+    predictions = predictions_view(backtest_log, teams, now)
     render_predictions(predictions, fc.coverage)
     render_results(predictions)
     write_json("predictions.json", markets.published_log(log), ensure_ascii=False)

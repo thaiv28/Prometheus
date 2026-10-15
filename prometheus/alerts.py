@@ -102,6 +102,8 @@ def record(alerts, now, key="alert"):
         if key not in a["entry"]:
             a["entry"][key] = {
                 "side": a["side"],
+                "team": a["entry"].get(f"ours{a['side']}")
+                or a["entry"].get(f"team{a['side']}"),
                 "p": round(a["p"], 4),
                 "price": round(a["price"], 4),
                 "edge": round(a["edge"], 4),
@@ -109,6 +111,17 @@ def record(alerts, now, key="alert"):
             }
             new += 1
     return new
+
+
+def alert_side(entry, alert):
+    """Resolve the originally backed team, independently of fixture ordering."""
+    team = alert.get("team")
+    if team is None:
+        return alert["side"]  # legacy records, prior to identity pinning
+    return next(
+        (i for i in (1, 2) if team == (entry.get(f"ours{i}") or entry.get(f"team{i}"))),
+        None,
+    )
 
 
 def paper_record(log, rate=0.07, key="alert"):
@@ -129,10 +142,13 @@ def settled_alerts(log, rate=0.07, key="alert"):
         alert = entry.get(key)
         if not alert or entry.get("winner") not in (1, 2):
             continue
-        won = entry["winner"] == alert["side"]
+        side = alert_side(entry, alert)
+        if side is None:
+            continue
+        won = entry["winner"] == side
         price = alert["price"]
         close = (entry.get("market") or {}).get("p")
-        if close is not None and alert["side"] == 2:
+        if close is not None and side == 2:
             close = 1 - close
         out.append(
             {
@@ -203,6 +219,7 @@ def shown(log, now, chosen):
         e
         for e in log.values()
         if e.get("alert")
+        and alert_side(e, e["alert"]) is not None
         and e["start"] > now_s
         and (e["match_id"] in ids or e["alert"]["at"][:10] == day)
     ]
@@ -210,7 +227,7 @@ def shown(log, now, chosen):
 
 
 def _row(entry, now_s, slugify, team_slugs):
-    side = entry["alert"]["side"]
+    side = alert_side(entry, entry["alert"])
     p, price, edge = _current(entry, side, now_s)
     was = 100 * entry["alert"]["edge"]
     if edge is None:
@@ -238,7 +255,9 @@ def issue(entries, log, now, data_through, slugify, team_slugs):
     `shown`, at this run's prices."""
     now_s = now.strftime("%Y-%m-%dT%H:%MZ")
     live = sum(
-        1 for e in entries if (_current(e, e["alert"]["side"], now_s)[2] or 0) > EDGE
+        1
+        for e in entries
+        if (_current(e, alert_side(e, e["alert"]), now_s)[2] or 0) > EDGE
     )
     gone = len(entries) - live
     title = (
