@@ -352,3 +352,5 @@ The head-to-head note calls cross-league comparisons an international matchup an
 ### Call performance
 
 Table IV shows the six fixture groups, Saved and Backtest, at the >5-point edge only. `call-performance.html` reuses that booktabs register for every existing threshold (Any, >0/3/5/10), then native disclosure rows open each group’s detailed call history. The ledger uses the same caption, tabular figures and horizontally scrolling register on phones; no new tokens, typeface, motion or controls. Public profit remains the $1 modeled record; private execution never appears here.
+
+Waiting fixtures reuse the Live register and Watch stage: “Waiting” replaces the clock, no unassigned map label, and “Waiting for match to start.” is the sole fresh status. Watch retains team headings and the stream; scoreline and figure hide until observations arrive. No new colour, badge, panel or animation.

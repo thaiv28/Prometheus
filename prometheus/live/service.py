@@ -12,6 +12,7 @@ retries); 401/403/429 from Riot stops the service, from Kalshi only its quotes.
 
 import argparse
 import json
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -40,6 +41,7 @@ from .series import series_chance
 from .start import find_start
 from .timeline import latest_elo
 
+GETSCHEDULE = f"https://{SITE_API_HOST}/persisted/gw/getSchedule?hl=en-US"
 GETLIVE = f"https://{SITE_API_HOST}/persisted/gw/getLive?hl=en-US"
 WINDOW = "https://feed.lolesports.com/livestats/v1/window/{}?{}"
 # Riot league slug -> Prometheus league name (picks the page's default stream).
@@ -90,11 +92,11 @@ def fetch_json(url, out):
 
 def resolve_team(team, catalog, aliases):
     names = {t["n"] for t in catalog}
-    if team["id"] in aliases:
+    if team.get("id") in aliases:
         return aliases[team["id"]]
     if team.get("name") in names:
         return team["name"]
-    slugs = [t["n"] for t in catalog if t.get("s") == team.get("slug")]
+    slugs = [t["n"] for t in catalog if team.get("slug") and t.get("s") == team["slug"]]
     return slugs[0] if len(slugs) == 1 else None
 
 
@@ -132,6 +134,81 @@ def mapping_for(event, catalog, aliases):
         "games": {g["id"]: g["number"] for g in match["games"]},
         "score": mapping_score(event),
     }
+
+
+def waiting_pages(events, catalog, aliases, at, tracked=(), failed=()):
+    """Due Riot fixtures while this worker is on; same IDs as getLive.
+
+    Schedule teams have names/codes but no Riot IDs or map assignments. Keep
+    those unknown, and never replace a tracked map (including between maps).
+    """
+    now = timestamp(at)
+    pages = []
+    seen = set(tracked)
+    # A failed/skipped active map is unavailable, never a pre-match fallback.
+    # getSchedule lacks games, so exclude its duplicate using getLive first.
+    seen.update(
+        event.get("id") or (event.get("match") or {}).get("id")
+        for event in events
+        if any(
+            g.get("state") == "inProgress" and g.get("id") in failed
+            for g in (event.get("match") or {}).get("games", [])
+        )
+    )
+    for event in events:
+        match = event.get("match") or {}
+        mid = match.get("id") or event.get("id")
+        if (
+            not mid
+            or not re.fullmatch(r"[\w-]+", str(mid))
+            or mid in seen
+            or event.get("state") not in {"unstarted", "inProgress"}
+        ):
+            continue
+        try:
+            if (
+                not -240 * 60
+                <= (timestamp(event["startTime"]) - now).total_seconds()
+                <= 75 * 60
+            ):
+                continue
+            teams = [
+                {"name": resolve_team(t, catalog, aliases), "code": t.get("code")}
+                for t in match["teams"]
+            ]
+            if (
+                len(teams) != 2
+                or any(not t["name"] for t in teams)
+                or teams[0]["name"] == teams[1]["name"]
+            ):
+                continue
+            league = event["league"]
+            pages.append(
+                {
+                    "schema": 1,
+                    "published_at": at,
+                    "status": "waiting",
+                    "note": None,
+                    "match": {
+                        "id": mid,
+                        "league": LEAGUES.get(league["slug"], league["name"]),
+                        "event": " ".join(
+                            filter(None, [league["name"], event.get("blockName")])
+                        ),
+                        "best_of": match.get("strategy", {}).get("count"),
+                        "teams": teams,
+                        "score": None,
+                        "series": {},
+                        "maps": [],
+                    },
+                    "game": None,
+                    "live_state_verified": False,
+                }
+            )
+            seen.add(mid)
+        except (ValueError, KeyError, TypeError):
+            continue
+    return pages
 
 
 def settle_map(ticker, number, results_path, out):
@@ -467,6 +544,8 @@ class Game:
         page = build_page(
             self.collector_dir, self.mapping, catalog, at, timeline=timeline
         )
+        if self.state == "waiting" and page.get("game") and not page["game"]["frames"]:
+            page.update(status="waiting", note=None)
         quotes = self.quotes(self.dir / "quotes.jsonl")
         game = page.get("game")
         score = self.score()
@@ -641,7 +720,7 @@ def write_index(page_dir, at):
             age = (timestamp(at) - timestamp(page["published_at"])).total_seconds()
             if (
                 age <= FRESH
-                and page.get("game")
+                and page.get("match")
                 and page["status"]
                 not in {
                     "unavailable",
@@ -677,6 +756,8 @@ def run(args):
         adopt[gid] = (Path(path), session)
     games, failed, last_discovery = {}, {}, 0.0
     events, last_active = None, time.monotonic()
+    scheduled = []
+    waiting_ids = set()
     kalshi = True
     try:
         while True:
@@ -699,6 +780,14 @@ def run(args):
                     ]:
                         games.pop(gid).close()
                         log("untracked", game=gid, reason="match no longer live")
+                try:
+                    _, schedule = fetch_json(
+                        GETSCHEDULE, args.root / "schedule" / stamp
+                    )
+                    scheduled = schedule["data"]["schedule"].get("events") or []
+                except (ValueError, KeyError, TypeError) as error:
+                    scheduled = []
+                    log("schedule_failed", reason=str(error))
                 for event in events or []:
                     for game in event["match"]["games"]:
                         gid = game["id"]
@@ -892,12 +981,28 @@ def run(args):
                     failed[gid] = str(error)
                     games.pop(gid).close()
                     log("game_failed", game=gid, reason=str(error))
+            at = utc_now()
+            tracked = {g.mapping["match_id"] for g in games.values()}
+            pending = waiting_pages(
+                scheduled + (events or []),
+                catalog,
+                aliases,
+                at,
+                tracked,
+                set(failed) | skip,
+            )
+            current_waiting = {p["match"]["id"] for p in pending}
+            for mid in waiting_ids - current_waiting - tracked:
+                (args.page_out / f"{mid}.json").unlink(missing_ok=True)
+            for page in pending:
+                write_atomic(args.page_out / f"{page['match']['id']}.json", page)
+            waiting_ids = current_waiting
             count, changed = write_index(args.page_out, utc_now())
             if args.s3 and (games or changed):
                 publish_s3(args.page_out, args.s3)
             log("cycle", tracked=len(games), published=count)
             # Activity is a map not yet over; getLive can list a decided match for hours.
-            if any(g.state != "finished" for g in games.values()):
+            if pending or any(g.state != "finished" for g in games.values()):
                 last_active = time.monotonic()
             elif (
                 args.idle_exit and time.monotonic() - last_active > args.idle_exit * 60

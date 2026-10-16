@@ -379,3 +379,10 @@
 .odds .odds-final { font-size: 1.625rem; color: var(--ink-3); font-weight: 400; letter-spacing: -0.005em; }
 .odds .odds-final.fav { color: var(--ink); font-weight: 600; }
 .odds-pending { font-style: italic; color: var(--ink-3); padding: 10px 0; }
+
+/* Pregame: the stream and team names, without an empty scoreline or plot. */
+.live-spread.is-waiting .live-board,
+.live-spread.is-waiting .live-chart { display: none; }
+
+.match-chip.is-waiting .chip-bar,
+.match-chip.is-waiting .chip-odds { display: none; }
