@@ -144,15 +144,53 @@ class Kalshi:
         ):
             raise ValueError("wrong_or_nonexclusive_event")
         series = self.request("GET", "/series/KXLOLGAME")["series"]
-        fee_type = event.get("fee_type_override") or series["fee_type"]
-        multiplier = event.get("fee_multiplier_override")
-        multiplier = decimal(
-            series["fee_multiplier"] if multiplier is None else multiplier
+        # Ordinary event responses need not expose current fee overrides. Read
+        # their authoritative history, including explicit null/null clears.
+        changes = self.pages(
+            "/events/fee_changes",
+            "event_fee_changes",
+            event_ticker=alert["event_ticker"],
         )
-        if fee_type not in {"quadratic", "quadratic_with_maker_fees"} or multiplier < 0:
-            raise ValueError("unsupported_fee_schedule")
-        if Decimal(".07") * multiplier > config.number("fee_rate_upper_bound"):
-            raise ValueError("fee_bound_exceeded")
+        if any(c.get("event_ticker") != alert["event_ticker"] for c in changes):
+            raise ValueError("fee_event_mismatch")
+        applicable = [c for c in changes if timestamp(c["scheduled_ts"]) <= now]
+        effective = (
+            max(applicable, key=lambda c: timestamp(c["scheduled_ts"]))
+            if applicable
+            else event
+        )
+        future_overrides = [
+            c
+            for c in changes
+            if now < timestamp(c["scheduled_ts"]) <= timestamp(alert["start"])
+        ]
+        series_changes = self.request(
+            "GET", "/series/fee_changes", series_ticker="KXLOLGAME"
+        )["series_fee_change_arr"]
+        if any(c.get("series_ticker") != "KXLOLGAME" for c in series_changes):
+            raise ValueError("fee_series_mismatch")
+        future_series = [
+            c
+            for c in series_changes
+            if now < timestamp(c["scheduled_ts"]) <= timestamp(alert["start"])
+        ]
+        # Conservatively cover every announced combination through fixture start.
+        # IOC execution occurs now; bounding future changes avoids a clock/race at
+        # a scheduled fee boundary without a second authenticated quote phase.
+        for profile in [series, *future_series]:
+            for override in [effective, *future_overrides]:
+                fee_type = override.get("fee_type_override") or profile["fee_type"]
+                multiplier = override.get("fee_multiplier_override")
+                multiplier = decimal(
+                    profile["fee_multiplier"] if multiplier is None else multiplier
+                )
+                if (
+                    fee_type not in {"quadratic", "quadratic_with_maker_fees"}
+                    or multiplier < 0
+                ):
+                    raise ValueError("unsupported_fee_schedule")
+                if Decimal(".07") * multiplier > config.number("fee_rate_upper_bound"):
+                    raise ValueError("fee_bound_exceeded")
         markets = event.get("markets") or response.get("markets") or []
         if len(markets) != 2:
             raise ValueError("ambiguous_outcomes")

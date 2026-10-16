@@ -69,9 +69,14 @@ class PublicClient(Kalshi):
         self.received = NOW.isoformat()
         self.server, self.age = NOW.isoformat(), "0"
         self.calls = []
+        self.event_changes, self.series_changes = [], []
 
     def request(self, method, path, body=None, **query):
         self.calls.append((method, path, body, query))
+        if path == "/events/fee_changes":
+            return {"event_fee_changes": self.event_changes, "cursor": ""}
+        if path == "/series/fee_changes":
+            return {"series_fee_change_arr": self.series_changes}
         if path.startswith("/events/"):
             return {"event": copy.deepcopy(self.event)}
         if path == "/series/KXLOLGAME":
@@ -354,3 +359,51 @@ def test_current_complete_fill_count_does_not_fetch_historical_endpoint():
     api.pages = pages
     assert len(api.fills("o", Decimal("1.00"))) == 1
     assert paths == ["/portfolio/fills"]
+
+
+def test_current_event_fee_override_history_is_authoritative_and_null_clears():
+    api = PublicClient()
+    api.event_changes = [
+        {
+            "event_ticker": "KXLOLGAME-F",
+            "fee_type_override": "quadratic",
+            "fee_multiplier_override": 2,
+            "scheduled_ts": "2026-10-15T11:00:00Z",
+        }
+    ]
+    with pytest.raises(ValueError, match="fee_bound_exceeded"):
+        api.resolve(alert(), NOW, config())
+    api.event_changes.append(
+        {
+            "event_ticker": "KXLOLGAME-F",
+            "fee_type_override": None,
+            "fee_multiplier_override": None,
+            "scheduled_ts": "2026-10-15T11:30:00Z",
+        }
+    )
+    assert len(api.resolve(alert(), NOW, config())) == 2
+
+
+@pytest.mark.parametrize("level", ["series", "event"])
+def test_announced_fee_change_before_match_cannot_exceed_reserve_bound(level):
+    api = PublicClient()
+    if level == "series":
+        api.series_changes = [
+            {
+                "series_ticker": "KXLOLGAME",
+                "fee_type": "quadratic",
+                "fee_multiplier": 2,
+                "scheduled_ts": "2026-10-15T12:00:05Z",
+            }
+        ]
+    else:
+        api.event_changes = [
+            {
+                "event_ticker": "KXLOLGAME-F",
+                "fee_type_override": "quadratic",
+                "fee_multiplier_override": 2,
+                "scheduled_ts": "2026-10-15T12:00:05Z",
+            }
+        ]
+    with pytest.raises(ValueError, match="fee_bound_exceeded"):
+        api.resolve(alert(), NOW, config())
