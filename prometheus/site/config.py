@@ -242,17 +242,17 @@ NAV = [
 PREDICTIONS = {
     "key": "predictions",
     "name": "Predictions",
-    "full_name": "Every match we rate, called before it's played",
-    "question": "Who wins the matches coming up?",
-    "description": "Each team's chance of winning every scheduled pro match between teams we rate, and how past calls did.",
+    "full_name": "Before the match",
+    "question": "Who wins next?",
+    "description": "Series odds and results.",
     "how_to_read": [
-        "Figures beside the bar: each team's chance of taking the series, in 100. It follows from the one-game chance, allowing for form that carries through a series: a favourite is a bigger favourite over five games than one, but less so than if games were independent.",
-        "Same league: FORGE, with separate weights outside LCK, LPL, LEC and LCS. Different leagues: Elo, on a curve fit to international games.",
-        "Calls refresh daily and freeze at the start. Matches played before the log began carry a call rebuilt from the day before; the weights saw those games, so trust saved calls more.",
-        "Log loss: lower is better; a coin flip scores 0.693. Table II scores the one-game chance per game, Table III the series chance per series.",
-        "Kalshi is the market's series chance, read hourly; the caret marks it. Blend combines that price with FORGE/Elo. Alerts require a positive blended edge after estimated fees, 6+ hours out, in domestic or international fixtures; other cross-league fixtures are excluded. Cloud9 fixtures and bets against NA internationally are alerts only. CLV is the closing price minus the ask.",
+        "Series win chances. Game gives the chance per map.",
+        "Same league: FORGE. Across leagues: Elo.",
+        "Saved calls precede play. Backtests use earlier ratings, but their weights saw these games.",
+        "Log loss: lower is better; a coin flip scores 0.693. Record uses map odds; market comparison uses series odds.",
+        "Kalshi refreshes hourly; its caret marks the bar. Blend combines Kalshi with FORGE/Elo. CLV: close minus ask, in points. Alerts: 6h+ out. Cloud9 fixtures and bets against NA internationally never trade.",
     ],
-    "caveats": "Schedule from Leaguepedia; teams Oracle's Elixir doesn't cover aren't shown. Calls ignore side selection, roster changes and new patches. Times are local.",
+    "caveats": "Leaguepedia schedule; Oracle's Elixir teams. Local times. Lineups may change.",
 }
 PROPS = {
     "key": "props",

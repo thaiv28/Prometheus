@@ -52,7 +52,7 @@
       if (time) time.textContent = timeFormat.format(start);
       if (upcoming && start <= now) {
         tr.classList.add("fx-started");
-        time.title = "Started; the result comes with the next update";
+        time.title = "Started; result pending.";
       }
       body.appendChild(tr);
     });
@@ -77,7 +77,7 @@
         if (trade) {
           trade.textContent = m.trading ? `${m.trading.p1}–${m.trading.p2}` : "—";
           trade.title = m.trading
-            ? `Blended chance as of ${stamp(m.trading.at)}; best net edge ${(100 * m.trading.net_edge).toFixed(1)} points`
+            ? `${stamp(m.trading.at)} · Net ${(100 * m.trading.net_edge).toFixed(1)} points`
             : "No eligible trading estimate";
         }
         const bar = $(".fx-bar", tr);
@@ -105,7 +105,7 @@
           } else {
             cell.textContent = pair;
           }
-          cell.title = `As of ${stamp(m.at)}${m.url ? "; opens the match on Kalshi" : ""}`;
+          cell.title = `Kalshi · ${stamp(m.at)}`;
         }
       });
       tables
@@ -122,7 +122,7 @@
             cap.insertBefore(note, link);
             cap.insertBefore(document.createTextNode(" "), link ? link : note);
           }
-          note.textContent = `Kalshi prices as of ${stamp(data.at)}.`;
+          note.textContent = `Kalshi · ${stamp(data.at)}.`;
         });
     })
     .catch(() => {});
@@ -175,7 +175,7 @@
       });
       const which = table.id;
       const count = $(`[data-count-for="${which}"]`);
-      if (count) count.textContent = shown === total ? `${total.toLocaleString()} shown.` : `${shown.toLocaleString()} of ${total.toLocaleString()} shown.`;
+      if (count) count.textContent = shown === total ? `${total.toLocaleString()} matches.` : `${shown.toLocaleString()}/${total.toLocaleString()} matches.`;
       const empty = $(`[data-empty-for="${which}"]`);
       if (empty) empty.hidden = shown > 0;
       // The last visible row closes the register with the heavy rule.
