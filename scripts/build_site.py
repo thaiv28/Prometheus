@@ -37,6 +37,7 @@ from prometheus.player_tables import PlayerTables
 from prometheus.ranking import load_glory_games
 from prometheus.season import get_luck, get_record, load_season_games
 from prometheus.site import config as site_config
+from prometheus.site.alert_history import render_alert_history
 from prometheus.site.config import (
     AURA_COLUMNS,
     ELO_COLUMNS,
@@ -341,6 +342,7 @@ def predictions_pages(fc: Forecasts, teams) -> dict:
     predictions = predictions_view(backtest_log, teams, now)
     render_predictions(predictions, fc.coverage)
     render_results(predictions)
+    render_alert_history(log, now)
     write_json("predictions.json", markets.published_log(log), ensure_ascii=False)
     # The hourly price job (scripts/update_prices.py) replaces this between builds.
     write_json("kalshi.json", markets.prices_file(log, now))

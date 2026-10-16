@@ -514,6 +514,8 @@ def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
     assert 'data-start="2026-10-04T08:00Z"' in html and "Sunday 4 October" in html
     assert 'href="results/2026-09.html">September 2026' in html
     assert "3 of 4 scheduled matches" in html
+    assert 'href="alerts.html">Alert history and profit</a>' in html
+    assert "Intervals from" not in html
     predictions.render_results(view)
     month = (tmp_path / "results" / "2026-09.html").read_text()
     assert "Missed" in month and 'href="#note-3"' in month and 'id="note-3"' in month

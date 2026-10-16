@@ -70,6 +70,8 @@ def test_run_prices_the_log_writes_site_files_and_the_alert(tmp_path):
         json.loads((out / "predictions.json").read_text())["matches"][0]["match_id"]
         == "m"
     )
+    history = (out / "alerts.html").read_text()
+    assert "Shopify Rebellion" in history and "Pending" in history
     alert = json.loads(alert_path.read_text())
     assert (
         "**Shopify Rebellion** v FlyQuest" in alert["body"]

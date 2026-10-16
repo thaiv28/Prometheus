@@ -127,3 +127,12 @@ def test_full_upload_resends_long_cached_files_with_their_headers(site, monkeypa
         "--cache-control" in c and "immutable" in c[c.index("--cache-control") + 1]
         for c in calls[sync:]
     )
+
+
+def test_hourly_history_upload_has_html_type_and_short_cache(site, monkeypatch):
+    (site / "alerts.html").write_text("history")
+    calls = _fake_aws(monkeypatch, manifest=None)
+    deploy.upload_hourly_files(site, "test", False)
+    upload = next(c for c in calls if "s3://test/current/alerts.html" in c)
+    assert upload[upload.index("--content-type") + 1] == "text/html; charset=utf-8"
+    assert upload[upload.index("--cache-control") + 1] == "max-age=300"

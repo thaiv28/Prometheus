@@ -157,8 +157,7 @@
             </table>
           </div>
         </figure>
-        {% set al = view.alerts %}
-        <p class="section-prose record-note">Intervals from {{ view.market_min }} series or bets. <strong>Alerts:</strong> {% if al.settled %}{{ al.settled }} settled, {{ al.won }} won{% if al.clv is not none %}; closing line value {{ '%+.1f' | format(100 * al.clv) }} points, {{ (100 * al.beat) | round | int }}% beat the close{% endif %}; {{ '%+.1f' | format(100 * al.roi) }}% after fees{% if al.interval %} ({{ '%+.1f' | format(100 * al.interval[0]) }}% to {{ '%+.1f' | format(100 * al.interval[1]) }}%){% else %}, too few for an interval{% endif %}.{% else %}none settled yet.{% endif %}</p>
+        <p class="section-prose record-note"><a href="alerts.html">Alert history and profit</a></p>
       </section>
 
       <section class="fixtures-block" aria-labelledby="past-heading">

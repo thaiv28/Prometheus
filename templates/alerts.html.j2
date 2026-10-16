@@ -1,0 +1,52 @@
+{% extends 'base.html.j2' %}
+{% block title %}Alert history · Prometheus{% endblock %}
+{% block description %}Every saved alert, its original price, outcome and paper profit.{% endblock %}
+{% block canonical_path %}alerts.html{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{{ asset('css/alerts.css') }}" />{% endblock %}
+{% block content %}
+  <div class="spread">
+    <div class="spread-main">
+      <header class="section-head">
+        <h1>Alert history</h1>
+        <p class="lede">Original picks and prices. $1 per pick, after fees. <a href="predictions.html">Predictions</a></p>
+      </header>
+      {% for group in groups %}
+      <section class="fixtures-block alert-track" aria-labelledby="{{ group.id }}-heading">
+        <div class="block-head"><h2 id="{{ group.id }}-heading">{{ group.title }}</h2><span class="track-label">{{ group.label }}</span></div>
+        {% set s = group.summary %}
+        {% if group.rows %}
+        <p class="section-prose alert-totals">Profit <strong>{{ '+' if s.profit >= 0 else '−' }}${{ '%.2f' | format(s.profit | abs) }}</strong>{% if s.roi is not none %} · Return {{ '%+.1f' | format(100 * s.roi) | replace('-', '−') }}%{% if s.interval %} <span class="ci">({{ '%+.1f' | format(100 * s.interval[0]) | replace('-', '−') }} to {{ '%+.1f' | format(100 * s.interval[1]) | replace('-', '−') }}%)</span>{% endif %}{% endif %}{% if s.clv is not none %} · CLV {{ '%+.1f' | format(100 * s.clv) | replace('-', '−') }}{% endif %}</p>
+        <figure class="register-figure" aria-labelledby="{{ group.id }}-cap">
+          <figcaption id="{{ group.id }}-cap" class="table-caption">{{ group.title }} picks, newest first.</figcaption>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="{{ group.title }} picks">
+            <table class="register register--alerts">
+              <thead><tr><th scope="col">Date <span class="muted">UTC</span></th><th scope="col">Pick</th><th scope="col" class="num alert-odds">Chance</th><th scope="col" class="num alert-odds">Ask</th><th scope="col">Outcome</th><th scope="col" class="num">Profit</th><th scope="col" class="num alert-clv"><abbr title="Closing price minus the original ask, in points">CLV</abbr></th></tr></thead>
+              <tbody>
+              {% for row in group.rows %}
+                <tr>
+                  <td class="alert-date"><time datetime="{{ row.start }}" title="{{ row.start }}">{{ row.start | shortdate }}</time></td>
+                  <th scope="row" class="alert-pick"><a href="{{ row.url }}" title="{{ row.event }} · alerted {{ row.at }}">{{ row.back }}</a><span class="alert-opponent">v {{ row.other }}</span><span class="alert-mobile-odds">{{ (100 * row.chance) | round(1) }}% · {{ (100 * row.ask) | round(1) }}¢</span></th>
+                  <td class="num alert-odds" title="Saved {{ row.at }}">{{ (100 * row.chance) | round(1) }}%</td>
+                  <td class="num alert-odds">{{ (100 * row.ask) | round(1) }}¢</td>
+                  <td class="alert-outcome">{{ row.result }}{% if row.score %}<span class="alert-score">{{ row.score }}</span>{% endif %}</td>
+                  <td class="num value">{% if row.profit is not none %}{{ '%+.2f' | format(row.profit) | replace('-', '−') }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                  <td class="num alert-clv">{% if row.clv is not none %}{{ '%+.1f' | format(100 * row.clv) | replace('-', '−') }}{% else %}<span class="muted">—</span>{% endif %}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </figure>
+        {% else %}<p class="empty">No picks yet.</p>{% endif %}
+      </section>
+      {% endfor %}
+    </div>
+    <aside class="margin notes" aria-labelledby="about-heading">
+      <h2 id="about-heading" class="margin-head">The record</h2>
+      <ol class="notes-list">
+        <li>Pending picks are excluded from profit.</li>
+        <li>CLV is the closing price minus the ask, in points.</li>
+      </ol>
+    </aside>
+  </div>
+{% endblock %}
