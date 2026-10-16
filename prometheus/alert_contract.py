@@ -20,6 +20,31 @@ GROUPS = frozenset(
         "other-cross-league",
     )
 )
+TRADE_GROUPS = GROUPS - {"other-cross-league"}
+
+
+def trade_veto(alert):
+    """Personal execution restrictions; alerts themselves remain visible."""
+    teams = alert.get("teams") or []
+    for team in teams:
+        folded = "".join(c for c in team.casefold() if c.isalnum())
+        if folded == "c9" or folded.startswith("cloud9"):
+            return "cloud9_fixture"
+    if alert.get("international") or alert.get("group") in {
+        "major-international",
+        "mixed-international",
+        "minor-international",
+    }:
+        homes = alert.get("team_homes") or {}
+        if any(not homes.get(team) for team in teams):
+            return "missing_international_home_leagues"
+        for team in teams:
+            home = "".join(c for c in homes[team].upper() if c.isalnum())
+            if home in {"LCS", "NALCS", "LTAN", "NACL"} and team != alert.get(
+                "backed_team"
+            ):
+                return "against_north_america_international"
+    return None
 
 
 def _digest(parts):
@@ -42,6 +67,11 @@ def identity(entry, saved):
         "alert_id": _digest([fixture_id, saved["at"], back]),
         "event_ticker": (entry.get("market") or {}).get("ticker"),
         "teams": teams,
+        "team_homes": {
+            entry.get(f"ours{i}") or entry.get(f"team{i}") or "": entry.get(f"home{i}")
+            for i in (1, 2)
+        },
+        "international": (saved.get("forecast") or {}).get("international"),
         "backed_team": back,
         "start": start,
     }
@@ -88,12 +118,15 @@ def saved_alerts(document):
                     "alert_at": saved["at"],
                     "start": pinned["start"],
                     "teams": list(teams),
+                    "team_homes": dict(pinned.get("team_homes") or {}),
+                    "international": pinned.get("international"),
                     "backed_team": pinned["backed_team"],
                     "event_ticker": pinned["event_ticker"],
                     "probability": str(probability),
                     "original_ask": str(ask),
                     "group": saved.get("group"),
                     "provenance": saved.get("forecast") or {},
+                    **({"trading": saved["trading"]} if saved.get("trading") else {}),
                 }
             )
         except (KeyError, TypeError, ValueError, InvalidOperation):

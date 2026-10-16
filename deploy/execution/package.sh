@@ -11,6 +11,7 @@ uv run --no-project --python 3.12 --with pip python -m pip install \
   --target "$stage" -r "$root/deploy/execution/requirements.txt"
 mkdir -p "$stage/prometheus" "$stage/deploy/execution"
 cp "$root/prometheus/__init__.py" "$root/prometheus/alert_contract.py" "$stage/prometheus/"
+cp "$root/prometheus/market_blend.py" "$root/prometheus/market_blend.json" "$stage/prometheus/"
 cp -R "$root/prometheus/execution" "$stage/prometheus/execution"
 cp "$root/deploy/execution/handler.py" "$stage/deploy/execution/handler.py"
 # Export the existing literal alias map without importing the site's pandas/API

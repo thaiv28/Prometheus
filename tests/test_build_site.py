@@ -500,7 +500,7 @@ def test_fixture_row_and_register_carry_the_market_price():
         and 'href="https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct041600t1gen"'
         in html
     )
-    assert ">Kalshi<" in html and 'colspan="11"' in html
+    assert ">Kalshi<" in html and ">Blend<" in html and 'colspan="12"' in html
     plain = predictions.fixture_row(_log()["soon"], set())
     assert "mkt1" not in plain
 

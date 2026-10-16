@@ -21,7 +21,7 @@
                 <tr{% if src.name == 'backtest' %} class="edges-backtest"{% endif %}>
                   {% if outer.first and loop.first %}<th scope="rowgroup" rowspan="{{ n }}" class="edges-calls">{{ group.label }}</th>{% endif %}
                   {% if loop.first %}<th scope="rowgroup" rowspan="{{ src.rows | length }}" class="edges-source"><span class="edges-method">{{ group.label }}, </span>{{ 'Backtest' if src.name == 'backtest' else 'Saved' }}</th>{% endif %}
-                  <td class="num">{% if row.edge is none %}<abbr title="Every match, backing our pick">Any</abbr>{% else %}&gt; {{ (100 * row.edge) | round | int }}{% endif %}</td>
+                  <td class="num">{% if row.net %}<abbr title="Blended probability minus ask and estimated fees">Net &gt; 0</abbr>{% elif row.edge is none %}<abbr title="Every match, backing our pick">Any</abbr>{% else %}&gt; {{ (100 * row.edge) | round | int }}{% endif %}</td>
                   <td class="num">{{ row.bets }}</td>
                   <td class="num phone-hide">{{ row.won }}</td>
                   {% if row.bets %}

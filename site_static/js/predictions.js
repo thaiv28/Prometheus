@@ -73,6 +73,13 @@
       $$("tr.fx[data-match]").forEach((tr) => {
         const m = data.matches[tr.dataset.match];
         if (!m) return;
+        const trade = $(".fx-trade", tr);
+        if (trade) {
+          trade.textContent = m.trading ? `${m.trading.p1}–${m.trading.p2}` : "—";
+          trade.title = m.trading
+            ? `Blended chance as of ${stamp(m.trading.at)}; best net edge ${(100 * m.trading.net_edge).toFixed(1)} points`
+            : "No eligible trading estimate";
+        }
         const bar = $(".fx-bar", tr);
         if (bar) {
           let caret = $(".fx-mkt", bar);

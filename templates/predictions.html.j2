@@ -113,8 +113,8 @@
           </div>
         </figure>
         <figure class="register-figure" aria-labelledby="edges-cap">
-          <figcaption id="edges-cap" class="table-caption">Table IV. $1 per call with more than 5 points over Kalshi’s ask, 12 hours before start. Return after fees; CLV in points.</figcaption>
-          {% with edge_groups = view.edges %}{% include '_call_edges.html.j2' %}{% endwith %}
+          <figcaption id="edges-cap" class="table-caption">Table IV. Blended calls above ask and fees, 12 hours before start. Domestic and international fixtures; other cross-league excluded. $1 plus fees per pick; return on total outlay. CLV in points.</figcaption>
+          {% with edge_groups = view.trading_edges %}{% include '_call_edges.html.j2' %}{% endwith %}
         </figure>
         <p class="section-prose record-note"><a href="call-performance.html">Call performance and all edges</a> · <a href="alerts.html">Alert history and profit</a></p>
       </section>

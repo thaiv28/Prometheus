@@ -303,6 +303,8 @@ def prices_file(log, now, days_back=2):
     team 2's chance (whole numbers adding to 100, as the register shows them),
     when that price was read and the market's page. The fixture registers apply
     it in the browser, so prices refreshed between site builds show."""
+    from prometheus import trading
+
     since = (now - datetime.timedelta(days=days_back)).strftime("%Y-%m-%dT%H:%MZ")
     out = {}
     for entry in log.values():
@@ -316,6 +318,15 @@ def prices_file(log, now, days_back=2):
             "at": market["at"],
             "url": event_url(market["ticker"]) if market.get("ticker") else None,
         }
+        estimate = trading.quote(entry)
+        if estimate:
+            trade1 = min(99, max(1, round(estimate["probability"] * 100)))
+            out[entry["match_id"]]["trading"] = {
+                "p1": trade1,
+                "p2": 100 - trade1,
+                "net_edge": estimate["pick"]["net_edge"],
+                "at": estimate["at"],
+            }
     return {"at": now.strftime("%Y-%m-%dT%H:%MZ"), "matches": out}
 
 

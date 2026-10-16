@@ -1,0 +1,49 @@
+{
+  "version": "market-blend-v1",
+  "training_source_sha256": "6812d0fc538908222136c382612065fb10e56aaa150d413cc61c0972d36e84e9",
+  "protocol": "Fresh 12h series; fixed C=1, no intercept; outcome available 24h after scheduled start. Monthly earlier-only fits. No build-time fitting.",
+  "snapshots": [
+    {
+      "available_from": "2026-05-01T00:00:00+00:00",
+      "trained_through": "2026-04-30T18:00:00+00:00",
+      "training_series": 352,
+      "market_slope": 1.090375306187244,
+      "gap_slope": 0.4205610049897581
+    },
+    {
+      "available_from": "2026-06-01T00:00:00+00:00",
+      "trained_through": "2026-05-31T20:00:00+00:00",
+      "training_series": 663,
+      "market_slope": 1.1100369813340942,
+      "gap_slope": 0.46849141955947404
+    },
+    {
+      "available_from": "2026-07-01T00:00:00+00:00",
+      "trained_through": "2026-06-30T08:00:00+00:00",
+      "training_series": 767,
+      "market_slope": 1.146216191004042,
+      "gap_slope": 0.4818025055990622
+    },
+    {
+      "available_from": "2026-08-01T00:00:00+00:00",
+      "trained_through": "2026-07-31T21:00:00+00:00",
+      "training_series": 1057,
+      "market_slope": 1.0410854899287891,
+      "gap_slope": 0.3066394211523212
+    },
+    {
+      "available_from": "2026-09-01T00:00:00+00:00",
+      "trained_through": "2026-08-31T23:00:00+00:00",
+      "training_series": 1496,
+      "market_slope": 1.0537830324631856,
+      "gap_slope": 0.2993506845053381
+    },
+    {
+      "available_from": "2026-10-01T00:00:00+00:00",
+      "trained_through": "2026-09-30T21:00:00+00:00",
+      "training_series": 1729,
+      "market_slope": 1.087254056134923,
+      "gap_slope": 0.34280025852274704
+    }
+  ]
+}

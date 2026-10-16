@@ -120,6 +120,31 @@ def test_routes_resolve_backed_yes_and_opponent_no_from_actual_books():
     ]
 
 
+def test_blended_routes_use_backed_side_two_sided_midpoint():
+    api = PublicClient()
+    api.books["KXLOLGAME-F-A"] = {
+        "yes_dollars": [[".58", "4"]],
+        "no_dollars": [[".40", "3"]],
+    }
+    api.books["KXLOLGAME-F-B"] = {
+        "yes_dollars": [[".40", "5"]],
+        "no_dollars": [[".58", "8"]],
+    }
+    routes = api.resolve(
+        {**alert(), "trading": {"version": "market-blend-v1"}}, NOW, config()
+    )
+    assert len(routes) == 2
+    assert all(Decimal(r["market_mid"]) == Decimal(".59") for r in routes)
+    assert all(r["at"] == NOW.isoformat() for r in routes)
+
+
+def test_blended_routes_reject_missing_or_wide_market_input():
+    with pytest.raises(ValueError, match="no_two_sided_blend_quote"):
+        PublicClient().resolve(
+            {**alert(), "trading": {"version": "market-blend-v1"}}, NOW, config()
+        )
+
+
 @pytest.mark.parametrize(
     "mutate",
     [

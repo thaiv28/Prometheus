@@ -221,6 +221,7 @@ class Kalshi:
             raise ValueError("duplicate_or_missing_outcome")
         self._fixture_tickers = {market["ticker"] for market, _ in parsed}
         routes = []
+        mids, quote_times = [], []
         for market, team in parsed:
             if (
                 market.get("status") != "active"
@@ -239,6 +240,24 @@ class Kalshi:
             ):
                 raise ValueError("stale_or_undated_orderbook")
             own = team == alert["backed_team"]
+            if alert.get("trading"):
+                bids = []
+                for field in ("yes_dollars", "no_dollars"):
+                    valid_bids = [
+                        decimal(p)
+                        for p, q in book["orderbook_fp"].get(field, [])
+                        if 0 < decimal(p) < 1 and decimal(q) > 0
+                    ]
+                    bids.append(max(valid_bids) if valid_bids else None)
+                yes, no = bids
+                if (
+                    yes is not None
+                    and no is not None
+                    and 0 <= 1 - no - yes <= Decimal(".10")
+                ):
+                    mid = (yes + 1 - no) / 2
+                    mids.append(mid if own else 1 - mid)
+                    quote_times.append(received)
             levels = book["orderbook_fp"]["no_dollars" if own else "yes_dollars"]
             valid = [
                 (decimal(p), decimal(q))
@@ -272,6 +291,12 @@ class Kalshi:
                     "at": received.isoformat(),
                 }
             )
+        if alert.get("trading"):
+            if not mids:
+                raise ValueError("no_two_sided_blend_quote")
+            for route in routes:
+                route["market_mid"] = str(sum(mids) / len(mids))
+                route["at"] = min(timestamp(route["at"]), *quote_times).isoformat()
         return routes
 
     def balance(self):

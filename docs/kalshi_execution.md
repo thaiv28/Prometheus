@@ -6,7 +6,7 @@ Deployed 2026-10-16 in **off** mode (`ThaivPrometheusExecution`, us-west-2). Sec
 
 `prometheus.alert_contract.saved_alerts` reads the private, successfully persisted `prometheus/predictions/predictions.json` object. New `alert` records pin schema version, fixture/alert identity, backed canonical team, both canonical teams, first fixture start and event ticker in `alert.execution`; probability/ask remain the original saved values. Provider-ID, ordering and later fixture changes do not alter the pinned identity. Legacy posted `international_paper_alert` is recognized, never rewritten; unposted `paper_alert` is excluded. No issue prose, public export, reconstructed candidate or current selector is an execution instruction.
 
-The six groups share one notification policy (>5-point edge, 6h, fresh ask and complete results). Grouping is for reporting. Execution applies additional current account/book/fee/spending controls to the saved proposal; a notification does not guarantee an order.
+Five groups share one notification policy: positive blended edge above ask plus estimated fees, 6h, fresh midpoint/ask and complete results. Major/minor domestic and every international group qualify; other cross-league fixtures do not. New proposals freeze raw and blended inputs and the monthly snapshot. Historical records retain their original terms. Execution skips every Cloud9 fixture (either side), and at international events any bet against a North American team (LCS, NA LCS, LTA N or NACL). Alerts still include those signals. Home leagues are pinned by canonical team name; missing international homes skip execution. Execution applies additional current account/book/fee/spending controls to the saved proposal; a notification does not guarantee an order.
 
 ## Runner and durable state
 
@@ -43,7 +43,7 @@ Infrastructure PR #16 is merged at `349a744`; application PR #65 is merged at `e
 | `max_alert_age_seconds` | Maximum age of a saved alert when submitting, including retries/missed runs |
 | `max_quote_age_seconds` | Maximum age of the freshly fetched executable book |
 | `max_price` | Absolute dollar price cap per backed contract, inside (0,1); original ask also caps it |
-| `min_after_fee_edge` | Required probability minus current price and conservative per-contract fees |
+| `min_after_fee_edge` | Minimum probability minus current price and conservative per-contract fees; zero permitted, but net edge must still be strictly positive |
 | `fee_rate_upper_bound` | Explicit bound on supported current quadratic fee rate; metadata above it is rejected |
 | `balance_precision_usd` | Verified account precision: 0.0001 for Direct or 0.01 otherwise; no inferred default |
 | `order_budget_usd` | Maximum cost plus reserved fees on one order |
@@ -60,3 +60,9 @@ The fee bound deliberately does not count on later rebates. Non-Direct cent-alig
 Mocked tests cover the saved-alert adapter/identity, V2 payload/direction, books, limits, conditional reservations, concurrent claims, configuration changes, timeouts, incomplete fills, cancellations, fees and settlements. Final local application suite: 623 passed, including 77 executor/API tests and 6 runner/control boundary tests. Both pending actual public fixtures resolved to exact YES/opponent-NO routes in about 1.3 seconds each (six unauthenticated reads); no account requests or orders. A local CDK synthesis/test checks off default, retained private storage, scheduling, exact-resource permissions and the control-role boundary. All 15 infrastructure tests and full synthesis pass. The local full site build runs without importing the executor. The 5.0 MB, 178-file Lambda zip was inspected for private inputs and smoke-tested in isolated Python: off-mode imports load no site or signing dependencies. The Linux package ran successfully in AWS off mode: cold invocation 3,851 ms plus 109 ms initialization, warm 389 ms, peak 105 MB at 256 MB allocation. Runtime SSM access and both consistent DynamoDB ACTIVE queries succeeded. No secret or source access is needed in empty off mode.
 
 Still unverified: credential/source IAM access, real DynamoDB write transactions, scheduler/retry timing, account signing permissions/precision, actual demo orders/fills/cancellations and settlement. Public market reads can verify metadata shape but cannot establish authenticated execution correctness. Before any live activation, validate these in demo, inspect the private ledger/failure queue, prove off/pause and timeout recovery, and explicitly choose account limits. Do not delete ledger fences or clear unknown reservations merely to retry an order; resolve exchange evidence first.
+
+## Prepared blended runtime
+
+The source package adds the monthly artifact and recomputes the saved raw probability against a fresh backed-side market midpoint from narrow two-sided books before evaluating the current ask. Missing/unknown snapshot or missing midpoint cannot fall back to raw odds. Actual execution probability/net edge are retained privately alongside original alert terms. The current deployed zip remains the earlier off-mode version until a separately authorized release.
+
+Sizing remains whole contracts limited by order/fixture/day/exposure caps, actual depth and available balance. It does not implement Kelly sizing or automatically compound a $50 bankroll; no spending values or deposits were configured by this change. Turning off stops new orders and retains reconciliation of existing positions.

@@ -4,7 +4,7 @@ import datetime
 import json
 import os
 
-from prometheus import alerts, forecast_groups, markets, schedule
+from prometheus import alerts, forecast_groups, markets, schedule, trading
 from prometheus.evaluation import paired_bootstrap
 from prometheus.site import config as site_config
 from prometheus.site.config import (
@@ -14,6 +14,7 @@ from prometheus.site.config import (
     RECENT_RESULT_DAYS,
 )
 from prometheus.site.render import env, slugify, write
+from prometheus.site.trading import groups as trading_groups
 from prometheus.types import INTERNATIONAL_LEAGUES
 
 
@@ -59,6 +60,11 @@ def fixture_row(entry, team_slugs):
         row["mkt_url"] = (
             markets.event_url(market["ticker"]) if market.get("ticker") else None
         )
+    estimate = trading.quote(entry)
+    if estimate:
+        row["trade1"], row["trade2"] = _pct_pair(estimate["probability"])
+        row["trade_at"] = estimate["at"]
+        row["trade_edge"] = estimate["pick"]["net_edge"]
     for side in (1, 2):
         name = schedule.display_name(entry, side)
         slug = slugify(entry[f"ours{side}"]) if entry.get(f"ours{side}") else None
@@ -136,7 +142,8 @@ def predictions_view(log, team_slugs, now):
         "months": result_months(past, team_slugs),
         "scorecard": schedule.scorecard(entries),
         "vs_market": method_groups(schedule.market_scorecard(entries)),
-        "edges": call_groups([row for row in edge_rows if row["edge"] == alerts.EDGE]),
+        "edges": call_groups([row for row in edge_rows if row["edge"] == 0.05]),
+        "trading_edges": trading_groups(entries),
         "backtest_span": backtest_span(entries),
         "alerts": alert_record(entries),
         "market_min": schedule.MARKET_MIN_SERIES,

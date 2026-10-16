@@ -10,16 +10,12 @@ import uuid
 from dataclasses import dataclass
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 
+from prometheus import market_blend
+from prometheus.alert_contract import TRADE_GROUPS, trade_veto
+
 ZERO = Decimal(0)
 CENT = Decimal(".01")
-GROUPS = {
-    "major-domestic",
-    "major-international",
-    "minor-domestic",
-    "mixed-international",
-    "minor-international",
-    "other-cross-league",
-}
+GROUPS = TRADE_GROUPS
 
 
 def decimal(value):
@@ -53,7 +49,6 @@ class Config:
                 "max_alert_age_seconds",
                 "max_quote_age_seconds",
                 "max_price",
-                "min_after_fee_edge",
                 "fee_rate_upper_bound",
                 "order_budget_usd",
                 "fixture_budget_usd",
@@ -72,7 +67,7 @@ class Config:
                 raise ValueError("unsupported balance precision")
             if decimal(value["fee_rate_upper_bound"]) > 1:
                 raise ValueError("fee upper bound must not exceed 1")
-            if decimal(value["min_after_fee_edge"]) >= 1:
+            if not 0 <= decimal(value["min_after_fee_edge"]) < 1:
                 raise ValueError("invalid edge")
             if decimal(value["max_contracts"]) != int(value["max_contracts"]):
                 raise ValueError("max_contracts must be an integer")
@@ -116,6 +111,8 @@ def validate_alert(alert, config, now):
         or alert["backed_team"] not in teams
     ):
         raise ValueError("ambiguous_teams")
+    if reason := trade_veto(alert):
+        raise ValueError(reason)
     when = timestamp(alert["alert_at"])
     if when < timestamp(config.raw["activation_at"]):
         raise ValueError("before_activation")
@@ -154,9 +151,13 @@ def plan_order(alert, routes, config, balance, now):
             config.number("fee_rate_upper_bound"),
             config.number("balance_precision_usd"),
         )
-        if decimal(alert["probability"]) - price - unit_fee < config.number(
-            "min_after_fee_edge"
-        ):
+        p = decimal(alert["probability"])
+        if alert.get("trading"):
+            if route.get("market_mid") is None:
+                continue
+            p = decimal(market_blend.refresh(alert["trading"], route["market_mid"]))
+        net_edge = p - price - unit_fee
+        if net_edge <= ZERO or net_edge < config.number("min_after_fee_edge"):
             continue
         budget = min(
             config.number("order_budget_usd"),
@@ -169,10 +170,10 @@ def plan_order(alert, routes, config, balance, now):
             int((budget / (price + unit_fee)).to_integral_value(rounding=ROUND_FLOOR)),
         )
         if count >= 1:
-            candidates.append((price, -count, route, count, unit_fee))
+            candidates.append((price, -count, route, count, unit_fee, p, net_edge))
     if not candidates:
         raise ValueError("price_edge_liquidity_or_balance")
-    _, _, route, count, unit_fee = min(
+    _, _, route, count, unit_fee, probability, net_edge = min(
         candidates, key=lambda x: (x[0], x[1], x[2]["ticker"])
     )
     price = decimal(route["price"])
@@ -186,6 +187,8 @@ def plan_order(alert, routes, config, balance, now):
         "environment": config.mode,
         "client_order_id": client_id,
         "route": copy.deepcopy(route),
+        "execution_probability": str(probability),
+        "execution_net_edge": str(net_edge),
         "request": {
             "ticker": route["ticker"],
             "client_order_id": client_id,
