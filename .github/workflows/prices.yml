@@ -52,6 +52,14 @@ jobs:
       - name: Restore the prediction log
         if: steps.busy.outputs.busy == 'false'
         run: bash scripts/prediction_log.sh restore
+      # The live worker powers off between match days; start it ahead of any
+      # match the live feed carries (scripts/live_wake.py). Never blocks prices.
+      - name: Wake the live worker
+        if: steps.busy.outputs.busy == 'false' && vars.LIVE_WORKER_INSTANCE_ID != ''
+        continue-on-error: true
+        env:
+          LIVE_WORKER_INSTANCE_ID: ${{ vars.LIVE_WORKER_INSTANCE_ID }}
+        run: uv run --no-dev python scripts/live_wake.py
       - name: Update prices and alerts
         if: steps.busy.outputs.busy == 'false'
         run: uv run python scripts/update_prices.py --log data/predictions.json --out output-prices

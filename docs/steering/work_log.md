@@ -2,6 +2,37 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-15 — Live pages with the live service: Riot feed, in-game model, FORGE and Kalshi
+
+- Rebased the live pages (front end from 2026-10-07, never merged) onto main and ported the lol-live pilot's live code into `prometheus/live/`:
+  - feed parser and SQLite collector;
+  - page building and an always-on service (getLive discovery, start search, estimated clock, timeline-model calls, FORGE in-process, Kalshi map and series quotes, settled-map results, finished-map files, an evidence archive and a call journal);
+  - the model (`time_model_v1.json`; training in `scripts/research/train_time_model.py`).
+- Left out: the broadcast/OCR reader and its benchmarks, the frozen 10/15/20 checkpoint-call path, and the one-off CLIs.
+- Page changes:
+  - **Removed:** the stream delay control. Numbers show as they arrive.
+  - **Layout:** odds and Table I beside the stream, Figure 1 full width over estimated game time (pauses take no width).
+  - **Map picker** for the series' finished maps (`?map=N`).
+  - **Finished maps:** a Final/Won/Lost row in place of live odds.
+  - **Hover reading** beside the cursor; shorter copy.
+- Production:
+  - `deploy/live/`: install script, 6-hourly refresh, systemd units; exit 3 on a Riot refusal is never restarted.
+  - The publish build uploads a ratings file for the worker (`export_live_inputs.py`, 0.6 MB; FORGE from it equals the DB path exactly).
+  - Cost: the worker runs only around matches. The service exits after 90 idle minutes and powers off; the hourly prices job wakes it ahead of matches (`live_wake.py`). The instance is a `t4g.micro`, and no S3 sync runs while idle.
+  - The end of KC–C9 exposed three fixes:
+    - A deciding map is settled from the series contract; the last map of a best-of always uses the series quotes, because getLive's 3–2 broke the tie rule after map 5.
+    - A decided series shows "X won the series 3–2" for 30 minutes, then leaves the index; getLive listed it for 5 more hours.
+    - Idle shutdown counts only unfinished tracked maps as activity.
+  - Local data: `backup.sh` saves each finished map's page file, `scripts/live_data.py pull`/`list` fetches and unpacks it, and `prometheus.live.data.load_maps()` gives frames, calls and quotes as tables.
+  - `deploy_site.py` never uploads or deletes `live/`.
+  - The EC2 host is in the infrastructure repo (`ThaivPrometheusLive`).
+- Checks:
+  - `ruff format`/`check` on the repo and the full `pytest` suite (results in the PR).
+  - 53 ported live tests; new deploy and gold-parser tests; the JS tests.
+  - shellcheck on the deploy scripts.
+  - `live_data.py list` and `load_maps` on the real KC–C9 map 4 file: 8,328 frames, 39 calls, 49 quotes, winner KC; archive unpacking on the real map 4 archive.
+  - The ported service ran live on Worlds KC–C9 map 5: FORGE in-process 62.6% per map, 70.7% series; the start search found 22:16:06; Kalshi series quotes used for the deciding map.
+  - Not verified: the systemd units on Amazon Linux, and the EC2 worker itself (not deployed).
 ## 2026-10-15 — Concise alert history, grouped by track
 
 Branch `alert-history`, base merged main `aeb0823` (PR #60). User requested replacing the Predictions alert/interval summary with a link to every saved alert, outcome and profit, grouped by type. Latest steering: keep the Almanac design and succinct copy; remove the 30-bet text, add no sample-size or interval explanation, retain interval calculations.
@@ -309,6 +340,12 @@ Branch `series-odds`, based on `main` (ba81227).
 - **Stale market cache:** the first Kalshi comparison showed our other-league series calls underconfident (slope 1.45). The main checkout's `data/markets/frames.pkl` dates from 2026-10-06 15:28, before the per-league Elo curves and other-league FORGE; `evaluate_markets.py --offline` rebuilt it in the worktree, and the slope is 0.82. The main checkout's cache is still the old one. `docs/market_report.md` is not regenerated here: an offline run covers different matches than the committed report (prices for newly rated matches aren't cached), so the PR's benchmark check is the like-for-like comparison.
 - Checks: new tests (`predict`'s series chance checked to within the rounding of `p_game`; published formula against a closed-form Bo3 and the research's beta-binomial, `series_rho` tiers, `predict` uses the major rho; research: rho = 0 against the old formula, a 200,000-series simulation, per-series rho, rho recovered from simulated series, fearless labels); `PREDICTIONS_FETCH=0 build_site.py` builds and the Predictions note renders; `uv run pytest -q`, `ruff format --check`, `ruff check`.
 - Limit: fearless and the 2025–26 calendar coincide (2024's 203 fearless series are the only overlap). The roster-games bands were first looked at on all years before the out-of-sample test (the new-roster cutoff comes from 2018–2024 only).
+## 2026-10-08 — Live pages (front end), with a demo feed
+
+- **`live.html`**, the Live home (header link "Live"): one register row per match in progress (clock and map, league, teams with our call either side of the duel bar and Kalshi's caret, Kalshi, series, gold lead named for the leader, kills, towers, dragons, barons); a row opens the match. **`watch.html?match=`**: a strip of every match (clock, score, our call and Kalshi's) above the stream; the stream with a control bar (stream picker: official LCS/LEC/LCK/Riot channels and co-streams Caedrel and Doublelift; a delay that holds every number back to match the stream, remembered per stream; full screen, where the bar and a see-through odds panel float over the video on any movement); the odds (live: ours at 10/15/20 and Kalshi; before the map: FORGE and Kalshi; series: FORGE and Kalshi); the scoreline; Figure 1 (our calls, Kalshi's map price on its spread, gold lead). The stream follows the chosen match's league unless a co-stream is on. With no feed, the stream still plays and both pages show the next fixtures. Layouts chosen by the owner in impeccable surface rounds (watch seed `d046b4a7`, overview `94ae1178`); briefs in `.impeccable/surfaces/`.
+- The pages read `live/index.json` and one file per match (format in tech.md, "Live pages"), which the build doesn't write; `scripts/live_demo.py` writes four made-up matches for previews. The collector (lol-live) and the hosting of `live/` are future work. Rebased onto the `prometheus/site/` split: `render_live` in `site/predictions.py`, `LIVE`/`LIVE_STREAMS` in `site/config.py`.
+- Owner reviews shaped it (odds table instead of a sentence, theater as the only layout, stream sized to fit the window, metadata under the stream, match strip and overview, then a distill pass cutting most copy); two fresh-context design reviews (both "fix", fixes applied).
+- Checks: Node tests (`tests/js/live_state.test.mjs`); `uv run pytest -q`; `ruff format`, `ruff check`; full `setup_db.sh` and `PREDICTIONS_FETCH=0 build_site.py`; both pages with the demo feed in headless Chrome at 1440×900, 1920×1000, 1280×720 and 390 px; the impeccable detector (no warnings). Not verified: a real live match, the embeds playing (the channels weren't live), a real full-screen session with the mouse, and a real phone.
 
 ## 2026-10-08 — Benchmark check required on main; site helpers shared across modules lose their underscore
 

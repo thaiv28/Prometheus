@@ -1,0 +1,381 @@
+/* The Almanac: the live page. A plate (the stream) beside the reading and
+   Figure 1, the scoreline under the plate; under 1000px they stack and, on
+   phones, the plate stays at the top while the numbers scroll under it. */
+
+.live-head { margin-bottom: 22px; }
+.live-head h1 {
+  font-size: clamp(2.25rem, 5vw, 3.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+}
+.live-facts {
+  margin-top: 12px;
+  display: flex; flex-wrap: wrap; gap: 2px 0;
+  font-size: 1.0625rem; color: var(--ink-2);
+  font-variant-numeric: lining-nums;
+}
+.live-facts > span + span::before { content: "·"; margin: 0 0.7em; color: var(--hairline); }
+.live-facts .league { color: var(--ink); }
+.live-facts a, .live-facts span > span:not(.side) { color: var(--ink); }
+.live-facts .side { font-style: italic; color: var(--ink-3); }
+.live-status { font-size: var(--fs-caption); font-style: italic; color: var(--ink-3); }
+.live-status:empty, .live-maps[hidden] { display: none; }
+.live-status.is-stale { color: var(--ink); }
+/* The series' maps: finished ones open their saved file; "now" is the live map. */
+.live-maps { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; font-size: var(--fs-caption); }
+.maps-label { color: var(--ink-3); font-style: italic; }
+.map-btn { font: inherit; color: var(--ink-2); background: none; border: 0; border-bottom: var(--hair) solid transparent; padding: 2px 0; cursor: pointer; font-variant-numeric: lining-nums; }
+.map-btn:hover { color: var(--ink); border-bottom-color: var(--hairline); }
+.map-btn.is-on { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+.live-status.is-stale::before { content: ""; display: inline-block; width: 0.5em; height: 0.5em; background: var(--spot); margin-right: 0.5em; vertical-align: 0.06em; }
+
+/* ---- The spread -------------------------------------------------------- */
+.live-spread {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  grid-template-areas: "watch side" "meta ." "chart chart";
+  gap: 40px clamp(28px, 3.5vw, 48px);
+  align-items: start;
+  margin-bottom: 52px;
+}
+.live-spread[hidden] { display: none; }
+.live-watch { grid-area: watch; min-width: 0; }
+/* Under the stream, one baseline row: the facts, the status, the series' maps. */
+.live-meta { grid-area: meta; min-width: 0; margin-top: -30px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 22px; }
+.live-meta .live-facts { margin-top: 0; }
+.live.is-on .live-head { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* The odds open level with the stream's top; the scoreline closes level with its bottom. */
+.live-side { grid-area: side; align-self: stretch; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+/* The scoreline closes the column: everything above it stays at the top. */
+.live-side .live-board { margin-top: auto; }
+/* The series' maps sit level with the stream's top, over the odds' rule. */
+.live-side .live-maps { line-height: 1.2; margin: -2px 0 -4px; }
+.live-board { min-width: 0; }
+.live-chart { grid-area: chart; min-width: 0; }
+/* The odds open on a 2px rule level with the stage's top. */
+.live-odds { min-width: 0; border-top: 2px solid var(--rule); padding-top: 10px; }
+
+/* ---- Desktop: the page widens to the window; the stream is sized (from
+   --fit-h, set by live.js) so it and the odds fit without scrolling; the odds
+   take the rest of the row, read from further back. ---- */
+@media (min-width: 1001px) {
+  body:has(.live--watch) .page { max-width: none; padding-top: 18px; }
+  body:has(.live--watch) .running-head, body:has(.live--watch) .colophon { width: calc(100% - 2 * var(--gutter)); }
+  .live-spread { grid-template-columns: minmax(0, calc(var(--fit-h, 60vh) * 16 / 9)) minmax(26rem, 1fr); }
+  /* Beside the stream the scoreline is narrow: short heads, sides in the fact line. */
+  .live-side .register--live .side-cell, .live-side .register--live thead th:first-child { display: none; }
+  .live-side .register--live .th-long { display: none; }
+  .live-side .register--live .th-short { display: inline; }
+  .live-side .register--live th, .live-side .register--live td { padding-left: 6px; padding-right: 6px; }
+  .live-side .register--live th[scope="row"] { white-space: nowrap; }
+  .live-side .live-board .register-figure { margin-bottom: 0; }
+  .live-side { max-width: 40rem; }
+  .chance-plot { height: clamp(360px, 46vh, 560px); }
+  .odds-live td { padding: 10px 0; }
+  .odds-live .odds-p { font-size: 2.25rem; }
+  .odds-live .odds-bar { height: 14px; }
+  .odds-pre td, .odds-series td { padding: 6px 0; }
+  .odds-pre .odds-p, .odds-series .odds-p { font-size: 1.25rem; }
+  .odds-group th { padding-top: 12px; }
+}
+
+/* ---- The match strip: every match in progress, above the stream ---------- */
+.match-strip { display: flex; align-items: stretch; gap: 0; margin: 0 0 14px; border-bottom: var(--hair) solid var(--rule); }
+.match-strip[hidden] { display: none; }
+.match-all {
+  flex: none; align-self: center; padding: 0 18px 0 0; margin-right: 4px;
+  font-style: italic; color: var(--ink-2);
+  border-right: var(--hair) solid var(--hairline);
+}
+.match-list { display: flex; overflow-x: auto; scrollbar-width: thin; }
+.match-chip {
+  display: grid; gap: 1px; min-width: 9.5rem;
+  padding: 6px 14px 8px; color: var(--ink); text-decoration: none;
+  border-top: 2px solid transparent;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.match-list li + li .match-chip { border-left: var(--hair) solid var(--hairline-soft); }
+.match-chip:hover { background: var(--paper-wash); }
+.match-chip:hover .fx-bar::before { background: var(--spot); }
+.match-chip[aria-current] { border-top-color: var(--ink); background: var(--paper-wash); }
+.match-chip[aria-current] .chip-teams { font-weight: 600; }
+.chip-top { display: flex; justify-content: space-between; gap: 10px; font-size: var(--fs-caption); color: var(--ink-3); }
+.chip-top .league { color: var(--ink-2); }
+.chip-clock { font-variant-numeric: lining-nums tabular-nums; }
+.chip-teams { white-space: nowrap; font-size: 1rem; }
+.chip-teams b { font-weight: 400; color: var(--ink-3); margin: 0 2px; }
+.match-chip .chip-bar { margin-top: 5px; }
+.chip-odds { margin-top: 3px; font-size: var(--fs-caption); color: var(--ink-2); white-space: nowrap; }
+@media (max-width: 720px) {
+  /* Phones: All matches goes last, chips narrow so two and a half show. */
+  body:has(.live--watch) .page { padding-top: 12px; }
+  .match-strip { margin: 0 calc(-1 * var(--gutter)) 0; padding: 0 var(--gutter); }
+  .match-all { order: 2; border-right: 0; border-left: var(--hair) solid var(--hairline); padding: 0 0 0 12px; margin: 0 0 0 4px; font-size: var(--fs-caption); white-space: nowrap; }
+  .match-list { flex: 1; min-width: 0; }
+  .match-chip { min-width: 0; width: 8.25rem; padding: 5px 9px 7px; }
+  .chip-teams { font-size: 0.9375rem; }
+  .chip-odds { font-size: 0.75rem; }
+}
+.fx-bar.is-empty::before { content: none; }
+/* The bar's Match select is for full screen, where the strip isn't. */
+.bar-match { display: none; }
+.stage.is-full .bar-match { display: inline; }
+
+/* ---- Overview: the live register --------------------------------------- */
+.live-matches { margin-bottom: 48px; }
+.live-matches .table-scroll { overflow-x: auto; }
+.lm-empty { border-top: 2px solid var(--rule); border-bottom: 2px solid var(--rule); }
+.lm-empty[hidden] { display: none; }
+.register--matches tbody.lm-match { cursor: pointer; }
+.register--matches tbody.lm-match + tbody.lm-match tr.lm td { border-top: var(--hair) solid var(--hairline-soft); }
+.register--matches tbody.lm-match:last-of-type tr.lm td { border-bottom: 2px solid var(--rule); }
+.register--matches tbody.lm-match:hover td { background: var(--paper-wash); }
+.register--matches tbody.lm-match:hover .fx-bar::before { background: var(--spot); }
+.register--matches td { vertical-align: middle; padding-top: 7px; padding-bottom: 7px; }
+.lm-clock { width: 1%; }
+.lm-time { display: block; font-weight: 600; font-variant-numeric: lining-nums tabular-nums; }
+.lm-map { display: block; font-size: var(--fs-caption); color: var(--ink-3); }
+.lm-team { white-space: nowrap; }
+.lm-team--1 { text-align: right; }
+.lm-name { display: inline-block; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; color: inherit; text-decoration: none; }
+.lm-match:hover .lm-name { text-decoration: underline; text-decoration-color: var(--hairline); }
+.live-overview-head { margin-bottom: 18px; }
+.table-caption.is-stale { color: var(--ink); }
+.lm-team.fav .lm-name { font-weight: 600; }
+.lm-p { width: 2.5rem; color: var(--ink-3); }
+.lm-p.fav { color: var(--ink); font-weight: 600; }
+.lm-p--2 { text-align: left; }
+.lm-bar-col { width: 7rem; min-width: 7rem; padding-left: 2px; padding-right: 2px; }
+.lm-kalshi { color: var(--ink-2); }
+.lm-stat { color: var(--ink-2); }
+.register--matches th.lm-chance-head { text-align: center; }
+.live-idle .block-head { justify-content: flex-start; gap: 8px 28px; }
+.register--matches .lm-line { display: none; }
+.lm-k { font-variant-caps: all-small-caps; letter-spacing: 0.05em; color: var(--ink-3); }
+.register--matches .th-short { display: none; text-decoration: none; }
+/* With less room: drop towers, dragons and barons, then fold the figures under the match. */
+@media (max-width: 1100px) {
+  .register--matches .lm-wide { display: none; }
+}
+@media (max-width: 720px) {
+  .register--matches .lm-stat, .register--matches .lm-opt, .register--matches .lm-go { display: none; }
+  .register--matches .lm-line { display: table-row; }
+  .register--matches .lm-line td { padding: 0 4px 9px; font-size: var(--fs-caption); color: var(--ink-2); white-space: normal; text-align: left; }
+  .register--matches tr.lm td { padding-bottom: 3px; border-bottom: 0 !important; }
+  .register--matches tbody.lm-match:last-of-type .lm-line td { border-bottom: 2px solid var(--rule); }
+  .register--matches .lm-series { display: none; }
+  .register--matches td, .register--matches th { padding-left: 4px; padding-right: 4px; }
+  .lm-name { max-width: 5.25rem; }
+  .register--matches tbody tr.lm-line td { border-bottom: var(--hair) solid var(--hairline-soft); }
+  .lm-p { width: 1.75rem; }
+  .lm-bar-col { width: 3.25rem; min-width: 3.25rem; }
+  }
+
+/* ---- No game in the feed: the stream plays; the odds column says so ---- */
+.odds-quiet { display: none; max-width: 24rem; font-style: italic; color: var(--ink-2); line-height: 1.45; }
+.live-spread.is-quiet .odds-quiet { display: block; }
+.live-spread.is-quiet .live-reading, .live-spread.is-quiet .live-board, .live-spread.is-quiet .live-chart { display: none; }
+.live-spread.is-quiet .live-side { gap: 0; }
+.live-spread.is-quiet { margin-bottom: 40px; }
+
+/* ---- Plate: the stream, with its control bar on the top edge ------------ */
+.stage { position: relative; background: var(--ink); }
+.plate-frame { position: relative; aspect-ratio: 16 / 9; background: var(--ink); }
+.plate-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.plate-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--paper-deep); font-style: italic; }
+/* The bar is the plate's top edge: ink, paper type, small-caps labels. */
+.stage-bar {
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 6px 22px;
+  padding: 6px 10px 6px 12px;
+  background: var(--ink); color: var(--paper);
+  border-bottom: var(--hair) solid var(--veil-rule);
+  font-size: 0.9375rem;
+}
+.bar-label { font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--paper-deep); margin-right: 8px; }
+.bar-select {
+  font: inherit; font-style: italic; color: var(--paper);
+  background: transparent; border: 0; border-bottom: var(--hair) solid var(--paper-deep); border-radius: 0;
+  padding: 0 1.1em 1px 0; appearance: none; cursor: pointer; field-sizing: content; min-width: 6em; max-width: 100%;
+  background-image: linear-gradient(45deg, transparent 50%, var(--paper-deep) 50%), linear-gradient(135deg, var(--paper-deep) 50%, transparent 50%);
+  background-position: calc(100% - 9px) 55%, calc(100% - 4px) 55%;
+  background-size: 5px 5px; background-repeat: no-repeat;
+}
+.bar-select:hover { border-bottom-color: var(--paper); }
+.bar-select option, .bar-select optgroup { color: var(--ink); background: var(--paper); font-style: normal; }
+.bar-views { display: inline-flex; gap: 2px; margin-left: auto; }
+.view-btn {
+  width: 2rem; height: 1.75rem; display: inline-grid; place-items: center;
+  background: transparent; border: 0; border-radius: 0;
+  color: var(--paper-deep); cursor: pointer; padding: 0;
+}
+.view-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; }
+.view-btn:hover { color: var(--paper); }
+.view-btn[hidden] { display: none; }
+.view-btn .icon-exit, .stage.is-full .view-btn .icon-enter { display: none; }
+.stage.is-full .view-btn .icon-exit { display: inline; }
+.stage-bar :focus-visible { outline: 2px solid var(--paper); outline-offset: 2px; }
+.stage-glass, .stage-odds { display: none; }
+
+/* ---- Full screen: the video untouched; bar and odds float over it ----- */
+.stage.is-full { width: 100vw; height: 100vh; }
+.stage.is-full .plate-frame { position: absolute; inset: 0; aspect-ratio: auto; }
+/* Catches the pointer over the video, short of the player's control strip. */
+.stage.is-full .stage-glass { display: block; position: absolute; inset: 0 0 64px 0; z-index: 1; }
+.stage.is-full:not(.is-awake) .stage-glass { cursor: none; }
+.stage.is-full .stage-bar {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 2;
+  background: var(--veil); border-bottom: 0; padding: 10px 16px;
+}
+.stage.is-full .stage.is-full .stage-odds {
+  display: block; position: absolute; z-index: 2;
+  top: 64px; right: 16px; width: min(24rem, 42vw);
+  padding: 14px 16px 12px;
+  background: var(--veil); color: var(--paper);
+}
+.stage.is-full .stage-bar, .stage.is-full .stage-odds { opacity: 0; pointer-events: none; transition: opacity 240ms var(--ease-out); }
+.stage.is-full.is-awake .stage-bar, .stage.is-full.is-awake .stage-odds { opacity: 1; pointer-events: auto; }
+/* The odds in paper type on the veil. */
+.stage-odds .live-reading { margin: 0; }
+.stage-odds .odds thead th { border-bottom-color: var(--veil-rule); }
+.stage-odds .odds-team a, .stage-odds .odds-team span, .stage-odds .odds-name, .stage-odds .odds-group th { color: var(--paper); }
+.stage-odds .odds-note, .stage-odds .odds-p { color: var(--paper-deep); }
+.stage-odds .odds-p.fav { color: var(--paper); }
+.stage-odds .odds-bar { background: var(--veil-rule); }
+.stage-odds .odds-live .odds-bar::before { background: var(--paper); }
+.stage-odds .odds-pre .odds-bar::before, .stage-odds .odds-series .odds-bar::before { background: var(--paper-deep); }
+.stage-odds .odds-bar::after { border-left-color: var(--paper-deep); }
+.stage-odds .stage-odds a { color: inherit; text-decoration-color: var(--paper-deep); }
+@media (prefers-reduced-motion: reduce) {
+  .stage.is-full .stage-bar, .stage.is-full .stage-odds { transition: none; }
+}
+
+/* ---- The odds: live first and largest, then before the map ------------- */
+.live-reading { margin: 0; }
+.nowrap { white-space: nowrap; }
+.odds-result { font-size: 1.625rem; line-height: 1.2; margin-bottom: 10px; }
+.odds { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: lining-nums tabular-nums; }
+.odds col.odds-c-label { width: 6.25rem; }
+.odds col.odds-c-p { width: 3.25rem; }
+.odds thead th { padding: 0 0 6px; border-bottom: var(--hair) solid var(--rule); font-weight: 400; font-size: 1.0625rem; line-height: 1.25; vertical-align: bottom; }
+.odds-team a, .odds-team span { color: var(--ink); }
+.odds-team--1 { text-align: left; }
+.odds-team--2 { text-align: right; }
+.odds-group th {
+  text-align: left; padding: 12px 0 2px;
+  font-variant-caps: all-small-caps; letter-spacing: 0.08em; font-weight: 600; font-size: var(--fs-label); color: var(--ink);
+}
+.odds tbody tr:not(.odds-group) th { text-align: left; font-weight: 400; padding: 3px 8px 3px 0; vertical-align: middle; line-height: 1.2; }
+.odds-name { display: block; width: fit-content; font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--ink); }
+.odds-note { display: block; font-size: var(--fs-caption); font-style: italic; color: var(--ink-3); }
+.odds td { vertical-align: middle; padding: 3px 0; }
+.odds-p { color: var(--ink-3); }
+.odds-p.fav { color: var(--ink); font-weight: 600; }
+.odds td.odds-p:first-of-type { text-align: left; padding-right: 8px; }
+.odds td.odds-p:last-child { text-align: right; padding-left: 8px; }
+.odds-bar { position: relative; display: block; height: 5px; background: var(--paper-deep); }
+.odds-bar::before { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--p, 0) * 1%); background: var(--ink-2); }
+.odds-bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: var(--hair) solid var(--ink-3); }
+.odds-bar.is-empty::before { content: none; }
+/* Live rows: headline figures and a heavier bar. */
+.odds-live td { padding: 6px 0; }
+.odds-live .odds-p { font-size: 1.625rem; line-height: 1.1; }
+.odds-live .odds-bar { height: 10px; }
+.odds-live .odds-bar::before { background: var(--ink); }
+.odds-live .odds-bar::after { top: -4px; bottom: -4px; }
+.odds-pre .odds-p, .odds-series .odds-p { font-size: 1.0625rem; }
+.odds tbody:last-child tr:last-child :is(td, th) { border-bottom: 2px solid var(--rule); padding-bottom: 8px; }
+
+/* ---- Figure 1: chance over the game -------------------------------------- */
+.chance-figure .figure-caption { margin: 0 0 6px; }
+.fig-num { font-weight: 600; font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--ink); }
+.chance-plot { position: relative; height: 320px; }
+.chance-plot:focus-visible { outline-offset: 4px; }
+.chance-plot svg { width: 100%; height: 100%; overflow: visible; }
+.chance-plot .grid { stroke: var(--hairline-soft); stroke-width: 1; }
+.chance-plot .axis { stroke: var(--rule); stroke-width: 1; }
+.chance-plot .base { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 3 3; }
+.chance-plot .checkpoint { stroke: var(--hairline); stroke-width: 1; stroke-dasharray: 1 3; }
+.chance-plot .label { fill: var(--ink-3); font-size: 12px; font-variant-numeric: lining-nums tabular-nums; }
+.chance-plot .gold { fill: var(--ink-3); }
+.chance-plot .mkt-band { fill: var(--paper-deep); }
+.chance-plot .mkt { fill: none; stroke: var(--ink-2); stroke-width: 1; }
+.chance-plot .ours { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: miter; }
+.chance-plot .call { fill: var(--ink); stroke: var(--paper); stroke-width: 1.5; }
+.chance-plot .call--pre { fill: var(--paper); stroke: var(--ink); stroke-width: 1.25; }
+.chance-plot .call-label { fill: var(--ink); font-size: 12.5px; font-weight: 600; font-variant-numeric: lining-nums tabular-nums; paint-order: stroke; stroke: var(--paper); stroke-width: 3px; }
+.chance-plot .now { stroke: var(--ink); stroke-width: 1; }
+.chance-plot .now-label { fill: var(--ink-2); font-size: 12px; font-style: italic; }
+.chance-plot .cursor { stroke: var(--spot); stroke-width: 1; }
+.chance-plot .cursor-dot { fill: var(--spot); }
+/* The traced moment, printed beside its rule: ledger blue on paper, a hairline frame. */
+.chance-tip {
+  position: absolute; top: 6px; z-index: 2; pointer-events: none;
+  display: grid; gap: 1px; padding: 5px 9px 6px;
+  background: var(--paper); border: var(--hair) solid var(--spot);
+  font-size: var(--fs-caption); line-height: 1.3; color: var(--spot); white-space: nowrap;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.chance-tip b { font-weight: 600; }
+.chance-empty { position: absolute; left: 34px; right: 14px; top: 38%; text-align: center; font-style: italic; color: var(--ink-2); font-size: var(--fs-small); }
+.chance-key {
+  display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 6px;
+  font-size: var(--fs-caption); color: var(--ink-2);
+  font-variant-caps: all-small-caps; letter-spacing: 0.06em;
+}
+.chance-key span { display: inline-flex; align-items: center; gap: 7px; }
+.chance-key svg { width: 18px; height: 10px; overflow: visible; }
+.chance-key .k-ours { stroke: var(--ink); stroke-width: 2; }
+.chance-key .k-call { fill: var(--ink); stroke: var(--paper); stroke-width: 1.5; }
+.chance-key .k-band { fill: var(--paper-deep); }
+.chance-key .k-mkt { stroke: var(--ink-2); stroke-width: 1; }
+.chance-key .k-gold { fill: var(--ink-3); }
+.chance-readout { min-height: 1.45em; margin-top: 4px; font-size: var(--fs-caption); color: var(--spot); font-variant-numeric: lining-nums tabular-nums; }
+
+/* ---- Scoreline ------------------------------------------------------------ */
+.live-board .register-figure { margin-bottom: 14px; }
+.live-board .table-scroll { overflow-x: auto; }
+.register--live th[scope="row"] { font-variant-caps: normal; letter-spacing: 0; font-size: var(--fs-table); color: var(--ink); font-weight: 500; border: 0; padding: 4px 10px; background: transparent; width: 100%; white-space: normal; vertical-align: baseline; }
+.register--live tbody tr:first-child th[scope="row"], .register--live tbody tr:first-child td { border-bottom: var(--hair) solid var(--hairline); }
+.register--live tbody tr:last-child th[scope="row"] { border-bottom: 2px solid var(--rule); }
+.register--live .side-cell { font-variant-caps: all-small-caps; letter-spacing: 0.06em; color: var(--ink-3); width: 1%; }
+.register--live td.lead { font-weight: 600; }
+.register--live tbody tr:hover td, .register--live tbody tr:hover th { background: transparent; }
+.register--live .th-short { display: none; text-decoration: none; }
+
+/* ---- Between games and the notes ----------------------------------------- */
+.live-idle { margin-bottom: 52px; max-width: 52rem; }
+.live-idle[hidden] { display: none; }
+.live-notes { max-width: 40rem; font-size: var(--fs-small); line-height: 1.45; color: var(--ink-2); }
+
+@media (max-width: 1000px) {
+  .live-spread { grid-template-columns: minmax(0, 1fr); grid-template-areas: "watch" "meta" "side" "chart"; }
+  .live-side { gap: 22px; }
+  .live-side .live-board { margin-top: 0; }
+  .live-odds { border-top: 0; padding-top: 0; }
+}
+@media (max-width: 720px) {
+  /* The stream stays in view while the numbers scroll under it. */
+  .live-watch { position: sticky; top: 0; z-index: 5; background: var(--paper); margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter); }
+  .stage { margin: 0 calc(-1 * var(--gutter)); }
+  .stage-bar { gap: 6px 16px; }
+  .view-btn { width: 2.5rem; height: 2.25rem; }
+  .chance-plot { height: 260px; }
+  .live-facts { gap: 2px 14px; }
+  .live-head { margin-bottom: 14px; }
+  .live-facts > span + span::before { content: none; }
+}
+@media (max-width: 600px) {
+  /* The side is in the fact line; the scoreline keeps the team and its numbers. */
+  .register--live .side-cell, .register--live thead th:first-child { display: none; }
+  .register--live th, .register--live td, .register--live th[scope="row"] { padding-left: 5px; padding-right: 5px; }
+  .register--live .th-long { display: none; }
+  .register--live .th-short { display: inline; }
+  .register--live th[scope="row"] { white-space: nowrap; max-width: 7.5rem; overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* A finished map: "Won" and "Lost" under the teams, in the odds' columns. */
+.odds-result-row th, .odds-result-row td { padding: 12px 0 10px; }
+.odds .odds-final { font-size: 1.625rem; color: var(--ink-3); font-weight: 400; letter-spacing: -0.005em; }
+.odds .odds-final.fav { color: var(--ink); font-weight: 600; }
+.odds-pending { font-style: italic; color: var(--ink-3); padding: 10px 0; }

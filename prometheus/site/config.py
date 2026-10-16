@@ -269,6 +269,67 @@ PROPS = {
     ],
     "caveats": "Starters are each team's last lineup. Not yet tested against these lines; the record starts 12 October 2026.",
 }
+LIVE = {
+    "key": "live",
+    "name": "Live",
+    "description": "Every pro League of Legends map being played: the scoreline, our win chance at 10, 15 and 20 minutes, and Kalshi's live price, with the stream.",
+    "how_to_read": [
+        "Ours: FORGE before the map, then gold and Elo through it.",
+        "Kalshi: the market's price.",
+    ],
+    "caveats": "Research preview: the in-game clock is estimated.",
+}
+# Streams the live page can embed: each league's official channels, then
+# co-streams. `youtube` is a channel ID (the live embed shows its current
+# broadcast); `twitch` is a channel name. `leagues` lists where a stream is the
+# default.
+LIVE_STREAMS = [
+    {
+        "key": "lcs-yt",
+        "name": "LCS on YouTube",
+        "group": "Official",
+        "youtube": "UCSF_aFGIIIoWY30GVV19TKA",
+        "leagues": ["LCS"],
+    },
+    {
+        "key": "lcs-tw",
+        "name": "LCS on Twitch",
+        "group": "Official",
+        "twitch": "lcs",
+    },
+    {
+        "key": "lec-tw",
+        "name": "LEC on Twitch",
+        "group": "Official",
+        "twitch": "lec",
+        "leagues": ["LEC"],
+    },
+    {
+        "key": "lck-tw",
+        "name": "LCK on Twitch",
+        "group": "Official",
+        "twitch": "lck",
+        "leagues": ["LCK"],
+    },
+    {
+        "key": "riot-tw",
+        "name": "Riot Games on Twitch",
+        "group": "Official",
+        "twitch": "riotgames",
+    },
+    {
+        "key": "caedrel",
+        "name": "Caedrel",
+        "group": "Co-streams",
+        "twitch": "caedrel",
+    },
+    {
+        "key": "doublelift",
+        "name": "Doublelift",
+        "group": "Co-streams",
+        "twitch": "doublelift",
+    },
+]
 # The home page lists this many upcoming major-league and international matches,
 # within this many days.
 HOME_FIXTURES = 10

@@ -37,6 +37,9 @@ OUTPUT = ROOT / "output"
 MANIFEST_KEY = "deploy/manifest.json"
 SITE_PREFIX = "current"
 HOURLY_FILES = ("kalshi.json", "predictions.json", "props-lines.json", "alerts.html")
+# Written every few seconds by the live worker (prometheus/live/service.py), never
+# by the build: deploys leave it alone, even when output/ holds a local copy.
+LIVE_DIR = "live"
 HOURLY_CACHE_CONTROL = "max-age=300"
 LONG_CACHE = {
     ".css": "public, max-age=31536000, immutable",
@@ -54,10 +57,9 @@ def build_manifest(root):
     """{relative path: sha256} for every file under root, with '/' separators."""
     manifest = {}
     for path in sorted(root.rglob("*")):
-        if path.is_file():
-            manifest[path.relative_to(root).as_posix()] = hashlib.sha256(
-                path.read_bytes()
-            ).hexdigest()
+        rel = path.relative_to(root)
+        if path.is_file() and rel.parts[0] != LIVE_DIR:
+            manifest[rel.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
     return manifest
 
 
@@ -198,6 +200,8 @@ def main(argv=None):
             str(output),
             site,
             "--recursive",
+            "--exclude",
+            f"{LIVE_DIR}/*",
             "--only-show-errors",
             dry_run=args.dry_run,
         )
@@ -207,6 +211,8 @@ def main(argv=None):
             str(output),
             site,
             "--delete",
+            "--exclude",
+            f"{LIVE_DIR}/*",
             "--only-show-errors",
             dry_run=args.dry_run,
         )

@@ -136,3 +136,21 @@ def test_hourly_history_upload_has_html_type_and_short_cache(site, monkeypatch):
     upload = next(c for c in calls if "s3://test/current/alerts.html" in c)
     assert upload[upload.index("--content-type") + 1] == "text/html; charset=utf-8"
     assert upload[upload.index("--cache-control") + 1] == "max-age=300"
+
+
+def test_live_files_are_never_deployed_or_deleted(site, monkeypatch):
+    # The live worker owns current/live/; a local copy in output/ stays out of it.
+    (site / "live").mkdir()
+    (site / "live" / "index.json").write_text("{}")
+    assert "live/index.json" not in deploy.build_manifest(site)
+
+    calls = _fake_aws(monkeypatch, manifest=None)
+    deploy.main(["--output", str(site)])
+    bulk = [
+        c
+        for c in calls
+        if c[:2] == ("s3", "sync") or (c[:2] == ("s3", "cp") and "--recursive" in c)
+    ]
+    assert bulk
+    for call in bulk:
+        assert call[call.index("--exclude") + 1] == "live/*"

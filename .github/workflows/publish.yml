@@ -143,6 +143,13 @@ jobs:
         with:
           path: db/prometheus.db
           key: ${{ steps.db-cache.outputs.cache-primary-key }}
+      # The live worker (deploy/live/refresh.sh) rates teams for FORGE and the
+      # in-game model from this file, so it never loads the DB; main only.
+      - name: Publish ratings for the live worker
+        if: env.CAN_USE_AWS == 'true'
+        run: |
+          uv run python scripts/export_live_inputs.py --out "$RUNNER_TEMP/live_inputs.json"
+          aws s3 cp "$RUNNER_TEMP/live_inputs.json" "s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/live-inputs/live_inputs.json" --only-show-errors
       - name: Back up freshly downloaded CSVs
         if: env.CAN_USE_AWS == 'true' && hashFiles('data/.fresh-download') != ''
         run: |

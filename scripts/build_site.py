@@ -60,6 +60,7 @@ from prometheus.site.players import (
 )
 from prometheus.site.predictions import (
     predictions_view,
+    render_live,
     render_predictions,
     render_results,
     update_predictions,
@@ -323,7 +324,7 @@ def write_json(name, data, **kwargs):
 
 
 def predictions_pages(fc: Forecasts, teams) -> dict:
-    """The Kalshi alert, the predictions and results pages, and the live JSON files."""
+    """The Kalshi alert, the predictions, results and live pages, and the live JSON files."""
     log = fc.prediction_log
     write_kalshi_alert(log, fc.coverage, teams)
     now = datetime.datetime.now(datetime.UTC)
@@ -343,6 +344,7 @@ def predictions_pages(fc: Forecasts, teams) -> dict:
     render_predictions(predictions, fc.coverage)
     render_results(predictions)
     render_alert_history(log, now)
+    render_live(predictions["home"])
     write_json("predictions.json", markets.published_log(log), ensure_ascii=False)
     # The hourly price job (scripts/update_prices.py) replaces this between builds.
     write_json("kalshi.json", markets.prices_file(log, now))
