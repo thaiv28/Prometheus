@@ -196,6 +196,8 @@ Shared statistics in `prometheus/evaluation.py` (since 2026-10-08): `resamples(u
 
 `elo_tempo_surprise.py` is an opt-in causal duration experiment: expectations learn from previous games and candidate pregame gaps, then modify only postgame update evidence. It reuses the margin harness for identical-cohort curve/Form/FORGE scoring, adds cross-league and within-other-league slices, and has future-duration perturbation/symmetry tests. Both runners leave the DB and published weights untouched. `elo_tempo_validation.py` adds same-curve attribution, earlier-only nested Form/blend calibration, copied-cache market reconstruction, and a `--fixed-only` follow-up that freezes the 30-minute tanh curve without another grid. Reports: [`elo_tempo_surprise.md`](../research/elo_tempo_surprise.md), [`elo_tempo_validation.md`](../research/elo_tempo_validation.md), and [`elo_tempo_fixed.md`](../research/elo_tempo_fixed.md).
 
+`series_checkpoint.py` scores the live map model (`time_model_v1`) with and without the series lead at Oracle's Elixir's 0/10/15/20/25-minute gold, reusing `series_independence.load` (whose duplicate home-league merge was removed: `gamelog.add_calls` now adds `home` and `opp_home`); tests in `tests/research/test_series_checkpoint.py`.
+
 Finished research (in-game snapshots, champions, snapshot and visible-input Elo, gol.gg objectives, Elo margins, league moves) lives in `scripts/research/`, with reports and the scripts' descriptions in [`docs/research/README.md`](../research/README.md) and tests in `tests/research/` (marker `research`). Most remains opt-in; the persistent regional-correction experiment supplies the separately validated international calibration artifact described above.
 
 ## Constraints

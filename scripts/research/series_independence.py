@@ -195,13 +195,8 @@ def fearless_labels(series):
 def load(con):
     """(games, series): one side of every series (the alphabetically first team)."""
     states = load_states()
+    # add_calls also adds both teams' home leagues ("" when unknown).
     g = gamelog.add_series(gamelog.add_calls(gamelog.load_team_games(), states))
-    home = states[["gameid", "teamid", "home"]].drop_duplicates(["gameid", "teamid"])
-    g = g.merge(home, on=["gameid", "teamid"], how="left").merge(
-        home.rename(columns={"teamid": "opp_id", "home": "opp_home"}),
-        on=["gameid", "opp_id"],
-        how="left",
-    )
     split = pd.read_sql(
         "SELECT DISTINCT gameid, split FROM matches", con
     ).drop_duplicates("gameid")
