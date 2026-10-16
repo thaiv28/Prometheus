@@ -284,6 +284,10 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 ### Predictions page
 - Title "Predictions" with its italic subtitle and lede; league/team filter; *Coming up* fixture register (Table I); *Record* (Table II), the existing FORGE/Other Saved/Backtest market comparison (Table III), and five allowed fixture groups × Saved/Backtest at positive blended after-fee edge (Table IV: Bets, Won, Return, CLV, Beat close; Won/Beat close phone-hide). Source labels are italic ink-2, groups separated by booktabs hairlines; on phones Calls folds into Source and wide figures scroll. Plain links lead to “Call performance” and “Alert history”. Captions carry only the pricing horizon and interpretation needed for their table. Margin notes hold short definitions and the backtest caveat; methodology stays in the README. No prose repeats the scorecard. *Results* (Table V) shows the last three days, newest first, with all-data and month links.
 
+### Market Blend methodology
+
+`market-blend.html` uses the existing Almanac headings and prose widths. Short estimate, signal and evidence sections; native disclosure holds formula, fit protocol and current coefficients. Linked from Blend, Predictions notes and Call performance. Keep the replay/profitability caveat; no new tokens or ranking page.
+
 ### Props page
 - Title "Props" with its full name in italic, a one-line lede ending "Lines as of …" (local time via `props.js`), then a filter line: a *stat* picker (radio list: Kills, Assists, Deaths, CS; `?stat=`) and a "with lines only" square checkbox, checked by default (`?lines=all` shows every match). Without JS the page shows kills and, already, only the matches with kills lines.
 - *Coming up*: one block per match, soonest first. The match head sets the teams at headline size (an italic ink-3 *v* between them, names linked to team pages) with the local day and time in small caps ink-2 after them; under it a caption-size fact line in ink-3: league mark, Bo, our series chance as a pair ("74–26").

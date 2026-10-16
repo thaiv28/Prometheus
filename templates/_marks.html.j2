@@ -44,7 +44,7 @@
       {% if not results %}<th scope="col" class="phone-hide">Bo</th>{% endif %}
       {% if not results %}<th scope="col" class="num phone-hide fx-opt" title="Per-map odds, first team–second team">Game{% if not compact %}<sup class="th-note" aria-hidden="true">1</sup>{% endif %}</th>{% endif %}
       {% if not results %}<th scope="col" class="num phone-hide" title="Kalshi series odds, updated hourly">Kalshi{% if not compact %}<sup class="th-note" aria-hidden="true">5</sup>{% endif %}</th>{% endif %}
-      {% if not results and not compact %}<th scope="col" class="num phone-hide" title="FORGE/Elo + Kalshi; domestic/international only">Blend</th>{% endif %}
+      {% if not results and not compact %}<th scope="col" class="num phone-hide" title="FORGE/Elo + Kalshi; domestic/international only"><a href="{{ root }}market-blend.html">Blend</a></th>{% endif %}
       {% if by %}<th scope="col" class="wide-only fx-opt">By{% if not compact %}<sup class="th-note" aria-hidden="true">2</sup>{% endif %}</th>{% endif %}
       {% if results %}<th scope="col" class="num phone-hide fx-close" title="Last pre-match Kalshi odds">Close{% if not compact %}<sup class="th-note" aria-hidden="true">5</sup>{% endif %}</th><th scope="col" class="num">Result</th><th scope="col">Call</th>{% endif %}
     </tr>

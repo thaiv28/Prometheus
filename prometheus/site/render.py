@@ -10,6 +10,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
+from prometheus import market_blend
 from prometheus.site import config as site_config
 from prometheus.site.config import (
     NAV,
@@ -98,6 +99,17 @@ def render_sunset():
         os.path.join(site_config.OUTPUT_DIR, "sunset.html"),
         env.get_template("sunset.html.j2").render(
             page_key="sunset", root_path="", metrics=SUNSET
+        ),
+    )
+
+
+def render_market_blend():
+    write(
+        os.path.join(site_config.OUTPUT_DIR, "market-blend.html"),
+        env.get_template("market_blend.html.j2").render(
+            page_key="predictions",
+            root_path="",
+            model=market_blend.load()["snapshots"][-1],
         ),
     )
 

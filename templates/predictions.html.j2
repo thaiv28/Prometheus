@@ -139,7 +139,7 @@
       <h2 id="about-heading" class="margin-head">Reading the odds</h2>
       <ol class="notes-list">
         {% for line in metric.how_to_read %}
-        <li id="note-{{ loop.index }}"><span class="note-mark" aria-hidden="true">{{ loop.index }}</span>{{ line }}</li>
+        <li id="note-{{ loop.index }}"><span class="note-mark" aria-hidden="true">{{ loop.index }}</span>{{ line }}{% if loop.index == 5 %} <a href="market-blend.html">Method</a>.{% endif %}</li>
         {% endfor %}
         <li id="note-dagger" class="caveat"><span class="note-mark" aria-hidden="true">†</span><span class="visually-hidden">Caveat: </span>{{ metric.caveats }}{% if coverage %} {{ coverage.matched }}/{{ coverage.matches }} fixtures rated.{% endif %}</li>
       </ol>

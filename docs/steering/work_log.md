@@ -2,6 +2,10 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-16 — Add Market Blend methodology page
+
+On `blended-alerts`, add `market-blend.html` to the fixed-page build and link it from Blend, the Predictions margin note and Call performance. Short estimate/policy/evidence sections; formula, fit protocol and current snapshot metadata in native disclosure. Coefficients/count/date come from the packaged artifact. No forecast/sizing change, new dependency, data load or network call. Copy review: PASS — reviewed the methodology page (including expanded formula) and Predictions links at 1440px/390px; one-sentence lede, short policy/evidence paragraphs, uncommon fit detail disclosed. Essential replay/profitability caveats retained; no errors/document overflow. Fixed-page entry-point and linked pages rendered from local inputs. New route warm render 0.54 ms; fixed pages 37.08 ms including cold templates. Full suite: 648 passed, 2 optional signing checks skipped; lint/diff/detector pass. Kelly sizing is the next authorized task; remains unimplemented in this commit.
+
 ## 2026-10-16 — Require succinct-copy review for every UI change
 
 Make the existing succinct-text design rule a completion gate in `AGENTS.md` and `docs/steering/ui.md`: every new/edited UI page, including generated copy, needs a whole-page desktop/phone review, preserved essential meaning/accessibility and a recorded `Copy review: PASS` with specific cuts or justification. Add the same check to the PR template. This is an agent/reviewer requirement, not an automated measure of prose quality; no brittle word-count test or new CI work. Applies immediately to the Predictions refinement below. Documentation links/checks verified with the final change.
@@ -504,4 +508,3 @@ From a repo review (correctness, CI speed, cost, cleanliness); the review's rema
 - **Market benchmark** (branch vs `main` at `894409c` on the same Kalshi cache, 2,486 series): all −0.0021 (−0.0057 to +0.0014); cross-league Elo (377) −0.0190 (−0.0410 to +0.0024); FORGE within other leagues (1,321) +0.0004 (−0.0019 to +0.0026); **FORGE same major league (788) +0.0017 (+0.0001 to +0.0034)**. With `main`'s weights the Elo change alone gives +0.0017 and the weight refit −0.0001. The loss sits in LEC Versus, the KeSPA Cup and the LCK; likely cause (not verified): a strong ERL's link offset holds part of its strength, so its promoted players arrive slightly underrated.
 - **Decision** (user): not merged, since it makes FORGE worse on the market benchmark. Elo on `main` is unchanged. Follow-ups in `current_state.md` Future work.
 - Docs only: `docs/league_moves_report.md`, this entry, the Future work item. Checks: `uv run pytest -q` (252 passed; the 3 tests that need a built DB fail in this DB-less worktree).
-

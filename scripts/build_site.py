@@ -82,6 +82,7 @@ from prometheus.site.render import (
     copy_static,
     env,
     render_404,
+    render_market_blend,
     render_redirect,
     render_sunset,
 )
@@ -134,6 +135,7 @@ class Players:
 def render_fixed_pages():
     render_404()
     render_sunset()
+    render_market_blend()
     render_redirect("glory_plus", "glory.html", "GLORY+ is now part of GLORY")
     # GlorELO+ was renamed FORGE; keep its old address working.
     render_redirect("glorelo_plus", "forge.html", "GlorELO+ is now FORGE")
