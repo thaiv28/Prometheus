@@ -2,6 +2,16 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-16 — Series score at the live model's gold checkpoints
+
+Branch `series-checkpoint` from `eb11b9e`. Research only; no production model, page or service change.
+
+- **`scripts/research/series_checkpoint.py`** (new; report `docs/research/series_checkpoint.md`, tests `tests/research/test_series_checkpoint.py`): the live map model's call (Elo from before the series, as the live page uses it) at Oracle's Elixir's 0/10/15/20/25-minute gold, with and without the series lead, on maps 2+ of clean Bo3/Bo5 (fit 2018–2024, scored 2025–2026, series-resampled intervals). Major teams: the series model's Beta shift cuts log loss 0.0039 (0 min), 0.0038 (10), 0.0028 (15), 0.0019 (20, interval includes 0). About half the lead is Elo moving between maps (with per-map Elo the major-team gain is under 0.0015, intervals include 0). A gold + Elo checkpoint refit beats the live model at 15 and 20 minutes (major −0.0041/−0.0043; other −0.0063/−0.0073).
+- **`series_independence.load`**: removed its home-league merge, which collided with the `home`/`opp_home` columns `gamelog.add_calls` now adds (the script failed on current main).
+- **Riot feed check:** `feed.lolesports.com/livestats/v1/window/<game>?startingTime=` returned frames for a 2026-05 LCK game and a 2024-01 LCK game (the oldest LCK schedule page); `getSchedule` pages back to January 2024.
+- Added future work: past series kept on the live pages with their graphs; the series term and more training timelines for the live model.
+- Checks: `pytest tests/research/test_series_checkpoint.py tests/research/test_series_independence.py tests/test_steering.py`; `ruff check` and `ruff format` on the new files; report regenerated from the script. Live model's GOL training maps (2022–2023) are a small part of the fit years and none of the scored years. Not checked: older feed coverage before 2024, request rate limits for a bulk backfill.
+
 ## 2026-10-16 — Unified alerts, six fixture groups and disabled trade execution
 
 Alert/reporting branch `unified-alerts` builds on `e67c428` (PR #62), then merged `1071c35` (PR #64 live deployment documentation), preserving both work-log entries. Executor delegated, per user instruction, to its clean pre-existing `kalshi-execution` worktree at the same base; parent owns adapter/alerts/UI/runner/control/docs, subagent owns only `prometheus/execution` and execution tests. Contract agreed before implementation. Infrastructure isolated on `prometheus-kalshi-execution`, based on `c615e0f` (existing live-worker stack), then merged `fcb5f12` (infra PR #15) after the user confirmed rollout, leaving other agents’ dirty main checkout untouched. User explicitly forbids resource deployment, real credential installation and real orders; default off/no bankroll invented.
