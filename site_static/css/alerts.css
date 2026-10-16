@@ -1,0 +1,27 @@
+/* The saved-alert ledger, in the existing Almanac register. */
+.track-label { color: var(--ink-3); font-size: var(--fs-caption); font-style: italic; }
+.alert-totals { font-variant-numeric: lining-nums tabular-nums; }
+.alert-totals .ci { color: var(--ink-3); font-size: var(--fs-caption); }
+.register--alerts th, .register--alerts td { vertical-align: top; }
+.register--alerts .alert-pick { font-variant-caps: normal; letter-spacing: 0; color: var(--ink); }
+.alert-pick a { font-weight: 600; }
+.alert-opponent, .alert-score { display: block; color: var(--ink-2); font-weight: 400; }
+.alert-mobile-odds { display: none; }
+.alert-date { white-space: nowrap; }
+.alert-outcome { white-space: nowrap; }
+.alert-track .table-scroll { overflow-x: auto; }
+@media (max-width: 600px) {
+  .register--alerts .alert-odds, .register--alerts .alert-clv { display: none; }
+  .register--alerts th, .register--alerts td { padding-left: 4px; padding-right: 4px; }
+  .register--alerts .alert-pick { min-width: 8rem; overflow-wrap: anywhere; }
+  .alert-mobile-odds { display: block; color: var(--ink-3); font-size: var(--fs-caption); font-weight: 400; }
+}
+.register--alerts tbody th { border: 0; padding: 4px 10px; white-space: normal; background: transparent; }
+.register--alerts tbody tr:last-child th { border-bottom: 2px solid var(--rule); }
+.register--alerts tbody tr:nth-child(5n):not(:last-child) th { border-bottom: var(--hair) solid var(--hairline); }
+.register--alerts tbody tr:hover th { background: var(--paper-wash); }
+.alert-track > .empty { text-align: left; padding: 0; margin: 0 0 44px; }
+@media (max-width: 600px) {
+  .register--alerts tbody th { padding-left: 4px; padding-right: 4px; }
+  .register--alerts .alert-pick { min-width: 0; }
+}

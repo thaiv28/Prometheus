@@ -225,11 +225,11 @@ def backtest_span(entries):
     return (min(days), max(days)) if days else None
 
 
-def alert_record(entries):
-    """The paper record of the Kalshi alerts for the Predictions page: settled,
+def alert_record(entries, key="alert"):
+    """The paper record of one saved-alert track: settled,
     won, mean CLV and share beating the close, and ROI after the 7% taker fee,
     with a 95% bootstrap interval once there are enough bets."""
-    bets = alerts.settled_alerts({e["match_id"]: e for e in entries})
+    bets = alerts.settled_alerts({e["match_id"]: e for e in entries}, key=key)
     clv, beat = alerts.clv_summary(bets)
     profits = [b["profit"] for b in bets]
     roi = interval = None

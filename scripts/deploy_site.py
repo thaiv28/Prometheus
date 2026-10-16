@@ -10,7 +10,7 @@ The manifest is deleted before any file changes and written back only after the
 upload succeeds, so a run that fails partway leaves no manifest and the next run
 uploads everything: `current/` never differs from what the manifest says.
 
-`kalshi.json`, `predictions.json` and `props-lines.json` are always uploaded, with a 5-minute
+`kalshi.json`, `predictions.json`, `props-lines.json` and `alerts.html` are always uploaded, with a 5-minute
 Cache-Control, because the hourly prices job rewrites them in `current/` between
 deploys (see docs/steering/deployment.md). CSS and JS get a year and `immutable`
 (every page links them with a content-hash `?v=`, so a change is a new URL to the
@@ -36,7 +36,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "output"
 MANIFEST_KEY = "deploy/manifest.json"
 SITE_PREFIX = "current"
-HOURLY_FILES = ("kalshi.json", "predictions.json", "props-lines.json")
+HOURLY_FILES = ("kalshi.json", "predictions.json", "props-lines.json", "alerts.html")
 HOURLY_CACHE_CONTROL = "max-age=300"
 LONG_CACHE = {
     ".css": "public, max-age=31536000, immutable",
@@ -149,7 +149,9 @@ def upload_hourly_files(output, bucket, dry_run):
                 f"s3://{bucket}/{SITE_PREFIX}/{name}",
                 "--only-show-errors",
                 "--content-type",
-                "application/json",
+                "text/html; charset=utf-8"
+                if name.endswith(".html")
+                else "application/json",
                 "--cache-control",
                 HOURLY_CACHE_CONTROL,
                 dry_run=dry_run,

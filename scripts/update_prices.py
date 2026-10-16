@@ -6,7 +6,7 @@ rebuild the site: it reads the prediction log, fetches Kalshi's open series
 markets once, updates the price on every rated match that hasn't started
 (`markets.attach_prices`; prices still freeze at the start), records new alerts
 and writes the day's alert issue (`alerts.update`), then writes `kalshi.json`
-and `predictions.json`, which the workflow uploads to the live site. The
+and `predictions.json`, plus the saved ledger `alerts.html`, which the workflow uploads to the live site. The
 Predictions page and home's fixtures read `kalshi.json` when they load.
 
 Kalshi names are matched against the teams in the log (every team we could
@@ -25,6 +25,7 @@ import urllib.request
 import pandas as pd
 
 from prometheus import alerts, markets, schedule
+from prometheus.site.alert_history import render_alert_history
 
 TEAMS_URL = "https://prometheus.thaiv.dev/teams.json"
 
@@ -97,6 +98,7 @@ def run(log_path, out_dir, alert_path, now=None, fetch=None, pages=None):
         json.dump(
             markets.published_log(log), f, ensure_ascii=False, separators=(",", ":")
         )
+    render_alert_history(log, now, out_dir)
     return {
         "priced": priced,
         "alert": alert and {"title": alert["title"], "new": alert["new"]},
@@ -111,7 +113,7 @@ def main():
     parser.add_argument(
         "--out",
         default="output-prices",
-        help="Where kalshi.json and predictions.json go",
+        help="Where the live prices, predictions and alert history go",
     )
     parser.add_argument("--alert", default="data/kalshi_alert.json")
     args = parser.parse_args()

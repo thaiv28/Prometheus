@@ -1,7 +1,7 @@
 name: Kalshi prices
 
 # Between daily site builds: refresh Kalshi's prices on upcoming matches, update
-# the live site's kalshi.json and predictions.json, and post the day's alert issue
+# the live site's prices, prediction log and alert ledger, and post the day's issue
 # (scripts/update_prices.py). No database, no site rebuild; about a minute.
 on:
   schedule:
@@ -66,9 +66,11 @@ jobs:
       - name: Publish prices to the site
         if: steps.busy.outputs.busy == 'false' && steps.save_prediction_log.outputs.saved == 'true' && env.BUCKET != ''
         run: |
-          for f in kalshi.json predictions.json; do
+          for f in kalshi.json predictions.json alerts.html; do
+            content_type=application/json
+            if [[ "$f" == *.html ]]; then content_type="text/html; charset=utf-8"; fi
             aws s3 cp "output-prices/$f" "s3://$BUCKET/current/$f" --only-show-errors \
-              --content-type application/json --cache-control "max-age=300"
+              --content-type "$content_type" --cache-control "max-age=300"
           done
       - name: Post the Kalshi alert
         if: steps.busy.outputs.busy == 'false' && steps.save_prediction_log.outputs.saved == 'true' && hashFiles('data/kalshi_alert.json') != ''
