@@ -174,6 +174,16 @@ class WaitingTest(unittest.TestCase):
             waiting_pages([self.fixture()], CATALOG, {}, self.now, {"m1"}), []
         )
 
+    def test_failed_active_map_is_not_relabelled_waiting_by_schedule(self):
+        live = event()
+        live["startTime"] = self.now
+        live["match"]["games"][0]["state"] = "inProgress"
+        live["match"]["games"][1]["state"] = "unstarted"
+        self.assertEqual(
+            waiting_pages([self.fixture(), live], CATALOG, {}, self.now, failed={"g4"}),
+            [],
+        )
+
     def test_late_match_stays_waiting_with_same_id(self):
         (page,) = waiting_pages(
             [self.fixture("2026-10-16T17:00:00Z")], CATALOG, {}, self.now

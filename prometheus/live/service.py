@@ -136,7 +136,7 @@ def mapping_for(event, catalog, aliases):
     }
 
 
-def waiting_pages(events, catalog, aliases, at, tracked=()):
+def waiting_pages(events, catalog, aliases, at, tracked=(), failed=()):
     """Due Riot fixtures while this worker is on; same IDs as getLive.
 
     Schedule teams have names/codes but no Riot IDs or map assignments. Keep
@@ -145,6 +145,16 @@ def waiting_pages(events, catalog, aliases, at, tracked=()):
     now = timestamp(at)
     pages = []
     seen = set(tracked)
+    # A failed/skipped active map is unavailable, never a pre-match fallback.
+    # getSchedule lacks games, so exclude its duplicate using getLive first.
+    seen.update(
+        event.get("id") or (event.get("match") or {}).get("id")
+        for event in events
+        if any(
+            g.get("state") == "inProgress" and g.get("id") in failed
+            for g in (event.get("match") or {}).get("games", [])
+        )
+    )
     for event in events:
         match = event.get("match") or {}
         mid = match.get("id") or event.get("id")
@@ -974,7 +984,12 @@ def run(args):
             at = utc_now()
             tracked = {g.mapping["match_id"] for g in games.values()}
             pending = waiting_pages(
-                scheduled + (events or []), catalog, aliases, at, tracked
+                scheduled + (events or []),
+                catalog,
+                aliases,
+                at,
+                tracked,
+                set(failed) | skip,
             )
             current_waiting = {p["match"]["id"] for p in pending}
             for mid in waiting_ids - current_waiting - tracked:
