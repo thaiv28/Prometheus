@@ -2,6 +2,10 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-16 — Remove repeated blended Edge column
+
+On `blended-alerts` (PR #69), remove the repeated Edge column from Predictions Table IV and the matching blended table on Call performance. Captions now explain that bets require net edge > 0 (blended chance minus ask and estimated fees). Raw threshold comparisons retain their distinct edge values. Presentation only; selection/accounting unchanged. Checks: 648 passed, 2 signing checks skipped without the optional dependency (unchanged executor); lint/diff and Impeccable detector pass. Re-rendered only Predictions/Call performance from existing saved/replayed inputs (~1.2 s including startup). Desktop/phone inspection verifies both tables omit Edge and display the net > 0 note, with no page errors/document overflow. Local preview refreshed. No new tests/dependencies/CI work; no design tokens changed.
+
 ## 2026-10-16 — Five-group blended alerts and personal execution vetoes
 
 Branch `blended-alerts`, based on merged main `b6e6a0d`, then merged documentation-only `e502358` (PR #68), preserving the installed-live-key status and user’s demo waiver; isolated worktree, read-only raw input and private DB/log copies. Adopt fixed C=1 symmetric market/model blend with monthly earlier-only snapshots (minimum 300 results; availability proxy start+24h), separate from raw FORGE/Elo. Positive estimated net edge selects major/minor domestic and all international groups; other cross-league excluded. Same-run price, 6h and complete-results guards retained. New proposals freeze raw/blended inputs and snapshot; saved legacy terms remain unchanged. Predictions adds Blend and five-group signal returns including fee outlay; raw comparisons remain on the detail page.
