@@ -13,6 +13,18 @@ mkdir -p "$stage/prometheus" "$stage/deploy/execution"
 cp "$root/prometheus/__init__.py" "$root/prometheus/alert_contract.py" "$stage/prometheus/"
 cp -R "$root/prometheus/execution" "$stage/prometheus/execution"
 cp "$root/deploy/execution/handler.py" "$stage/deploy/execution/handler.py"
+# Export the existing literal alias map without importing the site's pandas/API
+# modules. One source of truth; exact aliases only, never fuzzy matching.
+uv run --no-project python - "$root/prometheus/markets.py" "$stage/deploy/execution/market_aliases.json" <<'ALIASES'
+import ast
+import json
+import pathlib
+import sys
+module = ast.parse(pathlib.Path(sys.argv[1]).read_text())
+assignment = next(node for node in module.body if isinstance(node, ast.Assign)
+                  and any(isinstance(target, ast.Name) and target.id == "MARKET_ALIASES" for target in node.targets))
+pathlib.Path(sys.argv[2]).write_text(json.dumps(ast.literal_eval(assignment.value), sort_keys=True))
+ALIASES
 # Drop local bytecode and all account/config inputs. Only a tiny allowlist enters.
 uv run --no-project python - "$stage" "$target" <<'PYTHON'
 import pathlib

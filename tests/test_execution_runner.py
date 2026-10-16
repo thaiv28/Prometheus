@@ -78,6 +78,7 @@ def test_off_empty_uses_no_source_credentials_or_exchange(monkeypatch):
 
 def test_active_runner_reads_exact_private_source_and_lazily_own_environment(
     monkeypatch,
+    tmp_path,
 ):
     # Config validation is exercised by core tests. Here assert only the wrapper
     # forwards authoritative terms/config, not invocation data or public exports.
@@ -119,12 +120,24 @@ def test_active_runner_reads_exact_private_source_and_lazily_own_environment(
 
     aws["s3"] = SimpleNamespace(get_object=read_source)
     aws["secretsmanager"] = SimpleNamespace(get_secret_value=read_secret)
-    monkeypatch.setattr(kalshi, "Kalshi", lambda mode, key, pem: (mode, key, pem))
+    alias_path = tmp_path / "market_aliases.json"
+    alias_path.write_text(json.dumps({"FURIA Esports": "FURIA"}))
+    monkeypatch.setattr(handler, "ALIASES_PATH", alias_path)
+    monkeypatch.setattr(
+        kalshi,
+        "Kalshi",
+        lambda mode, key, pem, canonical_aliases: (mode, key, pem, canonical_aliases),
+    )
 
     def run(proposals, configuration, private_ledger, api):
         assert len(proposals) == 1 and proposals[0]["probability"] == "0.7"
         assert configuration() == {"mode": "demo"}
-        assert api("demo") == ("demo", "private-test-id", "private-test-key")
+        assert api("demo") == (
+            "demo",
+            "private-test-id",
+            "private-test-key",
+            {"FURIA Esports": "FURIA"},
+        )
         assert api("demo") == api("demo")
         return {"submitted": 1, "skipped": 0, "reconciled": 0, "errors": 0}
 

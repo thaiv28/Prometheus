@@ -2,8 +2,11 @@
 
 import json
 import os
+from pathlib import Path
 
 from prometheus.alert_contract import saved_alerts
+
+ALIASES_PATH = Path(__file__).with_name("market_aliases.json")
 
 
 def handler(event, context, *, clients=None):
@@ -39,7 +42,10 @@ def handler(event, context, *, clients=None):
         )
         credentials = json.loads(secret["SecretString"])
         apis[environment] = Kalshi(
-            environment, credentials["key_id"], credentials["private_key_pem"]
+            environment,
+            credentials["key_id"],
+            credentials["private_key_pem"],
+            canonical_aliases=json.loads(ALIASES_PATH.read_text()),
         )
 
         return apis[environment]
