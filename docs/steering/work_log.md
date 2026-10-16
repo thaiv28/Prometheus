@@ -2,6 +2,17 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-16 — Deploy the live worker
+
+- Merged PR #62 (`e67c428`). Its main publish deployed the live pages and uploaded `prometheus/live-inputs/live_inputs.json` (581 KB).
+- Merged infrastructure PR #15 (`fcb5f12`). The **Deploy Prometheus Live** `diff` showed only the new stack's resources (outbound-only security group, S3 limited to the live paths, start-only wake policy); `deploy` created `ThaivPrometheusLive` (`CREATE_COMPLETE`), worker `i-026b4649ad0e7dd80`. Set `LIVE_WORKER_INSTANCE_ID`.
+- Checks on the worker through SSM:
+  - Bootstrap and first refresh: ratings and `teams.json` fetched; the service cycles at 308 of 916 MB.
+  - `https://prometheus.thaiv.dev/live/index.json` returns 200 with `Cache-Control: max-age=2`.
+  - Idle shutdown with a temporary `/run` override of `--idle-exit 2`: the service logged `idle`, ran the backup and powered off. Started again, it came back without the override (`--idle-exit 90`) and resumed.
+  - IAM simulation of the shared deployment role: `ec2:StartInstances` allowed on this instance, denied on another; `ec2:StopInstances` denied.
+- Not yet exercised: a wake-up by the hourly job, and collecting and publishing a real match in production.
+
 ## 2026-10-15 — Live pages with the live service: Riot feed, in-game model, FORGE and Kalshi
 
 - Rebased the live pages (front end from 2026-10-07, never merged) onto main and ported the lol-live pilot's live code into `prometheus/live/`:
