@@ -77,9 +77,15 @@ When the data falls behind anyway, the site says so: the home page's title line 
 
 `s3://$DATA_BACKUP_BUCKET/prometheus/markets/market_prices.json` holds Kalshi's last price before each past series, for the game logs on team and player pages. Main builds restore it before `build_site.py` (read-only; the build never writes it). It is refreshed by hand: run `scripts/evaluate_markets.py` (slow, fetches Kalshi), then `scripts/export_market_prices.py`, then `aws s3 cp data/market_prices.json s3://$DATA_BACKUP_BUCKET/prometheus/markets/market_prices.json`. Without it, logs show only the prices saved in the prediction log.
 
-## Live feed files (planned)
+## Live worker (`deploy/live/`)
 
-`live.html` and `watch.html` read `live/index.json` and `live/<match>.json` from the site (see tech.md, "Live pages"). Nothing publishes it yet, and the build doesn't write it. Before a collector writes them to `s3://$DEPLOYMENT_BUCKET/current/live/`: give `/live/*` a CloudFront behaviour that honours a short `max-age` (the default policy's 1-day default would freeze it), upload with `Cache-Control: max-age=2`, and make `deploy_site.py` skip `live/` so a deploy's delete pass doesn't remove them.
+The live pages' files (`current/live/index.json`, one per match, `<match>/map<n>.json`) are written by an always-on worker, not by the build:
+
+- **Host:** stack `ThaivPrometheusLive` in the infrastructure repo (**Deploy Prometheus Live** workflow, `diff` then `deploy`): one `t4g.small` (Amazon Linux 2023, 30 GB encrypted gp3, IMDSv2), its own public subnet, no inbound rules, shell through SSM Session Manager only. Its role can write and delete under the site bucket's `current/live/`, read `current/teams.json`, read `s3://$DATA_BACKUP_BUCKET/prometheus/db/` and write `.../prometheus/live/`. User data writes `/etc/prometheus-live.env`, clones this repo into `/srv/prometheus-live/app` and runs `deploy/live/install.sh`.
+- **Service:** `prometheus-live.service` runs `python -m prometheus.live.service --fetch --s3 s3://$SITE_BUCKET/current/live` as user `prometheus`. Each cycle mirrors `output/live/` with `aws s3 sync --delete` and `Cache-Control: max-age=2`; the distribution's `CachingOptimized` policy (min TTL 1 s) honours it, so no extra behaviour or invalidation is needed. It restarts after a crash (60 s), never after exit 3 (Riot refused access or rate-limited it). Logs: `journalctl -u prometheus-live`.
+- **Refresh:** `prometheus-live-refresh.timer` every 6 hours runs `refresh.sh`: backs up finished games' evidence (`archive.tar.gz`, `results.json`, `calls.jsonl`, `forge.json`, series quotes) to `s3://$DATA_BACKUP_BUCKET/prometheus/live/`, resets to `origin/main`, `uv sync --frozen --no-dev`, downloads the DB snapshot when its ETag changed and the site's `teams.json`, and restarts the service only when any of them changed.
+- **DB snapshot:** the publish build on main uploads `db/prometheus.db.gz` (about 290 MB) to `s3://$DATA_BACKUP_BUCKET/prometheus/db/` after building or restoring the DB.
+- **Site deploys leave `live/` alone:** `deploy_site.py` keeps `live/` out of its manifest and excludes `live/*` from the full upload's `cp` and `sync --delete`.
 
 ## Notes
 

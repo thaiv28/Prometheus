@@ -2,6 +2,30 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-15 — Live pages with the live service: Riot feed, in-game model, FORGE and Kalshi
+
+- Rebased the live pages (front end from 2026-10-07, never merged) onto main and ported the lol-live pilot's live code into `prometheus/live/`:
+  - feed parser and SQLite collector;
+  - page building and an always-on service (getLive discovery, start search, estimated clock, timeline-model calls, FORGE in-process, Kalshi map and series quotes, settled-map results, finished-map files, an evidence archive and a call journal);
+  - the model (`time_model_v1.json`; training in `scripts/research/train_time_model.py`).
+- Left out: the broadcast/OCR reader and its benchmarks, the frozen 10/15/20 checkpoint-call path, and the one-off CLIs.
+- Page changes:
+  - **Removed:** the stream delay control. Numbers show as they arrive.
+  - **Layout:** odds and Table I beside the stream, Figure 1 full width over estimated game time (pauses take no width).
+  - **Map picker** for the series' finished maps (`?map=N`).
+  - **Finished maps:** a Final/Won/Lost row in place of live odds.
+  - **Hover reading** beside the cursor; shorter copy.
+- Production:
+  - `deploy/live/`: install script, 6-hourly refresh, systemd units; exit 3 on a Riot refusal is never restarted.
+  - The publish build uploads a DB snapshot for the worker.
+  - `deploy_site.py` never uploads or deletes `live/`.
+  - The EC2 host is in the infrastructure repo (`ThaivPrometheusLive`).
+- Checks:
+  - `ruff format`/`check` on the repo and the full `pytest` suite (results in the PR).
+  - 53 ported live tests; new deploy and gold-parser tests; the JS tests.
+  - shellcheck on the deploy scripts.
+  - The ported service ran live on Worlds KC–C9 map 5: FORGE in-process 62.6% per map, 70.7% series; the start search found 22:16:06; Kalshi series quotes used for the deciding map.
+  - Not verified: the systemd units on Amazon Linux, and the EC2 worker itself (not deployed).
 ## 2026-10-15 — Concise alert history, grouped by track
 
 Branch `alert-history`, base merged main `aeb0823` (PR #60). User requested replacing the Predictions alert/interval summary with a link to every saved alert, outcome and profit, grouped by type. Latest steering: keep the Almanac design and succinct copy; remove the 30-bet text, add no sample-size or interval explanation, retain interval calculations.

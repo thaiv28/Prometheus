@@ -1,0 +1,20 @@
+[Unit]
+Description=Prometheus live publisher (Riot feed, Kalshi and FORGE to the live pages)
+Wants=network-online.target
+After=network-online.target prometheus-live-refresh.service
+
+[Service]
+User=prometheus
+EnvironmentFile=/etc/prometheus-live.env
+WorkingDirectory=/srv/prometheus-live/app
+ExecStart=/bin/bash -c 'exec /home/prometheus/.local/bin/uv run --frozen --no-dev python -m prometheus.live.service --fetch --s3 "s3://${SITE_BUCKET}/current/live"'
+# Restart after a crash, never after Riot refused access or rate-limited us (exit 3).
+Restart=on-failure
+RestartSec=60
+RestartPreventExitStatus=3
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
