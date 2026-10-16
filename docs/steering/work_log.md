@@ -2,6 +2,13 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-16 — Show preparing matches on Live
+
+- The running worker reads Riot's schedule once per discovery (one extra request per minute), publishes known fixtures from 75 minutes before their start through four hours after it, and keeps itself awake for them. Waiting pages use Riot's match ID, so the watch URL and stream survive the first map. Completed/expired/unknown fixtures leave the list; tracked maps, including between maps, take precedence. Schedule failures drop waiting fixtures without suppressing tracked maps.
+- Live lists them as “Waiting”; Watch shows the stream, team names and “Waiting for match to start.” Empty scorelines/plots and unassigned maps stay hidden. A tracked map with no observations uses the same state until feed data arrives. The Almanac surface contracts are preserved.
+- Review also found Worlds defaulted to the LCS player: Riot Games now covers Worlds/MSI/FST in the stream catalog. Waiting chips omit empty odds.
+- Checks: 624 passed, 2 optional signing tests skipped; 21 Node tests; Ruff format/check; built both live templates and static assets, reviewed at 1440, 768 and 390px (no page overflow or JS errors). Impeccable polish plus detector: zero anti-patterns, six pre-existing type-ramp advisories. Official Riot schedule and live payloads inspected; video playback itself is unverified in the isolated preview. No model or metric changes. No extra build or CI step; worker discovery adds one bounded schedule request, while local selection/writes replace its previous empty-state pass.
+
 ## 2026-10-16 — Store live credentials while awaiting sizing findings
 
 Branch `live-key-status`, base `b6e6a0d` (merged PR #67). User confirmed the supplied credential belongs to live, authorized uploading the local private-key file to Secrets Manager, and elected to skip demo if code/tests pass. Reauthenticated the existing AWS SSO session with user approval. Validated the PEM in memory, uploaded JSON directly through AWS CLI stdin to the existing live secret (no credential temporary file), verified exact AWSCURRENT contents in memory, and checked central mode off before and after. No credentials/key ID/account amounts included in repository files, public artifacts or tool output. Demo secret left empty; no budgets configured or orders submitted.

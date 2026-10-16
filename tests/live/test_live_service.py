@@ -10,6 +10,7 @@ from prometheus.live.service import (
     mapping_for,
     patch_snapshot,
     resolve_team,
+    waiting_pages,
     write_index,
 )
 from prometheus.live.start import find_start
@@ -124,6 +125,62 @@ class IndexTest(unittest.TestCase):
             self.assertEqual((d / "index.json").read_text(), first)
 
 
+class WaitingTest(unittest.TestCase):
+    now = "2026-10-16T18:00:00Z"
+
+    def fixture(self, start="2026-10-16T19:00:00Z", state="unstarted"):
+        e = event(state)
+        e["startTime"] = start
+        e["match"]["id"] = e.pop("id")
+        # getSchedule has neither team IDs, slugs nor map assignments.
+        for team in e["match"]["teams"]:
+            team.pop("id")
+            team.pop("slug")
+        e["match"]["teams"][1]["name"] = "Cloud9"
+        e["match"].pop("games")
+        return e
+
+    def test_waiting_fixture_is_indexed_without_invented_map_or_stats(self):
+        (page,) = waiting_pages([self.fixture()], CATALOG, {}, self.now)
+        self.assertEqual(page["status"], "waiting")
+        self.assertIsNone(page["game"])
+        self.assertIsNone(page["match"]["score"])
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d)
+            (path / "m1.json").write_text(json.dumps(page))
+            self.assertEqual(write_index(path, self.now), (1, True))
+            (match,) = json.loads((path / "index.json").read_text())["matches"]
+            self.assertEqual(match["id"], "m1")
+            self.assertIsNone(match["game"])
+            # The tracked page replaces the waiting file under the same URL.
+            live = IndexTest().page(self.now)
+            live["match"]["id"] = "m1"
+            (path / "m1.json").write_text(json.dumps(live))
+            write_index(path, self.now)
+            (match,) = json.loads((path / "index.json").read_text())["matches"]
+            self.assertEqual(match["status"], "live")
+
+    def test_excludes_distant_expired_completed_unknown_and_tracked_fixtures(self):
+        for e in [
+            self.fixture("2026-10-16T19:16:00Z"),
+            self.fixture("2026-10-16T13:59:00Z"),
+            self.fixture(state="completed"),
+        ]:
+            self.assertEqual(waiting_pages([e], CATALOG, {}, self.now), [])
+        e = self.fixture()
+        e["match"]["teams"][0]["name"] = "TBD"
+        self.assertEqual(waiting_pages([e], CATALOG, {}, self.now), [])
+        self.assertEqual(
+            waiting_pages([self.fixture()], CATALOG, {}, self.now, {"m1"}), []
+        )
+
+    def test_late_match_stays_waiting_with_same_id(self):
+        (page,) = waiting_pages(
+            [self.fixture("2026-10-16T17:00:00Z")], CATALOG, {}, self.now
+        )
+        self.assertEqual(page["match"]["id"], "m1")
+
+
 class GameStateTest(unittest.TestCase):
     def test_new_game_reloads_saved_tickers_and_counts_settled_maps(self):
         with tempfile.TemporaryDirectory() as d:
@@ -144,6 +201,10 @@ class GameStateTest(unittest.TestCase):
             try:
                 self.assertEqual((g.ticker, g.series_ticker), ("T5", "S"))
                 self.assertEqual(g.state, "waiting")
+                g.page_out = root / "pages"
+                from prometheus.live.requests import utc_now
+
+                self.assertEqual(g.page(CATALOG, utc_now())["status"], "waiting")
                 # getLive still says 1-2 after map 4: the settled map is added.
                 self.assertEqual(g.score(), [2, 2])
                 g.mapping["score"] = [2, 2]  # getLive caught up: not counted twice

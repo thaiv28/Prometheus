@@ -265,7 +265,7 @@
       const last = g.frames[g.frames.length - 1];
       const c = L.currentCall(g);
       return {
-        clock: g.ended ? "Ended" : last ? L.clock(L.axis(g.frames).x(L.time(last.at))) : "—",
+        clock: m.status === "waiting" ? "Waiting" : g.ended ? "Ended" : last ? L.clock(L.axis(g.frames).x(L.time(last.at))) : "—",
         p: c ? c.p : null,
         q: L.quoteAt(g.market, Infinity),
         score: cur.match.score,
@@ -274,7 +274,7 @@
     }
     const g = m.game || {};
     const c = L.summaryCall(g);
-    return { clock: g.ended_at ? "Ended" : L.clock(g.clock) ?? "—", p: c ? c.p : null, q: g.market ? L.quoteAt([g.market], Infinity) : null, score: m.score };
+    return { clock: m.status === "waiting" ? "Waiting" : g.ended_at ? "Ended" : L.clock(g.clock) ?? "—", p: c ? c.p : null, q: g.market ? L.quoteAt([g.market], Infinity) : null, score: m.score };
   }
   function renderStrip() {
     strip.hidden = !matches.length;
@@ -286,7 +286,7 @@
       const p = L.in100(n.p);
       const mid = n.q ? L.in100(n.q.mid) : null;
       const score = Array.isArray(n.score) ? `${n.score[0]}–${n.score[1]}` : "v";
-      const a = h("a", { class: "match-chip", href: `watch.html?match=${encodeURIComponent(m.id)}` },
+      const a = h("a", { class: `match-chip${m.status === "waiting" ? " is-waiting" : ""}`, href: `watch.html?match=${encodeURIComponent(m.id)}` },
         h("span", { class: "chip-top" },
           h("span", { class: "league", "data-league": m.league }, h("span", { class: "league-mark", "aria-hidden": "true" }), m.league),
           h("span", { class: "chip-clock" }, n.clock)),
@@ -357,6 +357,7 @@
     // column says so, the scoreline and figure hide, and the next matches show.
     if (gameEl.hidden) { gameEl.hidden = false; root.classList.add("is-on"); fitStage(); }
     gameEl.classList.toggle("is-quiet", !live);
+    gameEl.classList.toggle("is-waiting", live && state.status === "waiting");
     facts.hidden = !live;
     idleEl.hidden = live;
     if (!stream) setStream(streamFor(live ? match.league : null), false);
@@ -396,10 +397,11 @@
       status.classList.remove("is-stale");
       return;
     }
+    if (state.status === "waiting") parts.push(state.match.score && state.match.score.some((n) => n > 0) ? "Waiting for next map." : "Waiting for match to start.");
     if (failed) parts.push("Feed unreachable.");
     if (state.status === "paused") parts.push("Paused.");
     if (state.status === "between_games") parts.push("Between maps.");
-    parts.push(age > STALE_MS ? `Stalled: last update ${ago(age)}.` : `Updated ${ago(age)}.`);
+    if (state.status !== "waiting" || age > STALE_MS) parts.push(age > STALE_MS ? `Stalled: last update ${ago(age)}.` : `Updated ${ago(age)}.`);
     if (state.note) parts.push(state.note);
     status.textContent = parts.join(" ");
     status.classList.toggle("is-stale", failed || age > STALE_MS);
@@ -410,7 +412,7 @@
     const items = [
       h("span", { class: "league", "data-league": m.league }, h("span", { class: "league-mark", "aria-hidden": "true" }), m.event || m.league),
     ];
-    if (g) items.push(h("span", {}, `Map ${g.number}`));
+    if (g && v.status !== "waiting") items.push(h("span", {}, `Map ${g.number}`));
     if (g && (g.blue === 0 || g.blue === 1)) {
       const blue = m.teams[g.blue], red = m.teams[1 - g.blue];
       items.push(h("span", {}, teamName(blue), h("span", { class: "side" }, " blue"), ", ", teamName(red), h("span", { class: "side" }, " red")));
@@ -465,6 +467,10 @@
         : h("tr", { class: "odds-result-row" }, h("td", { colspan: "5", class: "odds-pending" }, "Result pending"));
       return group(at ? `Final · ${at}` : "Final", [row]);
     };
+    const waiting = v.status === "waiting";
+    $("odds").tBodies[1].hidden = waiting && !g;
+    $("odds").tBodies[2].hidden = waiting && !g;
+    $("odds").tBodies[0].hidden = waiting;
     $("odds").tBodies[0].replaceChildren(...(over ? final() : group(at ? `Live · ${at}` : "Live", [
       oddsRow("Ours", "", call && call.p, { cls: "odds-ours" }),
       oddsRow("Kalshi", "", q && q.mid, { href: g && g.market_url }),
