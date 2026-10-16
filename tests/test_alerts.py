@@ -268,3 +268,117 @@ def test_select_skips_calls_whose_ratings_lack_a_teams_result():
         ),
     }
     assert [a["entry"]["match_id"] for a in alerts.select(log, NOW)] == ["fresh"]
+
+
+def _international(mid="intl", **extra):
+    return _entry(
+        mid,
+        **{
+            "method": "elo-cross",
+            "home2": "LCK",
+            "league": "Worlds",
+            "event": "2026 World Championship",
+            "ours2": "Gen.G",
+            "calibration": {
+                "version": "regional-v1",
+                "model": "2026-10-03",
+                "trained_through": "2026-10-02",
+            },
+            **extra,
+        },
+    )
+
+
+def test_international_scope_price_timing_and_calibration_guards():
+    log = {
+        "ok": _international("ok"),
+        "same": _international("same", home2="LPL"),
+        "cup": _international("cup", league="EM", event="EMEA Masters"),
+        "qual": _international("qual", event="World Championship Regional Finals"),
+        "old": _international("old", calibration=None),
+        "stale": _international("stale", at="2026-10-05T10:00Z"),
+        "soon": _international("soon", start="2026-10-06T15:59Z"),
+        "six": _international("six", start="2026-10-06T16:00Z"),
+        "zero": _international("zero", ask1=0, ask2=1),
+        "none": _international("none", ask1=None, ask2=None),
+        "home": _international("home", home2="Worlds"),
+    }
+    chosen = alerts.select(log, NOW, international=True)
+    assert [c["entry"]["match_id"] for c in chosen] == ["six", "ok"]
+    assert alerts.select(log, NOW) == []
+    assert alerts.select(log, NOW, minor=True) == []
+
+
+def test_international_skips_results_missing_from_ratings():
+    log = {
+        "m": _international(
+            data_through="2026-10-01", team1="JD Gaming", team2="Gen.G"
+        ),
+        "result": {
+            "match_id": "r",
+            "start": "2026-10-03T09:00Z",
+            "team1": "JD Gaming",
+            "team2": "Other",
+            "winner": 1,
+        },
+    }
+    assert alerts.select(log, NOW, international=True) == []
+
+
+def test_international_only_issue_freezes_terms_snapshot_and_sends_one_notification():
+    log = {"m": _international()}
+    issue = alerts.update(log, NOW, "2026-10-05", SLUG, set())
+    assert "international paper" in issue["title"]
+    assert "International — experimental paper track" in issue["body"]
+    assert "First Elo" in issue["body"] and "First ask" in issue["body"]
+    assert "New international experimental paper calls" in issue["comment"]
+    assert issue["new"] == 1
+    assert "alert" not in log["m"] and "paper_alert" not in log["m"]
+    import copy
+
+    first = copy.deepcopy(log["m"][alerts.INTERNATIONAL_KEY])
+    later = NOW + datetime.timedelta(hours=1)
+    log["m"].update(
+        p_series=0.8, calibration={"version": "regional-v1", "model": "later"}
+    )
+    log["m"]["market"].update(ask1=0.7, at="2026-10-06T11:00Z")
+    again = alerts.update(log, later, "2026-10-05", SLUG, set())
+    assert again["comment"] is None and again["new"] == 0
+    assert "61% | 54¢" in again["body"]  # first terms, not current 80% / 70c
+    assert log["m"][alerts.INTERNATIONAL_KEY] == first
+    log["m"]["winner"] = 1
+    assert alerts.paper_record(log) == (0, 0, 0.0, 0)
+    assert alerts.paper_record(log, key=alerts.INTERNATIONAL_KEY)[:3] == (1, 1, 1.0)
+
+
+def test_mixed_issue_has_separate_records_and_retains_gone_international_call():
+    log = {"dom": _entry("dom"), "intl": _international()}
+    issue = alerts.update(log, NOW, "2026-10-05", SLUG, set())
+    assert "## Domestic — FORGE" in issue["body"]
+    assert issue["new"] == 2
+    assert "**New:** 1 match" in issue["comment"]
+    log["intl"]["market"].update(ask1=0.6, at="2026-10-06T11:00Z")
+    later = NOW + datetime.timedelta(hours=1)
+    again = alerts.update(log, later, "2026-10-05", SLUG, set())
+    assert "gone: +1.0 now (alerted at +7.0)" in again["body"]
+    assert again["comment"] is None
+
+
+def test_international_record_survives_fixture_reordering_and_settles_by_team():
+    from prometheus import schedule
+
+    old = _international()
+    alerts.record(
+        alerts.select({"m": old}, NOW, international=True),
+        NOW,
+        alerts.INTERNATIONAL_KEY,
+    )
+    refreshed = {**old, "ours1": old["ours2"], "ours2": old["ours1"]}
+    refreshed.update(schedule.carry_records(old, refreshed))
+    assert refreshed[alerts.INTERNATIONAL_KEY]["side"] == 2
+    assert (
+        refreshed[alerts.INTERNATIONAL_KEY]["forecast"]
+        == old[alerts.INTERNATIONAL_KEY]["forecast"]
+    )
+    refreshed["winner"] = 2
+    assert alerts.paper_record({"m": refreshed}, key=alerts.INTERNATIONAL_KEY)[1] == 1

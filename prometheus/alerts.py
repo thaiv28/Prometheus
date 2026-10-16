@@ -1,31 +1,22 @@
-"""Daily alerts where FORGE's chance beats Kalshi's price by enough to matter.
+"""Daily model-versus-ask paper alerts, with separate forward records.
 
-After each build has refreshed the prediction log (our calls and Kalshi's prices),
-`select` picks matches that start at least `MIN_HOURS` hours from now (no upper
-limit: a match qualifies as soon as Kalshi quotes it),
-called by FORGE (both teams from one major league), where FORGE's chance for a
-team beats what a contract on that team costs now (the ask) by more than `EDGE`.
-That is the slice the market backtest supports (`docs/market_report.md`): calls
-in other leagues (Elo, and FORGE since 2026-10-06) lost to the market and are
-never alerted. FORGE calls inside one non-major league that pass the same bar
-are kept as paper alerts (`paper_alert`, never posted): in the backtest their
-closing line value was positive but their return after fees wasn't, so they
-earn a forward record before being turned on.
+Domestic major-league FORGE calls are `alert`; calibrated cross-home international
+Elo calls are `international_paper_alert`, explicitly experimental in the issue.
+Minor-league FORGE calls remain `paper_alert`, recorded but never posted.
 
-Each alert is recorded on its log entry (`alert`: the team backed, FORGE's
-chance, the price, the edge and when), once: a match alerted on two days keeps
-its first alert, as a paper bet would. `paper_record` scores settled alerts as
-$1 bets after Kalshi's taker fee, so the issue carries a running record of calls
-made before the match, with CLV (the closing price for the team backed minus
-the alerted price). `issue` writes the GitHub issue the publish workflow posts.
+All tracks require >5 points over a fresh ask and 6+ hours before start, with
+complete settled team results. Each keeps its first terms. International calls
+also pin model provenance. The issue reports domestic and international results
+separately; retrospective candidates never enter these forward records.
 """
 
+import copy
 import datetime
 import urllib.parse
 from zoneinfo import ZoneInfo
 
-from prometheus import markets, schedule
-from prometheus.types import ALL_MAJOR_LEAGUES
+from prometheus import markets, regional_calibration, schedule
+from prometheus.types import ALL_MAJOR_LEAGUES, INTERNATIONAL_LEAGUES
 
 EDGE = 0.05
 MAJORS = {l.value for l in ALL_MAJOR_LEAGUES}
@@ -52,22 +43,36 @@ def _stale(log, entry, now):
     )
 
 
-def select(log, now, edge=EDGE, minor=False):
+def select(log, now, edge=EDGE, minor=False, international=False):
     """Alert candidates, soonest first: dicts with the entry, the team backed
     (side 1 or 2), FORGE's chance for it, its price and the edge. Only prices read
     at this build (`market.at` is `now`) count. FORGE calls within a major league,
     or with `minor` within a non-major one (the paper track). A call whose ratings
-    lack a team's settled result (`schedule.missing_results`) is skipped."""
+    lack a team's settled result (`schedule.missing_results`) is skipped.
+    `international=True` selects calibrated cross-home international Elo only."""
     now_s = now.strftime("%Y-%m-%dT%H:%MZ")
     out = []
     for entry in log.values():
         market = entry.get("market") or {}
-        if (
-            not entry.get("matched")
-            or entry.get("method") != "forge"
-            or (entry.get("home1") in MAJORS) == minor
-            or market.get("at") != now_s
-        ):
+        if international:
+            homes = [entry.get("home1"), entry.get("home2")]
+            scope = (
+                entry.get("method") == "elo-cross"
+                and all(homes)
+                and homes[0] != homes[1]
+                and not any(h in INTERNATIONAL_LEAGUES for h in homes)
+                and (entry.get("calibration") or {}).get("version")
+                == regional_calibration.VERSION
+                and regional_calibration.eligible(
+                    entry.get("league"), entry.get("event", ""), entry["start"]
+                )
+            )
+        else:
+            scope = (
+                entry.get("method") == "forge"
+                and (entry.get("home1") in MAJORS) != minor
+            )
+        if not entry.get("matched") or not scope or market.get("at") != now_s:
             continue
         hours = (_start(entry) - now).total_seconds() / 3600
         if hours < MIN_HOURS:
@@ -82,7 +87,7 @@ def select(log, now, edge=EDGE, minor=False):
             (
                 (p - price, side, p, price)
                 for side, p, price in sides
-                if price is not None
+                if price is not None and 0 < price < 1
             ),
             default=None,
         )
@@ -109,6 +114,22 @@ def record(alerts, now, key="alert"):
                 "edge": round(a["edge"], 4),
                 "at": now_s,
             }
+            if key == "international_paper_alert":
+                a["entry"][key]["forecast"] = copy.deepcopy(
+                    {
+                        name: a["entry"].get(name)
+                        for name in (
+                            "calibration",
+                            "method",
+                            "p_game",
+                            "p_series",
+                            "home1",
+                            "home2",
+                            "data_through",
+                            "start",
+                        )
+                    }
+                )
             new += 1
     return new
 
@@ -210,7 +231,7 @@ def _current(entry, side, now_s):
     return p, price, None if price is None else p - price
 
 
-def shown(log, now, chosen):
+def shown(log, now, chosen, key="alert"):
     """Matches for today's issue, soonest first: those qualifying now (`chosen`)
     and those alerted earlier today (UTC) that haven't started."""
     now_s, day = now.strftime("%Y-%m-%dT%H:%MZ"), now.strftime("%Y-%m-%d")
@@ -218,18 +239,20 @@ def shown(log, now, chosen):
     out = [
         e
         for e in log.values()
-        if e.get("alert")
-        and alert_side(e, e["alert"]) is not None
+        if e.get(key)
+        and alert_side(e, e[key]) is not None
         and e["start"] > now_s
-        and (e["match_id"] in ids or e["alert"]["at"][:10] == day)
+        and (e["match_id"] in ids or e[key]["at"][:10] == day)
     ]
     return sorted(out, key=lambda e: (e["start"], e["match_id"]))
 
 
-def _row(entry, now_s, slugify, team_slugs):
-    side = alert_side(entry, entry["alert"])
+def _row(entry, now_s, slugify, team_slugs, key="alert"):
+    side = alert_side(entry, entry[key])
     p, price, edge = _current(entry, side, now_s)
-    was = 100 * entry["alert"]["edge"]
+    if key == "international_paper_alert":
+        p, price = entry[key]["p"], entry[key]["price"]
+    was = 100 * entry[key]["edge"]
     if edge is None:
         edge_cell = f"no price now (alerted at +{was:.1f})"
     elif edge > EDGE:
@@ -250,7 +273,9 @@ HEAD = [
 ]
 
 
-def issue(entries, log, now, data_through, slugify, team_slugs):
+def issue(
+    entries, log, now, data_through, slugify, team_slugs, international_entries=()
+):
     """(title, body) of the day's alert issue, in GitHub markdown: `entries` from
     `shown`, at this run's prices."""
     now_s = now.strftime("%Y-%m-%dT%H:%MZ")
@@ -264,6 +289,8 @@ def issue(entries, log, now, data_through, slugify, team_slugs):
         f"{day_key(now)} {live} FORGE call{'s' if live != 1 else ''} {round(100 * EDGE)}+ points above Kalshi"
         + (f" ({gone} gone)" if gone else "")
     )
+    if international_entries:
+        title += f"; {len(international_entries)} international paper"
     settled, won, staked, profit = paper_record(log)
     clv, beat = clv_summary(settled_alerts(log))
     if settled:
@@ -289,6 +316,8 @@ def issue(entries, log, now, data_through, slugify, team_slugs):
             )
             + f". Prices as of {now:%H:%M} UTC; games through {data_through}.",
             "",
+            "## Domestic — FORGE",
+            "",
             *HEAD,
             *(_row(e, now_s, slugify, team_slugs) for e in entries),
             "",
@@ -304,48 +333,119 @@ def issue(entries, log, now, data_through, slugify, team_slugs):
             "neither significant. A paper test, not advice. Each alert is scored at its first price.",
             "</details>",
             "",
+            *international_section(
+                international_entries, log, now_s, slugify, team_slugs
+            ),
             f"cc @{OWNER}",
         ]
     )
     return title, body
 
 
+INTERNATIONAL_KEY = "international_paper_alert"
+INTERNATIONAL_HEAD = [
+    HEAD[0]
+    .replace("FORGE", "First Elo")
+    .replace("Kalshi ask", "First ask")
+    .replace("Edge", "Current edge"),
+    HEAD[1],
+]
+INTERNATIONAL_REPORT = "https://github.com/thaiv28/Prometheus/blob/main/docs/research/international_alerts.md"
+
+
+def international_section(entries, log, now_s, slugify, team_slugs):
+    settled, won, staked, profit = paper_record(log, key=INTERNATIONAL_KEY)
+    clv, beat = clv_summary(settled_alerts(log, key=INTERNATIONAL_KEY))
+    record_line = (
+        f"**International paper record:** {settled} settled, {won} won, {100 * profit / staked:+.1f}% after fees"
+        if settled
+        else "**International paper record:** none settled yet."
+    )
+    if clv is not None:
+        record_line += f"; closing line value {100 * clv:+.1f} points, {round(100 * beat)}% beat the close"
+    return [
+        "## International — experimental paper track",
+        "",
+        "Calibrated cross-region Elo, separate from the domestic FORGE alerts above. "
+        "Same >5-point edge and 6+ hour minimum; fresh asks and complete team results required. "
+        "No demonstrated market edge.",
+        "",
+        *INTERNATIONAL_HEAD,
+        *(_row(e, now_s, slugify, team_slugs, INTERNATIONAL_KEY) for e in entries),
+        *([] if entries else ["No upcoming qualifying international calls to show."]),
+        "",
+        record_line,
+        "",
+        "Each paper call keeps its first team, chance, ask, timestamp and model snapshot; "
+        "returns use those original terms; the current edge can change. "
+        "Historical candidates are excluded from this forward record.",
+        "",
+        f"[Retrospective evaluation]({INTERNATIONAL_REPORT}): 46 calls at 12h, "
+        "+43.0% after assumed fees (95% −34.6% to +138.1%), CLV −0.42 points. "
+        "Removing the two largest wins gives −11.0%; only three tournaments contributed calls. "
+        "This does not validate the full first-qualifying hourly policy.",
+        "",
+    ]
+
+
 def update(log, now, data_through, slugify, team_slugs):
-    """Select and record this run's alerts, then the issue to post: a dict with
-    title, body, day (the title prefix the workflow matches) and comment (the
-    matches new since the last run, which GitHub emails; None when there are
-    none), or None when there is nothing to show today. Minor-league paper
-    alerts are recorded too, but never shown."""
+    """Record first terms and render separate domestic/international issue tracks.
+
+    Minor-league FORGE paper calls remain unposted. No historical backfill.
+    """
     record(select(log, now, minor=True), now, key="paper_alert")
     chosen = select(log, now)
+    international = select(log, now, international=True)
     new_ids = [a["entry"]["match_id"] for a in chosen if "alert" not in a["entry"]]
+    new_international = [
+        a["entry"]["match_id"]
+        for a in international
+        if INTERNATIONAL_KEY not in a["entry"]
+    ]
     record(chosen, now)
+    record(international, now, key=INTERNATIONAL_KEY)
     entries = shown(log, now, chosen)
-    if not entries:
+    international_entries = shown(log, now, international, INTERNATIONAL_KEY)
+    if not entries and not international_entries:
         return None
-    title, body = issue(entries, log, now, data_through, slugify, team_slugs)
+    title, body = issue(
+        entries, log, now, data_through, slugify, team_slugs, international_entries
+    )
     comment = None
-    if new_ids:
+    if new_ids or new_international:
         now_s = now.strftime("%Y-%m-%dT%H:%MZ")
-        rows = [
-            _row(e, now_s, slugify, team_slugs)
-            for e in entries
-            if e["match_id"] in new_ids
-        ]
-        comment = "\n".join(
-            [
+        parts = []
+        if new_ids:
+            rows = [
+                _row(e, now_s, slugify, team_slugs)
+                for e in entries
+                if e["match_id"] in new_ids
+            ]
+            parts += [
                 f"**New:** {len(rows)} match{'es' if len(rows) != 1 else ''} at {now:%H:%M} UTC.",
                 "",
                 *HEAD,
                 *rows,
                 "",
-                f"cc @{OWNER}",
             ]
-        )
+        if new_international:
+            rows = [
+                _row(e, now_s, slugify, team_slugs, INTERNATIONAL_KEY)
+                for e in international_entries
+                if e["match_id"] in new_international
+            ]
+            parts += [
+                f"**New international experimental paper calls:** {len(rows)} at {now:%H:%M} UTC. Separate from domestic FORGE alerts; no demonstrated market edge.",
+                "",
+                *INTERNATIONAL_HEAD,
+                *rows,
+                "",
+            ]
+        comment = "\n".join([*parts, f"cc @{OWNER}"])
     return {
         "title": title,
         "body": body,
         "day": day_key(now),
         "comment": comment,
-        "new": len(new_ids),
+        "new": len(new_ids) + len(new_international),
     }
