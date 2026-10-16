@@ -192,7 +192,7 @@ class Exchange:
             None,
         )
 
-    def fills(self, order_id):
+    def fills(self, order_id, expected=None):
         return copy.deepcopy(self.fill_rows)
 
     def settlements(self, ticker):
@@ -634,3 +634,45 @@ def test_conflicting_fill_evidence_fails_closed():
     api.fill_rows[0]["fee_cost"] = ".05"
     result = execute([])
     assert result["errors"] == 1 and held(ledger) == reserved
+
+
+def test_scalar_cancellation_settlement_needs_finalized_market_and_actual_payout():
+    _client, api, ledger, execute = harness()
+    execute([saved()])
+    fill(api)
+    api.settlement_rows = [
+        {
+            "ticker": "KXLOLGAME-F-A",
+            "market_result": "scalar",
+            "yes_count_fp": "3",
+            "no_count_fp": "0",
+            "revenue": 99,
+            "fee_cost": ".04",
+            "settled_time": NOW.isoformat(),
+            "finalized_market": {
+                "ticker": "KXLOLGAME-F-A",
+                "status": "finalized",
+                "result": "scalar",
+                "settlement_value_dollars": ".3333",
+                "settlement_ts": NOW.isoformat(),
+            },
+        }
+    ]
+    execute([])
+    assert held(ledger) == 0 and ledger.pending() == []
+    row = json.loads(ledger.get("demo", "INTENT#f")["payload"])
+    assert row["settlements"]["count"] == 1 and row["status"] == "settled"
+
+
+def test_midnight_between_reservation_and_post_aborts_daily_spending():
+    _client, api, ledger, _execute = harness()
+    before = dt.datetime(2026, 10, 15, 23, 59, 59, tzinfo=dt.UTC)
+    after = before + dt.timedelta(seconds=2)
+    reads = iter([before, after])
+    api.now = lambda: next(reads)
+    api.routes[0]["at"] = before.isoformat()
+    proposed = saved(alert_at=before.isoformat())
+    result = run([proposed], lambda: settings(), ledger, lambda env: api, before)
+    assert result["submitted"] == 0 and result["skipped"] == 1
+    assert not api.calls and held(ledger) == 0
+    assert ledger.get("demo", "DAY#2026-10-15")["committed"] == 0

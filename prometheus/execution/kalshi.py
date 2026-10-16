@@ -307,11 +307,15 @@ class Kalshi:
             raise ValueError("duplicate_exchange_client_ids")
         return matches[0] if matches else None
 
-    def fills(self, order_id):
+    def fills(self, order_id, expected=None):
         rows = self.pages("/portfolio/fills", "fills", order_id=order_id, subaccount=0)
-        rows += self.pages(
-            "/historical/fills", "fills", order_id=order_id, subaccount=0
-        )
+        if (
+            expected is None
+            or sum((decimal(f["count_fp"]) for f in rows), Decimal(0)) != expected
+        ):
+            rows += self.pages(
+                "/historical/fills", "fills", order_id=order_id, subaccount=0
+            )
         by_id = {}
         for row in rows:
             old = by_id.setdefault(row["fill_id"], row)
@@ -338,6 +342,28 @@ class Kalshi:
             ):
                 raise ValueError("invalid_settlement")
             timestamp(row["settled_time"])
+            if row["market_result"] == "scalar":
+                name = urllib.parse.quote(ticker, safe="")
+                try:
+                    market = self.request("GET", f"/markets/{name}")["market"]
+                except LookupError:
+                    market = self.request("GET", f"/historical/markets/{name}")[
+                        "market"
+                    ]
+                if (
+                    market.get("ticker") != ticker
+                    or market.get("status") != "finalized"
+                    or market.get("result") != "scalar"
+                    or not market.get("settlement_ts")
+                ):
+                    continue
+                value = decimal(market["settlement_value_dollars"])
+                if (
+                    not 0 <= value <= 1
+                    or timestamp(market["settlement_ts"]) > self.now()
+                ):
+                    raise ValueError("invalid_scalar_settlement")
+                row = {**row, "finalized_market": market}
             valid.append(row)
         return valid
 

@@ -313,3 +313,44 @@ def test_official_request_signature_path_without_query(kind):
     else:
         key.public_key().verify(signature, message)
     assert headers["KALSHI-ACCESS-KEY"] == "test-key"
+
+
+def test_scalar_settlement_requires_finalized_public_market_not_determined_result():
+    api = object.__new__(Kalshi)
+    api.now = lambda: NOW
+    api.pages = lambda *args, **kwargs: [
+        {
+            "ticker": "T",
+            "market_result": "scalar",
+            "settled_time": NOW.isoformat(),
+            "revenue": 99,
+            "fee_cost": ".01",
+        }
+    ]
+    market = {
+        "ticker": "T",
+        "result": "scalar",
+        "status": "determined",
+        "settlement_value_dollars": ".3333",
+        "settlement_ts": NOW.isoformat(),
+    }
+    api.request = lambda *args, **kwargs: {"market": market}
+    assert api.settlements("T") == []
+    market["status"] = "finalized"
+    assert (
+        api.settlements("T")[0]["finalized_market"]["settlement_value_dollars"]
+        == ".3333"
+    )
+
+
+def test_current_complete_fill_count_does_not_fetch_historical_endpoint():
+    api = object.__new__(Kalshi)
+    paths = []
+
+    def pages(path, *args, **kwargs):
+        paths.append(path)
+        return [{"fill_id": "f", "count_fp": "1.00", "fee_cost": ".02"}]
+
+    api.pages = pages
+    assert len(api.fills("o", Decimal("1.00"))) == 1
+    assert paths == ["/portfolio/fills"]

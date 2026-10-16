@@ -225,8 +225,8 @@ def reconcile(row, api, ledger, pause=False):
         order = api.lookup(row["client_order_id"], order["order_id"])
         if order is None or order.get("status") == "resting":
             return False
-    fills = api.fills(order["order_id"])
     expected = decimal(order["fill_count_fp"])
+    fills = api.fills(order["order_id"], expected)
     total = sum((decimal(f["count_fp"]) for f in fills), ZERO)
     if expected < 0 or total < 0 or total > decimal(row["request"]["count"]):
         raise ValueError("invalid_fill_quantity")
@@ -290,10 +290,28 @@ def reconcile(row, api, ledger, pause=False):
             ):
                 continue
             outcome = settlement.get("market_result")
-            if outcome not in {"yes", "no"}:
-                continue  # Unknown/scalar settlement requires manual review.
-            won = (outcome == "yes") == (row["route"]["side"] == "bid")
-            if decimal(settlement["revenue"]) / 100 < (total if won else ZERO):
+            if outcome in {"yes", "no"}:
+                yes_value = Decimal(1) if outcome == "yes" else ZERO
+            elif outcome == "scalar":
+                market = settlement.get("finalized_market") or {}
+                if (
+                    market.get("ticker") != row["request"]["ticker"]
+                    or market.get("status") != "finalized"
+                    or market.get("result") != "scalar"
+                    or not market.get("settlement_ts")
+                ):
+                    continue
+                yes_value = decimal(market["settlement_value_dollars"])
+                if not 0 <= yes_value <= 1:
+                    continue
+            else:
+                continue
+            value = yes_value if row["route"]["side"] == "bid" else 1 - yes_value
+            # Scalar payouts round down to cents. A settled account record must
+            # contain our entire quantity and at least its actual payout; netted
+            # or ambiguous pooled positions retain their reservation for review.
+            expected_revenue = (total * value).quantize(CENT, rounding=ROUND_FLOOR)
+            if decimal(settlement["revenue"]) / 100 < expected_revenue:
                 continue
             verified.append(settlement)
         if verified:
@@ -380,6 +398,8 @@ def run(alerts, config_provider, ledger, api_factory, now=None):
                 if current.raw != config.raw:
                     raise ValueError("configuration_changed")
                 validate_alert(alert, current, checked)
+                if checked.date().isoformat() != reserved["day"]:
+                    raise ValueError("utc_spending_day_changed")
                 plan_order(alert, [plan["route"]], current, balance, checked)
             except (ValueError, KeyError, TypeError, ArithmeticError):
                 ledger.abort(reserved, "pre_submission_check_failed")
