@@ -6,12 +6,12 @@ on:
       mode:
         description: Trading mode (off cancels tracked outstanding orders on the next reconciliation)
         required: true
-        default: off
+        default: "off"
         type: choice
         options:
-          - off
-          - demo
-          - live
+          - "off"
+          - "demo"
+          - "live"
 
 permissions:
   contents: read
