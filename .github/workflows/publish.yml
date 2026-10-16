@@ -32,6 +32,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
       - uses: astral-sh/setup-uv@v10.2.0
       - name: Install dependencies
         run: uv sync --frozen
@@ -41,6 +43,13 @@ jobs:
         run: uv run ruff check
       - name: Test
         run: uv run pytest -q
+      - name: Execution signing tests when changed
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet HEAD^1 HEAD -- prometheus/execution/ deploy/execution/ 'tests/test_execution*'; then
+            uv run --with cryptography==50.0.2 pytest -q tests/test_execution_api.py -k official_request_signature
+          fi
 
   # A PR that touches only docs and Markdown can't change the site's data or
   # code, so it skips the build (check still runs). Every other event builds.

@@ -1,0 +1,47 @@
+name: Kalshi execution mode
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Trading mode (off cancels tracked outstanding orders on the next reconciliation)
+        required: true
+        default: off
+        type: choice
+        options:
+          - off
+          - demo
+          - live
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: kalshi-execution-control
+  cancel-in-progress: false
+
+jobs:
+  control:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.KALSHI_EXECUTION_CONTROL_ROLE_ARN }}
+          aws-region: us-west-2
+          role-session-name: kalshi-execution-control-${{ github.run_id }}
+          mask-aws-account-id: true
+          unset-current-credentials: true
+      - name: Set central mode
+        env:
+          EXECUTION_MODE: ${{ inputs.mode }}
+          EXECUTION_PARAMETER: ${{ vars.KALSHI_EXECUTION_CONFIG_PARAMETER }}
+        run: |
+          set -euo pipefail
+          : "${EXECUTION_PARAMETER:?Set KALSHI_EXECUTION_CONFIG_PARAMETER from the execution stack output}"
+          uv run --no-project --with boto3 python -m deploy.execution.control \
+            --parameter "$EXECUTION_PARAMETER" --mode "$EXECUTION_MODE"

@@ -58,6 +58,8 @@ def test_select_takes_forge_edges_6_or_more_hours_out_with_fresh_prices():
     chosen = alerts.select(log, NOW)
     assert [(a["entry"]["match_id"], a["side"]) for a in chosen] == [
         ("edge", 1),
+        ("elo", 1),
+        ("minor", 1),
         ("other", 2),
         ("late", 1),
     ]
@@ -86,7 +88,7 @@ def test_update_writes_the_issue_with_links_and_a_comment_for_new_matches():
     alert = alerts.update(log, NOW, "2026-10-05", SLUG, {"jd-gaming"})
     assert (
         alert["title"]
-        == "Kalshi edges for Tue 6 Oct: 1 FORGE call 5+ points above Kalshi"
+        == "Kalshi edges for Tue 6 Oct: 1 call more than 5 points above Kalshi"
     )
     assert alert["day"] == alerts.day_key(NOW) and alert["title"].startswith(
         alert["day"]
@@ -129,7 +131,7 @@ def test_update_an_hour_later_edits_quietly_and_marks_a_gone_edge():
     gone = alerts.update(
         log, NOW + datetime.timedelta(hours=2), "2026-10-05", SLUG, set()
     )
-    assert gone["title"].endswith("0 FORGE calls 5+ points above Kalshi (1 gone)")
+    assert gone["title"].endswith("0 calls more than 5 points above Kalshi (1 gone)")
     assert "gone: +1.0 now (alerted at +7.0)" in gone["body"]
     assert log["m"]["alert"]["price"] == 0.54  # the paper bet keeps its first price
     # Next day: an alert from yesterday that no longer qualifies isn't shown.
@@ -221,21 +223,25 @@ def test_settled_alerts_score_clv_against_the_last_price_for_the_side():
     assert alerts.clv_summary([]) == (None, None)
 
 
-def test_minor_league_forge_edges_are_paper_alerts_never_posted():
+def test_minor_domestic_and_other_cross_league_notify_under_the_same_rules():
     log = {
-        "minor": _entry("minor", home1="LDL", home2="LDL"),  # +7, LDL FORGE
+        "minor": _entry("minor", home1="LDL", home2="LDL"),
         "minor_elo": _entry("minor_elo", method="elo", home1="LDL", home2="LDL"),
+        "cup": _entry(
+            "cup",
+            method="elo-cross",
+            home1="LFL",
+            home2="PRM",
+            league="EM",
+            event="EMEA Masters",
+        ),
     }
-    assert alerts.update(log, NOW, "5 Oct", lambda t: None, set()) is None
-    assert log["minor"]["paper_alert"]["edge"] == pytest.approx(0.07)
-    assert "alert" not in log["minor"]
-    assert "paper_alert" not in log["minor_elo"]
-    assert [a["entry"]["match_id"] for a in alerts.select(log, NOW)] == []
-
-    log["minor"]["winner"] = 1
-    assert alerts.paper_record(log) == (0, 0, 0.0, 0)
-    settled, won, staked, _ = alerts.paper_record(log, key="paper_alert")
-    assert (settled, won, staked) == (1, 1, 1.0)
+    issue = alerts.update(log, NOW, "5 Oct", SLUG, set())
+    assert issue["new"] == 3
+    assert "## Minor domestic" in issue["comment"]
+    assert "## Other cross-league" in issue["comment"]
+    assert all("alert" in e and "paper_alert" not in e for e in log.values())
+    assert alerts.update(log, NOW, "5 Oct", SLUG, set())["comment"] is None
 
 
 def test_select_skips_calls_whose_ratings_lack_a_teams_result():
@@ -289,7 +295,7 @@ def _international(mid="intl", **extra):
     )
 
 
-def test_international_scope_price_timing_and_calibration_guards():
+def test_every_scope_uses_same_timing_prices_and_probability_guards():
     log = {
         "ok": _international("ok"),
         "same": _international("same", home2="LPL"),
@@ -302,11 +308,19 @@ def test_international_scope_price_timing_and_calibration_guards():
         "zero": _international("zero", ask1=0, ask2=1),
         "none": _international("none", ask1=None, ask2=None),
         "home": _international("home", home2="Worlds"),
+        "missing": _international("missing", home2=None),
+        "nan": _international("nan", p_series=float("nan")),
+        "invalid": _international("invalid", p_series=1.1),
+        "settled": _international("settled", winner=1),
     }
-    chosen = alerts.select(log, NOW, international=True)
-    assert [c["entry"]["match_id"] for c in chosen] == ["six", "ok"]
-    assert alerts.select(log, NOW) == []
-    assert alerts.select(log, NOW, minor=True) == []
+    assert [a["entry"]["match_id"] for a in alerts.select(log, NOW)] == [
+        "six",
+        "cup",
+        "ok",
+        "old",
+        "qual",
+        "same",
+    ]
 
 
 def test_international_skips_results_missing_from_ratings():
@@ -322,21 +336,22 @@ def test_international_skips_results_missing_from_ratings():
             "winner": 1,
         },
     }
-    assert alerts.select(log, NOW, international=True) == []
+    assert alerts.select(log, NOW) == []
 
 
 def test_international_only_issue_freezes_terms_snapshot_and_sends_one_notification():
     log = {"m": _international()}
     issue = alerts.update(log, NOW, "2026-10-05", SLUG, set())
-    assert "international paper" in issue["title"]
-    assert "International — experimental paper track" in issue["body"]
-    assert "First Elo" in issue["body"] and "First ask" in issue["body"]
-    assert "New international experimental paper calls" in issue["comment"]
+    assert "1 call more than 5 points" in issue["title"]
+    assert "## Major vs major international" in issue["body"]
+    assert "experimental" not in issue["body"]
+    assert "First chance" in issue["body"] and "First ask" in issue["body"]
+    assert "**New:** 1 match" in issue["comment"]
     assert issue["new"] == 1
-    assert "alert" not in log["m"] and "paper_alert" not in log["m"]
+    assert "alert" in log["m"] and "paper_alert" not in log["m"]
     import copy
 
-    first = copy.deepcopy(log["m"][alerts.INTERNATIONAL_KEY])
+    first = copy.deepcopy(log["m"]["alert"])
     later = NOW + datetime.timedelta(hours=1)
     log["m"].update(
         p_series=0.8, calibration={"version": "regional-v1", "model": "later"}
@@ -345,18 +360,17 @@ def test_international_only_issue_freezes_terms_snapshot_and_sends_one_notificat
     again = alerts.update(log, later, "2026-10-05", SLUG, set())
     assert again["comment"] is None and again["new"] == 0
     assert "61% | 54¢" in again["body"]  # first terms, not current 80% / 70c
-    assert log["m"][alerts.INTERNATIONAL_KEY] == first
+    assert log["m"]["alert"] == first
     log["m"]["winner"] = 1
-    assert alerts.paper_record(log) == (0, 0, 0.0, 0)
-    assert alerts.paper_record(log, key=alerts.INTERNATIONAL_KEY)[:3] == (1, 1, 1.0)
+    assert alerts.paper_record(log)[:3] == (1, 1, 1.0)
 
 
 def test_mixed_issue_has_separate_records_and_retains_gone_international_call():
     log = {"dom": _entry("dom"), "intl": _international()}
     issue = alerts.update(log, NOW, "2026-10-05", SLUG, set())
-    assert "## Domestic — FORGE" in issue["body"]
+    assert "## Major domestic" in issue["body"]
     assert issue["new"] == 2
-    assert "**New:** 1 match" in issue["comment"]
+    assert "**New:** 2 matches" in issue["comment"]
     log["intl"]["market"].update(ask1=0.6, at="2026-10-06T11:00Z")
     later = NOW + datetime.timedelta(hours=1)
     again = alerts.update(log, later, "2026-10-05", SLUG, set())
@@ -369,7 +383,7 @@ def test_international_record_survives_fixture_reordering_and_settles_by_team():
 
     old = _international()
     alerts.record(
-        alerts.select({"m": old}, NOW, international=True),
+        alerts.select({"m": old}, NOW),
         NOW,
         alerts.INTERNATIONAL_KEY,
     )
@@ -382,3 +396,29 @@ def test_international_record_survives_fixture_reordering_and_settles_by_team():
     )
     refreshed["winner"] = 2
     assert alerts.paper_record({"m": refreshed}, key=alerts.INTERNATIONAL_KEY)[1] == 1
+
+
+def test_legacy_international_never_renotifies_or_rewrites_first_terms():
+    import copy
+
+    e = _international()
+    alerts.record(alerts.select({"m": e}, NOW), NOW, alerts.INTERNATIONAL_KEY)
+    original = copy.deepcopy(e[alerts.INTERNATIONAL_KEY])
+    e["p_series"] = 0.85
+    issue = alerts.update({"m": e}, NOW, "5 Oct", SLUG, set())
+    assert issue["new"] == 0 and issue["comment"] is None
+    assert "61% | 54¢" in issue["body"]
+    assert e[alerts.INTERNATIONAL_KEY] == original and "alert" not in e
+
+
+def test_unposted_legacy_minor_can_notify_once_at_current_terms_without_rewriting():
+    import copy
+
+    e = _entry("minor", home1="LDL", home2="LDL")
+    alerts.record(alerts.select({"m": e}, NOW), NOW, "paper_alert")
+    original = copy.deepcopy(e["paper_alert"])
+    e["p_series"] = 0.7
+    issue = alerts.update({"m": e}, NOW, "5 Oct", SLUG, set())
+    assert issue["new"] == 1 and e["alert"]["p"] == 0.7
+    assert e["paper_alert"] == original
+    assert alerts.update({"m": e}, NOW, "5 Oct", SLUG, set())["new"] == 0

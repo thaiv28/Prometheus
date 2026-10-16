@@ -958,7 +958,15 @@ def paper_bets(ours, costs, winner, close=None, rate=0.07):
     }
 
 
-def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
+def edge_record(
+    entries,
+    edges=BET_EDGES,
+    rate=0.07,
+    min_n=MARKET_MIN_SERIES,
+    *,
+    groups=None,
+    classify=None,
+):
     """Paper bets on settled matches, `markets.BET_LEAD` before the start: $1 on
     our pick in every match (edge None, the row Table III's matches line up
     with), or on our side where our chance beats what a contract cost then
@@ -974,6 +982,8 @@ def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
     """
     from prometheus.evaluation import paired_bootstrap
 
+    groups = BET_GROUPS if groups is None else groups
+    classify = _group if classify is None else classify
     bets = []
     for e in entries:
         early, close = e.get("market_12h"), e.get("market") or {}
@@ -989,7 +999,7 @@ def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
             rate,
         )
         if made is not None:
-            bets.append({"group": _group(e), **made})
+            bets.append({"group": classify(e), **made})
 
     def interval(values):
         if len(values) < min_n:
@@ -998,7 +1008,7 @@ def edge_record(entries, edges=BET_EDGES, rate=0.07, min_n=MARKET_MIN_SERIES):
         return float(lo), float(hi)
 
     rows = []
-    for label, source in BET_GROUPS:
+    for label, source in groups:
         group = [b for b in bets if b["group"] == (label, source)]
         for edge in edges:
             if edge is None:  # every match: back our pick

@@ -4,28 +4,38 @@ import datetime
 from pathlib import Path
 from urllib.parse import quote
 
-from prometheus import alerts, markets, schedule
+from prometheus import alerts, forecast_groups, markets, schedule
 from prometheus.site import config
 from prometheus.site.predictions import alert_record
 from prometheus.site.render import env, write
-
-TRACKS = (
-    ("domestic", "Domestic", "FORGE", "alert"),
-    (
-        "international",
-        "International",
-        "Experimental paper track",
-        alerts.INTERNATIONAL_KEY,
-    ),
-    ("minor", "Minor leagues", "Unposted paper track", "paper_alert"),
-)
 
 
 def history_view(log, now):
     groups = []
     now_s = now.strftime("%Y-%m-%dT%H:%MZ")
-    for identifier, title, label, key in TRACKS:
-        entries = [e for e in log.values() if e.get(key)]
+    posted = [view for entry in log.values() if (view := alerts.notified(entry))]
+    archived = [
+        {**e, "alert": e["paper_alert"]}
+        for e in log.values()
+        if e.get("paper_alert") and alerts.notified(e) is None
+    ]
+    tracks = [
+        (
+            identifier,
+            title,
+            "",
+            [e for e in posted if alerts.record_group(e) == identifier],
+        )
+        for identifier, title in forecast_groups.GROUPS
+    ]
+    # Unknown legacy homes are retained, never silently dropped or misclassified.
+    unknown = [e for e in posted if alerts.record_group(e) is None]
+    if unknown:
+        tracks.append(("unclassified", "Earlier alerts", "", unknown))
+    if archived:
+        tracks.append(("unposted", "Earlier unposted picks", "Not notified", archived))
+    for identifier, title, label, entries in tracks:
+        key = "alert"
         rows = []
         for entry in sorted(
             entries, key=lambda e: (e["start"], e["match_id"]), reverse=True
