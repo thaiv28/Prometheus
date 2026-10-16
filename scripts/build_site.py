@@ -38,6 +38,7 @@ from prometheus.ranking import load_glory_games
 from prometheus.season import get_luck, get_record, load_season_games
 from prometheus.site import config as site_config
 from prometheus.site.alert_history import render_alert_history
+from prometheus.site.call_performance import render_call_performance
 from prometheus.site.config import (
     AURA_COLUMNS,
     ELO_COLUMNS,
@@ -343,6 +344,7 @@ def predictions_pages(fc: Forecasts, teams) -> dict:
     predictions = predictions_view(backtest_log, teams, now)
     render_predictions(predictions, fc.coverage)
     render_results(predictions)
+    render_call_performance(backtest_log, predictions)
     render_alert_history(log, now)
     render_live(predictions["home"])
     write_json("predictions.json", markets.published_log(log), ensure_ascii=False)

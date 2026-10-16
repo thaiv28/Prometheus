@@ -12,12 +12,12 @@
       </header>
       {% for group in groups %}
       <section class="fixtures-block alert-track" aria-labelledby="{{ group.id }}-heading">
-        <div class="block-head"><h2 id="{{ group.id }}-heading">{{ group.title }}</h2><span class="track-label">{{ group.label }}</span></div>
+        <div class="block-head"><h2 id="{{ group.id }}-heading">{{ group.title }}</h2>{% if group.label %}<span class="track-label">{{ group.label }}</span>{% endif %}</div>
         {% set s = group.summary %}
         {% if group.rows %}
         <p class="section-prose alert-totals">Profit <strong>{{ '+' if s.profit >= 0 else '−' }}${{ '%.2f' | format(s.profit | abs) }}</strong>{% if s.roi is not none %} · Return {{ '%+.1f' | format(100 * s.roi) | replace('-', '−') }}%{% if s.interval %} <span class="ci">({{ '%+.1f' | format(100 * s.interval[0]) | replace('-', '−') }} to {{ '%+.1f' | format(100 * s.interval[1]) | replace('-', '−') }}%)</span>{% endif %}{% endif %}{% if s.clv is not none %} · CLV {{ '%+.1f' | format(100 * s.clv) | replace('-', '−') }}{% endif %}</p>
         <figure class="register-figure" aria-labelledby="{{ group.id }}-cap">
-          <figcaption id="{{ group.id }}-cap" class="table-caption">{{ group.title }} picks, newest first.</figcaption>
+          <figcaption id="{{ group.id }}-cap" class="table-caption">Newest first.</figcaption>
           <div class="table-scroll" tabindex="0" role="region" aria-label="{{ group.title }} picks">
             <table class="register register--alerts">
               <thead><tr><th scope="col">Date <span class="muted">UTC</span></th><th scope="col">Pick</th><th scope="col" class="num alert-odds">Chance</th><th scope="col" class="num alert-odds">Ask</th><th scope="col">Outcome</th><th scope="col" class="num">Profit</th><th scope="col" class="num alert-clv"><abbr title="Closing price minus the original ask, in points">CLV</abbr></th></tr></thead>

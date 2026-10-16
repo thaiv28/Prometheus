@@ -4,7 +4,7 @@ import datetime
 import json
 import os
 
-from prometheus import alerts, markets, schedule
+from prometheus import alerts, forecast_groups, markets, schedule
 from prometheus.evaluation import paired_bootstrap
 from prometheus.site import config as site_config
 from prometheus.site.config import (
@@ -125,7 +125,9 @@ def predictions_view(log, team_slugs, now):
     ][:HOME_FIXTURES]
     leagues = {e["league"] for e in entries}
     majors = env.globals["major_leagues"]
+    edge_rows = grouped_edges(entries)
     return {
+        "performance_edges": call_groups(edge_rows),
         "upcoming": _by_day(up_rows),
         "past": _by_day([fixture_row(e, team_slugs) for e in recent]),
         "upcoming_count": len(up_rows),
@@ -134,7 +136,7 @@ def predictions_view(log, team_slugs, now):
         "months": result_months(past, team_slugs),
         "scorecard": schedule.scorecard(entries),
         "vs_market": method_groups(schedule.market_scorecard(entries)),
-        "edges": method_groups(schedule.edge_record(entries)),
+        "edges": call_groups([row for row in edge_rows if row["edge"] == alerts.EDGE]),
         "backtest_span": backtest_span(entries),
         "alerts": alert_record(entries),
         "market_min": schedule.MARKET_MIN_SERIES,
@@ -193,6 +195,43 @@ def render_results(view):
                 older=months[i + 1] if i + 1 < len(months) else None,
             ),
         )
+
+
+def grouped_edges(entries):
+    groups = [
+        (identifier, source)
+        for identifier, _ in forecast_groups.GROUPS
+        for source in ("saved", "backtest")
+    ]
+    return schedule.edge_record(
+        entries,
+        groups=groups,
+        classify=lambda entry: (
+            forecast_groups.classify(entry),
+            "backtest" if entry.get("reconstructed") else "saved",
+        ),
+    )
+
+
+def call_groups(rows):
+    return [
+        {
+            "label": label,
+            "id": identifier,
+            "sources": [
+                {
+                    "name": source,
+                    "rows": [
+                        r
+                        for r in rows
+                        if r["label"] == identifier and r["source"] == source
+                    ],
+                }
+                for source in ("saved", "backtest")
+            ],
+        }
+        for identifier, label in forecast_groups.GROUPS
+    ]
 
 
 def method_groups(rows):

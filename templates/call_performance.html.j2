@@ -1,0 +1,29 @@
+{% extends 'base.html.j2' %}
+{% block title %}Call performance · Prometheus{% endblock %}
+{% block canonical_path %}call-performance.html{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{{ asset('css/alerts.css') }}" />{% endblock %}
+{% block content %}
+<div class="spread"><div class="spread-main">
+  <header class="section-head"><h1>Call performance</h1><p class="lede">$1 per call, 12 hours before start. After fees. <a href="predictions.html">Predictions</a> · <a href="alerts.html">Alert history</a></p></header>
+  <figure class="register-figure" aria-labelledby="edges-cap"><figcaption id="edges-cap" class="table-caption">Table I. Every edge threshold. “Any” backs our favourite; other rows back the larger edge.</figcaption>
+  {% with edge_groups = view.performance_edges %}{% include '_call_edges.html.j2' %}{% endwith %}
+  </figure>
+  {% for group in groups %}
+  <section class="fixtures-block" aria-labelledby="{{ group.id }}-heading">
+    <div class="block-head"><h2 id="{{ group.id }}-heading">{{ group.title }}</h2></div>
+    {% if group.rows %}
+    <details><summary>Call history</summary>
+    <figure class="register-figure"><figcaption class="table-caption">Larger-edge side, newest first. $1 per call; negative edges included.</figcaption>
+    <div class="table-scroll" tabindex="0" role="region" aria-label="{{ group.title }} call history"><table class="register register--alerts">
+      <thead><tr><th scope="col">Date <span class="muted">UTC</span></th><th scope="col">Pick</th><th scope="col">Source</th><th scope="col" class="num">Chance</th><th scope="col" class="num">Ask</th><th scope="col" class="num">Edge</th><th scope="col">Outcome</th><th scope="col" class="num">Profit</th><th scope="col" class="num">CLV</th></tr></thead>
+      <tbody>{% for row in group.rows %}<tr>
+        <td class="alert-date"><time datetime="{{ row.start }}">{{ row.start | shortdate }}</time></td>
+        <th scope="row" class="alert-pick" title="{{ row.event }}">{{ row.back }}<span class="alert-opponent">v {{ row.other }}</span></th>
+        <td>{{ row.source }}</td><td class="num">{{ '%.1f' | format(100 * row.chance) }}%</td><td class="num">{{ '%.1f' | format(100 * row.ask) }}¢</td><td class="num">{{ '%+.1f' | format(100 * row.edge) }}</td>
+        <td>{{ 'Won' if row.won else 'Lost' }}</td><td class="num value">{{ '%+.2f' | format(row.profit) | replace('-', '−') }}</td><td class="num">{% if row.clv is not none %}{{ '%+.1f' | format(100 * row.clv) }}{% else %}—{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div></figure></details>
+    {% else %}<p class="empty">No priced results yet.</p>{% endif %}
+  </section>{% endfor %}
+</div><aside class="margin notes"><h2 class="margin-head">The calls</h2><ol class="notes-list"><li>Saved calls keep their original forecasts. Backtest calls use the current model and earlier results.</li><li>These are fixed 12-hour observations. Alert history records the first qualifying alert.</li><li>CLV is the closing price minus the ask, in points.</li></ol></aside></div>
+{% endblock %}
