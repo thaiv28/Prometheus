@@ -111,7 +111,17 @@ class IndexTest(unittest.TestCase):
             (d / "c.json").write_text(
                 json.dumps(self.page(now.isoformat(), "unavailable"))
             )
-            self.assertEqual(write_index(d, now.isoformat()), 1)
+            self.assertEqual(write_index(d, now.isoformat()), (1, True))
+
+    def test_idle_index_is_not_rewritten(self):
+        now = datetime(2026, 10, 15, 22, tzinfo=UTC)
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            self.assertEqual(write_index(d, now.isoformat()), (0, True))
+            first = (d / "index.json").read_text()
+            later = (now + timedelta(minutes=5)).isoformat()
+            self.assertEqual(write_index(d, later), (0, False))
+            self.assertEqual((d / "index.json").read_text(), first)
 
 
 class GameStateTest(unittest.TestCase):
@@ -144,18 +154,33 @@ class GameStateTest(unittest.TestCase):
     def test_deciding_map_is_the_series(self):
         with tempfile.TemporaryDirectory() as d:
             mapping = mapping_for(event(), CATALOG, {})
-            game = {
-                "id": "g5",
-                "number": 5,
-                "teams": [{"id": "c9", "side": "blue"}, {"id": "kc", "side": "red"}],
-            }
-            g = Game(Path(d), mapping, game, None, None, "2026-10-15T18:00:00Z")
+            sides = [{"id": "c9", "side": "blue"}, {"id": "kc", "side": "red"}]
+            start = "2026-10-15T18:00:00Z"
+            five = Game(
+                Path(d),
+                mapping,
+                {"id": "g5", "number": 5, "teams": sides},
+                None,
+                None,
+                start,
+            )
+            four = Game(
+                Path(d),
+                mapping,
+                {"id": "g4", "number": 4, "teams": sides},
+                None,
+                None,
+                start,
+            )
             try:
-                self.assertTrue(g.deciding([2, 2]))
-                self.assertFalse(g.deciding([2, 1]))
-                self.assertFalse(g.deciding([1, 1]))
+                self.assertTrue(five.deciding([2, 2]))
+                # Map 5 of 5 stays the deciding map after the score counts it.
+                self.assertTrue(five.deciding([3, 2]))
+                self.assertFalse(four.deciding([2, 1]))
+                self.assertFalse(four.deciding([1, 1]))
             finally:
-                g.close()
+                five.close()
+                four.close()
 
     def test_snapshot_gets_the_settled_winner(self):
         with tempfile.TemporaryDirectory() as d:

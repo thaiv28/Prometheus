@@ -7,11 +7,16 @@ After=network-online.target prometheus-live-refresh.service
 User=prometheus
 EnvironmentFile=/etc/prometheus-live.env
 WorkingDirectory=/srv/prometheus-live/app
-ExecStart=/bin/bash -c 'exec /home/prometheus/.local/bin/uv run --frozen --no-dev python -m prometheus.live.service --fetch --s3 "s3://${SITE_BUCKET}/current/live"'
-# Restart after a crash, never after Riot refused access or rate-limited us (exit 3).
+ExecStart=/bin/bash -c 'exec /home/prometheus/.local/bin/uv run --frozen --no-dev python -m prometheus.live.service --fetch --idle-exit 90 --s3 "s3://${SITE_BUCKET}/current/live"'
+# Restart after a crash; never after Riot refused access or rate-limited us (exit
+# 3) or after 90 minutes with no live game (exit 4: back up, then power off until
+# the schedule starts the worker again, scripts/live_wake.py).
 Restart=on-failure
 RestartSec=60
-RestartPreventExitStatus=3
+RestartPreventExitStatus=3 4
+ExecStopPost=/bin/bash /srv/prometheus-live/app/deploy/live/backup.sh
+ExecStopPost=+/bin/bash -c 'if [ "$EXIT_STATUS" = 4 ]; then systemctl poweroff; fi'
+
 NoNewPrivileges=true
 ProtectSystem=full
 PrivateTmp=true

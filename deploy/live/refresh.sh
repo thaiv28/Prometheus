@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The live worker's refresh (prometheus-live-refresh.timer, every 6 hours), run as
-# the service user: the newest main, its dependencies, the database snapshot the
+# the service user: the newest main, its dependencies, the ratings file the
 # publish build leaves in the artifacts bucket and the site's team catalog. Backs
-# up the live evidence first. Touches $APP_ROOT/restart when the code or the data
+# up the live evidence first (backup.sh). Touches $APP_ROOT/restart when the code or the data
 # changed, so the unit restarts the service only then.
 set -euo pipefail
 # shellcheck source=/dev/null
@@ -11,31 +11,24 @@ cd "$APP_ROOT/app"
 uv="$HOME/.local/bin/uv"
 before=$(git rev-parse HEAD)
 
-# Finished games' archives, results and call journals, for later backtests.
-if [ -d data/live ]; then
-  aws s3 sync data/live "s3://$ARTIFACTS_BUCKET/prometheus/live/" --only-show-errors \
-    --exclude '*' --include '*/archive.tar.gz' --include '*/results.json' \
-    --include '*/calls.jsonl' --include '*/forge.json' --include '*/series_quotes.jsonl'
-fi
+bash deploy/live/backup.sh
 
 git fetch --quiet --depth 50 origin main
 git reset --quiet --hard origin/main
 "$uv" sync --quiet --frozen --no-dev
 
-mkdir -p db output
+mkdir -p data output
 changed=$([ "$(git rev-parse HEAD)" != "$before" ] && echo 1 || echo 0)
 
-# The database: replaced only when the snapshot's ETag moved.
-snapshot="s3://$ARTIFACTS_BUCKET/prometheus/db/prometheus.db.gz"
-etag=$(aws s3api head-object --bucket "$ARTIFACTS_BUCKET" --key prometheus/db/prometheus.db.gz \
-  --query ETag --output text)
-if [ "$etag" != "$(cat db/.snapshot-etag 2>/dev/null || true)" ]; then
-  aws s3 cp "$snapshot" db/prometheus.db.gz.new --only-show-errors
-  gunzip -c db/prometheus.db.gz.new > db/prometheus.db.new
-  rm db/prometheus.db.gz.new
-  mv db/prometheus.db.new db/prometheus.db
-  echo "$etag" > db/.snapshot-etag
+# Ratings for FORGE and the in-game model (scripts/export_live_inputs.py, uploaded
+# by the publish build): a small file, so the worker never loads the database.
+aws s3 cp "s3://$ARTIFACTS_BUCKET/prometheus/live-inputs/live_inputs.json" \
+  data/live_inputs.json.new --only-show-errors
+if ! cmp -s data/live_inputs.json.new data/live_inputs.json; then
+  mv data/live_inputs.json.new data/live_inputs.json
   changed=1
+else
+  rm data/live_inputs.json.new
 fi
 
 aws s3 cp "s3://$SITE_BUCKET/current/teams.json" output/teams.json.new --only-show-errors

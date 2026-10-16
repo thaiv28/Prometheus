@@ -4,6 +4,8 @@ Description=Refresh the Prometheus live worker every 6 hours
 [Timer]
 # The daily publish (10:00 UTC) often starts hours late, so check four times a day.
 OnCalendar=*-*-* 00/6:30:00
+# The worker is off between match days: refresh as soon as the schedule starts it.
+OnBootSec=30s
 RandomizedDelaySec=300
 Persistent=true
 

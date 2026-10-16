@@ -1,4 +1,4 @@
-"""Always-on live publisher: every lolesports game in progress onto the live pages.
+"""Live publisher: every lolesports game in progress onto the live pages.
 
 Each minute one getLive request lists games in progress; each tracked game's
 window feed is read every 10 seconds into its own collector. Pages carry actual
@@ -61,6 +61,10 @@ FRESH = 60  # seconds a match file stays in the index without a new write
 # Exit status after Riot refused access or rate-limited us: the systemd unit
 # doesn't restart on it (no retrying into a block).
 REFUSED = 3
+# Exit status after --idle-exit minutes with no live game: the unit backs up the
+# evidence and powers the worker off until the schedule starts it again.
+IDLE = 4
+SERIES_SHOWN = 30  # minutes a decided series stays on the live pages
 
 
 class Stop(Exception):
@@ -175,30 +179,69 @@ def mapping_score(event):
     return [(t.get("result") or {}).get("gameWins") for t in event["match"]["teams"]]
 
 
-class Forge:
-    """FORGE's pre-match calls, as `prometheus predict` makes them.
+class Ratings:
+    """Team ratings for FORGE and the in-game model.
 
-    Ratings come from every game in Prometheus's database (`current_ratings`),
-    reloaded every `REFRESH` seconds so a rebuilt database reaches live calls.
+    Production reads `live_inputs.json` (`scripts/export_live_inputs.py`, from
+    the publish build); without it, local runs compute them from the database.
+    Reloaded when the file changes, or every `REFRESH` seconds from the DB.
     """
 
     REFRESH = 6 * 3600
 
-    def __init__(self):
-        self.ratings, self.loaded = None, 0.0
+    def __init__(self, inputs=None, db=None):
+        self.inputs, self.db = inputs, db
+        self.teams, self.stamp = None, None
 
-    def call(self, mapping, start_time):
-        from ..form import load_states
-        from ..schedule import (
-            current_ratings,
-            game_probability,
-            series_probability,
-            series_rho,
-        )
+    def _load(self):
+        if self.inputs and self.inputs.exists():
+            stamp = self.inputs.stat().st_mtime
+            if stamp != self.stamp:
+                self.teams = json.loads(self.inputs.read_text())["teams"]
+                self.stamp = stamp
+            return self.teams
+        if not (self.db and Path(self.db).exists()):
+            self.teams = {}  # no ratings: stats and Kalshi only
+            return self.teams
+        if self.teams is None or time.monotonic() - (self.stamp or 0) > self.REFRESH:
+            from ..form import load_states
+            from ..schedule import current_ratings
 
-        if self.ratings is None or time.monotonic() - self.loaded > self.REFRESH:
-            self.ratings, self.loaded = current_ratings(load_states()), time.monotonic()
-        a, b = (self.ratings.loc[t["name"]] for t in mapping["teams"])
+            frame = current_ratings(load_states())
+            teams = {}
+            for name, row in frame.iterrows():
+                teams[name] = {
+                    "league": row["league"],
+                    "elo": float(row["elo"]),
+                    "form": float(row["form"]),
+                    "forge": float(row["forge"]),
+                    "has_form": bool(row["has_form"]),
+                    "latest_date": str(row["latest_date"]),
+                }
+            if self.db:
+                for team in teams:
+                    try:
+                        found = latest_elo(self.db, team, datetime.now(UTC))
+                    except ValueError:
+                        continue
+                    teams[team]["model_elo"] = found["elo"]
+                    teams[team]["model_elo_as_of"] = found["as_of"]
+            self.teams, self.stamp = teams, time.monotonic()
+        return self.teams
+
+    def model_elo(self, name):
+        """The game-length Elo the in-game model was trained on, with its date."""
+        team = self._load().get(name) or {}
+        if team.get("model_elo") is None:
+            raise ValueError(f"no Prometheus Elo for {name}")
+        return {"elo": team["model_elo"], "as_of": team["model_elo_as_of"]}
+
+    def forge(self, mapping, start_time):
+        """FORGE's pre-match call for mapping team 0, as `prometheus predict` makes it."""
+        from ..schedule import game_probability, series_probability, series_rho
+
+        teams = self._load()
+        a, b = (teams[t["name"]] for t in mapping["teams"])
         start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
         p, method = game_probability(
             a,
@@ -215,7 +258,7 @@ class Forge:
             "method": method,
             "rho": rho,
             "homes": [a["league"], b["league"]],
-            "ratings_through": [str(a["latest_date"]), str(b["latest_date"])],
+            "ratings_through": [a["latest_date"], b["latest_date"]],
             "computed_at": utc_now(),
         }
 
@@ -226,7 +269,7 @@ def forge_for(args, mapping, start_time):
     if path.exists():
         return json.loads(path.read_text())
     try:
-        forge = args.forge.call(mapping, start_time)
+        forge = args.ratings.forge(mapping, start_time)
     except (KeyError, ValueError, sqlite3.Error) as error:
         log("forge_failed", match=mapping["match_id"], reason=str(error)[:300])
         return None
@@ -265,7 +308,9 @@ def publish_s3(page_out, uri):
 
 
 class Game:
-    def __init__(self, root, mapping, game, model, elo_db, start_time=None, adopt=None):
+    def __init__(
+        self, root, mapping, game, model, ratings, start_time=None, adopt=None
+    ):
         self.mapping, self.id = mapping, game["id"]
         self.number, self.start_time = game["number"], start_time
         self.ticker = self.series_ticker = self.forge = self.page_out = None
@@ -302,9 +347,8 @@ class Game:
         self.timeline = None
         if model:
             try:
-                now = datetime.now(UTC)
-                ratings = [latest_elo(elo_db, t["name"], now) for t in mapping["teams"]]
-                self.timeline = (model, ratings)
+                elos = [ratings.model_elo(t["name"]) for t in mapping["teams"]]
+                self.timeline = (model, elos)
             except ValueError as error:
                 log("no_model", game=self.id, reason=str(error))
         # A resumed collector may already hold the finished map.
@@ -326,11 +370,12 @@ class Game:
 
         Kalshi's determination usually lands minutes before getLive's score.
         """
-        if self.state != "finished" or not self.ticker or self.number in self.results():
+        ticker = self.ticker
+        if not ticker and self.number == self.mapping.get("best_of"):
+            ticker = self.series_ticker  # the deciding map is the series
+        if self.state != "finished" or not ticker or self.number in self.results():
             return
-        settle_map(
-            self.ticker, self.number, self.results_path, self.request_dir("settle")
-        )
+        settle_map(ticker, self.number, self.results_path, self.request_dir("settle"))
 
     def save_tickers(self):
         write_atomic(
@@ -437,6 +482,16 @@ class Game:
                 game["winner"] = result["winner"]
                 game["ended_at"] = game["frames"][-1]["at"] if game["frames"] else at
                 page["note"] = f"{names[result['winner']]} won map {self.number}."
+            need = (self.mapping.get("best_of") or 1) // 2 + 1
+            if score and max(score) >= need:
+                # The series is over: say so, then leave the index after a while.
+                won = 0 if score[0] > score[1] else 1
+                page["note"] = f"{names[won]} won the series {max(score)}–{min(score)}."
+                last = game["frames"][-1]["at"] if game["frames"] else None
+                if last and timestamp(at) - timestamp(last) > timedelta(
+                    minutes=SERIES_SHOWN
+                ):
+                    page["status"] = "idle"
         elif (
             game
             and self.state == "waiting"
@@ -491,7 +546,10 @@ class Game:
 
     def deciding(self, score):
         """Whether this map decides the series (both teams one map from winning)."""
-        need = (self.mapping.get("best_of") or 1) // 2 + 1
+        best_of = self.mapping.get("best_of") or 1
+        if self.number == best_of:
+            return True  # the last map, even once the score counts it
+        need = best_of // 2 + 1
         return bool(score) and score[0] == score[1] == need - 1
 
     def snapshot_path(self, number=None):
@@ -594,11 +652,18 @@ def write_index(page_dir, at):
         except (ValueError, KeyError, TypeError, OSError):
             continue
     note = None if matches else "No live match."
+    path = page_dir / "index.json"
+    if not matches:
+        # Nothing on, as before: leave the file (and the S3 mirror) untouched.
+        try:
+            if not json.loads(path.read_text())["matches"]:
+                return 0, False
+        except (ValueError, KeyError, TypeError, OSError):
+            pass
     write_atomic(
-        page_dir / "index.json",
-        {"schema": 1, "published_at": at, "matches": matches, "note": note},
+        path, {"schema": 1, "published_at": at, "matches": matches, "note": note}
     )
-    return len(matches)
+    return len(matches), True
 
 
 def run(args):
@@ -611,6 +676,7 @@ def run(args):
         gid, path, session = spec.split(":", 2)
         adopt[gid] = (Path(path), session)
     games, failed, last_discovery = {}, {}, 0.0
+    events, last_active = None, time.monotonic()
     kalshi = True
     try:
         while True:
@@ -660,7 +726,7 @@ def run(args):
                                 mapping,
                                 game,
                                 model,
-                                args.elo_db,
+                                args.ratings,
                                 event.get("startTime"),
                                 adopt.get(gid),
                             )
@@ -695,7 +761,7 @@ def run(args):
                                 mapping,
                                 game,
                                 model,
-                                args.elo_db,
+                                args.ratings,
                                 event.get("startTime"),
                                 adopt.get(gid),
                             )
@@ -715,7 +781,12 @@ def run(args):
                         snap = args.page_out / event["id"] / f"map{game['number']}.json"
                         if game["id"] in games or not tickers.exists() or not kalshi:
                             continue
-                        ticker = json.loads(tickers.read_text()).get("map")
+                        saved = json.loads(tickers.read_text())
+                        ticker = saved.get("map")
+                        if not ticker and game["number"] == event["match"].get(
+                            "strategy", {}
+                        ).get("count"):
+                            ticker = saved.get("series")  # the deciding map
                         try:
                             stamp_dir = (
                                 match_dir / "settlements" / f"{stamp}_{game['number']}"
@@ -821,10 +892,18 @@ def run(args):
                     failed[gid] = str(error)
                     games.pop(gid).close()
                     log("game_failed", game=gid, reason=str(error))
-            count = write_index(args.page_out, utc_now())
-            if args.s3:
+            count, changed = write_index(args.page_out, utc_now())
+            if args.s3 and (games or changed):
                 publish_s3(args.page_out, args.s3)
             log("cycle", tracked=len(games), published=count)
+            # Activity is a map not yet over; getLive can list a decided match for hours.
+            if any(g.state != "finished" for g in games.values()):
+                last_active = time.monotonic()
+            elif (
+                args.idle_exit and time.monotonic() - last_active > args.idle_exit * 60
+            ):
+                log("idle", minutes=args.idle_exit)
+                return IDLE
             time.sleep(max(0, args.interval - (time.monotonic() - cycle)))
     except Stop as error:
         log("stopped", reason=str(error))
@@ -870,11 +949,23 @@ def main():
         help="Riot team ID -> Prometheus team name, for names that don't match",
     )
     parser.add_argument("--model", type=Path, default=HERE / "time_model_v1.json")
-    parser.add_argument("--elo-db", type=Path, default=Path(DB_PATH))
+    parser.add_argument(
+        "--inputs",
+        type=Path,
+        default=ROOT / "data" / "live_inputs.json",
+        help="Ratings from scripts/export_live_inputs.py; else read from --db",
+    )
+    parser.add_argument("--db", type=Path, default=Path(DB_PATH))
     parser.add_argument("--no-model", action="store_true", help="Stats only")
     parser.add_argument("--no-forge", action="store_true", help="No FORGE calls")
     parser.add_argument(
         "--s3", help="Also mirror the live files here, e.g. s3://<bucket>/current/live"
+    )
+    parser.add_argument(
+        "--idle-exit",
+        type=int,
+        metavar="MINUTES",
+        help="Exit (status 4) after this long with no live game",
     )
     parser.add_argument("--interval", type=int, default=10)
     parser.add_argument("--discover-interval", type=int, default=60)
@@ -893,7 +984,8 @@ def main():
         parser.error("interval 10..30 s; discovery at least every 30 s")
     if args.no_model:
         args.model = None
-    args.forge = None if args.no_forge else Forge()
+    args.ratings = Ratings(args.inputs, args.db)
+    args.forge = not args.no_forge
     args.page_out.mkdir(parents=True, exist_ok=True)
     sys.exit(run(args))
 

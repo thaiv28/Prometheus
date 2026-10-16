@@ -17,13 +17,20 @@ Append one dated entry for each substantive agent work session, newest first. Re
   - **Hover reading** beside the cursor; shorter copy.
 - Production:
   - `deploy/live/`: install script, 6-hourly refresh, systemd units; exit 3 on a Riot refusal is never restarted.
-  - The publish build uploads a DB snapshot for the worker.
+  - The publish build uploads a ratings file for the worker (`export_live_inputs.py`, 0.6 MB; FORGE from it equals the DB path exactly).
+  - Cost: the worker runs only around matches. The service exits after 90 idle minutes and powers off; the hourly prices job wakes it ahead of matches (`live_wake.py`). The instance is a `t4g.micro`, and no S3 sync runs while idle.
+  - The end of KC–C9 exposed three fixes:
+    - A deciding map is settled from the series contract; the last map of a best-of always uses the series quotes, because getLive's 3–2 broke the tie rule after map 5.
+    - A decided series shows "X won the series 3–2" for 30 minutes, then leaves the index; getLive listed it for 5 more hours.
+    - Idle shutdown counts only unfinished tracked maps as activity.
+  - Local data: `backup.sh` saves each finished map's page file, `scripts/live_data.py pull`/`list` fetches and unpacks it, and `prometheus.live.data.load_maps()` gives frames, calls and quotes as tables.
   - `deploy_site.py` never uploads or deletes `live/`.
   - The EC2 host is in the infrastructure repo (`ThaivPrometheusLive`).
 - Checks:
   - `ruff format`/`check` on the repo and the full `pytest` suite (results in the PR).
   - 53 ported live tests; new deploy and gold-parser tests; the JS tests.
   - shellcheck on the deploy scripts.
+  - `live_data.py list` and `load_maps` on the real KC–C9 map 4 file: 8,328 frames, 39 calls, 49 quotes, winner KC; archive unpacking on the real map 4 archive.
   - The ported service ran live on Worlds KC–C9 map 5: FORGE in-process 62.6% per map, 70.7% series; the start search found 22:16:06; Kalshi series quotes used for the deciding map.
   - Not verified: the systemd units on Amazon Linux, and the EC2 worker itself (not deployed).
 ## 2026-10-15 — Concise alert history, grouped by track
