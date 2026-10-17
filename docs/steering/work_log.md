@@ -1,5 +1,16 @@
 # Work log
 
+## 2026-10-17 — Faster Live prices and started fixture handoff
+
+Branch `live-refresh`, worktree based on main `ac5745c` (PR #76). Kalshi map/series books and publication target 2 s instead of 10 s; browser polling 5 → 2 s and live JSON cache 2 → 1 s. Separate the Riot feed/settlement/model/journal cadence (still 10 s); price-only cycles refresh the saved page without replaying the collector/model. Idle/Kalshi-disabled cycles keep the old interval. Live’s Coming up hides a canonical team-pair match only when that series is displayed live/between maps; waiting and elapsed scheduled time alone keep it. Optional scheduled start guards against a later repeat pairing; support older worker summaries. Keep matched rows hidden for the page session; hide empty day groups/section. Watch retains its existing idle-section behavior.
+
+Focused checks: live service/page publisher and Node tests pass; cadence regression observes 6 price cycles, 12 orderbook reads, 2 Riot reads/model page rebuilds/settlement checks in 10 seconds. Price-only test preserves calls and our series chance. Team/order/status/date/older-worker cases covered. Full suite: 717 passed, 2 skipped in 9.00 s (unchanged base: 715 passed, 2 skipped in 9.16 s; the timing difference is noise). Repository-wide ruff format/check, whitespace check and one Impeccable detector pass are clean. No metric method/weights change, no DB rebuild required.
+
+Cost: active orderbook requests/publication cycles rise 5× (two contracts: 720 → 3,600 reads/hour; S3 cycles 360 → 1,800/hour), active browser polls 2.5×. Full match JSON still publishes, increasing active bandwidth/storage. This buys lower quote latency without new dependencies/jobs or more Riot/model work. Slow provider/discovery/S3 requests can extend the two-second target. Production timings/quote age and Actions timings remain unverified until deployment.
+
+Copy review: PASS — production-template Live/Watch at 1440px and 390px, whole-page headings, captions, odds, notes, statuses and empty states read in the browser; existing copy already minimal, no strings added. No JS errors or document overflow. Playwright confirms waiting retains the fixture, then live hides exactly its row and empty day while the next fixture remains; exhausting both fixtures hides Coming up. A changed Watch quote appears on the next two-second poll. Screenshots in `/private/tmp/live-refresh-{overview,watch}-{1440,390}.png`. Local representative data/providers; external stream embeds blocked during browser checks, so actual stream playback was not verified. No live credentials or production writes.
+
+
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
 ## 2026-10-17 — Live results: a page per series, whole rows clickable

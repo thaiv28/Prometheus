@@ -130,6 +130,18 @@ const PrometheusLive = (function () {
       .map((x) => x.m);
   }
 
+  // Provider IDs differ (Leaguepedia vs Riot). Match the team pair and the
+  // scheduled series; a waiting row alone is not evidence that play started.
+  function fixtureOnLive(teams, start, matches) {
+    const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const pair = teams.map(fold).sort().join("|");
+    return teams.length === 2 && teams.every(Boolean) && matches.some((m) =>
+      ["live", "between_games"].includes(m.status) &&
+      Array.isArray(m.teams) && m.teams.length === 2 &&
+      m.teams.map((t) => fold(t.name)).sort().join("|") === pair &&
+      (!m.start || Math.abs(time(m.start) - time(start)) < 12 * 3600000));
+  }
+
   // A match file's path from the index: relative, under live/, a .json file.
   // A match file, or one finished map of it (live/<match>/map<n>.json).
   const safeUrl = (u) => (typeof u === "string" && /^live\/[\w-]+(\/map\d+)?\.json$/.test(u) ? u : null);
@@ -166,7 +178,7 @@ const PrometheusLive = (function () {
   // A team's short name: its code when the feed gives one.
   const short = (team) => (team && (team.code || team.name)) || "?";
 
-  return { MAX_SPREAD, time, release, axis, currentCall, quoteAt, gold, clock, in100, liveMatches, safeUrl, summaryCall, pair, goldLead, goldLeader, short };
+  return { MAX_SPREAD, time, release, axis, currentCall, quoteAt, gold, clock, in100, liveMatches, fixtureOnLive, safeUrl, summaryCall, pair, goldLead, goldLeader, short };
 })();
 
 if (typeof module === "object" && module.exports) module.exports = PrometheusLive;

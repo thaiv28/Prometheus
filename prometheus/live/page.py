@@ -310,6 +310,7 @@ def summary(page):
     last = game["frames"][-1] if game and game["frames"] else {}
     return {
         **{k: match[k] for k in ("id", "league", "event", "best_of", "teams", "score")},
+        "start": match.get("start"),
         "url": f"live/{match['id']}.json",
         "status": page["status"],
         "game": None

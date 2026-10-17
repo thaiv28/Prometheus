@@ -31,7 +31,7 @@
     set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private window */ } },
   };
 
-  const POLL_MS = 5000;
+  const POLL_MS = 2000;
   const RETRY_MS = 15000;
   // With no game in the feed, look again once a minute.
   const QUIET_MS = 60000;

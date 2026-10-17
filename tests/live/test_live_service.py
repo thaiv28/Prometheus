@@ -400,3 +400,93 @@ class StartSearchTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FastQuotesTest(unittest.TestCase):
+    def test_prices_refresh_without_rebuilding_feed_or_calls(self):
+        from prometheus.live.service import Game
+
+        with tempfile.TemporaryDirectory() as tmp:
+            game = object.__new__(Game)
+            game.dir = Path(tmp) / "map1"
+            game.dir.mkdir()
+            game.ticker = "map"
+            game.series_ticker = "series"
+            game.start = {"source_at": "2026-10-17T00:00:00+00:00"}
+            q = {"at": "2026-10-17T00:00:12+00:00", "bid": 0.6, "ask": 0.62}
+            (game.dir / "quotes.jsonl").write_text(json.dumps(q) + "\n")
+            game.series_quotes_path.write_text(json.dumps(q) + "\n")
+            page = {
+                "match": {"series": {"ours": 0.7}},
+                "game": {"frames": [], "calls": ["unchanged"]},
+            }
+            updated = game.add_quotes(page)
+            self.assertEqual(updated["game"]["market"], [q])
+            self.assertEqual(updated["match"]["series"]["kalshi"], q)
+            self.assertEqual(updated["game"]["calls"], ["unchanged"])
+            self.assertEqual(updated["match"]["series"]["ours"], 0.7)
+
+    def test_fast_cycle_preserves_ten_second_feed_cadence(self):
+        from types import SimpleNamespace
+
+        from prometheus.live import service
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "teams.json").write_text("[]")
+            e = event()
+            e["match"]["games"] = [{"id": "g4", "number": 4, "state": "inProgress"}]
+            g = mock.Mock()
+            g.mapping = {"match_id": "m1", "teams": [{"name": "A"}, {"name": "B"}]}
+            g.id, g.number, g.state = "g4", 4, "live"
+            g.forge, g.ticker, g.series_ticker = {}, "map", "series"
+            g.dir = root
+            page = {"match": {"id": "m1"}, "game": {}}
+            g.page.return_value = page
+            g.add_quotes.return_value = page
+            args = SimpleNamespace(
+                team_catalog=root / "teams.json",
+                aliases=root / "none",
+                model=None,
+                skip_game=[],
+                adopt=[],
+                root=root,
+                page_out=root,
+                discover_interval=60,
+                interval=10,
+                ratings=None,
+                forge=False,
+                s3=None,
+                idle_exit=None,
+            )
+            clock = [100.0]
+
+            def sleep(seconds):
+                clock[0] += seconds
+                if clock[0] >= 112:
+                    raise service.Stop("test complete")
+
+            payload = {"data": {"schedule": {"events": [e]}}}
+            with (
+                mock.patch.multiple(
+                    service,
+                    fetch_json=mock.Mock(return_value=({}, payload)),
+                    pin_order=mock.Mock(side_effect=lambda e, r: e),
+                    mapping_for=mock.Mock(return_value=g.mapping),
+                    feed_sides=mock.Mock(side_effect=lambda game, out: game),
+                    Game=mock.Mock(return_value=g),
+                    waiting_pages=mock.Mock(return_value=[]),
+                    write_index=mock.Mock(return_value=(1, True)),
+                    log=mock.Mock(),
+                ),
+                mock.patch.object(
+                    service.time, "monotonic", side_effect=lambda: clock[0]
+                ),
+                mock.patch.object(service.time, "sleep", side_effect=sleep),
+            ):
+                self.assertEqual(service.run(args), service.REFUSED)
+            self.assertEqual(g.poll.call_count, 2)
+            self.assertEqual(g.page.call_count, 2)
+            self.assertEqual(g.settle.call_count, 2)
+            self.assertEqual(g.poll_quote.call_count, 12)  # two books in six cycles
+            self.assertEqual(g.add_quotes.call_count, 4)
