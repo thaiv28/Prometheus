@@ -360,3 +360,60 @@ def test_props_worse_scores_fail_and_same_scores_pass():
     )
     rows = cb.compare_props(_prop_scores(), head, N)
     assert [r["result"] for r in rows] == ["not paired", "within noise"]
+
+
+def _live_calls(shift=0.0, seed=0):
+    """In-game calls on 120 maps (40 series) at the seven checkpoints."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for g in range(120):
+        won = int(rng.random() < 0.5)
+        for minute in (0, 5, 10, 15, 20, 25, 30):
+            p = np.clip(0.5 + (0.3 if won else -0.3) * minute / 30, 0.05, 0.95)
+            p = np.clip(
+                p + rng.normal(0, 0.05) - (shift if won else -shift), 0.01, 0.99
+            )
+            rows.append(
+                {
+                    "game": f"g{g}",
+                    "series": f"s{g // 3}",
+                    "start": "2025-06-01" if g < 60 else "2026-03-01",
+                    "checkpoint": minute,
+                    "ours": p,
+                    "kalshi": 0.5,
+                    "won": won,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def test_live_worse_calls_fail_by_band_and_same_calls_pass():
+    same = cb.compare_live(_live_calls(), _live_calls(), N)
+    assert [r["name"].split(" (")[0] for r in same] == [
+        "log loss, pregame",
+        "log loss, early",
+        "log loss, mid",
+        "log loss, late",
+        "log loss, all",
+    ]
+    assert all(r["result"] == "within noise" and r["guarded"] for r in same)
+    worse = cb.compare_live(_live_calls(), _live_calls(shift=0.1), N)
+    assert {r["result"] for r in worse} == {"worse"} and cb.failures(worse)
+    # Only one band worse still fails the check.
+    head = _live_calls()
+    late = head["checkpoint"] >= 25
+    head.loc[late, "ours"] = np.where(head.loc[late, "won"] == 1, 0.3, 0.7)
+    rows = cb.compare_live(_live_calls(), head, N)
+    assert [r["result"] for r in rows if "late" in r["name"]] == ["worse"]
+    assert cb.failures(rows)
+
+
+def test_live_scores_only_maps_after_both_models_fit():
+    # Head is much worse, but only on maps its fit date excludes.
+    head = _live_calls()
+    early = head["start"] < "2026-01-01"
+    head.loc[early, "ours"] = np.where(head.loc[early, "won"] == 1, 0.1, 0.9)
+    assert cb.failures(cb.compare_live(_live_calls(), head, N))
+    rows = cb.compare_live(_live_calls(), head, N, fit_through="2025-12-31")
+    assert not cb.failures(rows)
+    assert rows[-1]["name"] == "log loss, all (420)"
