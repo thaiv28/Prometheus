@@ -1,0 +1,89 @@
+{% extends 'base.html.j2' %}
+{% from '_marks.html.j2' import fixtures, league %}
+{% block title %}Live results, {{ month.label }} · Prometheus{% endblock %}
+{% block description %}Every series Prometheus followed live in {{ month.label }}: the call before it, Kalshi's close, and our call through each map.{% endblock %}
+{% block canonical_path %}live-results/{{ month.key }}.html{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{{ root_path }}{{ asset('css/live.css') }}" />{% endblock %}
+{% block content %}
+  {#- One month of followed series: Table I as on Results (the call before the
+      series), then a figure per recorded map, the first-listed team's chance. -#}
+  <div class="spread">
+    <div class="spread-main">
+      <header class="section-head">
+        <h1>Live results <span class="full-name">{{ month.label }}</span></h1>
+      </header>
+
+      <section class="fixtures-block" aria-labelledby="month-cap">
+        <figure class="register-figure register-figure--main">
+          <figcaption id="month-cap" class="table-caption">Table I. Series followed live, newest first.</figcaption>
+          <div class="table-scroll">{{ fixtures(month.days, results=True, compact=True, root='../', id='past') }}</div>
+        </figure>
+      </section>
+
+      <section class="lr-figures" aria-labelledby="maps-heading">
+        <div class="block-head">
+          <h2 id="maps-heading">By map</h2>
+        </div>
+        <p class="chance-key lr-key" aria-hidden="true">
+          <span><svg viewBox="0 0 18 10"><line class="k-ours" x1="0" y1="5" x2="18" y2="5"/></svg>Our call</span>
+          <span><svg viewBox="0 0 18 10"><line class="k-mkt" x1="0" y1="5" x2="18" y2="5"/></svg>Kalshi</span>
+          <span><svg viewBox="0 0 18 10"><rect class="k-gold" x="2" y="1" width="3" height="8"/><rect class="k-gold" x="8" y="4" width="3" height="5"/><rect class="k-gold" x="14" y="3" width="3" height="6"/></svg>Gold lead</span>
+        </p>
+        {% for s in month.series %}
+        <article class="lr-series" id="s-{{ s.id }}" aria-labelledby="s-{{ s.id }}-head">
+          <h3 id="s-{{ s.id }}-head" class="lr-head">
+            <span class="lr-teams">{{ s.names[0] }} <span class="lr-score">{{ s.row.score or 'v' }}</span> {{ s.names[1] }}</span>
+            <span class="lr-meta">{{ league(s.row.league, show_code=False) }} {{ s.row.event }} · {{ s.date }}</span>
+          </h3>
+          {% set shown = s.maps | selectattr('recorded') | list %}
+          {% if shown %}
+          <div class="lr-maps">
+            {% for m in shown %}
+            {% set f = m.figure %}
+            <figure class="lr-map">
+              <figcaption class="lr-cap">
+                <span><b>Map {{ m.number }}</b>{% if m.length %} · {{ m.length }}{% endif %}{% if m.winner %} · {{ m.winner }} won{% endif %}</span>
+                <span class="lr-pre">{% if m.pre is not none %}Before: {{ m.pre }}{% endif %}{% if m.pre_market is not none %}, Kalshi {{ m.pre_market }}{% endif %}</span>
+              </figcaption>
+              <svg class="lr-plot" viewBox="0 0 {{ f.w }} {{ f.h }}" role="img" aria-label="{{ s.names[0] }}’s chance to win map {{ m.number }}. {{ f.label }}">
+                <line class="grid" x1="{{ f.left }}" x2="{{ f.right }}" y1="{{ f.y100 }}" y2="{{ f.y100 }}"/>
+                <line class="base" x1="{{ f.left }}" x2="{{ f.right }}" y1="{{ f.y50 }}" y2="{{ f.y50 }}"/>
+                <line class="axis" x1="{{ f.left }}" x2="{{ f.right }}" y1="{{ f.y0 }}" y2="{{ f.y0 }}"/>
+                <text class="label" x="{{ f.left - 5 }}" y="{{ f.y100 + 4 }}" text-anchor="end">100</text>
+                <text class="label" x="{{ f.left - 5 }}" y="{{ f.y50 | float + 4 }}" text-anchor="end">50</text>
+                <text class="label" x="{{ f.left - 5 }}" y="{{ f.y0 + 4 }}" text-anchor="end">0</text>
+                <line class="grid" x1="{{ f.left }}" x2="{{ f.right }}" y1="{{ f.gold_mid }}" y2="{{ f.gold_mid }}"/>
+                <text class="label" x="{{ f.left - 5 }}" y="{{ f.gold_top + 8 }}" text-anchor="end">+{{ f.gold_label }}</text>
+                <text class="label" x="{{ f.left - 5 }}" y="{{ f.gold_bottom }}" text-anchor="end">−{{ f.gold_label }}</text>
+                {% for c in f.columns %}<rect class="gold" x="{{ c.x }}" y="{{ c.y }}" width="{{ c.w }}" height="{{ c.h }}"/>{% endfor %}
+                {% for t in f.ticks %}<line class="axis" x1="{{ t.x }}" x2="{{ t.x }}" y1="{{ f.gold_bottom + 2 }}" y2="{{ f.gold_bottom + 5 }}"/><text class="label" x="{{ t.x }}" y="{{ f.axis_y }}" text-anchor="middle">{{ t.label }}</text>{% endfor %}
+                {% if f.market %}<path class="mkt" d="{{ f.market }}"/>{% endif %}
+                {% if f.ours %}<path class="ours" d="{{ f.ours }}"/>{% endif %}
+                {% if f.pre %}<circle class="call call--pre" cx="{{ f.pre.x }}" cy="{{ f.pre.y }}" r="3"/>{% endif %}
+                {% if f.end %}<circle class="call" cx="{{ f.end.x }}" cy="{{ f.end.y }}" r="3"/>{% endif %}
+              </svg>
+            </figure>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if s.missing %}
+          <p class="lr-missing">Not recorded: {{ 'map' if s.missing | length == 1 else 'maps' }} {{ s.missing | join(', ') }}.</p>
+          {% endif %}
+        </article>
+        {% endfor %}
+      </section>
+
+      {% if newer or older %}
+      <p class="month-index">{% if newer %}<a href="{{ newer.key }}.html" rel="prev">← {{ newer.label }}</a>{% endif %}{% if newer and older %} · {% endif %}{% if older %}<a href="{{ older.key }}.html" rel="next">{{ older.label }} →</a>{% endif %}</p>
+      {% endif %}
+    </div>
+
+    <aside class="margin notes" aria-labelledby="about-heading">
+      <h2 id="about-heading" class="margin-head">Reading the results</h2>
+      <p class="margin-note">Table I: the call before the series, as on <a href="../predictions.html">Predictions</a>. Figures: the first-listed team's chance to win the map over estimated game time, starting from our call before it (open circle).</p>
+    </aside>
+  </div>
+{% endblock %}
+{% block scripts %}
+  <script src="{{ root_path }}{{ asset('js/predictions.js') }}" defer></script>
+{% endblock %}

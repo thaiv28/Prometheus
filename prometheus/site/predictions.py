@@ -294,12 +294,13 @@ def alert_record(entries, key="alert"):
     }
 
 
-def render_live(fixtures):
+def render_live(fixtures, finished=None, live_months=()):
     """live.html (every match in progress) and watch.html (one match, with its stream).
 
     JS fills both from live/index.json and live/<match>.json, written by the live
     collector, not by this build; `fixtures` (the next matches) show between games
-    and without JS.
+    and without JS; `finished` (the last week's followed series, None without
+    saved live maps) and `live_months` link to the live results pages.
     """
     for name, template in [
         ("live.html", "live.html.j2"),
@@ -313,6 +314,8 @@ def render_live(fixtures):
                 metric=site_config.LIVE,
                 streams=site_config.LIVE_STREAMS,
                 fixtures=fixtures,
+                finished=finished,
+                live_months=live_months,
             ),
         )
 
