@@ -77,7 +77,7 @@
       {% if by %}<td class="wide-only fx-opt fx-by">{{ r.method }}{% if r.cross %}<span class="fx-cross" title="{{ 'Elo with regional calibration' if r.calibrated else 'Teams from different leagues: Elo alone' }}"> across</span>{% endif %}</td>{% endif %}
       {% if results %}
       <td class="num phone-hide fx-close fx-market"{% if r.mkt1 %} title="Kalshi close · {{ r.mkt_at }}"{% endif %}>{% if r.mkt1 and r.mkt_url %}<a href="{{ r.mkt_url }}" aria-label="Kalshi’s closing line for {{ r.name1 }} against {{ r.name2 }}: {{ r.mkt1 }}–{{ r.mkt2 }}">{{ r.mkt1 }}–{{ r.mkt2 }}</a>{% elif r.mkt1 %}{{ r.mkt1 }}–{{ r.mkt2 }}{% else %}<span class="muted" title="No Kalshi market or usable quote">—</span>{% endif %}</td>
-      <td class="num fx-score" title="Best of {{ r.best_of }}">{{ r.score or '—' }}</td>
+      <td class="num fx-score" title="Best of {{ r.best_of }}">{% if r.href %}<a href="{{ r.href }}">{{ r.score or '—' }}</a>{% else %}{{ r.score or '—' }}{% endif %}</td>
       <td class="fx-call fx-call--{{ r.call or 'pending' }}">{% if r.call == 'right' %}Right{% elif r.call == 'missed' %}Missed{% elif r.call == 'even' %}Even{% else %}<i>To come</i>{% endif %}{% if r.reconstructed %}<a class="note-ref" href="#note-3" aria-label="Rebuilt after the match: note 3">3</a>{% endif %}</td>
       {% endif %}
     </tr>

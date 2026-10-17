@@ -46,7 +46,8 @@ def map_files(*roots):
         root = Path(root)
         files += root.glob("*/pages/map*.json")
         files += root.glob("*/map*.json")
-    return sorted(set(files))
+    # map<n>.min.json are the results pages' compact copies (live/archive.py).
+    return sorted(f for f in set(files) if not f.name.endswith(".min.json"))
 
 
 def _times(df, *columns):
