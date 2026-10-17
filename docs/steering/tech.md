@@ -295,4 +295,6 @@ Two existing-key consistent reads (ACCOUNT and the UTC DAY) precede sizing. Free
 
 `test_execution_sizing.py` checks the integer solution against exhaustive feasible search, fees, cash/seed/fraction/open risk, route-depth tradeoffs, funding races, depletion and exactly-once own-profit accounting for wins/losses/pooled revenue. `test_execution.py` retains failures/concurrency/partial fills/pause; its service fake understands multi-field ADD and the new funding conditions. This is a constrained sequential cash allocation, not joint correlated-portfolio Kelly. Full mathematical/activation details are in [execution](../kalshi_execution.md#kelly-bankroll-and-activation).
 
+### Live preparation (2026-10-16)
+
 Live preparation: `service.waiting_pages` selects known Riot `getSchedule` fixtures in the wake window (−4h to +75min), once per discovery. The page has `status: waiting`, `game: null` until a map is selected; `page.summary` preserves the nullable game. Tracked games take precedence; their no-observation state is also waiting. Waiting files are refreshed each cycle and removed on expiry/completion or discovery failure. Riot match IDs carry through to tracking.
