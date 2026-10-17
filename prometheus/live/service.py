@@ -36,7 +36,7 @@ from .kalshi import (
 )
 from .page import build_page, summary, write_atomic
 from .requests import SITE_API_HOST, probe, utc_now
-from .series import series_chance
+from .series import map_prior, map_shift, series_chance
 from .start import find_start
 from .timeline import latest_elo
 
@@ -392,6 +392,22 @@ class Game:
                 score[result["winner"]] += 1
         return score
 
+    def score_before(self, score):
+        """The series score before this map, or None when it can't be told."""
+        if not score:
+            return None
+        before = list(score)
+        counted = sum(before) - (self.number - 1)
+        if counted == 1:
+            # getLive or a settlement already counts this map.
+            winner = (self.results().get(self.number) or {}).get("winner")
+            if winner not in (0, 1):
+                return None
+            before[winner] -= 1
+        elif counted != 0:
+            return None
+        return before
+
     def request_dir(self, kind):
         self.seq += 1
         stamp = datetime.now(UTC).strftime("%H%M%S")
@@ -461,15 +477,20 @@ class Game:
         return self.dir.parent / "series_quotes.jsonl"
 
     def page(self, catalog, at, record=True):
+        score = self.score()
+        before = self.score_before(score)
+        # Maps already played move this map's call as they move the series odds.
+        shift = 0.0
+        if self.forge and before:
+            shift = map_shift(self.forge["p_game"], self.forge["rho"], *before)
         timeline = None
         if self.timeline:
-            timeline = (*self.timeline, (self.start or {}).get("source_at"))
+            timeline = (*self.timeline, (self.start or {}).get("source_at"), shift)
         page = build_page(
             self.collector_dir, self.mapping, catalog, at, timeline=timeline
         )
         quotes = self.quotes(self.dir / "quotes.jsonl")
         game = page.get("game")
-        score = self.score()
         result = self.results().get(self.number)
         if score:
             page["match"]["score"] = score
@@ -503,9 +524,10 @@ class Game:
             page["match"]["maps"] = self.maps()
         if game and self.forge and score:
             # FORGE is side-free; `forge` was computed for mapping team 0.
-            game["pregame"] = dict(
-                game["pregame"] or {}, p=self.forge["p_game"], by="FORGE"
-            )
+            p_map = self.forge["p_game"]
+            if before:
+                p_map = map_prior(p_map, self.forge["rho"], *before)
+            game["pregame"] = dict(game["pregame"] or {}, p=p_map, by="FORGE")
             calls = game["calls"]
             live = calls[-1]["p"] if calls and page["status"] == "live" else None
             page["match"]["series"] = {

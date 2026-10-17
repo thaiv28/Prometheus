@@ -10,6 +10,21 @@ live model; later maps use the updated Beta.
 import math
 
 
+def map_prior(p_game, rho, wins, losses):
+    """Team 0's pre-map chance after `wins`-`losses` in this series: the Beta's
+    posterior mean, as the series model updates the one-map chance."""
+    kappa = 1 / max(rho, 1e-9) - 1
+    return (p_game * kappa + wins) / (kappa + wins + losses)
+
+
+def map_shift(p_game, rho, wins, losses):
+    """Log-odds to add to team 0's live map call for the maps already played
+    (`docs/research/series_checkpoint.md`); 0 before the first map."""
+    p = min(max(p_game, 1e-4), 1 - 1e-4)
+    post = map_prior(p, rho, wins, losses)
+    return math.log(post / (1 - post)) - math.log(p / (1 - p))
+
+
 def _log_beta(a, b):
     return math.lgamma(a) + math.lgamma(b) - math.lgamma(a + b)
 

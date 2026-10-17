@@ -41,6 +41,7 @@ from sklearn.linear_model import LogisticRegression
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from series_independence import DB, ROOT, load
 
+from prometheus.live.series import map_shift
 from prometheus.live.timeline import START_GOLD, predict
 from prometheus.schedule import SERIES_RHO
 
@@ -94,10 +95,11 @@ def rows(g, s, gold, model):
     # The series model's pre-game chance for this map, and its log-odds shift from
     # the pre-series chance (game 1's call), as `live/series.py` updates it.
     rho = np.where(g["major"], SERIES_RHO[True], SERIES_RHO[False])
-    kappa = 1 / rho - 1
-    p1 = np.clip(g["p1"].to_numpy(dtype=float), 1e-4, 1 - 1e-4)
-    post = (p1 * kappa + g["won_before"]) / (kappa + g["k"] - 1)
-    g["shift"] = logit(post) - logit(p1)
+    lost_before = g["k"] - 1 - g["won_before"]
+    g["shift"] = [
+        map_shift(p, r, w, l)
+        for p, r, w, l in zip(g["p1"].astype(float), rho, g["won_before"], lost_before)
+    ]
 
     out = []
     for minute in MINUTES:

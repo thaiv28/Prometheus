@@ -2,15 +2,19 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
-## 2026-10-16 — Series score at the live model's gold checkpoints
+## 2026-10-16 — Series score in live calls, feed timeline backfill and model v2 refit
 
-Branch `series-checkpoint` from `eb11b9e`. Research only; no production model, page or service change.
+Branch `series-checkpoint` from `eb11b9e` (PR #66).
+
+- **Series shift (live service):** `series.map_shift`/`map_prior`; `Game.score_before` (the score before this map; none while a counted map's winner is unknown); `timeline_calls(..., shift)` moves the pre-map and every in-game call; the FORGE pre-map call uses `map_prior`. The checkpoint report now computes its shift with `map_shift` and reproduces exactly (diffed). Tests: map shift, score before, shifted calls (`tests/live`, 63 passed).
+- **`scripts/research/feed_timelines.py`** (+ `feed_timelines_collect.sh`): 9,046 completed maps since 2024 in 16 leagues listed (`schedule.json`, 25 min); collection at one window a minute (~32 requests, 17 s a map), four shards. First run stopped at 91 maps when this laptop slept (connection timeouts, exit 3 then); now "no answer" exits 4 and the runner reruns a minute later, refusals still stop. Found: `getEventDetails` sides are often swapped against the feed's metadata and Oracle's Elixir (checked on two 2024 maps), so the join ignores them and the collector records the feed's blue team; some maps have no feed data (204: 10 of the first 159, 6 LPL); the feed marks pauses (`paused`, one frozen frame, one pause 17 minutes).
+- **`scripts/research/train_time_model_v2.py`**: protocol fixed before scoring (see the script). Dry run on 155 maps: 140 joined; estimated clock vs Oracle's Elixir game length within −114 to +40 s (1st–99th percentile) after removing marked pauses (before: up to +998 s). Full run pending the collection.
 
 - **`scripts/research/series_checkpoint.py`** (new; report `docs/research/series_checkpoint.md`, tests `tests/research/test_series_checkpoint.py`): the live map model's call (Elo from before the series, as the live page uses it) at Oracle's Elixir's 0/10/15/20/25-minute gold, with and without the series lead, on maps 2+ of clean Bo3/Bo5 (fit 2018–2024, scored 2025–2026, series-resampled intervals). Major teams: the series model's Beta shift cuts log loss 0.0039 (0 min), 0.0038 (10), 0.0028 (15), 0.0019 (20, interval includes 0). About half the lead is Elo moving between maps (with per-map Elo the major-team gain is under 0.0015, intervals include 0). A gold + Elo checkpoint refit beats the live model at 15 and 20 minutes (major −0.0041/−0.0043; other −0.0063/−0.0073).
 - **`series_independence.load`**: removed its home-league merge, which collided with the `home`/`opp_home` columns `gamelog.add_calls` now adds (the script failed on current main).
 - **Riot feed check:** `feed.lolesports.com/livestats/v1/window/<game>?startingTime=` returned frames for a 2026-05 LCK game and a 2024-01 LCK game (the oldest LCK schedule page); `getSchedule` pages back to January 2024.
 - Added future work: past series kept on the live pages with their graphs; the series term and more training timelines for the live model.
-- Checks: `pytest tests/research/test_series_checkpoint.py tests/research/test_series_independence.py tests/test_steering.py`; `ruff check` and `ruff format` on the new files; report regenerated from the script. Live model's GOL training maps (2022–2023) are a small part of the fit years and none of the scored years. Not checked: older feed coverage before 2024, request rate limits for a bulk backfill.
+- Checks: `pytest tests/live tests/research tests/test_steering.py`; `ruff check` and `ruff format` on the new files; report regenerated from the script. Live model's GOL training maps (2022–2023) are a small part of the fit years and none of the scored years. Not checked: older feed coverage before 2024, request rate limits for a bulk backfill.
 
 ## 2026-10-16 — Unified alerts, six fixture groups and disabled trade execution
 

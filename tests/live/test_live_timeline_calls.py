@@ -1,3 +1,4 @@
+import math
 import unittest
 from datetime import UTC, datetime, timedelta
 
@@ -64,6 +65,15 @@ class CallsTest(unittest.TestCase):
         # Frames are in match-team order, so teams[0] leads gold on either side.
         self.assertGreater(calls0[-1]["p"], pre0)
         self.assertGreater(calls1[-1]["p"], pre1)
+
+    def test_series_shift_moves_every_call(self):
+        frames = [frame(0, 2500, 2500), frame(120, 6000, 4000)]
+        page = lambda: {"game": {"blue": 1, "frames": frames, "calls": []}}
+        pre, calls = timeline_calls(page(), MODEL, self.ratings)
+        up_pre, up_calls = timeline_calls(page(), MODEL, self.ratings, shift=0.3)
+        logit = lambda p: math.log(p / (1 - p))
+        self.assertAlmostEqual(logit(up_pre) - logit(pre), 0.3)
+        self.assertAlmostEqual(logit(up_calls[-1]["p"]) - logit(calls[-1]["p"]), 0.3)
 
     def test_one_call_per_minute_newest_wins_and_stops_past_range(self):
         frames = [frame(0, 2500, 2500)]
