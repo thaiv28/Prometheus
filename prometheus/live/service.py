@@ -133,6 +133,26 @@ def feed_sides(game, out):
     return dict(game, teams=[dict(t, side=by_id[t["id"]]) for t in game["teams"]])
 
 
+def pin_order(event, root):
+    """`event` with its teams in the order first seen for the match.
+
+    Team 0 is who every stored record is for (settled map winners, FORGE, the
+    quotes, the score), and getLive can swap a match's teams between maps (FURIA
+    v C9 2026-10-16: C9 first on map 1, FURIA from map 2).
+    """
+    teams = event["match"]["teams"]
+    ids = [t["id"] for t in teams]
+    path = root / event["id"] / "teams.json"
+    if not path.exists():
+        write_atomic(path, ids)
+        return event
+    saved = json.loads(path.read_text())
+    if saved == ids or sorted(saved) != sorted(ids):
+        return event
+    teams = sorted(teams, key=lambda t: saved.index(t["id"]))
+    return dict(event, match=dict(event["match"], teams=teams))
+
+
 def mapping_for(event, catalog, aliases):
     match = event["match"]
     teams = []
@@ -800,7 +820,11 @@ def run(args):
                 except ValueError as error:
                     log("discovery_failed", reason=str(error))
                     payload = None
-                events = list(live_events(payload)) if payload else None
+                events = (
+                    [pin_order(e, args.root) for e in live_events(payload)]
+                    if payload
+                    else None
+                )
                 if events is not None:
                     live_ids = {e["id"] for e in events}
                     for gid in [

@@ -11,6 +11,7 @@ from prometheus.live.service import (
     live_events,
     mapping_for,
     patch_snapshot,
+    pin_order,
     resolve_team,
     waiting_pages,
     write_index,
@@ -324,6 +325,30 @@ class FeedSidesTest(unittest.TestCase):
                 )
             finally:
                 again.close()
+
+
+class PinOrderTest(unittest.TestCase):
+    def test_match_keeps_its_first_team_order(self):
+        with tempfile.TemporaryDirectory() as d:
+            first = event()
+            self.assertIs(pin_order(first, Path(d)), first)
+            swapped = event()
+            swapped["match"]["teams"].reverse()
+            swapped["match"]["teams"][0]["result"]["gameWins"] = 3
+            again = pin_order(swapped, Path(d))
+            mapping = mapping_for(again, CATALOG, {})
+            self.assertEqual(
+                [t["name"] for t in mapping["teams"]], ["Karmine Corp", "Cloud9"]
+            )
+            self.assertEqual(mapping["score"], [1, 3])  # the score follows the teams
+            self.assertEqual(swapped["match"]["teams"][0]["id"], "c9")  # not mutated
+
+    def test_other_teams_are_left_alone(self):
+        with tempfile.TemporaryDirectory() as d:
+            pin_order(event(), Path(d))
+            other = event()
+            other["match"]["teams"][0]["id"] = "t1"
+            self.assertIs(pin_order(other, Path(d)), other)
 
 
 class StartSearchTest(unittest.TestCase):
