@@ -2,6 +2,17 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-16 — Replay in-game calls against Kalshi's in-game trades
+
+Branch `live-market-bench`, base `main` at `e502358`. Research only: new `scripts/research/live_markets_retro.py` (report `docs/research/live_markets_retro.md`, tests `tests/research/test_live_markets_retro.py`) replays the live in-game model (`time_model_v1.json`) over saved Riot feed timelines (`data/feed_timelines/games/`, about one sample a minute) for every map with a settled `KXLOLMAP` market, and reads Kalshi's per-trade tape (`/historical/trades` before Kalshi's cutoff, `/markets/trades` after; cached in `data/research/live_markets/trades/`). The user asked for numbers 1, 2, 4 and 5 (log loss by minute, our weight beside the market, paper bets placed only after Kalshi has been quiet, gap/trading/spread), measured lag and quarter-Kelly sizing.
+
+Feed lag measured from the KC–C9 pilot's request log (`../lol-live/data/live/115660588583171786/`): the newest frame received was never under 20 s old, median 21.1 s on map 5 (steady polling), 26.1 s on map 4. Lag 21 s is the default; 0/10/30 reported.
+
+Data fix found on the way: on 100 of the matched maps the saved feed timelines attach the team names to the wrong side (their blue/red stats are right). KOI–G2 2026-02-23 map 1 is labelled KOI blue; OE has G2 blue, and blue won 10 towers to 4. Sides now come from OE's game between the two teams nearest the feed start. Winner mismatches against Kalshi's result fell from 100 to 7 (dropped). The live service itself checks each side's team ID against the window metadata (`feed.py`), so it would reject such frames, not mis-assign them.
+
+Results (358 maps, 304 series, 2025-10-27 to 2026-10, series bootstrap): Kalshi's last trade beats our call at every minute; ours − Kalshi log loss +0.046 (+0.011 to +0.081) at 15 min and +0.049 (+0.018 to +0.082) at 20 min, minutes 5–30 pooled +0.032 (+0.009 to +0.055), about the same at lag 0 as at 21 s. Our weight beside Kalshi's log-odds, minutes 5–30: +0.15 (−0.07 to +0.41), not significant. Paper bets (first per map, edge ≥ 5 pts, lag 21 s): quiet 10 s 312 bets, flat ROI +5.5% (−9.3% to +22.5%), quarter-Kelly growth +0.0012/bet (−0.0057 to +0.0086), CLV −0.2 pts; quiet 21 s −2.9% (−16.0% to +11.0%). No setting has an interval excluding zero. Markets trade about 10 times a minute in game; about half of calls arrive after ≥10 s without a trade; implied spread 3–4 cents.
+
+Checks: `uv run pytest -q tests/research/test_live_markets_retro.py` (8 pass); full suite and ruff below. First run fetched ~760 trade tapes in about 3 minutes; reruns from cache take about 20 s. No CI, site or metric change. Limits: last trade stands for the book (quiet = no trade); calls once a minute instead of every few seconds; one pilot match for the lag; 2026 was development evidence for the in-game model, so this is retrospective.
 ## 2026-10-16 — Live results: past followed series with their map figures
 
 Branch `live-archive`, base `1c03850` (PR #73). User asked for a backlog of past series on Live, by month like Predictions, with the timeline figure and our pre-match odds.
