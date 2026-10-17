@@ -107,6 +107,52 @@ def live_events(payload):
             yield event
 
 
+def feed_sides(game, out):
+    """`game` with its sides as Riot's feed has them; None until the feed has it.
+
+    getLive can still list the previous map's sides when a map starts (KC v MVK
+    map 3, FURIA v C9 maps 2 and 3, 2026-10-16). The collector refuses every frame
+    whose teams aren't on the selected sides, so a map selected that way shows no
+    stats, never finishes and leaves no snapshot.
+    """
+    try:
+        _, payload = fetch_json(WINDOW.split("?")[0].format(game["id"]), out)
+    except ValueError as error:
+        log("sides_failed", game=game["id"], reason=str(error))
+        return None
+    metadata = (payload or {}).get("gameMetadata") or {}
+    ids = {
+        side: (metadata.get(f"{side}TeamMetadata") or {}).get("esportsTeamId")
+        for side in ("blue", "red")
+    }
+    if None in ids.values():
+        return None
+    by_id = {team_id: side for side, team_id in ids.items()}
+    if set(by_id) != {t["id"] for t in game["teams"]}:
+        raise ValueError(f"feed teams {sorted(by_id)} are not getLive's")
+    return dict(game, teams=[dict(t, side=by_id[t["id"]]) for t in game["teams"]])
+
+
+def pin_order(event, root):
+    """`event` with its teams in the order first seen for the match.
+
+    Team 0 is who every stored record is for (settled map winners, FORGE, the
+    quotes, the score), and getLive can swap a match's teams between maps (FURIA
+    v C9 2026-10-16: C9 first on map 1, FURIA from map 2).
+    """
+    teams = event["match"]["teams"]
+    ids = [t["id"] for t in teams]
+    path = root / event["id"] / "teams.json"
+    if not path.exists():
+        write_atomic(path, ids)
+        return event
+    saved = json.loads(path.read_text())
+    if saved == ids or sorted(saved) != sorted(ids):
+        return event
+    teams = sorted(teams, key=lambda t: saved.index(t["id"]))
+    return dict(event, match=dict(event["match"], teams=teams))
+
+
 def mapping_for(event, catalog, aliases):
     match = event["match"]
     teams = []
@@ -406,6 +452,10 @@ class Game:
         # An adopted game keeps another run's collector and session (its history).
         self.collector_dir, session = adopt or (self.dir / "collector", self.id)
         self.collector = Collector(self.collector_dir, "network_probe")
+        # A resumed session keeps the sides it was selected with.
+        saved = self.collector.state["used_sessions"].get(session)
+        if saved:
+            sides = {"blue": saved["blue_id"], "red": saved["red_id"]}
         self.collector.process(
             {
                 "action": "select",
@@ -770,7 +820,11 @@ def run(args):
                 except ValueError as error:
                     log("discovery_failed", reason=str(error))
                     payload = None
-                events = list(live_events(payload)) if payload else None
+                events = (
+                    [pin_order(e, args.root) for e in live_events(payload)]
+                    if payload
+                    else None
+                )
                 if events is not None:
                     live_ids = {e["id"] for e in events}
                     for gid in [
@@ -798,8 +852,19 @@ def run(args):
                             or gid in skip
                         ):
                             continue
+                        if any(
+                            g.mapping["match_id"] == event["id"]
+                            and g.number > game["number"]
+                            for g in games.values()
+                        ):
+                            continue  # getLive relisting an earlier map as live
                         try:
                             mapping = mapping_for(event, catalog, aliases)
+                            if gid not in adopt:
+                                out = args.root / event["id"] / gid / "sides" / stamp
+                                game = feed_sides(game, out)
+                                if game is None:
+                                    continue  # draft or loading: next discovery
                             # A new map replaces the match's earlier one.
                             for old in [
                                 k

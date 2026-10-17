@@ -3,12 +3,15 @@ import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 from prometheus.live.service import (
     Game,
+    feed_sides,
     live_events,
     mapping_for,
     patch_snapshot,
+    pin_order,
     resolve_team,
     waiting_pages,
     write_index,
@@ -266,6 +269,86 @@ class GameStateTest(unittest.TestCase):
             patch_snapshot(snap, results, ["Karmine Corp", "Cloud9"])
             game = json.loads(snap.read_text())["game"]
             self.assertEqual((game["winner"], game["ended_at"]), (1, "end"))
+
+
+# getLive at the start of KC v MVK map 3 (2026-10-16): the last map's sides.
+MAP3 = {
+    "id": "g3",
+    "number": 3,
+    "teams": [{"id": "kc", "side": "blue"}, {"id": "mvk", "side": "red"}],
+}
+
+
+class FeedSidesTest(unittest.TestCase):
+    def sides(self, payload):
+        with mock.patch(
+            "prometheus.live.service.fetch_json", return_value=({}, payload)
+        ):
+            return feed_sides(MAP3, Path("unused"))
+
+    def window(self, blue, red):
+        return {
+            "gameMetadata": {
+                "blueTeamMetadata": {"esportsTeamId": blue},
+                "redTeamMetadata": {"esportsTeamId": red},
+            }
+        }
+
+    def test_feed_sides_replace_getlive_sides(self):
+        game = self.sides(self.window("mvk", "kc"))
+        self.assertEqual(
+            game["teams"], [{"id": "kc", "side": "red"}, {"id": "mvk", "side": "blue"}]
+        )
+        self.assertEqual(game["number"], 3)
+
+    def test_no_feed_yet_waits(self):
+        self.assertIsNone(self.sides(None))
+        self.assertIsNone(self.sides({"frames": []}))
+
+    def test_other_teams_in_the_feed_are_refused(self):
+        with self.assertRaises(ValueError):
+            self.sides(self.window("kc", "t1"))
+
+    def test_resumed_game_keeps_its_selected_sides(self):
+        with tempfile.TemporaryDirectory() as d:
+            mapping = mapping_for(event(), CATALOG, {})
+            sides = [{"id": "c9", "side": "blue"}, {"id": "kc", "side": "red"}]
+            game = {"id": "g4", "number": 4, "teams": sides}
+            Game(Path(d), mapping, game, None, None).close()
+            # getLive has since swapped them; the saved session still resumes.
+            swapped = [{"id": "c9", "side": "red"}, {"id": "kc", "side": "blue"}]
+            again = Game(Path(d), mapping, dict(game, teams=swapped), None, None)
+            try:
+                selection = again.collector.state["selection"]
+                self.assertEqual(
+                    (selection["blue_id"], selection["red_id"]), ("c9", "kc")
+                )
+            finally:
+                again.close()
+
+
+class PinOrderTest(unittest.TestCase):
+    def test_match_keeps_its_first_team_order(self):
+        with tempfile.TemporaryDirectory() as d:
+            first = event()
+            self.assertIs(pin_order(first, Path(d)), first)
+            swapped = event()
+            swapped["match"]["teams"].reverse()
+            swapped["match"]["teams"][0]["result"]["gameWins"] = 3
+            again = pin_order(swapped, Path(d))
+            mapping = mapping_for(again, CATALOG, {})
+            self.assertEqual(
+                [t["name"] for t in mapping["teams"]], ["Karmine Corp", "Cloud9"]
+            )
+            self.assertEqual(mapping["score"], [1, 3])  # the score follows the teams
+            self.assertEqual(swapped["match"]["teams"][0]["id"], "c9")  # not mutated
+
+    def test_other_teams_are_left_alone(self):
+        with tempfile.TemporaryDirectory() as d:
+            pin_order(event(), Path(d))
+            other = event()
+            other["match"]["teams"][0]["id"] = "t1"
+            self.assertIs(pin_order(other, Path(d)), other)
 
 
 class StartSearchTest(unittest.TestCase):
