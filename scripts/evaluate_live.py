@@ -77,7 +77,10 @@ from prometheus.live import timeline
 
 TIMELINES = ROOT / "data" / "feed_timelines" / "games"
 MARKET_LIST = ROOT / "data" / "markets" / f"{markets.MAP}.json"
-TRADES = ROOT / "data" / "live_bench" / "trades"
+TRADES = ROOT / "data" / "live_bench" / "trades"  # whole maps
+# Pre-map tapes: only the half hour before each map's start, kept apart so a
+# short tape is never read as a whole map's.
+PRE_TRADES = ROOT / "data" / "live_bench" / "pre_trades"
 DATA = ROOT / "data" / "live_bench" / "live_maps.json.gz"
 PIN = ROOT / "scripts" / "live_bench_data.json"
 REPO = "thaiv28/Prometheus"
@@ -114,6 +117,13 @@ MARKET_FIELDS = (
     "trades",
     "spread",
 )
+# Kalshi before each priced map (team 0 = blue): the price 12 minutes before
+# the start (about before the draft), the price and each side's last cost a
+# minute before (after it: the paper bet), and the price at the start.
+PREMAP_FIELDS = ("p_before", "p_bet", "cost0", "cost1", "p_start")
+PRE_BEFORE = pd.Timedelta(minutes=12)
+PRE_BET = pd.Timedelta(minutes=1)
+PRE_STALE = 600  # pre-game trading is thinner
 
 # Words too common in team names to identify a team.
 GENERIC = {"esports", "esport", "gaming", "team", "club", "e", "sports", "the", "gg"}
@@ -229,13 +239,27 @@ def score_before(hist, names, start, window=SERIES_WINDOW):
     return [wins0, len(earlier) - wins0]
 
 
-def elo_before(hist, name, day):
+class EloBefore:
     """A team's game-length Elo after its last game before a UTC day. The live
-    service reads the latest DB, which holds games through the day before."""
-    rows = hist[
-        (hist["teamname"] == name) & (hist["date"] < pd.Timestamp(day, tz="UTC"))
-    ]
-    return None if rows.empty else float(rows["elo"].iloc[-1])
+    service reads the latest DB, which holds games through the day before.
+    Each team's history is indexed once (a lookup per map is a binary search)."""
+
+    def __init__(self, hist):
+        self.teams = {
+            name: (g["date"].dt.tz_convert(None).to_numpy(), g["elo"].to_numpy())
+            for name, g in hist.sort_values("date").groupby("teamname")
+        }
+
+    def __call__(self, name, day):
+        if name not in self.teams:
+            return None
+        dates, elos = self.teams[name]
+        i = dates.searchsorted(pd.Timestamp(day).to_datetime64()) - 1
+        return None if i < 0 else float(elos[i])
+
+
+def elo_before(hist, name, day):
+    return EloBefore(hist)(name, day)
 
 
 def feed_winner(game, blue):
@@ -251,9 +275,10 @@ def feed_winner(game, blue):
 # ---------------------------------------------------------------- Kalshi trades
 
 
-def fetch_trades(ticker, min_ts, max_ts, historical):
-    """Every trade on one market between two Unix times, oldest first, cached."""
-    path = TRADES / f"{ticker}.json"
+def fetch_trades(ticker, min_ts, max_ts, historical, cache=TRADES):
+    """Every trade on one market between two Unix times, oldest first, cached
+    in `cache`."""
+    path = cache / f"{ticker}.json"
     if path.exists():
         return json.loads(path.read_text())
     endpoint = "/historical/trades" if historical else "/markets/trades"
@@ -274,8 +299,8 @@ def fetch_trades(ticker, min_ts, max_ts, historical):
     return trades
 
 
-def cached_trades(ticker):
-    path = TRADES / f"{ticker}.json"
+def cached_trades(ticker, cache=TRADES):
+    path = cache / f"{ticker}.json"
     return json.loads(path.read_text()) if path.exists() else None
 
 
@@ -350,6 +375,119 @@ def _team_stats(sample, side):
     return [block.get(s) for s in STATS]
 
 
+def oe_games(db=DB_PATH):
+    """Every OE game, blue v red: gameid, UTC start, league, team names, blue's
+    result."""
+    with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as conn:
+        teams = pd.read_sql(
+            "SELECT gameid, date, league, side, teamname, result FROM matches", conn
+        )
+    teams["date"] = pd.to_datetime(teams["date"]).dt.tz_localize("UTC")
+    blue = teams[teams["side"] == "Blue"].set_index("gameid")
+    red = teams[teams["side"] == "Red"].set_index("gameid")
+    games = blue.join(red[["teamname"]], rsuffix="_red", how="inner")
+    return games.rename(columns={"teamname": "blue", "teamname_red": "red"})[
+        ["date", "league", "blue", "red", "result"]
+    ].reset_index()
+
+
+def match_oe_game(event, matcher, by_pair):
+    """(OE game, blue is Kalshi's team1) for a settled map event: the two teams'
+    n-th game together in the event's window (n = the map number), when its
+    result agrees with Kalshi's; else None."""
+    a, b = matcher(event["team1"]), matcher(event["team2"])
+    if not a or not b or not event["map"]:
+        return None
+    start = pd.Timestamp(event["start"])
+    window = pd.Timedelta(hours=8 if event["timed"] else 32)
+    pair = [g for k in ((a, b), (b, a)) if (g := by_pair.get(k)) is not None]
+    if not pair:
+        return None
+    pair = pd.concat(pair)
+    pair = pair[
+        (pair["date"] > start - pd.Timedelta(hours=1)) & (pair["date"] < start + window)
+    ].sort_values("date")
+    if len(pair) < event["map"]:
+        return None
+    game = pair.iloc[event["map"] - 1]
+    blue_is_team1 = game["blue"] == a
+    if (game["result"] == 1) != (blue_is_team1 == event["won1"]):
+        return None
+    return game, blue_is_team1
+
+
+def premap_trades(event, at, cutoff, fetch=True):
+    """Each contract's trades around a map's start: a whole-map tape when one is
+    cached, else the pre-map tape (fetched when missing and `fetch`)."""
+    trades = {}
+    for m in event["markets"]:
+        got = cached_trades(m["ticker"]) or cached_trades(m["ticker"], PRE_TRADES)
+        if got is None and fetch:
+            got = fetch_trades(
+                m["ticker"],
+                int((at - pd.Timedelta(minutes=30)).timestamp()),
+                int((at + pd.Timedelta(minutes=5)).timestamp()),
+                historical=m["close"] < cutoff,
+                cache=PRE_TRADES,
+            )
+        trades[m["ticker"]] = got or []
+    return trades
+
+
+def premap_state(tp, at):
+    """Kalshi before one map (see PREMAP_FIELDS)."""
+    bet = at - PRE_BET
+    return [
+        price_at(tp, at - PRE_BEFORE, stale=PRE_STALE),
+        price_at(tp, bet, stale=PRE_STALE),
+        cost_to_back(tp, bet, 0, stale=PRE_STALE),
+        cost_to_back(tp, bet, 1, stale=PRE_STALE),
+        price_at(tp, at, stale=PRE_STALE),
+    ]
+
+
+def build_premaps(matcher, events, cutoff, fetch=True, db=DB_PATH):
+    """Every settled map market matched to its OE game, with Kalshi's prices
+    before the start (pre-map tapes fetched as needed)."""
+    games = oe_games(db)
+    by_pair = dict(list(games.groupby(["blue", "red"])))
+    hist = team_history(sorted(set(games["blue"]) | set(games["red"])), db)
+    counts = {"map markets": 0, "no OE game": 0, "no price": 0}
+    out = []
+    for i, event in enumerate(events, 1):
+        counts["map markets"] += 1
+        hit = match_oe_game(event, matcher, by_pair)
+        if hit is None:
+            counts["no OE game"] += 1
+            continue
+        game, blue_is_team1 = hit
+        at = game["date"]
+        tp = tape(event, premap_trades(event, at, cutoff, fetch), blue_is_team1)
+        state = premap_state(tp, at)
+        if state[1] is None:
+            counts["no price"] += 1
+            continue
+        teams = [game["blue"], game["red"]]
+        pair = "|".join(sorted(teams))
+        out.append(
+            {
+                "game": game["gameid"],
+                "series": f"{game['league']}|{at.date()}|{pair}",
+                "league": game["league"],
+                "map": event["map"],
+                "start": at.isoformat(),
+                "teams": teams,
+                "won0": bool(game["result"] == 1),
+                "score_before": score_before(hist, teams, at),
+                "market": state,
+            }
+        )
+        if i % 1000 == 0:
+            _log(f"  pre-map {i}/{len(events)}")
+    counts["pre-maps"] = len(out)
+    return out, counts
+
+
 def build_data(refresh_markets=False):
     """Reduce feed timelines and Kalshi trade tapes to the benchmark's data."""
     if refresh_markets:
@@ -363,8 +501,9 @@ def build_data(refresh_markets=False):
         get_latest_elos("game_length"),
         {**json.loads(schedule.ALIASES_PATH.read_text()), **markets.MARKET_ALIASES},
     )
+    events = markets.events(json.loads(MARKET_LIST.read_text()))
     by_map = {}
-    for r in markets.events(json.loads(MARKET_LIST.read_text())):
+    for r in events:
         by_map.setdefault(r["map"], []).append(r)
 
     counts = dict.fromkeys(
@@ -460,17 +599,22 @@ def build_data(refresh_markets=False):
             _log(f"  {i}/{len(matched)}")
     counts["maps"] = len(maps)
     counts["series"] = len({m["series"] for m in maps})
+    premaps, premap_counts = build_premaps(matcher, events, cutoff)
     data = {
         "built": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
         "lag": LAG,
-        "fields": {"teams": STATS, "market": MARKET_FIELDS},
+        "fields": {"teams": STATS, "market": MARKET_FIELDS, "premap": PREMAP_FIELDS},
         "counts": counts,
+        "premap_counts": premap_counts,
         "maps": maps,
+        "premaps": premaps,
     }
     DATA.parent.mkdir(parents=True, exist_ok=True)
     with gzip.open(DATA, "wt") as f:
         json.dump(data, f, separators=(",", ":"))
-    _log(f"{counts}\nwrote {DATA} ({DATA.stat().st_size / 1e6:.1f} MB)")
+    _log(
+        f"{counts}\n{premap_counts}\nwrote {DATA} ({DATA.stat().st_size / 1e6:.1f} MB)"
+    )
     return data
 
 
@@ -570,10 +714,11 @@ def replay(data, db=DB_PATH, model_path=timeline.MODEL_PATH):
     model = json.loads(Path(model_path).read_text())
     fields = data["fields"]["teams"]
     hist = team_history(sorted({n for m in data["maps"] for n in m["teams"]}), db)
+    elo = EloBefore(hist)
     rows, skipped = [], 0
     for m in data["maps"]:
         day = m["start"][:10]
-        elos = [elo_before(hist, n, day) for n in m["teams"]]
+        elos = [elo(n, day) for n in m["teams"]]
         if None in elos:
             skipped += 1
             continue
@@ -596,6 +741,58 @@ def replay(data, db=DB_PATH, model_path=timeline.MODEL_PATH):
                 dict(base, pregame=False, minute=c["minute"], p=c["p"], **market)
             )
     return pd.DataFrame(rows), skipped
+
+
+def replay_premaps(data, db=DB_PATH, model_path=timeline.MODEL_PATH):
+    """Our pregame call on every priced map (blue is team 0), through the live
+    service's `timeline_calls`, with Kalshi's prices before the start."""
+    model = json.loads(Path(model_path).read_text())
+    premaps = data.get("premaps") or []
+    elo = EloBefore(team_history(sorted({n for m in premaps for n in m["teams"]}), db))
+    rows = []
+    for m in premaps:
+        elos = [elo(n, m["start"][:10]) for n in m["teams"]]
+        if None in elos:
+            continue
+        page = {"game": {"blue": 0, "frames": []}}
+        pregame, _ = timeline.timeline_calls(page, model, [{"elo": e} for e in elos])
+        rows.append(
+            {
+                "game": m["game"],
+                "series": m["series"],
+                "league": m["league"],
+                "start": m["start"],
+                "won": int(m["won0"]),
+                "p": pregame,
+                **dict(zip(PREMAP_FIELDS, m["market"])),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def premap_bets(pre, edge):
+    """$1 a minute before the start on the side our pregame chance beats the
+    last traded cost of by `edge`; CLV against the price at the start."""
+    bets = []
+    for r in pre.itertuples(index=False):
+        for side, p, cost in ((0, r.p, r.cost0), (1, 1 - r.p, r.cost1)):
+            if cost is None or pd.isna(cost) or not 0 < cost < 1 or p - cost < edge:
+                continue
+            close = r.p_start
+            if close is not None and not pd.isna(close) and side == 1:
+                close = 1 - close
+            bets.append(
+                {
+                    "series": r.series,
+                    "game": r.game,
+                    "p": p,
+                    "cost": cost,
+                    "won": bool(r.won) == (side == 0),
+                    "clv": None if close is None or pd.isna(close) else close - cost,
+                }
+            )
+            break
+    return pd.DataFrame(bets)
 
 
 def _market(values):
@@ -762,7 +959,63 @@ def _ci(v, digits=4):
     return f"{point:+.{digits}f} ({lo:+.{digits}f} to {hi:+.{digits}f})"
 
 
-def report(data, calls, skipped):
+def premap_section(pre, counts):
+    """5. Before the map: our pregame call on every priced map against Kalshi a
+    minute before the start and 12 minutes before, and paper bets."""
+    if len(pre) < 30:
+        return []
+    lines = [
+        "",
+        "## 5. Before the map (every priced map)",
+        "",
+        "Every settled Kalshi map market matched to its Oracle's Elixir game (the two",
+        "teams' n-th game in the event's window for map n, results agreeing):",
+        ", ".join(f"{k} {v}" for k, v in counts.items())
+        + f"; scored (both Elos) {len(pre)}, {pre['series'].nunique()} series.",
+        "Our call is the live page's pregame call (blue is team 0). Kalshi: last trade",
+        f"{int(PRE_BEFORE.total_seconds() // 60)} minutes before OE's start (about"
+        f" before the draft) and {int(PRE_BET.total_seconds())} s before (after it).",
+        "",
+        "| Kalshi's price | Maps | Ours LL | Kalshi LL | Ours − Kalshi (95%) |",
+        "|---|---:|---:|---:|---|",
+    ]
+    for label, col in (
+        (f"{int(PRE_BEFORE.total_seconds() // 60)} min before", "p_before"),
+        (f"{int(PRE_BET.total_seconds())} s before", "p_bet"),
+    ):
+        rows = pre[pre[col].notna() & (pre[col] > 0) & (pre[col] < 1)]
+        rows = rows.rename(columns={"p": "ours"}).assign(kalshi=rows[col])
+        c = compare(rows)
+        ll = c["log_loss"]
+        lines.append(
+            f"| {label} | {c['n']} | {ll[0]:.4f} | {ll[1]:.4f} | {_ci(ll[2:])} |"
+        )
+    lines += [
+        "",
+        f"Paper bets {int(PRE_BET.total_seconds())} s before the start at the last traded"
+        " cost of backing a side (within"
+        f" {PRE_STALE // 60} minutes), when our chance beats it by the edge; CLV is the"
+        " price at the start minus the cost, in points.",
+        "",
+        "| Edge | Bets | Won | Avg cost | Avg ours | Flat ROI (95%) "
+        "| Kelly growth/bet (95%) | Kelly multiple | Max drawdown | CLV |",
+        "|---:|---:|---:|---:|---:|---|---|---:|---:|---:|",
+    ]
+    for edge in EDGES:
+        s = bet_summary(premap_bets(pre, edge))
+        if s is None:
+            lines.append(f"| {edge:.2f} | 0 | | | | | | | | |")
+            continue
+        clv = "" if s["clv"] is None else f"{s['clv'] * 100:+.1f}"
+        lines.append(
+            f"| {edge:.2f} | {s['n']} | {s['won']:.1%} | {s['cost']:.3f} | {s['p']:.3f} "
+            f"| {_ci(s['roi'], 3)} | {_ci(s['growth'], 4)} | {s['multiple']:.2f} "
+            f"| {s['drawdown']:.0%} | {clv} |"
+        )
+    return lines
+
+
+def report(data, calls, skipped, pre=None):
     counts = dict(data["counts"], **{"no Elo": skipped})
     games = calls["game"].unique()
     leagues = calls.drop_duplicates("game")["league"].value_counts().to_dict()
@@ -894,6 +1147,8 @@ def report(data, calls, skipped):
             f"| {(quiet >= 10).mean():.0%} | {(quiet >= 21).mean():.0%} "
             f"| {spread.median() if len(spread) else float('nan'):.3f} | {len(spread)} |"
         )
+    if pre is not None:
+        lines += premap_section(pre, data.get("premap_counts") or {})
     lines += [
         "",
         "## Limits",
@@ -905,6 +1160,8 @@ def report(data, calls, skipped):
         "- The lag is from one pilot match; the feed's delay may differ by league or day.",
         "- Feed games are matched to Kalshi's events by fuzzy team names, map number",
         "  and time; maps whose feed end state disagrees with Kalshi's result are dropped.",
+        "- Before the map, OE's game time stands for the start and the draft's timing",
+        "  is estimated; a bet a minute before may fall in the loading screen.",
         "- 2026 games were seen while building the in-game model (as development",
         "  evidence, not training), so this is retrospective, not a fresh holdout.",
     ]
@@ -923,13 +1180,17 @@ def fit_through(model):
     return f"{max(years)}-12-31" if years else None
 
 
-def write_dump(calls, dirname, model_path=timeline.MODEL_PATH):
+def write_dump(calls, dirname, model_path=timeline.MODEL_PATH, pre=None):
     """Each map's checkpoint calls for `compare_benchmarks.py` (Kalshi's price
-    rides along for the report; it is the same on both sides), and the model's
-    fit date in `metrics.json`."""
+    rides along for the report; it is the same on both sides), the pre-map
+    calls as checkpoint -1 (keyed by OE game), and the model's fit date in
+    `metrics.json`."""
     out = Path(dirname)
     out.mkdir(parents=True, exist_ok=True)
     frame = checkpoints(calls)
+    if pre is not None and len(pre):
+        premap = pre.rename(columns={"p": "ours", "p_bet": "kalshi"})
+        frame = pd.concat([frame, premap.assign(checkpoint=-1)], ignore_index=True)
     frame["start"] = frame["start"].str[:10]
     cols = ["game", "series", "start", "checkpoint", "ours", "kalshi", "won"]
     frame[cols].to_csv(out / "calls.csv.gz", index=False)
@@ -962,14 +1223,15 @@ def main():
     started = time.monotonic()
     data = load_data(args.data)
     calls, skipped = replay(data)
+    pre = replay_premaps(data)
     _log(
-        f"{calls['game'].nunique()} maps, {len(calls)} calls "
+        f"{calls['game'].nunique()} maps, {len(calls)} calls, {len(pre)} pre-maps "
         f"({time.monotonic() - started:.1f} s)"
     )
     if args.dump:
-        write_dump(calls, args.dump)
+        write_dump(calls, args.dump, pre=pre)
     if args.out or not args.dump:
-        text = report(data, calls, skipped)
+        text = report(data, calls, skipped, pre)
         if args.out:
             args.out.write_text(text)
             _log(f"wrote {args.out}")

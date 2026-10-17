@@ -264,3 +264,93 @@ def test_replay_checkpoints_and_dump(tmp_path):
     meta = json.loads((tmp_path / "dump" / "metrics.json").read_text())
     assert meta == {"fit_through": "2024-12-31"}  # v1: calibrated on 2024
     assert el.fit_through({"fit_through": "2025-06-30T00:00"}) == "2025-06-30"
+
+
+class _Matcher:
+    def __call__(self, name):
+        return {"T1": "T1", "Gen.G": "Gen.G"}.get(name)
+
+
+def test_match_oe_game_takes_the_nth_game_and_checks_the_result():
+    games = pd.DataFrame(
+        {
+            "gameid": ["g1", "g2", "g3"],
+            "date": pd.to_datetime(
+                ["2026-05-01T10:30Z", "2026-05-01T11:20Z", "2026-05-01T12:10Z"]
+            ),
+            "league": "LCK",
+            "blue": ["T1", "Gen.G", "T1"],
+            "red": ["Gen.G", "T1", "Gen.G"],
+            "result": [1, 1, 0],
+        }
+    )
+    by_pair = dict(list(games.groupby(["blue", "red"])))
+    event = {
+        "team1": "T1",
+        "team2": "Gen.G",
+        "map": 2,
+        "start": dt.datetime(2026, 5, 1, 10, 0, tzinfo=dt.UTC),
+        "timed": True,
+        "won1": False,  # Gen.G (blue) won map 2
+    }
+    game, blue_is_team1 = el.match_oe_game(event, _Matcher(), by_pair)
+    assert game["gameid"] == "g2" and blue_is_team1 is False
+    assert el.match_oe_game(dict(event, won1=True), _Matcher(), by_pair) is None
+    assert el.match_oe_game(dict(event, map=4), _Matcher(), by_pair) is None
+
+
+def test_premap_state_and_bets():
+    at = T0 + pd.Timedelta(minutes=20)
+    trades = {
+        "M-T1": [
+            _trade(5 * 60, 0.50, "yes"),  # 15 min before
+            _trade(18 * 60, 0.60, "yes"),  # 2 min before: backs team 0 at 0.60
+            _trade(18 * 60 + 30, 0.58, "no"),  # backs team 1 at 0.42
+            _trade(20 * 60, 0.65, "yes"),  # at the start
+        ]
+    }
+    tp = el.tape(_event(), trades, first_is_team1=True)
+    state = dict(zip(el.PREMAP_FIELDS, el.premap_state(tp, at)))
+    assert state["p_before"] == 0.50 and state["p_bet"] == 0.58
+    assert state["cost0"] == 0.60 and abs(state["cost1"] - 0.42) < 1e-9
+    assert state["p_start"] == 0.65
+    pre = pd.DataFrame([dict(state, p=0.70, won=1, series="s1", game="g1")])
+    bets = el.premap_bets(pre, edge=0.05)
+    assert bets["cost"].iloc[0] == 0.60 and bool(bets["won"].iloc[0])
+    assert abs(bets["clv"].iloc[0] - 0.05) < 1e-9
+    assert el.premap_bets(pre.assign(p=0.62), edge=0.05).empty
+
+
+def test_replay_premaps_and_dump_band(tmp_path):
+    db = tmp_path / "p.db"
+    _db(db)
+    data = {
+        "premaps": [
+            {
+                "game": "oe1",
+                "series": "LCK|2026-05-01|A|B",
+                "league": "LCK",
+                "map": 1,
+                "start": T0.isoformat(),
+                "teams": ["A", "B"],
+                "won0": True,
+                "score_before": [0, 0],
+                "market": [0.5, 0.55, 0.56, 0.46, 0.6],
+            }
+        ]
+    }
+    pre = el.replay_premaps(data, db=db)
+    # A's Elo 1550 v 1450 (the same-day game isn't known yet): above 50%.
+    assert len(pre) == 1 and pre["p"].iloc[0] > 0.55
+    samples = [_sample(0, 2500, 2500)] + [
+        _sample(60 * k + 5, 2500 + 400 * k, 2500 + 300 * k) for k in range(1, 32)
+    ]
+    feed = {
+        "fields": {"teams": FIELDS, "market": el.MARKET_FIELDS},
+        "maps": [_map(samples, blue=0, won0=True)],
+    }
+    calls, _ = el.replay(feed, db=db)
+    el.write_dump(calls, tmp_path / "d", pre=pre)
+    dump = pd.read_csv(tmp_path / "d" / "calls.csv.gz")
+    premap = dump[dump["checkpoint"] == -1]
+    assert list(premap["game"]) == ["oe1"] and premap["kalshi"].iloc[0] == 0.55

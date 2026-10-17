@@ -25,8 +25,8 @@ paired-bootstrap interval:
 
 A line is "better" or "worse" when its interval lies entirely on one side of 0,
 otherwise "within noise". The exit code is 1 when a guarded value is significantly
-worse (see `GUARDED_*`), or AURA's ECE is above `ECE_LIMIT` at any snapshot, and 0
-otherwise. Rows present in only one dump are counted, not compared.
+worse (see `GUARDED_*`), or AURA's ECE is above `ECE_LIMIT` at any snapshot, 2
+when the comparison itself fails, and 0 otherwise. Rows present in only one dump are counted, not compared.
 
 Usage:
     uv run python scripts/compare_benchmarks.py BASE_DIR HEAD_DIR [--out report.md]
@@ -36,6 +36,7 @@ import argparse
 import json
 import os
 import sys
+import traceback
 
 import numpy as np
 import pandas as pd
@@ -74,7 +75,13 @@ MARKET_KEY = ["kind", "event_ticker", "team1"]
 # Prop projections (on the Props page): every measure evaluate_props.py dumps.
 PROPS_KEY = ["measure", "unit"]
 # In-game calls (`evaluate_live.py`): every band and all minutes together.
-LIVE_BANDS = {"pregame": (0,), "early": (5, 10), "mid": (15, 20), "late": (25, 30)}
+LIVE_BANDS = {
+    "pre-map, every priced map": (-1,),
+    "pregame": (0,),
+    "early": (5, 10),
+    "mid": (15, 20),
+    "late": (25, 30),
+}
 LIVE_KEY = ["game", "checkpoint"]
 N_RESAMPLES = 2000
 # Base and head run on different machines, so identical code can differ by about
@@ -590,6 +597,8 @@ def compare_live(base, head, n_resamples=N_RESAMPLES, fit_through=None):
     """Log loss of our in-game calls per minute band, on the map-minutes both
     dumps scored after `fit_through` (the later of the two models' fit dates),
     resampling series."""
+    # Feed game ids are numbers and OE ids text: read every key as text.
+    base, head = (f.assign(game=f["game"].astype(str)) for f in (base, head))
     if fit_through and "start" in base and "start" in head:
         base = base[base["start"] > fit_through]
         head = head[head["start"] > fit_through]
@@ -598,7 +607,10 @@ def compare_live(base, head, n_resamples=N_RESAMPLES, fit_through=None):
         return [_missing("Live", "log loss", True, only)]
     rows = []
     for name, minutes in [*LIVE_BANDS.items(), ("all", None)]:
-        pick = both if minutes is None else both[both["checkpoint"].isin(minutes)]
+        if minutes is None:  # all: the feed maps' checkpoints
+            pick = both[both["checkpoint"] >= 0]
+        else:
+            pick = both[both["checkpoint"].isin(minutes)]
         if pick.empty:
             continue
         b = game_losses(pick["ours_base"], pick["won_base"])["log_loss"].to_numpy()
@@ -773,7 +785,12 @@ def main():
     parser.add_argument("--out", help="Also write the report to this Markdown file")
     args = parser.parse_args()
 
-    sections, notes = compare_dirs(args.base, args.head)
+    try:
+        sections, notes = compare_dirs(args.base, args.head)
+    except Exception:
+        # A crash is an error (exit 2), never a "significantly worse" verdict (1).
+        traceback.print_exc()
+        sys.exit(2)
     report = render(sections, notes)
     print(report)
     if args.out:
