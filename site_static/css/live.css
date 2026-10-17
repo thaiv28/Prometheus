@@ -429,3 +429,4 @@
 .lr-before-maps { max-width: 40rem; margin: 0 0 22px; }
 .register--before th.lr-group { text-align: center; }
 .register--before td.lr-k { color: var(--ink-2); }
+.lr-plot-wrap .chance-tip[hidden] { display: none; }
