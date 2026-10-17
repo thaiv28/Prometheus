@@ -2,6 +2,18 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-16 — Live benchmark in the PR check
+
+Branch `live-market-bench`, rebased on `main` at `5806c9a` (PR #75). The user asked for the replay to become a CI benchmark guarding the live model, chose a GitHub release asset for its data and a log-loss guard by minute band.
+
+- **`scripts/evaluate_live.py`** replaces `scripts/research/live_markets_retro.py` (removed, with its test and report). It replays calls through the live service's own `timeline.timeline_calls` and model path (new `timeline.MODEL_PATH`, now the service's `--model` default), so a PR that changes the model or the call is scored as the service would publish it. `--build-data` reduces timelines and trade tapes to about 1 KB a map (sides from the feed's new `blue_id`, else OE; series score before each map stored for the coming series shift); `--publish-data` / `--fetch-data` move it through the `live-bench-data` release, pinned by hash in `scripts/live_bench_data.json`. Report `docs/live_report.md`.
+- **`compare_benchmarks.py`** gains a Live section: log loss head − base per band (pregame, 5–10, 15–20, 25–30, all), series resampled, all guarded. `benchmarks.yml` runs `evaluate_live.py --fetch-data --dump dumps/live` in the market job after the market benchmark; a side without the pin file skips it.
+- Data now: 406 maps / 336 series (686 feed games since 2025-10-27 in the timelines collected so far; 257 without a market, 9 winner mismatches, 14 without in-game trades; feed `blue_id` and OE disagree on 3). Kalshi still ahead: pooled 5–30 min +0.0245 (+0.0039 to +0.0459); our weight +0.21 (−0.01 to +0.44); paper bets with any quiet window and edge within noise.
+- The order book around each live call is already saved by the worker (every 10 s, raw in each map's `archive.tar.gz`, backed up); the replay uses trades because past maps have no book.
+- Gate check: replaying with the model's Elo terms zeroed makes every band significantly worse (all +0.013 to +0.052, intervals above 0); identical dumps pass.
+- Cost: dump 1.9 s wall locally (replay 1.1 s), report 7.5 s; the data download is under 1 MB. Runs in the market job after the market benchmark (adds a few seconds to that job, nothing to the core job or publish build).
+- Checks: `uv run pytest -q tests/test_evaluate_live.py tests/test_compare_benchmarks.py` (8 + 16 pass); full suite and ruff below. Not yet run on Actions: the release asset is not uploaded and the pin not committed until the user approves publishing.
+
 ## 2026-10-16 — Replay in-game calls against Kalshi's in-game trades
 
 Branch `live-market-bench`, base `main` at `e502358`. Research only: new `scripts/research/live_markets_retro.py` (report `docs/research/live_markets_retro.md`, tests `tests/research/test_live_markets_retro.py`) replays the live in-game model (`time_model_v1.json`) over saved Riot feed timelines (`data/feed_timelines/games/`, about one sample a minute) for every map with a settled `KXLOLMAP` market, and reads Kalshi's per-trade tape (`/historical/trades` before Kalshi's cutoff, `/markets/trades` after; cached in `data/research/live_markets/trades/`). The user asked for numbers 1, 2, 4 and 5 (log loss by minute, our weight beside the market, paper bets placed only after Kalshi has been quiet, gap/trading/spread), measured lag and quarter-Kelly sizing.

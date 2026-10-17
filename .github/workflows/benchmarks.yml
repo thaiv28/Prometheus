@@ -4,7 +4,8 @@ name: Benchmarks
 # prop projections' held-out scores on
 # the PR (head: the merge commit) and on its base (the commit it merges onto), each
 # on its own DB built from the same CSVs, plus the market benchmark on the same
-# cached Kalshi markets, and compare them (scripts/compare_benchmarks.py). Head and
+# cached Kalshi markets and the live benchmark (in-game calls, evaluate_live.py)
+# in the market job, and compare them (scripts/compare_benchmarks.py). Head and
 # base, and the core benchmarks and the market one, run as parallel jobs (the core
 # job runs its four scripts at once); the base's dumps are cached by base commit
 # and inputs, so later pushes to a PR rerun only the head. Posts one sticky comment and fails when a
@@ -214,6 +215,14 @@ jobs:
           uv run python scripts/evaluate_markets.py --offline --dump dumps/markets > dumps/markets.log 2>&1 \
             || { cat dumps/markets.log; exit 1; }
           tail -n 20 dumps/markets.log
+      # In-game calls on past maps against Kalshi's trades: the data file pinned in
+      # scripts/live_bench_data.json (a release asset, under 1 MB), replayed with
+      # this side's model and DB. A few seconds; sides from before it have none.
+      - name: Live benchmark
+        if: steps.dumps.outputs.cache-hit != 'true' && matrix.group == 'markets'
+        run: |
+          [ -f scripts/live_bench_data.json ] || { echo "No live benchmark on this side."; exit 0; }
+          uv run python scripts/evaluate_live.py --fetch-data --dump dumps/live
       - name: Cache the base's dumps
         if: matrix.side == 'base' && env.RAW_KEY != '' && steps.dumps.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6

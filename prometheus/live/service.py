@@ -39,7 +39,7 @@ from .page import build_page, summary, write_atomic
 from .requests import SITE_API_HOST, probe, utc_now
 from .series import series_chance
 from .start import find_start
-from .timeline import latest_elo
+from .timeline import MODEL_PATH, latest_elo
 
 GETSCHEDULE = f"https://{SITE_API_HOST}/persisted/gw/getSchedule?hl=en-US"
 GETLIVE = f"https://{SITE_API_HOST}/persisted/gw/getLive?hl=en-US"
@@ -1118,7 +1118,7 @@ def main():
         default=HERE / "team_aliases.json",
         help="Riot team ID -> Prometheus team name, for names that don't match",
     )
-    parser.add_argument("--model", type=Path, default=HERE / "time_model_v1.json")
+    parser.add_argument("--model", type=Path, default=MODEL_PATH)
     parser.add_argument(
         "--inputs",
         type=Path,
