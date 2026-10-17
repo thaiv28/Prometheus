@@ -746,6 +746,7 @@ def test_live_pages_render_streams_and_fixtures(tmp_path, monkeypatch):
     assert streams == site_config.LIVE_STREAMS
     assert "js/live.js?v=" in html
     assert all(s.get("youtube") or s.get("twitch") for s in site_config.LIVE_STREAMS)
+    assert "WLDs" in next(s for s in streams if s["key"] == "riot-tw")["leagues"]
     predictions.render_live([])
     empty = (tmp_path / "live.html").read_text()
     assert "None in the next four days." in empty

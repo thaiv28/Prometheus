@@ -316,6 +316,7 @@ LIVE_STREAMS = [
         "name": "Riot Games on Twitch",
         "group": "Official",
         "twitch": "riotgames",
+        "leagues": ["WLDs", "Worlds", "MSI", "FST"],
     },
     {
         "key": "caedrel",

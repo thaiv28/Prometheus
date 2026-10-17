@@ -70,3 +70,5 @@ Every word on the site must be necessary; more text is not better (the owner, 20
 
 - Light only; there is no dark mode.
 - Phone rows are two lines tall (team, then league and year), so a phone shows about 20 rows per screen.
+
+Live includes preparing fixtures while the worker runs. Their Watch URL stays the same when map data arrives; the stream remains visible, with a short waiting status and no empty scoreline or chart.

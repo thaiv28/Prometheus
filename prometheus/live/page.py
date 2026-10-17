@@ -307,12 +307,14 @@ def write_atomic(path, payload):
 
 def summary(page):
     match, game = page["match"], page["game"]
-    last = game["frames"][-1] if game["frames"] else {}
+    last = game["frames"][-1] if game and game["frames"] else {}
     return {
         **{k: match[k] for k in ("id", "league", "event", "best_of", "teams", "score")},
         "url": f"live/{match['id']}.json",
         "status": page["status"],
-        "game": {
+        "game": None
+        if game is None
+        else {
             "number": game["number"],
             "blue": game["blue"],
             "clock": last.get("clock"),

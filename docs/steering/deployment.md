@@ -129,3 +129,5 @@ The Lambda package now includes stdlib `market_blend.py` and its fitted JSON art
 ### Kelly runtime/configuration (prepared 2026-10-16)
 
 The existing package automatically includes stdlib `execution/sizing.py`. New active-mode validation requires explicit positive `starting_bankroll_usd` and `kelly_fraction` in (0,1], alongside all existing limits; off remains valid with unset budgets. Control preserves these fields and never supplies defaults. ACCOUNT gains numeric `realized` through the existing transactional ledger, with no table/index/IAM/schedule change. No runtime upload, config/secret update, mode switch or order was performed. Rebuild/review the versioned zip and choose limits before activation.
+
+Preparing matches: the live service now makes one additional public Riot `getSchedule` request per discovery minute. It keeps the worker active while a known fixture is in the existing wake window (75 minutes before to four hours after start). No new AWS permissions or resources; code reaches the worker through its existing refresh/restart cycle.
