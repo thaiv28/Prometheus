@@ -134,6 +134,23 @@ def figure(compact, flip):
         "ticks": ticks,
         "gold_label": f"{gold_max / 1000:.0f}k",
         "label": _figure_label(calls, market),
+        # For live_results.js's hover reading: the same series in game seconds,
+        # the plot's x range and the chance panel's y range in SVG units.
+        "trace": {
+            "w": W,
+            "x0": PAD_L,
+            "x1": W - PAD_R,
+            "y100": CHANCE_TOP,
+            "y0": CHANCE_BOTTOM,
+            "bottom": GOLD_BOTTOM,
+            "span": span,
+            "pre": pre is not None,
+            "calls": calls,
+            "market": [
+                (s, side(m) if m is not None else None) for s, m in compact["market"]
+            ],
+            "gold": gold,
+        },
     }
 
 
@@ -222,6 +239,9 @@ def series_view(log, archive, team_slugs, now=None):
                     if mk is not None
                     else None,
                     figure=figure(m, flip),
+                    backfilled=bool(
+                        m.get("market_backfilled") or pre.get("backfilled")
+                    ),
                 )
             map_rows.append(item)
         out.append(

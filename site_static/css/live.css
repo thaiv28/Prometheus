@@ -416,3 +416,13 @@
 .lr-duel .fx-fav { color: var(--ink); font-weight: 600; }
 .lr-duel .fx-dog { color: var(--ink-3); }
 .lr-figures .lr-maps { margin-top: 10px; }
+.lr-plot-wrap { position: relative; }
+.lr-plot { cursor: crosshair; }
+.lr-plot:focus-visible { outline: var(--hair) solid var(--spot); outline-offset: 4px; }
+.lr-plot .cursor { stroke: var(--spot); stroke-width: 1; }
+.lr-plot .cursor-dot { fill: var(--spot); }
+/* A series page: one map per row across the page (live_results.js draws each at this width). */
+.lr-figures--wide .lr-maps { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+.lr-figures--wide .lr-cap { font-size: var(--fs-small); }
+.lr-before { max-width: 62rem; }
+.lr-notes { max-width: 40rem; margin-top: 28px; }

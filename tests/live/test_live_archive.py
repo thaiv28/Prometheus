@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from prometheus.live.archive import axis, compact
+from prometheus.live.archive import axis, backfill, compact
 from prometheus.live.data import map_files
 from prometheus.site import config as site_config
 from prometheus.site import live_results
@@ -67,7 +67,9 @@ class CompactTest(unittest.TestCase):
         self.assertEqual(c["market"][0], [120, 0.61])
         self.assertIn([170, None], c["market"])
         self.assertEqual(c["gold"][:2], [[120, 0], [150, 60]])
-        self.assertEqual(c["pregame"], {"p": 0.7, "by": "FORGE", "market": 0.71})
+        self.assertEqual(
+            c["pregame"], {"p": 0.7, "by": "FORGE", "market": 0.71, "backfilled": False}
+        )
         self.assertEqual(c["match"]["teams"], ["Karmine Corp", "MVK Esports"])
         self.assertLess(len(json.dumps(c)), 2500)
 
@@ -78,6 +80,67 @@ class CompactTest(unittest.TestCase):
             (pages / "map2.json").write_text("{}")
             (pages / "map2.min.json").write_text("{}")
             self.assertEqual([p.name for p in map_files(d)], ["map2.json"])
+
+
+class BackfillTest(unittest.TestCase):
+    RULE = (
+        "If {side} wins game 2 in the Worlds 2026: Karmine Corp vs. MVK Esports "
+        "League of Legends match originally scheduled for Oct 16, 2026 at 2:00 PM EDT"
+    )
+
+    def get(self, path, **query):
+        self.calls.append((path, query))
+        if path == "/markets":
+            if query["series_ticker"] != "KXLOLMAP":
+                return {"markets": []}
+            return {
+                "markets": [
+                    {
+                        "ticker": f"T-{code}",
+                        "event_ticker": "T",
+                        "rules_primary": self.RULE.format(side=side),
+                    }
+                    for code, side in (("KC", "Karmine Corp"), ("MVK", "MVK Esports"))
+                ]
+            }
+        start = datetime.datetime.fromisoformat(at(0)).timestamp()
+        # One candle before the map (the pre-map price), two during it.
+        return {
+            "candlesticks": [
+                {
+                    "end_period_ts": int(start + dt),
+                    "yes_bid": {"close_dollars": b},
+                    "yes_ask": {"close_dollars": a},
+                }
+                for dt, b, a in (
+                    (-60, "0.70", "0.72"),
+                    (60, "0.60", "0.62"),
+                    (120, "0.50", "0.52"),
+                )
+            ]
+        }
+
+    def test_a_map_without_kalshi_gets_its_minute_prices(self):
+        self.calls = []
+        bare = page()
+        bare["game"]["market"] = []
+        bare["game"]["pregame"]["market"] = None
+        filled = backfill(bare, get=self.get)
+        self.assertEqual(
+            self.calls[-1][0], "/series/KXLOLMAP/markets/T-KC/candlesticks"
+        )
+        c = compact(filled)
+        self.assertTrue(c["market_backfilled"])
+        self.assertEqual(c["pregame"]["market"], 0.71)
+        self.assertTrue(c["pregame"]["backfilled"])
+        self.assertEqual([m for _, m in c["market"]], [0.61, 0.51])
+        self.assertNotIn("market_backfilled", bare["game"])  # input untouched
+
+    def test_a_map_with_kalshi_is_left_alone(self):
+        self.calls = []
+        full = page()
+        self.assertIs(backfill(full, get=self.get), full)
+        self.assertEqual(self.calls, [])
 
 
 def entry(**kw):
@@ -131,6 +194,10 @@ class SeriesTest(unittest.TestCase):
         # The last map goes to the series winner even without a settled result.
         self.assertEqual(s["maps"][2]["winner"], "Karmine Corp")
         self.assertTrue(recorded["figure"]["ours"] and recorded["figure"]["market"])
+        # The hover reading's series are in the page's team order too.
+        trace = recorded["figure"]["trace"]
+        self.assertAlmostEqual(trace["calls"][0][1], 0.3)
+        self.assertEqual(trace["market"][0], (120, 0.39))
 
     def test_a_match_the_log_lacks_still_shows(self):
         archive = self.archive()
@@ -158,6 +225,8 @@ class SeriesTest(unittest.TestCase):
         self.assertIn('class="ours"', page)
         self.assertIn("Not recorded: maps 1, 3.", page)
         self.assertIn('href="2026-10.html"', page)
+        self.assertIn("data-trace=", page)
+        self.assertIn("live_results.js", page)
 
     def test_no_archive_renders_nothing(self):
         with tempfile.TemporaryDirectory() as d:
