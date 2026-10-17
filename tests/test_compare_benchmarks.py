@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -431,3 +432,27 @@ def test_live_pre_map_band_is_guarded_and_kept_out_of_all():
     assert by["log loss, pre-map, every priced map"]["result"] == "worse"
     assert by["log loss, all"]["result"] == "within noise"
     assert cb.failures(rows)
+
+
+def test_live_pairs_numeric_and_text_game_ids(tmp_path):
+    # A base with only feed maps (numeric ids) against a head with OE pre-maps.
+    base = _live_calls().assign(game=lambda f: f["game"].str[1:].astype(int))
+    pre = base[base["checkpoint"] == 0].assign(checkpoint=-1, game="LOLTMNT_1")
+    head = pd.concat([base, pre])
+    for side, frame in (("base", base), ("head", head)):
+        (tmp_path / side / "live").mkdir(parents=True)
+        frame.to_csv(tmp_path / side / "live" / "calls.csv.gz", index=False)
+    sections, _ = cb.compare_dirs(str(tmp_path / "base"), str(tmp_path / "head"), N)
+    rows = dict(sections)["Live"]
+    assert all(r["result"] == "within noise" for r in rows if "diff" in r)
+
+
+def test_a_crash_exits_2_not_worse(tmp_path, monkeypatch):
+    def boom(*a, **k):
+        raise ValueError("bad dump")
+
+    monkeypatch.setattr(cb, "compare_dirs", boom)
+    monkeypatch.setattr(sys, "argv", ["compare_benchmarks.py", "a", "b"])
+    with pytest.raises(SystemExit) as stop:
+        cb.main()
+    assert stop.value.code == 2
