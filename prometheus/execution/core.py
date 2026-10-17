@@ -12,6 +12,7 @@ from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 
 from prometheus import market_blend
 from prometheus.alert_contract import TRADE_GROUPS, trade_veto
+from prometheus.execution.sizing import kelly_order
 
 ZERO = Decimal(0)
 CENT = Decimal(".01")
@@ -56,6 +57,7 @@ class Config:
                 "max_exposure_usd",
                 "max_contracts",
                 "balance_precision_usd",
+                "starting_bankroll_usd",
             ):
                 if decimal(value[name]) <= 0:
                     raise ValueError(f"{name} must be positive")
@@ -71,6 +73,8 @@ class Config:
                 raise ValueError("invalid edge")
             if decimal(value["max_contracts"]) != int(value["max_contracts"]):
                 raise ValueError("max_contracts must be an integer")
+            if not 0 < decimal(value["kelly_fraction"]) <= 1:
+                raise ValueError("kelly_fraction must be inside (0, 1]")
         return cls(mode, value)
 
     from_dict = parse
@@ -126,13 +130,35 @@ def validate_alert(alert, config, now):
             raise ValueError("invalid_probability_or_price")
 
 
-def plan_order(alert, routes, config, balance, now):
-    """Use the cheapest freshly read executable level, capped at that price.
+def plan_order(
+    alert, routes, config, balance, now, account=None, committed=ZERO, exposure=ZERO
+):
+    """Choose the feasible route/whole count with greatest expected log growth.
 
     No book walking/slippage: quantity must exist at the chosen limit. Route
     `price` is always the backed outcome's cost; YES-book `limit` is inverted
     for an ask (buying the opposite team's NO).
     """
+    account = account or {}
+    held, realized = (
+        decimal(account.get("held", 0)),
+        decimal(account.get("realized", 0)),
+    )
+    committed, exposure = decimal(committed), decimal(exposure)
+    if held < 0 or committed < 0 or exposure < 0:
+        raise ValueError("invalid_bankroll_state")
+    capital = config.number("starting_bankroll_usd") + realized - held
+    effective = capital * config.number("kelly_fraction")
+    budget = min(
+        config.number("order_budget_usd"),
+        config.number("fixture_budget_usd"),
+        balance - config.number("min_balance_usd") - held,
+        config.number("max_exposure_usd") - exposure - held,
+        config.number("daily_budget_usd") - committed,
+        effective,
+    )
+    if effective <= 0 or budget <= 0:
+        raise ValueError("bankroll_or_spending_cap_exhausted")
     candidates = []
     for route in routes:
         age = (now - timestamp(route["at"])).total_seconds()
@@ -159,24 +185,21 @@ def plan_order(alert, routes, config, balance, now):
         net_edge = p - price - unit_fee
         if net_edge <= ZERO or net_edge < config.number("min_after_fee_edge"):
             continue
-        budget = min(
-            config.number("order_budget_usd"),
-            config.number("fixture_budget_usd"),
-            balance - config.number("min_balance_usd"),
-        )
-        count = min(
+        cap = min(
             int(config.number("max_contracts")),
             int(decimal(route["quantity"])),
             int((budget / (price + unit_fee)).to_integral_value(rounding=ROUND_FLOOR)),
         )
-        if count >= 1:
-            candidates.append((price, -count, route, count, unit_fee, p, net_edge))
+        sizing = kelly_order(p, price + unit_fee, effective, cap)
+        if sizing:
+            candidates.append((price, route, sizing, unit_fee, p, net_edge))
     if not candidates:
         raise ValueError("price_edge_liquidity_or_balance")
-    _, _, route, count, unit_fee, probability, net_edge = min(
-        candidates, key=lambda x: (x[0], x[1], x[2]["ticker"])
+    price, route, sizing, unit_fee, probability, net_edge = min(
+        candidates,
+        key=lambda x: (-decimal(x[2]["expected_log_growth"]), x[0], x[1]["ticker"]),
     )
-    price = decimal(route["price"])
+    count = sizing["count"]
     client_id = str(
         uuid.uuid5(
             uuid.NAMESPACE_URL, f"prometheus:{config.mode}:{alert['fixture_id']}"
@@ -189,6 +212,17 @@ def plan_order(alert, routes, config, balance, now):
         "route": copy.deepcopy(route),
         "execution_probability": str(probability),
         "execution_net_edge": str(net_edge),
+        "sizing": {
+            "method": "kelly-v1",
+            "starting_bankroll_usd": str(config.number("starting_bankroll_usd")),
+            "kelly_fraction": str(config.number("kelly_fraction")),
+            "held_before": str(held),
+            "realized_before": str(realized),
+            "bankroll_usd": str(capital),
+            "effective_bankroll_usd": str(effective),
+            "unit_cost_bound": str(price + unit_fee),
+            **sizing,
+        },
         "request": {
             "ticker": route["ticker"],
             "client_order_id": client_id,
@@ -316,12 +350,19 @@ def reconcile(row, api, ledger, pause=False):
             expected_revenue = (total * value).quantize(CENT, rounding=ROUND_FLOOR)
             if decimal(settlement["revenue"]) / 100 < expected_revenue:
                 continue
-            verified.append(settlement)
+            verified.append((settlement, expected_revenue))
         if verified:
-            settlements = verified
+            settlements = [s for s, _ in verified]
             # Keep exchange account settlement evidence. Do not attribute pooled
             # settlement revenue to this order if the account has other positions.
-            update.update(status="settled", settlements=settlements, held="0")
+            update.update(
+                status="settled",
+                settlements=settlements,
+                held="0",
+                realized_profit=str(
+                    min(revenue for _, revenue in verified) - cost - fees
+                ),
+            )
     ledger.replace(row, update)
     return True
 
@@ -379,7 +420,18 @@ def run(alerts, config_provider, ledger, api_factory, now=None):
             # Real time after network reads, injectable for deterministic tests.
             checked = api.now() if hasattr(api, "now") else dt.datetime.now(dt.UTC)
             validate_alert(alert, config, checked)
-            plan = plan_order(alert, routes, config, balance, checked)
+            account = ledger.get(config.mode, "ACCOUNT") or {}
+            day = ledger.get(config.mode, f"DAY#{checked.date().isoformat()}") or {}
+            plan = plan_order(
+                alert,
+                routes,
+                config,
+                balance,
+                checked,
+                account,
+                day.get("committed", ZERO),
+                exposure,
+            )
             reserved = ledger.reserve(plan, reserve_config, balance)
             if reserved is None:
                 raise ValueError("duplicate_or_spending_cap")
@@ -403,7 +455,16 @@ def run(alerts, config_provider, ledger, api_factory, now=None):
                 validate_alert(alert, current, checked)
                 if checked.date().isoformat() != reserved["day"]:
                     raise ValueError("utc_spending_day_changed")
-                plan_order(alert, [plan["route"]], current, balance, checked)
+                plan_order(
+                    alert,
+                    [plan["route"]],
+                    current,
+                    balance,
+                    checked,
+                    account,
+                    day.get("committed", ZERO),
+                    exposure,
+                )
             except (ValueError, KeyError, TypeError, ArithmeticError):
                 ledger.abort(reserved, "pre_submission_check_failed")
                 raise

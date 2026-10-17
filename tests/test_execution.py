@@ -32,6 +32,8 @@ def settings(**changes):
         "min_balance_usd": "5",
         "max_contracts": 10,
         "balance_precision_usd": ".0001",
+        "starting_bankroll_usd": "50",
+        "kelly_fraction": "1",
         **changes,
     }
 
@@ -93,17 +95,24 @@ class AtomicDynamo:
                 ):
                     raise Conditional
                 if " <= :available" in condition:
-                    field = condition.split("(")[1].split(")")[0]
+                    field = "held" if "held <= :available" in condition else "committed"
                     if field in old and old[field] > values[":available"]:
+                        raise Conditional
+                for field in ("held", "realized"):
+                    expected = values.get(f":expected_{field}")
+                    if expected is not None and old.get(field, Decimal(0)) != expected:
                         raise Conditional
                 if "Put" in action:
                     next_data[key] = copy.deepcopy(item)
                 elif "Delete" in action:
                     next_data.pop(key, None)
                 else:
-                    _, field, delta = op["UpdateExpression"].split()
                     old.update(_decode(op["Key"]))
-                    old[field] = old.get(field, Decimal(0)) + values[delta]
+                    for addition in (
+                        op["UpdateExpression"].removeprefix("ADD ").split(",")
+                    ):
+                        field, delta = addition.split()
+                        old[field] = old.get(field, Decimal(0)) + values[delta]
                     next_data[key] = _item(old)
             self.data = next_data
 
@@ -526,12 +535,20 @@ def test_concurrent_different_fixtures_respect_daily_and_exposure_caps():
     assert held(ledger) == Decimal("4.41")
 
 
-@pytest.mark.parametrize("risk,cash", [("20", "100"), ("0", "5"), ("18", "100")])
+@pytest.mark.parametrize("risk,cash", [("20", "100"), ("0", "5")])
 def test_account_exposure_balance_or_available_cap_blocks(risk, cash):
     _client, api, ledger, execute = harness()
     api.risk, api.cash = risk, cash
     execute([saved()])
     assert not api.calls and held(ledger) == 0
+
+
+def test_remaining_exposure_shrinks_order_instead_of_exceeding_cap():
+    _, api, ledger, execute = harness()
+    api.risk = "18"
+    execute([saved()])
+    assert api.calls[0]["count"] == "3.00"
+    assert held(ledger) + Decimal(api.risk) <= Decimal("20")
 
 
 @pytest.mark.parametrize(

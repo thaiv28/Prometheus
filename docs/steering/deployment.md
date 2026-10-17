@@ -125,3 +125,7 @@ Manual `.github/workflows/kalshi-execution-control.yml` exposes off/demo/live th
 ### Blended policy release (prepared 2026-10-16)
 
 The Lambda package now includes stdlib `market_blend.py` and its fitted JSON artifact. Rebuild/review the versioned runtime before a separately authorized execution update; the already deployed off-mode zip still implements its earlier policy. No AWS resource, schedule, credentials, config values or mode changed here. Alerts/page signals include Cloud9 and anti-NA international signals; the private executor vetoes these. A zero `min_after_fee_edge` is supported but still requires strictly positive net edge under conservative execution fees. Existing off/demo/live controls and spending caps remain.
+
+### Kelly runtime/configuration (prepared 2026-10-16)
+
+The existing package automatically includes stdlib `execution/sizing.py`. New active-mode validation requires explicit positive `starting_bankroll_usd` and `kelly_fraction` in (0,1], alongside all existing limits; off remains valid with unset budgets. Control preserves these fields and never supplies defaults. ACCOUNT gains numeric `realized` through the existing transactional ledger, with no table/index/IAM/schedule change. No runtime upload, config/secret update, mode switch or order was performed. Rebuild/review the versioned zip and choose limits before activation.
