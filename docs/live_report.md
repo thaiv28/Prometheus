@@ -9,19 +9,19 @@ price is the last trade (team 0's chance), at most 5 minutes old.
 
 | Step | Count |
 |---|---:|
-| feed games | 2594 |
-| no market | 930 |
+| feed games | 2720 |
+| no market | 973 |
 | unrated | 0 |
 | no side | 0 |
 | feed and OE sides disagree | 6 |
-| winner mismatch | 24 |
-| no trades | 50 |
-| maps | 1590 |
-| series | 805 |
+| winner mismatch | 25 |
+| no trades | 56 |
+| maps | 1666 |
+| series | 813 |
 | no Elo | 1 |
-| scored maps | 1589 |
+| scored maps | 1665 |
 
-Leagues: {'LPL': 346, 'LCK': 335, 'LEC': 225, 'LCP': 181, 'LCS': 177, 'CBLOL': 170, 'MSI': 45, 'VCS': 35, 'LJL': 27, 'FST': 24, 'EWC': 24}.
+Leagues: {'LPL': 365, 'LCK': 345, 'LEC': 236, 'LCP': 195, 'LCS': 186, 'CBLOL': 176, 'MSI': 47, 'VCS': 36, 'LJL': 29, 'EWC': 26, 'FST': 24}.
 
 ## 1. Log loss against Kalshi by game minute
 
@@ -29,21 +29,21 @@ Our call reaches us 21 s after its feed time (measured). Negative favours us.
 
 | Minute | Maps | Series | Ours LL | Kalshi LL | Ours − Kalshi (95%) | Ours Brier | Kalshi Brier | Ours − Kalshi Brier (95%) |
 |---:|---:|---:|---:|---:|---|---:|---:|---|
-| 0 | 1452 | 755 | 0.6307 | 0.6269 | +0.0038 (-0.0093 to +0.0170) | 0.2194 | 0.2186 | +0.0008 (-0.0047 to +0.0061) |
-| 5 | 1480 | 769 | 0.6189 | 0.6208 | -0.0018 (-0.0166 to +0.0123) | 0.2143 | 0.2152 | -0.0009 (-0.0068 to +0.0046) |
-| 10 | 1504 | 779 | 0.5847 | 0.5737 | +0.0111 (-0.0022 to +0.0245) | 0.2001 | 0.1957 | +0.0044 (-0.0011 to +0.0100) |
-| 15 | 1520 | 784 | 0.5294 | 0.5148 | +0.0146 (+0.0007 to +0.0296) | 0.1764 | 0.1709 | +0.0055 (+0.0001 to +0.0109) |
-| 20 | 1518 | 783 | 0.4721 | 0.4442 | +0.0279 (+0.0122 to +0.0444) | 0.1547 | 0.1440 | +0.0107 (+0.0051 to +0.0163) |
-| 25 | 1499 | 786 | 0.3676 | 0.3459 | +0.0217 (+0.0062 to +0.0370) | 0.1175 | 0.1084 | +0.0091 (+0.0033 to +0.0148) |
-| 30 | 1140 | 705 | 0.3136 | 0.2850 | +0.0287 (+0.0133 to +0.0437) | 0.0979 | 0.0875 | +0.0104 (+0.0045 to +0.0162) |
+| 0 | 1522 | 764 | 0.6312 | 0.6261 | +0.0051 (-0.0081 to +0.0177) | 0.2195 | 0.2182 | +0.0014 (-0.0041 to +0.0067) |
+| 5 | 1551 | 779 | 0.6204 | 0.6202 | +0.0002 (-0.0138 to +0.0142) | 0.2150 | 0.2149 | +0.0001 (-0.0054 to +0.0054) |
+| 10 | 1574 | 788 | 0.5874 | 0.5757 | +0.0117 (-0.0017 to +0.0253) | 0.2012 | 0.1965 | +0.0047 (-0.0008 to +0.0100) |
+| 15 | 1590 | 792 | 0.5341 | 0.5170 | +0.0172 (+0.0025 to +0.0311) | 0.1781 | 0.1717 | +0.0064 (+0.0009 to +0.0117) |
+| 20 | 1589 | 793 | 0.4791 | 0.4492 | +0.0298 (+0.0139 to +0.0459) | 0.1567 | 0.1457 | +0.0110 (+0.0055 to +0.0165) |
+| 25 | 1572 | 797 | 0.3731 | 0.3500 | +0.0231 (+0.0085 to +0.0380) | 0.1193 | 0.1102 | +0.0090 (+0.0038 to +0.0146) |
+| 30 | 1193 | 720 | 0.3185 | 0.2878 | +0.0307 (+0.0157 to +0.0463) | 0.0995 | 0.0882 | +0.0113 (+0.0054 to +0.0174) |
 
 Minutes 5-30 pooled, Kalshi's price when our call arrives and at our feed
 time (the same moment in the game, before the market sees what we will):
 
 | Kalshi's price | Rows | Ours LL | Kalshi LL | Ours − Kalshi (95%) |
 |---|---:|---:|---:|---|
-| +21 s | 8661 | 0.4879 | 0.4713 | +0.0166 (+0.0064 to +0.0272) |
-| +0 s | 8662 | 0.4881 | 0.4785 | +0.0096 (-0.0009 to +0.0199) |
+| +21 s | 9069 | 0.4922 | 0.4739 | +0.0183 (+0.0078 to +0.0286) |
+| +0 s | 9071 | 0.4925 | 0.4807 | +0.0118 (+0.0011 to +0.0218) |
 
 ## 2. Our weight beside the market
 
@@ -52,30 +52,35 @@ Kalshi alone would be 1 and 0; our weight above 0 means we add information.
 
 | Minutes | Rows | Kalshi weight (95%) | Our weight (95%) |
 |---|---:|---|---|
-| 5-30 pooled | 8661 | +0.71 (+0.58 to +0.85) | +0.30 (+0.17 to +0.43) |
-| 10-20 | 4542 | +0.70 (+0.53 to +0.87) | +0.27 (+0.12 to +0.41) |
-| 0 (pregame) | 1452 | +0.51 (+0.25 to +0.80) | +0.42 (+0.20 to +0.65) |
+| 5-30 pooled | 9069 | +0.72 (+0.59 to +0.85) | +0.28 (+0.16 to +0.40) |
+| 10-20 | 4753 | +0.70 (+0.55 to +0.86) | +0.25 (+0.11 to +0.39) |
+| 0 (pregame) | 1522 | +0.53 (+0.28 to +0.80) | +0.40 (+0.18 to +0.63) |
 
 ## 3. Paper bets
 
-First call per map where our chance beats the last traded cost of backing
-that side (traded within 120 s) by the edge, after the market has had
-no trade for the quiet window. Flat: $1 a bet after Kalshi's taker fee. Kelly:
-0.25 Kelly on one bankroll in map order. CLV: our side's price 120 s
-later minus the cost paid, in points.
+First call per map where our chance beats the cost of backing a side by the
+edge, once Kalshi's price has held: at least 2 trades in the window before our call arrives, all within
+the tolerance of each other; the cost is a trade backing our side in that
+window, never below the latest price for that side. "Any" bets on any call
+at the last cost within 120 s (stale prices flatter it). Flat: $1 a bet
+after Kalshi's taker fee. Kelly: 0.25 Kelly on one bankroll in map order.
+CLV: our side's price 120 s later minus the cost paid, in points.
 
-| Quiet (s) | Edge | Bets | Won | Avg cost | Avg ours | Flat ROI (95%) | Kelly growth/bet (95%) | Kelly multiple | Max drawdown | CLV |
-|---:|---:|---:|---:|---:|---:|---|---|---:|---:|---:|
-| 0 | 0.05 | 1519 | 56.2% | 0.525 | 0.626 | +0.129 (+0.016 to +0.304) | +0.0037 (+0.0003 to +0.0076) | 268.90 | 74% | +0.3 |
-| 10 | 0.05 | 1368 | 55.7% | 0.526 | 0.631 | +0.059 (-0.014 to +0.135) | +0.0040 (+0.0001 to +0.0079) | 241.86 | 77% | +0.9 |
-| 21 | 0.05 | 1081 | 54.3% | 0.522 | 0.631 | +0.003 (-0.075 to +0.079) | +0.0020 (-0.0023 to +0.0065) | 8.71 | 68% | +0.8 |
-| 30 | 0.05 | 886 | 54.9% | 0.518 | 0.630 | +0.036 (-0.060 to +0.145) | +0.0031 (-0.0019 to +0.0083) | 15.46 | 78% | +0.8 |
-| 10 | 0.03 | 1464 | 56.7% | 0.540 | 0.629 | +0.042 (-0.022 to +0.107) | +0.0035 (+0.0002 to +0.0071) | 168.82 | 70% | +0.1 |
-| 10 | 0.10 | 993 | 52.5% | 0.476 | 0.630 | +0.088 (+0.001 to +0.181) | +0.0051 (-0.0006 to +0.0111) | 161.13 | 87% | +2.1 |
-| 10 | 0.15 | 655 | 48.9% | 0.437 | 0.639 | +0.082 (-0.022 to +0.193) | +0.0053 (-0.0033 to +0.0144) | 31.36 | 88% | +3.0 |
-| 21 | 0.03 | 1204 | 55.8% | 0.536 | 0.629 | +0.019 (-0.054 to +0.094) | +0.0021 (-0.0013 to +0.0061) | 13.22 | 64% | +0.2 |
-| 21 | 0.10 | 744 | 51.7% | 0.465 | 0.622 | +0.105 (-0.007 to +0.235) | +0.0065 (-0.0003 to +0.0138) | 128.28 | 76% | +3.0 |
-| 21 | 0.15 | 453 | 48.8% | 0.433 | 0.639 | +0.114 (-0.040 to +0.275) | +0.0084 (-0.0032 to +0.0208) | 44.04 | 78% | +3.2 |
+| Price held (s) | Tolerance | Edge | Bets | Won | Avg cost | Avg ours | Flat ROI (95%) | Kelly growth/bet (95%) | Kelly multiple | Max drawdown | CLV |
+|---:|---:|---:|---:|---:|---:|---:|---|---|---:|---:|---:|
+| any |  | 0.05 | 1592 | 56.1% | 0.529 | 0.629 | +0.117 (+0.005 to +0.294) | +0.0033 (-0.0001 to +0.0068) | 206.99 | 80% | +0.3 |
+| 10 | 0.00 | 0.05 | 683 | 51.2% | 0.480 | 0.602 | +0.022 (-0.088 to +0.139) | +0.0001 (-0.0055 to +0.0057) | 1.10 | 79% | +1.1 |
+| 10 | 0.01 | 0.05 | 954 | 51.7% | 0.490 | 0.606 | +0.012 (-0.069 to +0.099) | -0.0001 (-0.0045 to +0.0043) | 0.93 | 88% | +1.1 |
+| 10 | 0.02 | 0.05 | 1084 | 51.1% | 0.487 | 0.601 | +0.101 (-0.058 to +0.314) | +0.0002 (-0.0041 to +0.0044) | 1.19 | 89% | +1.1 |
+| 21 | 0.00 | 0.05 | 643 | 46.8% | 0.463 | 0.582 | -0.142 (-0.236 to -0.049) | -0.0038 (-0.0088 to +0.0013) | 0.09 | 98% | +0.5 |
+| 21 | 0.01 | 0.05 | 948 | 50.2% | 0.491 | 0.606 | -0.054 (-0.133 to +0.025) | -0.0015 (-0.0055 to +0.0026) | 0.23 | 92% | +0.9 |
+| 21 | 0.02 | 0.05 | 1127 | 53.1% | 0.505 | 0.619 | +0.097 (-0.049 to +0.328) | +0.0010 (-0.0032 to +0.0051) | 2.95 | 75% | +0.8 |
+| 30 | 0.00 | 0.05 | 554 | 47.5% | 0.483 | 0.604 | -0.157 (-0.258 to -0.053) | -0.0061 (-0.0118 to -0.0002) | 0.03 | 99% | +0.5 |
+| 30 | 0.01 | 0.05 | 896 | 51.1% | 0.490 | 0.607 | -0.018 (-0.109 to +0.073) | +0.0001 (-0.0047 to +0.0049) | 1.07 | 90% | +1.0 |
+| 30 | 0.02 | 0.05 | 1108 | 52.9% | 0.498 | 0.614 | +0.114 (-0.038 to +0.342) | +0.0034 (-0.0010 to +0.0080) | 43.21 | 82% | +0.5 |
+| 21 | 0.01 | 0.03 | 1119 | 53.2% | 0.510 | 0.606 | -0.020 (-0.097 to +0.063) | -0.0001 (-0.0035 to +0.0034) | 0.85 | 81% | +0.8 |
+| 21 | 0.01 | 0.10 | 584 | 45.9% | 0.455 | 0.614 | -0.091 (-0.197 to +0.020) | -0.0041 (-0.0109 to +0.0031) | 0.09 | 98% | +1.4 |
+| 21 | 0.01 | 0.15 | 317 | 41.0% | 0.396 | 0.606 | -0.017 (-0.194 to +0.182) | -0.0044 (-0.0170 to +0.0092) | 0.25 | 96% | +2.2 |
 
 ## 4. Gap, trading and spread
 
@@ -86,12 +91,12 @@ sides' last costs minus 1, where both traded in the last 60 s.
 
 | Minute | Maps | Mean gap | Trades/min | Quiet (s) | Quiet ≥10 s | Quiet ≥21 s | Spread | Spread n |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 5 | 1480 | 0.087 | 12 | 9 | 48% | 31% | 0.040 | 904 |
-| 10 | 1504 | 0.086 | 10 | 10 | 50% | 33% | 0.040 | 940 |
-| 15 | 1520 | 0.086 | 11 | 10 | 49% | 32% | 0.040 | 922 |
-| 20 | 1518 | 0.084 | 12 | 10 | 50% | 32% | 0.040 | 931 |
-| 25 | 1499 | 0.080 | 11 | 10 | 50% | 33% | 0.040 | 863 |
-| 30 | 1140 | 0.082 | 13 | 9 | 46% | 32% | 0.040 | 659 |
+| 5 | 1551 | 0.086 | 12 | 10 | 48% | 31% | 0.040 | 948 |
+| 10 | 1574 | 0.085 | 10 | 10 | 50% | 33% | 0.040 | 985 |
+| 15 | 1590 | 0.086 | 11 | 10 | 49% | 32% | 0.040 | 965 |
+| 20 | 1589 | 0.084 | 12 | 10 | 50% | 32% | 0.040 | 972 |
+| 25 | 1572 | 0.080 | 11 | 10 | 50% | 34% | 0.030 | 905 |
+| 30 | 1193 | 0.083 | 13 | 9 | 46% | 32% | 0.040 | 692 |
 
 ## 5. Before the map (every priced map)
 
@@ -119,10 +124,9 @@ Paper bets 60 s before the start at the last traded cost of backing a side (with
 
 - Kalshi's price is the last trade, not the book: quiet means no trade, and a
   bet's cost is the last trade backing that side, not the ask at that moment.
-  In game that flatters the paper bets: a quiet market is also a stale price
-  (makers may have pulled their quotes), and a cost up to two minutes old can be
-  below anything on offer. Treat their returns, and Kelly multiples above all, as
-  an upper bound until the live worker's recorded book can price them.
+  "Any" bets use a cost up to two minutes old, which can be below anything on
+  offer; the held-price rule prices from trades inside its window. Both are
+  upper bounds until the live worker's recorded book can price them.
 - One feed sample a minute (live: every 10 s), so fewer chances to bet than
   live, and the estimated game clock misses pauses between samples.
 - The lag is from one pilot match; the feed's delay may differ by league or day.

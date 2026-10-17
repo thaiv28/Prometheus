@@ -166,29 +166,67 @@ def test_map_calls_go_through_the_live_timeline_calls():
 
 
 def _calls(rows):
-    cols = ["minute", "p", "quiet", "cost0", "cost1", "p_clv"]
+    """Calls with Kalshi's state: (minute, p, p_lag, cost0, cost1, p_clv, range_21,
+    n_21, cost0_21, cost1_21)."""
+    cols = [
+        "minute",
+        "p",
+        "p_lag",
+        "cost0",
+        "cost1",
+        "p_clv",
+        "range_21",
+        "n_21",
+        "cost0_21",
+        "cost1_21",
+    ]
     frame = pd.DataFrame(rows, columns=cols)
     return frame.assign(game="m1", series="s1", won=1, pregame=frame["minute"] == 0)
 
 
-def test_first_bet_waits_for_a_quiet_market_and_edge():
+def test_bets_wait_for_a_held_price():
     calls = _calls(
         [
-            (0, 0.70, 30, 0.50, 0.50, 0.5),  # pregame: never bet
-            (1, 0.52, 30, 0.50, 0.50, 0.5),  # no edge
-            (2, 0.70, 15, 0.50, 0.50, 0.5),  # edge, market moved 15 s ago
-            (3, 0.70, 25, 0.50, 0.50, 0.6),  # edge and quiet
+            (0, 0.70, 0.50, 0.50, 0.50, 0.5, 0.0, 5, 0.50, 0.50),  # pregame: never
+            (1, 0.70, 0.50, 0.50, 0.50, 0.5, 0.04, 6, 0.50, 0.50),  # price moving
+            (2, 0.70, 0.50, 0.50, 0.50, 0.5, 0.0, 1, 0.50, 0.50),  # one trade only
+            (3, 0.70, 0.55, 0.50, 0.46, 0.6, 0.01, 4, 0.53, 0.46),  # held
         ]
     )
-    bets = el.first_bets(calls, quiet=21, edge=0.05)
-    assert len(bets) == 1 and bets["cost"].iloc[0] == 0.50
-    assert bool(bets["won"].iloc[0]) and abs(bets["clv"].iloc[0] - 0.1) < 1e-9
-    first = el.first_bets(calls, quiet=0, edge=0.05)
-    assert abs(first["clv"].iloc[0]) < 1e-9  # the minute-2 call
+    bets = el.first_bets(calls, 0.05, window=21, tol=0.01)
+    assert len(bets) == 1
+    # A trade backing team 0 at 0.53, but the latest price is 0.55: pay 0.55.
+    assert bets["cost"].iloc[0] == 0.55 and abs(bets["clv"].iloc[0] - 0.05) < 1e-9
+    assert el.first_bets(calls, 0.05, window=21, tol=0.0).empty  # 1 cent of range
+    # Without the rule, the first in-game call bets at its last cost.
+    any_bet = el.first_bets(calls, 0.05)
+    assert any_bet["cost"].iloc[0] == 0.50 and abs(any_bet["clv"].iloc[0]) < 1e-9
     # Backing team 1 when our chance is low; CLV in team 1's terms.
-    low = el.first_bets(_calls([(1, 0.30, 30, 0.70, 0.40, 0.45)]), quiet=10, edge=0.05)
-    assert low["cost"].iloc[0] == 0.40 and not bool(low["won"].iloc[0])
-    assert abs(low["clv"].iloc[0] - 0.15) < 1e-9
+    low = el.first_bets(
+        _calls([(1, 0.30, 0.62, 0.62, 0.38, 0.55, 0.0, 3, 0.62, 0.36)]), 0.05, 21, 0.01
+    )
+    assert abs(low["cost"].iloc[0] - 0.38) < 1e-9 and not bool(low["won"].iloc[0])
+    assert abs(low["clv"].iloc[0] - 0.07) < 1e-9
+
+
+def test_window_state_counts_recent_trades():
+    trades = {
+        "M-T1": [
+            _trade(0, 0.60, "yes"),
+            _trade(25, 0.61, "no"),
+            _trade(30, 0.60, "yes"),
+        ]
+    }
+    tp = el.tape(_event(), trades, first_is_team1=True)
+    at = T0 + pd.Timedelta(seconds=35)
+    spread, n, cost0, cost1 = el.window_state(tp, at, 21)
+    assert (spread, n, cost0) == (0.01, 2, 0.60) and abs(cost1 - 0.39) < 1e-9
+    assert el.window_state(tp, T0 + pd.Timedelta(seconds=200), 21) == [
+        None,
+        0,
+        None,
+        None,
+    ]
 
 
 def test_kelly_and_flat_profit():

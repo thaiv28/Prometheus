@@ -12,8 +12,9 @@ Our call from a feed sample with source time `s` reaches us at `s + LAG`. The
 live pilot (KC-C9, Worlds 2026 maps 4-5) measured that lag from its request log:
 the newest frame received was never under 20 s old, median 21 s on the map
 polled steadily. Kalshi trades on the broadcast and is ahead of our feed, so a
-paper bet is placed only when the market has had no trade for a quiet window
-before our call arrives, at the last price paid to back our side.
+paper bet is placed only once Kalshi's price has held: the market kept trading
+in the window before our call arrives without the price moving (a market with no
+trades at all may simply have stale quotes), priced from a trade in that window.
 
 The report, each interval over whole series resampled together:
 
@@ -22,7 +23,7 @@ The report, each interval over whole series resampled together:
 2. our weight beside the market: a logistic fit of the result on both
    log-odds; above zero means we add something Kalshi's price lacks;
 3. paper bets: the first call in a map where our chance beats the price of
-   backing that side by the edge while the market is quiet, at $1 flat and at
+   backing that side by the edge once the price has held, at $1 flat and at
    quarter Kelly, after Kalshi's taker fee, with the price two minutes later;
 4. the gap between our call and Kalshi's price, trading and implied spread.
 
@@ -45,7 +46,8 @@ Usage:
     uv run python scripts/evaluate_live.py --publish-data    # upload and pin (gh CLI)
     uv run python scripts/evaluate_live.py --fetch-data      # download the pinned data
 
-Limits: Kalshi's price is the last trade, not the book (quiet means no trade);
+Limits: Kalshi's price is the last trade, not the book (a held price is one the
+trades show; the book may have moved between them);
 one call a minute where the live service makes one every 10 s; the lag is from
 one pilot match; maps whose feed end state disagrees with Kalshi's result are
 dropped.
@@ -88,7 +90,6 @@ RELEASE = "live-bench-data"
 
 KALSHI_START = "2025-10-27"  # the first KXLOLMAP market
 LAG = 21  # seconds from a feed sample's source time to our call (measured)
-QUIETS = (0, 10, 21, 30)  # seconds with no trade before a bet
 EDGES = (0.03, 0.05, 0.10, 0.15)
 EDGE = 0.05
 KELLY = 0.25
@@ -116,7 +117,15 @@ MARKET_FIELDS = (
     "p_clv",
     "trades",
     "spread",
+    # Price stability before our call arrives, per window W (STABLE_WINDOWS):
+    # the range of team 0's trade prices in the W seconds, their count, and each
+    # side's last cost within them.
+    *(f"{k}_{w}" for w in (10, 21, 30) for k in ("range", "n", "cost0", "cost1")),
 )
+STABLE_WINDOWS = (10, 21, 30)
+TOLERANCES = (0.0, 0.01, 0.02)
+STABLE_MIN_TRADES = 2  # a stable price is one the market keeps trading at
+STABLE_WINDOW, STABLE_TOL = 21, 0.01  # the edge grid's setting
 # Kalshi before each priced map (team 0 = blue): the price 12 minutes before
 # the start (about before the draft), the price and each side's last cost a
 # minute before (after it: the paper bet), and the price at the start.
@@ -364,6 +373,20 @@ def market_state(tp, source):
         price_at(tp, at + pd.Timedelta(seconds=CLV_AFTER)),
         int(((tp["at"] > at - pd.Timedelta(minutes=1)) & (tp["at"] <= at)).sum()),
         None if None in costs else round(costs[0] + costs[1] - 1, 4),
+        *(v for w in STABLE_WINDOWS for v in window_state(tp, at, w)),
+    ]
+
+
+def window_state(tp, at, seconds):
+    """[range of team 0's trade prices, trade count, each side's last cost] over
+    the `seconds` before `at` (range None without trades)."""
+    recent = tp[(tp["at"] > at - pd.Timedelta(seconds=seconds)) & (tp["at"] <= at)]
+    spread = round(recent["p0"].max() - recent["p0"].min(), 4) if len(recent) else None
+    return [
+        spread,
+        len(recent),
+        cost_to_back(tp, at, 0, stale=seconds),
+        cost_to_back(tp, at, 1, stale=seconds),
     ]
 
 
@@ -874,18 +897,44 @@ def weights(frame):
 # ---------------------------------------------------------------- 3: paper bets
 
 
-def first_bets(calls, quiet, edge):
+def _present(v):
+    return v is not None and not pd.isna(v)
+
+
+def first_bets(calls, edge, window=None, tol=None):
     """The first bet per map: our chance for a side beats the cost of backing it
-    by `edge`, with no trade for `quiet` seconds before our call arrives."""
+    by `edge`. With `window`, only once Kalshi's price has held: at least
+    STABLE_MIN_TRADES trades in the `window` seconds before our call arrives, all
+    within `tol` of each other, and the cost is a trade backing our side in that
+    window, never below the latest price for that side. Without it, any call,
+    at the last cost within BET_STALE."""
     live = calls[~calls["pregame"]]
     bets = []
     for game, rows in live.groupby("game", sort=False):
         for r in rows.itertuples(index=False):
-            if quiet and (r.quiet is None or pd.isna(r.quiet) or r.quiet < quiet):
-                continue
+            costs = (r.cost0, r.cost1)
+            if window is not None:
+                spread = getattr(r, f"range_{window}")
+                if getattr(r, f"n_{window}") < STABLE_MIN_TRADES or not _present(
+                    spread
+                ):
+                    continue
+                if spread > tol + 1e-9:
+                    continue
+                now = r.p_lag
+                costs = tuple(
+                    max(c, side_price) if _present(c) and _present(now) else None
+                    for c, side_price in (
+                        (getattr(r, f"cost0_{window}"), now),
+                        (
+                            getattr(r, f"cost1_{window}"),
+                            1 - now if _present(now) else None,
+                        ),
+                    )
+                )
             placed = None
-            for side, p, cost in ((0, r.p, r.cost0), (1, 1 - r.p, r.cost1)):
-                if cost is None or pd.isna(cost) or not 0 < cost < 1:
+            for side, p, cost in ((0, r.p, costs[0]), (1, 1 - r.p, costs[1])):
+                if not _present(cost) or not 0 < cost < 1:
                     continue
                 if p - cost >= edge:
                     placed = (side, p, cost)
@@ -894,7 +943,7 @@ def first_bets(calls, quiet, edge):
                 continue
             side, p, cost = placed
             later = r.p_clv
-            if later is not None and not pd.isna(later) and side == 1:
+            if _present(later) and side == 1:
                 later = 1 - later
             bets.append(
                 {
@@ -904,7 +953,7 @@ def first_bets(calls, quiet, edge):
                     "p": p,
                     "cost": cost,
                     "won": bool(r.won) == (side == 0),
-                    "clv": None if later is None or pd.isna(later) else later - cost,
+                    "clv": later - cost if _present(later) else None,
                 }
             )
             break
@@ -1097,28 +1146,34 @@ def report(data, calls, skipped, pre=None):
         "",
         "## 3. Paper bets",
         "",
-        "First call per map where our chance beats the last traded cost of backing",
-        f"that side (traded within {BET_STALE} s) by the edge, after the market has had",
-        "no trade for the quiet window. Flat: $1 a bet after Kalshi's taker fee. Kelly:",
-        f"{KELLY:g} Kelly on one bankroll in map order. CLV: our side's price {CLV_AFTER} s",
-        "later minus the cost paid, in points.",
+        "First call per map where our chance beats the cost of backing a side by the",
+        "edge, once Kalshi's price has held: at least"
+        f" {STABLE_MIN_TRADES} trades in the window before our call arrives, all within",
+        "the tolerance of each other; the cost is a trade backing our side in that",
+        'window, never below the latest price for that side. "Any" bets on any call',
+        f"at the last cost within {BET_STALE} s (stale prices flatter it). Flat: $1 a bet",
+        f"after Kalshi's taker fee. Kelly: {KELLY:g} Kelly on one bankroll in map order.",
+        f"CLV: our side's price {CLV_AFTER} s later minus the cost paid, in points.",
         "",
-        "| Quiet (s) | Edge | Bets | Won | Avg cost | Avg ours | Flat ROI (95%) "
-        "| Kelly growth/bet (95%) | Kelly multiple | Max drawdown | CLV |",
-        "|---:|---:|---:|---:|---:|---:|---|---|---:|---:|---:|",
+        "| Price held (s) | Tolerance | Edge | Bets | Won | Avg cost | Avg ours "
+        "| Flat ROI (95%) | Kelly growth/bet (95%) | Kelly multiple | Max drawdown | CLV |",
+        "|---:|---:|---:|---:|---:|---:|---:|---|---|---:|---:|---:|",
     ]
-    grid = [(q, EDGE) for q in QUIETS]
-    grid += [(q, e) for q in (10, LAG) for e in EDGES if e != EDGE]
-    for quiet, edge in grid:
-        s = bet_summary(first_bets(calls, quiet, edge))
+    grid = [(None, None, EDGE)]
+    grid += [(w, t, EDGE) for w in STABLE_WINDOWS for t in TOLERANCES]
+    grid += [(STABLE_WINDOW, STABLE_TOL, e) for e in EDGES if e != EDGE]
+    for window, tol, edge in grid:
+        held = "any" if window is None else str(window)
+        tolerance = "" if tol is None else f"{tol:.2f}"
+        s = bet_summary(first_bets(calls, edge, window, tol))
         if s is None:
-            lines.append(f"| {quiet} | {edge:.2f} | 0 | | | | | | | | |")
+            lines.append(f"| {held} | {tolerance} | {edge:.2f} | 0 | | | | | | | | |")
             continue
         clv = "" if s["clv"] is None else f"{s['clv'] * 100:+.1f}"
         lines.append(
-            f"| {quiet} | {edge:.2f} | {s['n']} | {s['won']:.1%} | {s['cost']:.3f} "
-            f"| {s['p']:.3f} | {_ci(s['roi'], 3)} | {_ci(s['growth'], 4)} "
-            f"| {s['multiple']:.2f} | {s['drawdown']:.0%} | {clv} |"
+            f"| {held} | {tolerance} | {edge:.2f} | {s['n']} | {s['won']:.1%} "
+            f"| {s['cost']:.3f} | {s['p']:.3f} | {_ci(s['roi'], 3)} "
+            f"| {_ci(s['growth'], 4)} | {s['multiple']:.2f} | {s['drawdown']:.0%} | {clv} |"
         )
 
     live = frame[frame["checkpoint"] > 0]
@@ -1155,10 +1210,9 @@ def report(data, calls, skipped, pre=None):
         "",
         "- Kalshi's price is the last trade, not the book: quiet means no trade, and a",
         "  bet's cost is the last trade backing that side, not the ask at that moment.",
-        "  In game that flatters the paper bets: a quiet market is also a stale price",
-        "  (makers may have pulled their quotes), and a cost up to two minutes old can be",
-        "  below anything on offer. Treat their returns, and Kelly multiples above all, as",
-        "  an upper bound until the live worker's recorded book can price them.",
+        '  "Any" bets use a cost up to two minutes old, which can be below anything on',
+        "  offer; the held-price rule prices from trades inside its window. Both are",
+        "  upper bounds until the live worker's recorded book can price them.",
         "- One feed sample a minute (live: every 10 s), so fewer chances to bet than",
         "  live, and the estimated game clock misses pauses between samples.",
         "- The lag is from one pilot match; the feed's delay may differ by league or day.",
