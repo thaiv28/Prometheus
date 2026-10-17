@@ -1173,7 +1173,10 @@ def run(args):
             ):
                 log("idle", minutes=args.idle_exit)
                 return IDLE
-            interval = QUOTE_INTERVAL if games and kalshi else args.interval
+            # Every 2 s while a map is tracked or in its draft (its book is read).
+            interval = (
+                QUOTE_INTERVAL if (games or pre.maps) and kalshi else args.interval
+            )
             time.sleep(max(0, interval - (time.monotonic() - cycle)))
     except Stop as error:
         log("stopped", reason=str(error))
