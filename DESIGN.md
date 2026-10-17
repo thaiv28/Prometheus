@@ -286,7 +286,7 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 
 ### Market Blend methodology
 
-`market-blend.html` uses the existing Almanac headings and prose widths. Short estimate, signal and evidence sections; native disclosure holds formula, fit protocol and current coefficients. Linked from Blend, Predictions notes and Call performance. Keep the replay/profitability caveat; no new tokens or ranking page.
+`market-blend.html` uses the existing Almanac headings and prose widths. Short estimate, signal and evidence sections; native disclosure holds formula, fit protocol and current coefficients. Linked from Blend, Predictions notes and Call performance. Keep the replay/profitability caveat; no new tokens or ranking page. Kelly copy describes capped bets without specifying order granularity; exact execution precision belongs in the execution guide.
 
 ### Props page
 - Title "Props" with its full name in italic, a one-line lede ending "Lines as of …" (local time via `props.js`), then a filter line: a *stat* picker (radio list: Kills, Assists, Deaths, CS; `?stat=`) and a "with lines only" square checkbox, checked by default (`?lines=all` shows every match). Without JS the page shows kills and, already, only the matches with kills lines.
