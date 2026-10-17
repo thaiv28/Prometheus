@@ -12,7 +12,7 @@ from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 
 from prometheus import market_blend
 from prometheus.alert_contract import TRADE_GROUPS, trade_veto
-from prometheus.execution.sizing import kelly_order
+from prometheus.execution.sizing import QUANTITY_STEP, kelly_order
 
 ZERO = Decimal(0)
 CENT = Decimal(".01")
@@ -88,7 +88,7 @@ def fee_bound(price, count, rate, precision):
 
     Official fixed-point and fee-rounding guides: a fill may be as small as .01
     contracts, fee rounds to six dollar decimals, balances align to .0001 for
-    Direct / .01 for non-Direct. At most 100 fills per requested whole contract;
+    Direct / .01 for non-Direct. At most 100*quantity fills on the 0.01 grid;
     allow one full precision increment and one microdollar per fragment. The
     accumulator's eventual rebates only improve on this conservative bound.
     """
@@ -133,7 +133,7 @@ def validate_alert(alert, config, now):
 def plan_order(
     alert, routes, config, balance, now, account=None, committed=ZERO, exposure=ZERO
 ):
-    """Choose the feasible route/whole count with greatest expected log growth.
+    """Choose the feasible route/0.01-grid quantity with greatest log growth.
 
     No book walking/slippage: quantity must exist at the chosen limit. Route
     `price` is always the backed outcome's cost; YES-book `limit` is inverted
@@ -186,10 +186,10 @@ def plan_order(
         if net_edge <= ZERO or net_edge < config.number("min_after_fee_edge"):
             continue
         cap = min(
-            int(config.number("max_contracts")),
-            int(decimal(route["quantity"])),
-            int((budget / (price + unit_fee)).to_integral_value(rounding=ROUND_FLOOR)),
-        )
+            config.number("max_contracts"),
+            decimal(route["quantity"]),
+            budget / (price + unit_fee),
+        ).quantize(QUANTITY_STEP, rounding=ROUND_FLOOR)
         sizing = kelly_order(p, price + unit_fee, effective, cap)
         if sizing:
             candidates.append((price, route, sizing, unit_fee, p, net_edge))
@@ -199,7 +199,7 @@ def plan_order(
         candidates,
         key=lambda x: (-decimal(x[2]["expected_log_growth"]), x[0], x[1]["ticker"]),
     )
-    count = sizing["count"]
+    count = decimal(sizing["count"])
     client_id = str(
         uuid.uuid5(
             uuid.NAMESPACE_URL, f"prometheus:{config.mode}:{alert['fixture_id']}"

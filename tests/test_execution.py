@@ -352,9 +352,9 @@ def test_intent_precedes_submission_and_v2_body():
 
     def submit(body):
         assert ledger.pending()[0]["status"] == "submitting"
-        assert held(ledger) == Decimal("4.41")
+        assert held(ledger) == Decimal("4.9959")
         assert body["side"] == "bid"
-        assert body["price"] == "0.6000" and body["count"] == "7.00"
+        assert body["price"] == "0.6000" and body["count"] == "7.93"
         assert body["time_in_force"] == "immediate_or_cancel"
         assert "action" not in body and "yes_price" not in body
         return original(body)
@@ -480,9 +480,10 @@ def test_off_cancels_only_tracked_order_reconciles_both_environments_and_does_no
 def test_pause_cancel_failure_retains_entire_reservation():
     _client, api, ledger, execute = harness()
     execute([saved()])
+    reserved = held(ledger)
     api.orders[0]["status"], api.cancel_fails = "resting", True
     result = run([], lambda: {"mode": "off"}, ledger, lambda env: api, NOW)
-    assert result["errors"] == 1 and held(ledger) == Decimal("4.41")
+    assert result["errors"] == 1 and held(ledger) == reserved
 
 
 @pytest.mark.parametrize(
@@ -532,7 +533,7 @@ def test_concurrent_different_fixtures_respect_daily_and_exposure_caps():
             )
         )
     assert len(api.calls) == 1
-    assert held(ledger) == Decimal("4.41")
+    assert 0 < held(ledger) <= Decimal("5")
 
 
 @pytest.mark.parametrize("risk,cash", [("20", "100"), ("0", "5")])
@@ -547,7 +548,7 @@ def test_remaining_exposure_shrinks_order_instead_of_exceeding_cap():
     _, api, ledger, execute = harness()
     api.risk = "18"
     execute([saved()])
-    assert api.calls[0]["count"] == "3.00"
+    assert api.calls[0]["count"] == "3.17"
     assert held(ledger) + Decimal(api.risk) <= Decimal("20")
 
 
@@ -555,7 +556,7 @@ def test_remaining_exposure_shrinks_order_instead_of_exceeding_cap():
     "route",
     [
         {"price": ".61"},
-        {"quantity": ".9"},
+        {"quantity": ".009"},
         {"at": "2026-10-15T11:58:00Z"},
         {"at": "2026-10-15T12:00:01Z"},
     ],

@@ -9,9 +9,9 @@ from decimal import Decimal
 import pytest
 from test_execution import NOW, fill, harness, saved, settings
 
-from prometheus.execution.core import Config, plan_order, reconcile
+from prometheus.execution.core import Config, fee_bound, plan_order, reconcile
 from prometheus.execution.ledger import _item
-from prometheus.execution.sizing import kelly_order
+from prometheus.execution.sizing import QUANTITY_STEP, kelly_order
 
 
 def growth(n, p, c, capital):
@@ -22,22 +22,36 @@ def growth(n, p, c, capital):
     )
 
 
-def test_integer_kelly_matches_exhaustive_feasible_log_growth():
+def test_fractional_kelly_matches_exhaustive_feasible_log_growth():
     for p, c, capital, cap in itertools.product(
-        (0.51, 0.6, 0.8, 0.99), (0.1, 0.5, 0.8), (1, 7, 50), (1, 10, 100)
+        (0.51, 0.6, 0.8, 0.99), (0.1, 0.5, 0.8), (0.05, 1, 7), (0.03, 0.17, 1.234, 3)
     ):
         chosen = kelly_order(p, c, capital, cap)
-        n = chosen["count"] if chosen else 0
-        optimum = max(growth(k, p, c, capital) for k in range(cap + 1))
+        n = float(chosen["count"]) if chosen else 0
+        optimum = max(growth(k / 100, p, c, capital) for k in range(int(cap * 100) + 1))
         assert growth(n, p, c, capital) == pytest.approx(optimum, abs=1e-12)
+        if chosen:
+            quantity = Decimal(chosen["count"])
+            assert quantity % QUANTITY_STEP == 0
+            assert quantity <= Decimal(str(cap))
+            assert chosen["quantity_step"] == "0.01"
 
 
-def test_fee_cost_bankroll_and_small_integer_edges():
-    assert kelly_order(".6", ".5", 50, 100)["count"] == 20
-    assert kelly_order(".6", ".5", 100, 100)["count"] == 40
-    assert kelly_order(".6", ".52", 50, 100)["count"] == 16
-    assert kelly_order(".51", ".5", 1, 100) is None
+def test_fee_cost_bankroll_and_small_fractional_edges():
+    assert kelly_order(".6", ".5", 50, 100)["count"] == "20.00"
+    assert kelly_order(".6", ".5", 100, 100)["count"] == "40.00"
+    assert kelly_order(".6", ".52", 50, 100)["count"] == "16.03"
+    assert kelly_order(".51", ".5", 1, 100)["count"] == "0.04"
+    assert kelly_order(".51", ".5", ".01", 100) is None
     assert kelly_order(".5", ".5", 50, 100) is None
+
+
+def test_fractional_depth_caps_round_down_and_never_exhaust_bankroll():
+    assert kelly_order(".8", ".5", 50, ".239")["count"] == "0.23"
+    assert kelly_order(".8", ".5", 50, ".009") is None
+    assert kelly_order(".8", ".5", ".005", 100) is None
+    with pytest.raises(ValueError, match="finite"):
+        kelly_order(".8", ".5", 50, "NaN")
 
 
 @pytest.mark.parametrize(
@@ -188,14 +202,14 @@ def test_executor_compounds_verified_profit_on_the_next_fixture():
     _, api, ledger, execute = harness(roomy().raw)
     api.routes[0]["quantity"] = "100"
     execute([saved(probability=".70")])
-    first_count = int(Decimal(api.calls[0]["count"]))
+    first_count = Decimal(api.calls[0]["count"])
     fill(api, count=str(first_count), price=".59", fee=".15")
     api.settlement_rows = [
         {
             "ticker": api.orders[0]["ticker"],
             "yes_count_fp": str(first_count),
             "market_result": "yes",
-            "revenue": first_count * 100,
+            "revenue": int(first_count * 100),
         }
     ]
     execute([])
@@ -205,3 +219,91 @@ def test_executor_compounds_verified_profit_on_the_next_fixture():
     second = json.loads(ledger.get("demo", "INTENT#next")["payload"])
     assert Decimal(second["sizing"]["bankroll_usd"]) == 50 + earned
     assert Decimal(second["request"]["count"]) > first_count
+
+
+@pytest.mark.parametrize("quantity", ["0.01", "0.03", "0.90", "2.379"])
+def test_fractional_depth_reaches_order_without_truncation_or_float(quantity):
+    _, api, _, _ = harness()
+    api.routes[0]["quantity"] = quantity
+    row = plan_order(saved(), api.routes, roomy(), Decimal(100), NOW)
+    expected = Decimal(quantity).quantize(QUANTITY_STEP, rounding="ROUND_FLOOR")
+    assert row["request"]["count"] == f"{expected:.2f}"
+    assert Decimal(row["held"]) == expected * Decimal(".63")
+    assert json.loads(json.dumps(row))["sizing"]["count"] == f"{expected:.2f}"
+
+
+@pytest.mark.parametrize("cap", ["order", "fixture", "daily", "exposure", "cash"])
+def test_subcontract_order_respects_every_remaining_spending_cap(cap):
+    _, api, _, _ = harness()
+    config, balance, kwargs = roomy(), Decimal(100), {}
+    if cap in {"order", "fixture"}:
+        config = Config.parse({**config.raw, f"{cap}_budget_usd": ".0189"})
+    elif cap == "cash":
+        balance = Decimal("5.0189")
+    else:
+        kwargs["committed" if cap == "daily" else "exposure"] = Decimal("99.9811")
+    row = plan_order(saved(), api.routes, config, balance, NOW, **kwargs)
+    assert row["request"]["count"] == "0.03"
+    assert Decimal(row["held"]) <= Decimal(".0189")
+    if cap == "cash":
+        assert balance - Decimal(row["held"]) >= config.number("min_balance_usd")
+
+
+def test_fractional_order_partial_fill_settlement_and_retry_accounting():
+    _, api, ledger, execute = harness(settings(order_budget_usd=".0315"))
+    assert execute([saved()])["submitted"] == 1
+    assert api.calls[0]["count"] == "0.05"
+    assert ledger.get("demo", "ACCOUNT")["held"] == Decimal(".0315")
+    fill(api, count=".03", price=".59", fee=".0006")
+    execute([])
+    assert ledger.get("demo", "ACCOUNT")["held"] == Decimal(".0183")
+    api.settlement_rows = [
+        {
+            "ticker": api.orders[0]["ticker"],
+            "yes_count_fp": ".03",
+            "market_result": "yes",
+            "revenue": 3,
+        }
+    ]
+    execute([])
+    execute([])
+    execute([saved()])
+    assert ledger.get("demo", "ACCOUNT")["held"] == 0
+    assert ledger.get("demo", "ACCOUNT")["realized"] == Decimal(".0117")
+    assert ledger.get("demo", "DAY#2026-10-15")["committed"] == Decimal(".0183")
+    assert len(api.calls) == 1
+
+
+def test_existing_whole_contract_intent_reconciles_without_resizing():
+    _, api, ledger, _ = harness()
+    legacy = plan()
+    legacy["request"]["count"] = "7.00"
+    legacy["sizing"]["count"] = 7
+    del legacy["sizing"]["quantity_step"]
+    legacy["held"] = legacy["committed"] = "4.41"
+    reserved = ledger.reserve(legacy, roomy(), Decimal(100))
+    assert reserved is not None
+    api.place(reserved["request"])
+    fill(api)
+    assert reconcile(reserved, api, ledger)
+    assert ledger.get("demo", "ACCOUNT")["held"] == Decimal("1.81")
+    assert ledger.pending()[0]["request"]["count"] == "7.00"
+    assert len(api.calls) == 1
+
+
+def test_fractional_reserve_bounds_maximum_fragment_rounding_without_rebates():
+    from decimal import ROUND_CEILING
+
+    for precision, price, quantity in itertools.product(
+        (Decimal(".0001"), Decimal(".01")),
+        (Decimal(".0001"), Decimal(".35"), Decimal(".5"), Decimal(".9999")),
+        (Decimal(".01"), Decimal(".03"), Decimal("1.23")),
+    ):
+        worst_price = min(price, Decimal(".5"))
+        fragment_fee = (
+            Decimal(".07") * worst_price * (1 - worst_price) * QUANTITY_STEP
+        ).quantize(Decimal(".000001"), rounding=ROUND_CEILING) + precision
+        worst_fragment_fees = int(quantity / QUANTITY_STEP) * fragment_fee
+        assert (
+            fee_bound(price, quantity, Decimal(".07"), precision) >= worst_fragment_fees
+        )
