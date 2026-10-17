@@ -12,6 +12,15 @@
   const tables = $$(".register--fixtures");
   if (!tables.length) return;
 
+  // A row with its own page (live results) opens it from anywhere on the row;
+  // links inside it (teams, Kalshi) keep their own targets.
+  document.addEventListener("click", (e) => {
+    const row = e.target.closest("tr.fx[data-href]");
+    if (!row || e.target.closest("a") || String(window.getSelection())) return;
+    if (e.metaKey || e.ctrlKey) window.open(row.dataset.href);
+    else location.href = row.dataset.href;
+  });
+
   const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
   const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long" });
   const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

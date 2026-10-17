@@ -2,6 +2,14 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-17 — Live results: a page per series, whole rows clickable
+
+Branch `live-series`, base `5806c9a` (PR #75). User feedback: a row on Live opened the month page, which showed every series' maps under its table, and only the result was a link.
+
+- Each followed series now has its own page, `live-results/<match id>.html`: teams and score as the title, league, event and date, a "Before the series" line (our call as the duel bar with Kalshi's caret, the method, Kalshi's close, the call), then the figure per recorded map and the "Not recorded" line, and a link back to its month. The month page keeps only its table (the index).
+- Rows with a page (Live's Table III, the month index) open it from anywhere on the row: `data-href` on the row from the fixture macro, one delegated click handler in `predictions.js` (links inside the row, teams and Kalshi, keep their targets; Cmd/Ctrl-click opens a new tab; text selection doesn't navigate), pointer cursor and paper-wash hover. The result cell stays a real link for keyboards and no-JS.
+- Checks: `tests/live/test_live_archive.py` updated (row links, the month page without figures, the series page with them); full `uv run pytest -q`, ruff; full fetch-disabled site build; screenshots of the series page (1440 px, 390 px; the score no longer wraps) and the month index; Playwright clicks on a row's bar cell on Live and on the month page open the series page, and a team link still opens the team page. CI cost unchanged (one more small page per series in the build).
+
 ## 2026-10-16 — Live results: past followed series with their map figures
 
 Branch `live-archive`, base `1c03850` (PR #73). User asked for a backlog of past series on Live, by month like Predictions, with the timeline figure and our pre-match odds.

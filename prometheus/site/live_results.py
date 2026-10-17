@@ -189,7 +189,7 @@ def series_view(log, archive, team_slugs, now=None):
                 "slug2": None,
             }
             flip, names = False, list(teams)
-        row["href"] = f"#s-{match_id}"
+        row["href"] = f"{match_id}.html"  # from live-results/
         winners = dict(match["results"])
         for n, m in maps.items():
             if m.get("winner") in (0, 1):
@@ -231,7 +231,8 @@ def series_view(log, archive, team_slugs, now=None):
                 "names": names,
                 "maps": map_rows,
                 "missing": [m["number"] for m in map_rows if not m["recorded"]],
-                "date": f"{start.day} {start.strftime('%B')}",
+                "date": f"{start.day} {start.strftime('%B')} {start.year}",
+                "month": row["start"][:7],
             }
         )
     out.sort(key=lambda s: s["row"]["start"], reverse=True)
@@ -259,22 +260,20 @@ def month_views(series):
 
 
 def recent(series, now):
-    """Live's Table III: the last week's series, linked to their month page."""
+    """Live's Table III: the last week's series, linked to their pages."""
     since = (now - datetime.timedelta(days=RECENT_DAYS)).strftime("%Y-%m-%dT%H:%MZ")
     rows = []
     for s in series:
         if s["row"]["start"] < since:
             break
-        rows.append(
-            dict(
-                s["row"], href=f"live-results/{s['row']['start'][:7]}.html#s-{s['id']}"
-            )
-        )
+        rows.append(dict(s["row"], href=f"live-results/{s['id']}.html"))
     return _by_day(rows)
 
 
 def render_live_results(months):
-    """live-results/<month>.html, with links to the months either side."""
+    """live-results/<month>.html (the month's series, each row opening its
+    page, with links to the months either side) and live-results/<match>.html
+    (one series: the call before it and a figure per recorded map)."""
     if not months:
         return
     folder = os.path.join(site_config.OUTPUT_DIR, "live-results")
@@ -292,3 +291,17 @@ def render_live_results(months):
                 older=months[i + 1] if i + 1 < len(months) else None,
             ),
         )
+    series_template = env.get_template("live_series.html.j2")
+    labels = {m["key"]: m["label"] for m in months}
+    for month in months:
+        for s in month["series"]:
+            write(
+                os.path.join(folder, f"{s['id']}.html"),
+                series_template.render(
+                    page_key="live",
+                    root_path="../",
+                    metric=site_config.LIVE,
+                    s=s,
+                    month_label=labels[s["month"]],
+                ),
+            )

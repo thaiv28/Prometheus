@@ -121,7 +121,7 @@ class SeriesTest(unittest.TestCase):
         self.assertEqual(s["names"], ["MVK Esports", "Karmine Corp"])
         self.assertEqual((s["row"]["pct1"], s["row"]["mkt1"]), (10, 16))
         self.assertEqual(s["row"]["score"], "0–3")
-        self.assertEqual(s["row"]["href"], "#s-m1")
+        self.assertEqual(s["row"]["href"], "m1.html")
         self.assertEqual([m["number"] for m in s["maps"]], [1, 2, 3])
         self.assertEqual(s["missing"], [1, 3])
         # Live's first team is KC: the chances turn to MVK's.
@@ -146,14 +146,18 @@ class SeriesTest(unittest.TestCase):
         months = live_results.month_views(series)
         now = datetime.datetime(2026, 10, 17, tzinfo=datetime.UTC)
         recent = live_results.recent(series, now)
-        self.assertEqual(recent[0]["rows"][0]["href"], "live-results/2026-10.html#s-m1")
+        self.assertEqual(recent[0]["rows"][0]["href"], "live-results/m1.html")
         with tempfile.TemporaryDirectory() as d:
             with mock.patch.object(site_config, "OUTPUT_DIR", d):
                 live_results.render_live_results(months)
-            html = (Path(d) / "live-results" / "2026-10.html").read_text()
-        self.assertIn('id="s-m1"', html)
-        self.assertIn('class="ours"', html)
-        self.assertIn("Not recorded: maps 1, 3.", html)
+            month = (Path(d) / "live-results" / "2026-10.html").read_text()
+            page = (Path(d) / "live-results" / "m1.html").read_text()
+        # The month lists the series, each row opening its own page.
+        self.assertIn('data-href="m1.html"', month)
+        self.assertNotIn('class="ours"', month)
+        self.assertIn('class="ours"', page)
+        self.assertIn("Not recorded: maps 1, 3.", page)
+        self.assertIn('href="2026-10.html"', page)
 
     def test_no_archive_renders_nothing(self):
         with tempfile.TemporaryDirectory() as d:
