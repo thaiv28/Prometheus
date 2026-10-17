@@ -4,10 +4,12 @@
 #   LIVE_BACKUP=s3://<bucket>/prometheus/live bash scripts/live_archive.sh
 #
 # The live worker backs up each finished map's page file (pages/map<n>.json,
-# about 3 MB) to $LIVE_BACKUP/<match>/ (deploy/live/backup.sh). Each one without
-# a compact copy beside it is downloaded once, cut down by prometheus.live.archive
-# (a few KB) and its map<n>.min.json uploaded; then every compact copy and each
-# match's results.json (settled map winners) is synced down. A failure leaves the
+# about 3 MB) to $LIVE_BACKUP/<match>/ (deploy/live/backup.sh). The compact
+# copies (map<n>.min.json) and each match's results.json (settled map winners)
+# are synced down; each page file without a current compact copy is downloaded,
+# cut down by prometheus.live.archive (a few KB, with Kalshi's minute prices
+# where the service recorded none) and its copy uploaded beside it; each
+# finished match gets series.min.json (prometheus.live.archive series_record). A failure leaves the
 # pages without the newest maps, never fails the build.
 set -uo pipefail
 
@@ -24,22 +26,40 @@ fi
 keys=$(awk '{print $4}' "$tmp/list")
 prefix="${uri#s3://}"
 prefix="${prefix#*/}/"
+mkdir -p "$dest"
+aws s3 sync "$uri/" "$dest/" --only-show-errors --exclude '*' \
+    --include '*/pages/map*.min.json' --include '*/results.json' \
+    --include '*/forge.json' --include '*/series.min.json' ||
+    echo "::warning::Couldn't restore the live results."
+# A compact copy from an older prometheus.live.archive (SCHEMA) is made again.
+schema=$(uv run --no-sync python -c 'from prometheus.live.archive import SCHEMA; print(SCHEMA)')
 made=0
 for key in $(grep -E '/pages/map[0-9]+\.json$' <<<"$keys"); do
-    min="${key%.json}.min.json"
-    grep -qxF "$min" <<<"$keys" && continue
     rel="${key#"$prefix"}"
+    min="$dest/${rel%.json}.min.json"
+    grep -qF "\"schema\":$schema," "$min" 2>/dev/null && continue
+    mkdir -p "$(dirname "$min")"
     if aws s3 cp "$uri/$rel" "$tmp/map.json" --only-show-errors &&
-        uv run --no-sync python -m prometheus.live.archive "$tmp/map.json" "$tmp/map.min.json" &&
-        aws s3 cp "$tmp/map.min.json" "$uri/${rel%.json}.min.json" --only-show-errors \
+        uv run --no-sync python -m prometheus.live.archive "$tmp/map.json" "$min" &&
+        aws s3 cp "$min" "$uri/${rel%.json}.min.json" --only-show-errors \
             --content-type application/json; then
         made=$((made + 1))
     else
         echo "::warning::Couldn't compact $rel"
+        rm -f "$min"
     fi
 done
-mkdir -p "$dest"
-aws s3 sync "$uri/" "$dest/" --only-show-errors --exclude '*' \
-    --include '*/pages/map*.min.json' --include '*/results.json' ||
-    echo "::warning::Couldn't restore the live results."
-echo "Live results: $made new maps compacted, $(find "$dest" -name 'map*.min.json' | wc -l | tr -d ' ') restored."
+# Each finished match without a series record gets one (every map's start, winner
+# and Kalshi's map and series prices before it; nothing while a map is unplayed).
+series=0
+for folder in "$dest"/*/; do
+    [ -f "$folder/series.min.json" ] && continue
+    compgen -G "$folder/pages/map*.min.json" >/dev/null || continue
+    id=$(basename "$folder")
+    if uv run --no-sync python -m prometheus.live.archive series "$folder" &&
+        [ -f "$folder/series.min.json" ]; then
+        aws s3 cp "$folder/series.min.json" "$uri/$id/series.min.json" --only-show-errors \
+            --content-type application/json && series=$((series + 1))
+    fi
+done
+echo "Live results: $made maps compacted, $series series recorded, $(find "$dest" -name 'map*.min.json' | wc -l | tr -d ' ') restored."

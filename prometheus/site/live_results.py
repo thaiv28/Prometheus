@@ -12,8 +12,9 @@ import json
 import os
 from pathlib import Path
 
+from prometheus.live.series import series_chance
 from prometheus.site import config as site_config
-from prometheus.site.predictions import _by_day, _pct_pair, fixture_row
+from prometheus.site.predictions import _by_day, fixture_row
 from prometheus.site.render import env, write
 
 # How far a live match's first map may be from the logged start (Leaguepedia's
@@ -34,7 +35,8 @@ def _time(iso):
 
 
 def load_archive(root=None):
-    """{match id: {"maps": {n: compact map}, "results": {n: winner index}}}."""
+    """{match id: {"maps": {n: compact map}, "results": {n: winner index},
+    "record": series.min.json or None, "forge": forge.json or None}}."""
     root = Path(root or os.path.join(site_config.ROOT_DIR, "data", "live"))
     out = {}
     for path in sorted(root.glob("*/pages/map*.min.json")):
@@ -45,6 +47,11 @@ def load_archive(root=None):
         except (OSError, ValueError, KeyError):
             continue
     for match_id, match in out.items():
+        for key, name in (("record", "series.min.json"), ("forge", "forge.json")):
+            try:
+                match[key] = json.loads((root / match_id / name).read_text())
+            except (OSError, ValueError):
+                match[key] = None
         try:
             results = json.loads((root / match_id / "results.json").read_text())
             match["results"] = {
@@ -76,12 +83,13 @@ def _path(points, x, y, until):
     return d
 
 
-def figure(compact, flip):
+def figure(compact, flip, pre=None):
     """One map's chance over game time (the first listed team's), the market and
     the gold lead, as SVG pieces for the template."""
     side = (lambda p: 1 - p) if flip else (lambda p: p)
     calls = [(s, side(p)) for s, p in compact["calls"]]
-    pre = compact["pregame"].get("p")
+    if pre is None:
+        pre = compact["pregame"].get("p")
     if pre is not None:
         calls.insert(0, (0, side(pre)))
     market = [(s, side(m)) for s, m in compact["market"] if m is not None]
@@ -134,6 +142,23 @@ def figure(compact, flip):
         "ticks": ticks,
         "gold_label": f"{gold_max / 1000:.0f}k",
         "label": _figure_label(calls, market),
+        # For live_results.js's hover reading: the same series in game seconds,
+        # the plot's x range and the chance panel's y range in SVG units.
+        "trace": {
+            "w": W,
+            "x0": PAD_L,
+            "x1": W - PAD_R,
+            "y100": CHANCE_TOP,
+            "y0": CHANCE_BOTTOM,
+            "bottom": GOLD_BOTTOM,
+            "span": span,
+            "pre": pre is not None,
+            "calls": calls,
+            "market": [
+                (s, side(m) if m is not None else None) for s, m in compact["market"]
+            ],
+            "gold": gold,
+        },
     }
 
 
@@ -152,6 +177,29 @@ def _figure_label(calls, market):
 
 def _minutes(seconds):
     return f"{seconds // 60}′" if seconds else None
+
+
+def _before_map(p_game, rho, best_of, score, record, flip):
+    """The first listed team's chances before a map (whole numbers in 100):
+    ours for the map and the series (from the score so far; `p_game` for live
+    team 0), and Kalshi's for both in the minute before it."""
+
+    def first(p):
+        return None if p is None else round(100 * (1 - p if flip else p))
+
+    series = (
+        series_chance(p_game, best_of, rho, score)
+        if p_game is not None and rho is not None and score is not None
+        else None
+    )
+    shown = None if score is None else (score[::-1] if flip else score)
+    return {
+        "score": f"{shown[0]}–{shown[1]}" if shown else None,
+        "map_ours": first(p_game),
+        "map_kalshi": first(record.get("kalshi_map")),
+        "series_ours": first(series),
+        "series_kalshi": first(record.get("kalshi_series")),
+    }
 
 
 def series_view(log, archive, team_slugs, now=None):
@@ -189,15 +237,28 @@ def series_view(log, archive, team_slugs, now=None):
                 "slug2": None,
             }
             flip, names = False, list(teams)
-        row["href"] = f"#s-{match_id}"
-        winners = dict(match["results"])
+        row["href"] = f"{match_id}.html"  # from live-results/
+        record = {m["number"]: m for m in (match.get("record") or {}).get("maps", [])}
+        winners = {n: m["winner"] for n, m in record.items() if m["winner"] in (0, 1)}
+        for n, w in match["results"].items():
+            winners.setdefault(n, w)
         for n, m in maps.items():
             if m.get("winner") in (0, 1):
                 winners.setdefault(n, m["winner"])
-        played = max(list(winners) + list(maps))
+        played = max(list(winners) + list(maps) + list(record))
         if row.get("score"):
             played = max(played, sum(int(v) for v in row["score"].split("–")))
         map_rows = []
+        forge = match.get("forge") or {}
+        # Our map chance for live team 0: the logged call before the series
+        # (the live service's forge.json can be for the other team when getLive
+        # swapped the order before 2026-10-17), else the service's.
+        if entry:
+            p_game = 1 - entry["p_game"] if flip else entry["p_game"]
+        else:
+            p_game = forge.get("p_game")
+        best_of = first["match"].get("best_of") or 1
+        score = [0, 0]  # live order, before the map
         for n in range(1, played + 1):
             # Winners are by live team order; `won` by the row's (log) order.
             won = winners.get(n)
@@ -210,18 +271,20 @@ def series_view(log, archive, team_slugs, now=None):
                 "number": n,
                 "winner": names[won] if won is not None else None,
                 "recorded": recorded,
+                "before": _before_map(
+                    p_game, forge.get("rho"), best_of, score, record.get(n) or {}, flip
+                ),
             }
+            live_won = winners.get(n)
+            if score is not None and live_won in (0, 1):
+                score = [score[0] + (live_won == 0), score[1] + (live_won == 1)]
+            else:
+                score = None  # an earlier map's winner is unknown
             if recorded:
-                pre = m["pregame"]
-                p = pre.get("p")
-                mk = pre.get("market")
                 item.update(
                     length=_minutes(m.get("length")),
-                    pre=_pct_pair(1 - p if flip else p)[0] if p is not None else None,
-                    pre_market=_pct_pair(1 - mk if flip else mk)[0]
-                    if mk is not None
-                    else None,
-                    figure=figure(m, flip),
+                    figure=figure(m, flip, pre=p_game if entry else None),
+                    backfilled=bool(m.get("market_backfilled")),
                 )
             map_rows.append(item)
         out.append(
@@ -231,7 +294,8 @@ def series_view(log, archive, team_slugs, now=None):
                 "names": names,
                 "maps": map_rows,
                 "missing": [m["number"] for m in map_rows if not m["recorded"]],
-                "date": f"{start.day} {start.strftime('%B')}",
+                "date": f"{start.day} {start.strftime('%B')} {start.year}",
+                "month": row["start"][:7],
             }
         )
     out.sort(key=lambda s: s["row"]["start"], reverse=True)
@@ -259,22 +323,20 @@ def month_views(series):
 
 
 def recent(series, now):
-    """Live's Table III: the last week's series, linked to their month page."""
+    """Live's Table III: the last week's series, linked to their pages."""
     since = (now - datetime.timedelta(days=RECENT_DAYS)).strftime("%Y-%m-%dT%H:%MZ")
     rows = []
     for s in series:
         if s["row"]["start"] < since:
             break
-        rows.append(
-            dict(
-                s["row"], href=f"live-results/{s['row']['start'][:7]}.html#s-{s['id']}"
-            )
-        )
+        rows.append(dict(s["row"], href=f"live-results/{s['id']}.html"))
     return _by_day(rows)
 
 
 def render_live_results(months):
-    """live-results/<month>.html, with links to the months either side."""
+    """live-results/<month>.html (the month's series, each row opening its
+    page, with links to the months either side) and live-results/<match>.html
+    (one series: the call before it and a figure per recorded map)."""
     if not months:
         return
     folder = os.path.join(site_config.OUTPUT_DIR, "live-results")
@@ -292,3 +354,17 @@ def render_live_results(months):
                 older=months[i + 1] if i + 1 < len(months) else None,
             ),
         )
+    series_template = env.get_template("live_series.html.j2")
+    labels = {m["key"]: m["label"] for m in months}
+    for month in months:
+        for s in month["series"]:
+            write(
+                os.path.join(folder, f"{s['id']}.html"),
+                series_template.render(
+                    page_key="live",
+                    root_path="../",
+                    metric=site_config.LIVE,
+                    s=s,
+                    month_label=labels[s["month"]],
+                ),
+            )

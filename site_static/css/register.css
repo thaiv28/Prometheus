@@ -439,6 +439,8 @@
 .fx-bar::before { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--p, 50) * 1%); background: var(--ink); }
 .fx-bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; border-left: var(--hair) solid var(--ink-3); }
 .register--fixtures tbody tr.fx:hover .fx-bar::before { background: var(--spot); }
+.register--fixtures tbody tr.fx--link { cursor: pointer; }
+.register--fixtures tbody tr.fx--link:hover td { background: var(--paper-wash); }
 .fx-bo, .fx-by { font-variant-caps: all-small-caps; letter-spacing: 0.05em; color: var(--ink-3); }
 .fx-game, .fx-market { color: var(--ink-2); }
 /* The market's chance for the first team: a small printed caret over the duel bar. */

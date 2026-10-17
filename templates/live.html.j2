@@ -60,7 +60,7 @@
         <h2 id="finished-heading">Finished</h2>
       </div>
       <figure class="register-figure" aria-labelledby="finished-cap">
-        <figcaption id="finished-cap" class="table-caption">Table III. {% if finished %}Followed live, last 7 days. Each result links to its maps.{% else %}None in the last week.{% endif %}</figcaption>
+        <figcaption id="finished-cap" class="table-caption">Table III. {% if finished %}Followed live, last 7 days. A row opens its maps.{% else %}None in the last week.{% endif %}</figcaption>
         {% if finished %}
         <div class="table-scroll">{{ fixtures_table(finished, results=True, compact=True, id='finished') }}</div>
         {% endif %}
