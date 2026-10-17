@@ -9,6 +9,7 @@ from decimal import Decimal
 
 import pytest
 
+from prometheus import market_blend
 from prometheus.execution.core import Config, fee_bound, run
 from prometheus.execution.ledger import DynamoLedger, _decode, _item
 
@@ -31,6 +32,8 @@ def settings(**changes):
         "min_balance_usd": "5",
         "max_contracts": 10,
         "balance_precision_usd": ".0001",
+        "starting_bankroll_usd": "50",
+        "kelly_fraction": "1",
         **changes,
     }
 
@@ -92,17 +95,24 @@ class AtomicDynamo:
                 ):
                     raise Conditional
                 if " <= :available" in condition:
-                    field = condition.split("(")[1].split(")")[0]
+                    field = "held" if "held <= :available" in condition else "committed"
                     if field in old and old[field] > values[":available"]:
+                        raise Conditional
+                for field in ("held", "realized"):
+                    expected = values.get(f":expected_{field}")
+                    if expected is not None and old.get(field, Decimal(0)) != expected:
                         raise Conditional
                 if "Put" in action:
                     next_data[key] = copy.deepcopy(item)
                 elif "Delete" in action:
                     next_data.pop(key, None)
                 else:
-                    _, field, delta = op["UpdateExpression"].split()
                     old.update(_decode(op["Key"]))
-                    old[field] = old.get(field, Decimal(0)) + values[delta]
+                    for addition in (
+                        op["UpdateExpression"].removeprefix("ADD ").split(",")
+                    ):
+                        field, delta = addition.split()
+                        old[field] = old.get(field, Decimal(0)) + values[delta]
                     next_data[key] = _item(old)
             self.data = next_data
 
@@ -214,6 +224,52 @@ def harness(config=None):
         alerts, lambda: config, ledger, lambda environment: api, now=NOW
     )
     return client, api, ledger, execute
+
+
+def test_blended_execution_reprices_market_and_records_actual_probability():
+    forecast = market_blend.estimate(0.9, 0.7, NOW)
+    alert = saved(trading=forecast, probability=forecast["probability"])
+    _, api, ledger, execute = harness(settings(min_after_fee_edge="0"))
+    api.routes[0]["market_mid"] = "0.2"
+    execute([alert])
+    assert api.calls == [] and held(ledger) == 0
+    api.routes[0]["market_mid"] = "0.7"
+    execute([alert])
+    assert len(api.calls) == 1
+    plan = json.loads(ledger.get("demo", "INTENT#f")["payload"])
+    # The frozen alert is retained alongside the current execution estimate.
+    assert plan is not None
+    assert float(plan["execution_probability"]) == pytest.approx(
+        forecast["probability"]
+    )
+
+
+def test_blended_execution_requires_current_mid_and_excludes_cross_league():
+    forecast = market_blend.estimate(0.9, 0.7, NOW)
+    _, api, _, execute = harness(settings(min_after_fee_edge="0"))
+    execute([saved(trading=forecast, probability=forecast["probability"])])
+    assert api.calls == []
+    execute([saved(group="other-cross-league")])
+    assert api.calls == []
+
+
+@pytest.mark.parametrize(
+    "teams,back,group,homes,allowed",
+    [
+        (["A", "Cloud9"], "A", "major-domestic", {}, False),
+        (["Cloud9 Kia", "B"], "Cloud9 Kia", "major-international", {}, False),
+        (["C9", "B"], "B", "minor-domestic", {}, False),
+        (["A", "B"], "A", "major-international", {"A": "LCK", "B": "LCS"}, False),
+        (["B", "A"], "A", "major-international", {"A": "LCK", "B": "LTA N"}, False),
+        (["A", "B"], "B", "major-international", {"A": "LCK", "B": "LCS"}, True),
+        (["A", "B"], "A", "major-domestic", {"A": "LCS", "B": "LCS"}, True),
+        (["A", "B"], "A", "major-international", {}, False),
+    ],
+)
+def test_personal_trading_vetoes(teams, back, group, homes, allowed):
+    _, api, _, execute = harness()
+    execute([saved(teams=teams, backed_team=back, group=group, team_homes=homes)])
+    assert bool(api.calls) == allowed
 
 
 def held(ledger):
@@ -479,12 +535,20 @@ def test_concurrent_different_fixtures_respect_daily_and_exposure_caps():
     assert held(ledger) == Decimal("4.41")
 
 
-@pytest.mark.parametrize("risk,cash", [("20", "100"), ("0", "5"), ("18", "100")])
+@pytest.mark.parametrize("risk,cash", [("20", "100"), ("0", "5")])
 def test_account_exposure_balance_or_available_cap_blocks(risk, cash):
     _client, api, ledger, execute = harness()
     api.risk, api.cash = risk, cash
     execute([saved()])
     assert not api.calls and held(ledger) == 0
+
+
+def test_remaining_exposure_shrinks_order_instead_of_exceeding_cap():
+    _, api, ledger, execute = harness()
+    api.risk = "18"
+    execute([saved()])
+    assert api.calls[0]["count"] == "3.00"
+    assert held(ledger) + Decimal(api.risk) <= Decimal("20")
 
 
 @pytest.mark.parametrize(

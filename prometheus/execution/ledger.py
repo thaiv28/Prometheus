@@ -84,6 +84,13 @@ class DynamoLedger:
             config.number("max_exposure_usd"),
             balance - config.number("min_balance_usd"),
         )
+        sizing = plan.get("sizing") or {}
+        if sizing.get("method") == "kelly-v1":
+            cap = min(
+                cap,
+                config.number("starting_bankroll_usd")
+                + decimal(sizing["realized_before"]),
+            )
         if amount > cap or amount > config.number("daily_budget_usd"):
             return None
         row = copy.deepcopy(plan)
@@ -93,16 +100,26 @@ class DynamoLedger:
             ("ACCOUNT", "held", cap),
             (f"DAY#{plan['day']}", "committed", config.number("daily_budget_usd")),
         ):
+            condition = f"attribute_not_exists({field}) OR {field} <= :available"
+            values = {":amount": amount, ":available": limit - amount}
+            if sk == "ACCOUNT" and sizing.get("method") == "kelly-v1":
+                condition = f"({condition})"
+                for name in ("held", "realized"):
+                    expected = decimal(sizing[f"{name}_before"])
+                    key = f":expected_{name}"
+                    values[key] = expected
+                    match = f"{name} = {key}"
+                    if expected == 0:
+                        match = f"(attribute_not_exists({name}) OR {match})"
+                    condition += f" AND {match}"
             transactions.append(
                 {
                     "Update": {
                         "TableName": self.table,
                         "Key": _item(self.key(env, sk)),
                         "UpdateExpression": f"ADD {field} :amount",
-                        "ConditionExpression": f"attribute_not_exists({field}) OR {field} <= :available",
-                        "ExpressionAttributeValues": _item(
-                            {":amount": amount, ":available": limit - amount}
-                        ),
+                        "ConditionExpression": condition,
+                        "ExpressionAttributeValues": _item(values),
                     }
                 }
             )
@@ -192,14 +209,25 @@ class DynamoLedger:
         ]
         for sk, field in (("ACCOUNT", "held"), (f"DAY#{previous['day']}", "committed")):
             delta = decimal(row[field]) - decimal(previous[field])
-            if delta:
+            profit_delta = (
+                decimal(row.get("realized_profit", 0))
+                - decimal(previous.get("realized_profit", 0))
+                if sk == "ACCOUNT"
+                else Decimal(0)
+            )
+            if delta or profit_delta:
+                expression = f"ADD {field} :delta"
+                values = {":delta": delta}
+                if profit_delta:
+                    expression += ", realized :profit_delta"
+                    values[":profit_delta"] = profit_delta
                 changes.append(
                     {
                         "Update": {
                             "TableName": self.table,
                             "Key": _item(self.key(env, sk)),
-                            "UpdateExpression": f"ADD {field} :delta",
-                            "ExpressionAttributeValues": _item({":delta": delta}),
+                            "UpdateExpression": expression,
+                            "ExpressionAttributeValues": _item(values),
                         }
                     }
                 )

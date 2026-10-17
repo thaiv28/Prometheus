@@ -6,7 +6,7 @@ Deployed 2026-10-16 in **off** mode (`ThaivPrometheusExecution`, us-west-2). The
 
 `prometheus.alert_contract.saved_alerts` reads the private, successfully persisted `prometheus/predictions/predictions.json` object. New `alert` records pin schema version, fixture/alert identity, backed canonical team, both canonical teams, first fixture start and event ticker in `alert.execution`; probability/ask remain the original saved values. Provider-ID, ordering and later fixture changes do not alter the pinned identity. Legacy posted `international_paper_alert` is recognized, never rewritten; unposted `paper_alert` is excluded. No issue prose, public export, reconstructed candidate or current selector is an execution instruction.
 
-The six groups share one notification policy (>5-point edge, 6h, fresh ask and complete results). Grouping is for reporting. Execution applies additional current account/book/fee/spending controls to the saved proposal; a notification does not guarantee an order.
+Five groups share one notification policy: positive blended edge above ask plus estimated fees, 6h, fresh midpoint/ask and complete results. Major/minor domestic and every international group qualify; other cross-league fixtures do not. New proposals freeze raw and blended inputs and the monthly snapshot. Historical records retain their original terms. Execution skips every Cloud9 fixture (either side), and at international events any bet against a North American team (LCS, NA LCS, LTA N or NACL). Alerts still include those signals. Home leagues are pinned by canonical team name; missing international homes skip execution. Execution applies additional current account/book/fee/spending controls to the saved proposal; a notification does not guarantee an order.
 
 ## Runner and durable state
 
@@ -14,7 +14,7 @@ A 5-minute EventBridge rule invokes a Python 3.12 Lambda independently of EC2, G
 
 The retained encrypted DynamoDB table has `pk`/`sk` string keys and point-in-time recovery. Separate demo/live namespaces hold intent, active pointers, fixture/event fences, UTC-day spending, account exposure, latest skips and individual fill/settlement evidence. Intent plus spending reservations and both duplicate fences are atomic before submission; a conditional claim permits only one submitter. Stable client order IDs supplement these durable guards. No automatic retry sends a second order after an uncertain response. Unknown outcomes keep their entire reservation until exchange evidence resolves them; “not found” alone never releases it. Fences have no TTL.
 
-The package exports the same 37 explicit team aliases used by alerts; the runtime applies these fixed aliases without fuzzy matching or loading site dependencies. Market resolution requires the exact event, two unambiguous canonical team outcomes and matching fixture time/rules. It rediscovers the executable route: backed team YES, or opponent NO; the saved event ticker/aggregate ask is not itself an executable market. Fresh books, actual tick grids, authoritative event fee-override history, announced series/event fee changes through fixture start and account data are read before submission. The capped IOC limit never exceeds the original ask or configured price cap; it uses available size at the selected price, without walking to worse levels. Partial fills are retained; the canceled/unfilled remainder is never reissued. Whole-contract orders can still receive fractional fills, so fee reservations conservatively include fragmentation/rounding and require verified account balance precision.
+The package exports the same 37 explicit team aliases used by alerts; the runtime applies these fixed aliases without fuzzy matching or loading site dependencies. Market resolution requires the exact event, two unambiguous canonical team outcomes and matching fixture time/rules. It rediscovers the executable route: backed team YES, or opponent NO; the saved event ticker/aggregate ask is not itself an executable market. Fresh books, actual tick grids, authoritative event fee-override history, announced series/event fee changes through fixture start and account data are read before submission. The capped IOC limit never exceeds the original ask or configured price cap. Kelly compares feasible whole-contract sizes on the best level of each route and selects the highest expected log growth, without walking to worse levels. Partial fills are retained; the canceled/unfilled remainder is never reissued. Whole-contract orders can still receive fractional fills, so fee reservations conservatively include fragmentation/rounding and require verified account balance precision.
 
 Order creation uses the documented [V2 event order endpoint](https://docs.kalshi.com/api-reference/orders/create-order-v2), fixed-point price/count and YES-book `bid`/`ask` direction. Current [fixed-point](https://docs.kalshi.com/getting_started/fixed_point_migration) and [fee rounding](https://docs.kalshi.com/getting_started/fee_rounding) rules are part of the fee bound; actual fill fees and settlement evidence remain private. Fee profiles come from [event override history](https://docs.kalshi.com/api-reference/events/get-event-fee-changes) and [series fee changes](https://docs.kalshi.com/api-reference/exchange/get-series-fee-changes).
 
@@ -33,7 +33,7 @@ Infrastructure PR #16 is merged at `349a744`; application PR #65 is merged at `e
 1. Build the isolated runtime zip from the reviewed application commit: `bash deploy/execution/package.sh /tmp/prometheus-execution.zip`. It contains only the adapter/executor/handler and signing dependency, no DB, saved log, `.env`, credentials or site output. The deployment artifact goes in the existing **private** artifacts bucket at `prometheus/execution/releases/<zip SHA256>.zip`.
 2. Secrets `prometheus/execution/demo` and `prometheus/execution/live` are provisioned. The live value is installed; demo remains empty. For future credential changes, create API credentials for the intended demo/live account and store each as a Secrets Manager JSON secret with `key_id` and `private_key_pem`. For demo-only setup, the separate live secret can remain empty; do not install live credentials before a separately authorized live rollout. Do not put keys in GitHub variables, the prediction log or application `.env`. Use the minimum order/read/cancel scopes the API supports for the account. If using a customer-managed KMS key, supply the narrowly scoped decrypt permission separately; the prepared stack assumes the normal Secrets Manager managed key.
 3. Supply stack parameters `ArtifactsBucketName`, immutable `CodeObjectKey`, the reviewed upload’s `CodeObjectVersion`, `demoSecretArn` and `liveSecretArn`. Store the secrets in `us-west-2`, the runner’s region. The table/config/schedule/private failure queue and exact-ARN IAM grants are created only by a separately authorized targeted deployment. Never deploy all application stacks for this change.
-4. Configure the SSM parameter `/prometheus/execution/config` with the fields below **while keeping mode off**. No spending values are provided by the implementation. Configure the GitHub variables `KALSHI_EXECUTION_CONTROL_ROLE_ARN` and `KALSHI_EXECUTION_CONFIG_PARAMETER` from the stack outputs. The dedicated main-branch OIDC control role can only read/write this one parameter; it cannot read credentials, invoke trades or change the ledger.
+4. Configure the SSM parameter `/prometheus/execution/config` with the fields below **while keeping mode off**. No spending values are provided by the implementation. Configure the GitHub variables `KALSHI_EXECUTION_CONTROL_ROLE_ARN` and `KALSHI_EXECUTION_CONFIG_PARAMETER` from the stack outputs. The dedicated main-branch OIDC control role reads/writes this one parameter and reads the executor release metadata; it cannot read credential secrets, invoke trades or change the ledger.
 5. The user elected to skip demo on 2026-10-16 after code/test review. Once sizing findings are reviewed and explicit limits/account precision are configured, use the manual **Kalshi execution mode** workflow’s `off`/`demo`/`live` dropdown. It validates explicit limits, preserves them and writes a fresh activation timestamp. Live remains a separate user decision; nothing in this implementation switches it on automatically.
 
 | Field | Meaning |
@@ -43,7 +43,7 @@ Infrastructure PR #16 is merged at `349a744`; application PR #65 is merged at `e
 | `max_alert_age_seconds` | Maximum age of a saved alert when submitting, including retries/missed runs |
 | `max_quote_age_seconds` | Maximum age of the freshly fetched executable book |
 | `max_price` | Absolute dollar price cap per backed contract, inside (0,1); original ask also caps it |
-| `min_after_fee_edge` | Required probability minus current price and conservative per-contract fees |
+| `min_after_fee_edge` | Minimum probability minus current price and conservative per-contract fees; zero permitted, but net edge must still be strictly positive |
 | `fee_rate_upper_bound` | Explicit bound on supported current quadratic fee rate; metadata above it is rejected |
 | `balance_precision_usd` | Verified account precision: 0.0001 for Direct or 0.01 otherwise; no inferred default |
 | `order_budget_usd` | Maximum cost plus reserved fees on one order |
@@ -52,6 +52,8 @@ Infrastructure PR #16 is merged at `349a744`; application PR #65 is merged at `e
 | `max_exposure_usd` | Maximum open exposure/reservations including account positions and resting orders |
 | `min_balance_usd` | Cash that must remain after reservation |
 | `max_contracts` | Positive whole-contract order cap; actual fills may be fractional |
+| `starting_bankroll_usd` | Explicit strategy capital; e.g. 50 for the requested $50 start, not the entire exchange balance |
+| `kelly_fraction` | Explicit capital multiplier in (0,1]; 1 is full Kelly, smaller values scale capital used by the calculation |
 
 The fee bound deliberately does not count on later rebates. Non-Direct cent-aligned accounts may have no executable edge under the conservative fractional-fill bound. Existing account exposure and local reservations are counted conservatively, potentially twice while exchange views lag; this can skip viable orders rather than exceed limits.
 
@@ -62,3 +64,58 @@ Mocked tests cover the saved-alert adapter/identity, V2 payload/direction, books
 Follow-up review found no blocking defect in identity/route validation, atomic reservations, duplicate fences, uncertain-response handling or pre-submit mode checks. The 86 execution/API/runner/contract cases passed in 1.09 s. The live key parsed locally, was uploaded through stdin without a credential temporary file, and its AWSCURRENT value was verified in memory. A single signed live GET balance request authenticated and parsed successfully; account amounts were suppressed and order endpoints were prohibited. Trading remains off.
 
 Still unverified: runtime credential/source IAM access, real DynamoDB write transactions, retry timing, account precision, actual orders/fills/cancellations and settlement. The first scheduled off invocation and the main-branch off control are verified. Authenticated reads do not establish order/fill correctness. User chose to skip demo; finish the sizing review and explicit account limits before activation, retaining these verification limits. Do not delete ledger fences or clear unknown reservations merely to retry an order; resolve exchange evidence first.
+
+## Prepared blended runtime
+
+The source package adds the monthly artifact and recomputes the saved raw probability against a fresh backed-side market midpoint from narrow two-sided books before evaluating the current ask. Missing/unknown snapshot or missing midpoint cannot fall back to raw odds. Actual execution probability/net edge are retained privately alongside original alert terms. The current deployed zip remains the earlier off-mode version until a separately authorized release.
+
+Kelly sizing now uses starting capital plus verified settled profit minus open/reserved cost. Fees are included in the unit cost; whole counts maximize expected log growth within depth, cash and order/fixture/day/exposure caps. No spending values or deposits were configured by this change. Turning off stops new orders and retains reconciliation of existing positions.
+
+## Kelly bankroll and activation
+
+Source support is prepared; the deployed off-mode zip/config are unchanged. Active modes now require explicit `starting_bankroll_usd` and `kelly_fraction` in addition to every existing limit. For the requested starting capital/full-Kelly policy these two fields would be `"50"` and `"1"`; they have not been installed. Missing values fail activation. Changing the seed deliberately changes the strategy budget; it is not a top-up mechanism and never deposits money.
+
+Let B = starting capital + ACCOUNT.realized − ACCOUNT.held. Fractional Kelly scales B by `kelly_fraction`; B excludes open commitments and unrealized profits. Price plus conservative per-contract fee bound is c; frozen/refreshed probability is p. Continuous full-Kelly contracts are B*(p−c)/(c*(1−c)). Compare neighbouring feasible whole counts and zero using p*log(1+n*(1−c)/B)+(1−p)*log(1−n*c/B). Skip non-positive growth or any count that exhausts capital on a loss. A positive alert edge may still be too small for one contract.
+
+The ledger atomically checks the observed held/realized values, total strategy capital and all existing caps when reserving. Raced funding snapshots cannot submit. Partial fills release only unused reservation; unknown responses keep funds reserved. Verified settlement credits our fill quantity’s contractual payout minus actual cost/fees, never pooled account revenue. Credit and release use the intent revision transaction, so retries cannot double-compound. Losses reduce future sizes; exhausted capital stops orders. Daily gross-spend caps do not refill on wins.
+
+This is sequential Kelly on free strategy capital under the existing one-order-per-fixture rule, not a joint optimizer of correlated open positions. Account exposure/reservations remain conservatively counted and may suppress bets. The probability estimate and fee bound determine the answer; sizing is not a profitability guarantee. The objective follows [Kelly’s original paper](https://www.princeton.edu/~wbialek/rome/refs/kelly_56.pdf); the fee-aware unit-contract conversion above is our derivation.
+
+## Deploy on merge and configure live
+
+The prepared `Publish` workflow adds `deploy-execution` after the existing checks, beside the site build. A main push touching packaged executor inputs triggers it; the changed-file range covers the entire push. PRs and scheduled site builds never deploy the executor. For repair, dispatch **Publish** on main with `deploy_execution` checked. An obsolete main revision is rejected before deployment. Identical source fingerprints skip the update after runtime verification.
+
+Infrastructure must be merged/deployed first, using **Deploy Prometheus Execution Infrastructure** (`diff`, then `deploy`): the execution-only stack adds `CodeSourceHash`, release tags, the dedicated `DeployRoleArn` output and read access to Lambda release metadata for the control role. Preserve the existing code key/version and all other parameters during this bootstrap. Copy `DeployRoleArn` into `KALSHI_EXECUTION_DEPLOY_ROLE_ARN` and `FunctionName` into `KALSHI_EXECUTION_FUNCTION_NAME`. Existing control/config variables remain required. Bootstrap deployed through infrastructure PR #18 (`1b9f1ab`) and targeted workflow `38987448513`; both new GitHub variables are installed. The application runtime release/configuration still awaits its merge.
+
+The deploy role uploads only under private `prometheus/execution/releases/` and can update only this stack/function. The release helper pins the zip checksum and S3 VersionId, reuses the deployed template, and preserves every non-release parameter (including masked secret ARNs). It waits for stack completion and verifies the healthy runtime, package checksum and source tags without invoking the handler. Unexpected current-code drift fails before upload. No mode/configuration/credential/ledger writes are permitted by the release role. Existing live mode would stay live during a later code deployment; switch off first if you want to pause it.
+
+After the first successful deployment:
+
+1. Open **Actions → Configure Kalshi execution → Run workflow**, on `main`. Supply the complete settings JSON below after replacing the account-precision placeholder. This saves limits only while mode is off; it cannot activate trading. Later changes may supply just the changed limit fields. Workflows serialize configuration and mode changes in one concurrency group; direct console/CLI SSM writers must not run concurrently (SSM has no compare-and-swap).
+2. Open **Actions → Kalshi execution mode → Run workflow**, on `main`, choose `live`. Activation checks the actual Lambda release fingerprint/checksum and all limits, then sets a fresh activation timestamp. An old or failed deployment cannot be activated by this workflow.
+3. To pause, run the same mode workflow with `off`. It remains available without release verification or valid limits. The next scheduled invocation stops submissions and reconciles tracked positions.
+
+Example for review: $50 seed, full Kelly, up to $50 on one order/fixture or open exposure, $100 gross UTC-day spend. These caps allow the starting capital to be used and limit later compounding until raised; they are not installed defaults. Kelly normally sizes below the order ceiling. `daily_budget_usd` is turnover, not a daily loss stop. `min_after_fee_edge: 0` still requires strictly positive net edge.
+
+```json
+{
+  "starting_bankroll_usd": "50",
+  "kelly_fraction": "1",
+  "order_budget_usd": "50",
+  "fixture_budget_usd": "50",
+  "daily_budget_usd": "100",
+  "max_exposure_usd": "50",
+  "min_balance_usd": "0",
+  "max_contracts": 10000,
+  "max_price": "0.99",
+  "min_after_fee_edge": "0",
+  "fee_rate_upper_bound": "0.07",
+  "balance_precision_usd": "REPLACE_WITH_VERIFIED_ACCOUNT_PRECISION",
+  "max_alert_age_seconds": 3600,
+  "max_quote_age_seconds": 30
+}
+```
+
+Verify `balance_precision_usd` for the actual account: `"0.0001"` for Direct membership, `"0.01"` for non-Direct, per [Kalshi's rounding documentation](https://docs.kalshi.com/getting_started/fee_rounding). Do not choose based on the displayed balance or to make more bets pass. The placeholder intentionally fails validation. Fee rates above the configured bound cause a skip. With the existing conservative rounding bound, a non-Direct account may produce no executable bets; no trade is preferable to treating an unverified precision as fact.
+
+The strategy spends only its seed plus verified profits and never deposits or borrows. Keeping the seed at $50 bounds planned strategy losses relative to inception to that funded capital (including reserved fees), even if the exchange account holds more. It does not enforce a $100 drawdown stop from a later profit peak: that feature is not implemented. Do not raise the seed merely to bypass losses or unresolved reservations. Existing positions/unknown fills can delay further trading and must reconcile from evidence. Full Kelly assumes the estimated probabilities are correct; profitability remains unproven.

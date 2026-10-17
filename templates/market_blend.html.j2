@@ -1,0 +1,39 @@
+{% extends 'base.html.j2' %}
+{% block title %}Market Blend · Prometheus{% endblock %}
+{% block description %}How FORGE/Elo forecasts and Kalshi prices become blended series odds.{% endblock %}
+{% block canonical_path %}market-blend.html{% endblock %}
+{% block content %}
+<div class="spread">
+  <div class="spread-main">
+    <header class="section-head">
+      <h1>Market Blend</h1>
+      <p class="lede">Series odds combining FORGE/Elo with Kalshi’s midpoint.</p>
+    </header>
+
+    <section class="fixtures-block" aria-labelledby="estimate-heading">
+      <div class="block-head"><h2 id="estimate-heading">The estimate</h2></div>
+      <p class="section-prose">The blend adjusts our forecast toward market information. FORGE and Elo remain independent of prices. Missing midpoint or fitted snapshot: no estimate.</p>
+      <details>
+        <summary>Formula and fit</summary>
+        <p class="section-prose">With forecast <var>f</var> and market midpoint <var>m</var>:</p>
+        <p class="section-prose">logit(Blend) = <var>a</var> · logit(<var>m</var>) + <var>b</var> · [logit(<var>f</var>) − logit(<var>m</var>)]</p>
+        <p class="section-prose">Logit means log-odds. Logistic regression fits <var>a</var> and <var>b</var>, without an intercept, with fixed C = 1. Swapping teams reverses the odds.</p>
+        <p class="section-prose">Monthly snapshots use 300+ earlier results, assumed available 24h after start. The latest packaged fit stays active until replaced.</p>
+        <p class="section-prose">Current fit: {{ model.available_from | longdate }}, {{ model.training_series }} series. <var>a</var> = {{ '%.3f' | format(model.market_slope) }}; <var>b</var> = {{ '%.3f' | format(model.gap_slope) }}.</p>
+      </details>
+    </section>
+
+    <section class="fixtures-block" aria-labelledby="signals-heading">
+      <div class="block-head"><h2 id="signals-heading">Signals</h2></div>
+      <p class="section-prose">Net &gt; 0: Blend − ask − estimated fees. Domestic and international fixtures qualify; other cross-league fixtures do not. Alerts need 6h+ before start.</p>
+      <p class="section-prose">Cloud9 fixtures and bets against NA internationally remain alerts only. Execution rechecks prices, fees and limits. Kelly sizes whole contracts within those caps; only settled profit compounds.</p>
+    </section>
+
+    <section class="fixtures-block" aria-labelledby="evidence-heading">
+      <div class="block-head"><h2 id="evidence-heading">Evidence</h2></div>
+      <p class="section-prose">Historical log loss improved. Profitability and an advantage over calibrated market-only odds remain unproven. Replay weights saw some evaluated matches.</p>
+      <p class="section-prose"><a href="https://github.com/thaiv28/Prometheus/blob/main/docs/research/market_blend_validation.md">Validation and limits</a> · <a href="predictions.html">Predictions</a></p>
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,40 @@
+name: Configure Kalshi execution
+
+on:
+  workflow_dispatch:
+    inputs:
+      settings:
+        description: Bankroll and limits JSON (see docs/kalshi_execution.md). Requires execution off.
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: kalshi-execution-control
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.KALSHI_EXECUTION_CONTROL_ROLE_ARN }}
+          aws-region: us-west-2
+          mask-aws-account-id: true
+          unset-current-credentials: true
+      - name: Save limits while off
+        env:
+          EXECUTION_PARAMETER: ${{ vars.KALSHI_EXECUTION_CONFIG_PARAMETER }}
+        run: |
+          set -euo pipefail
+          : "${EXECUTION_PARAMETER:?Set KALSHI_EXECUTION_CONFIG_PARAMETER}"
+          uv run --no-project --with boto3 python -m deploy.execution.control \
+            --parameter "$EXECUTION_PARAMETER" --settings-event "$GITHUB_EVENT_PATH"

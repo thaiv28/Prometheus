@@ -11,6 +11,7 @@ uv run --no-project --python 3.12 --with pip python -m pip install \
   --target "$stage" -r "$root/deploy/execution/requirements.txt"
 mkdir -p "$stage/prometheus" "$stage/deploy/execution"
 cp "$root/prometheus/__init__.py" "$root/prometheus/alert_contract.py" "$stage/prometheus/"
+cp "$root/prometheus/market_blend.py" "$root/prometheus/market_blend.json" "$stage/prometheus/"
 cp -R "$root/prometheus/execution" "$stage/prometheus/execution"
 cp "$root/deploy/execution/handler.py" "$stage/deploy/execution/handler.py"
 # Export the existing literal alias map without importing the site's pandas/API
@@ -35,6 +36,14 @@ target.parent.mkdir(parents=True, exist_ok=True)
 with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
     for path in sorted(stage.rglob("*")):
         if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc" and path.relative_to(stage).parts[0] != "bin":
-            archive.write(path, path.relative_to(stage))
+            info = zipfile.ZipInfo(str(path.relative_to(stage)), date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            content = path.read_bytes()
+            # pip's excluded console scripts have machine-specific shebang
+            # hashes in RECORD. Drop those absent files from wheel metadata.
+            if path.name == "RECORD" and path.parent.name.endswith(".dist-info"):
+                content = b"".join(line for line in content.splitlines(keepends=True) if not line.startswith(b"../"))
+            archive.writestr(info, content)
 print(target)
 PYTHON

@@ -40,8 +40,9 @@ jobs:
         env:
           EXECUTION_MODE: ${{ inputs.mode }}
           EXECUTION_PARAMETER: ${{ vars.KALSHI_EXECUTION_CONFIG_PARAMETER }}
+          EXECUTION_FUNCTION: ${{ vars.KALSHI_EXECUTION_FUNCTION_NAME }}
         run: |
           set -euo pipefail
           : "${EXECUTION_PARAMETER:?Set KALSHI_EXECUTION_CONFIG_PARAMETER from the execution stack output}"
           uv run --no-project --with boto3 python -m deploy.execution.control \
-            --parameter "$EXECUTION_PARAMETER" --mode "$EXECUTION_MODE"
+            --parameter "$EXECUTION_PARAMETER" --mode "$EXECUTION_MODE" --function "$EXECUTION_FUNCTION"

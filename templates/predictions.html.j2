@@ -8,7 +8,7 @@
     <div class="spread-main">
       <header class="section-head">
         <h1>{{ metric.name }} <span class="full-name">{{ metric.full_name }}</span></h1>
-        <p class="lede">{{ metric.description }} Calls freeze at the start.{% if games_through %} Games through {{ games_through }}.{% endif %}<a class="note-ref" href="#note-3" aria-label="Note 3">3</a></p>
+        <p class="lede">Calls freeze at start.{% if games_through %} Data through {{ games_through }}.{% endif %}<a class="note-ref" href="#note-3" aria-label="Note 3">3</a></p>
       </header>
 
       {{ filter_line(view) }}
@@ -18,22 +18,20 @@
           <h2 id="upcoming-heading">Coming up</h2>
         </div>
         <figure class="register-figure" aria-labelledby="upcoming-cap">
-          <figcaption id="upcoming-cap" class="table-caption">Table I. {% if view.upcoming_count == 1 %}The next match.{% else %}The next {{ view.upcoming_count }} matches, soonest first.{% endif %}<a class="note-ref" href="#note-dagger" aria-label="Caveat">†</a> <span class="count" data-count-for="upcoming" aria-live="polite"></span></figcaption>
+          <figcaption id="upcoming-cap" class="table-caption">Table I. <a class="note-ref" href="#note-dagger" aria-label="Caveat">†</a> <span class="count" data-count-for="upcoming" aria-live="polite">{{ view.upcoming_count }} matches.</span></figcaption>
           {% if view.upcoming %}
           <div class="table-scroll">{{ fixtures(view.upcoming, id='upcoming') }}</div>
           {% endif %}
-          <p class="empty fx-empty" data-empty-for="upcoming"{% if view.upcoming %} hidden{% endif %}>{% if view.upcoming %}No upcoming match fits these filters.{% else %}No matches between teams we rate are scheduled in the next week.{% endif %}</p>
+          <p class="empty fx-empty" data-empty-for="upcoming"{% if view.upcoming %} hidden{% endif %}>{% if view.upcoming %}No matching fixtures.{% else %}No rated fixtures this week.{% endif %}</p>
         </figure>
       </section>
 
       <section class="fixtures-block" aria-labelledby="record-heading">
         <div class="block-head">
-          <h2 id="record-heading">How the calls have done</h2>
+          <h2 id="record-heading">Record</h2>
         </div>
-        {% set saved = view.scorecard[0] %}
-        <p class="section-prose">{% if saved.series %}Called before the match{% if view.saved_since %} since {{ view.saved_since | longdate }}{% endif %}: the favourite won {{ saved.right | round | int }} of {{ saved.series }}.{% else %}No saved call has finished yet.{% endif %}{% if view.scorecard[1].series %} Rebuilt calls: {{ view.scorecard[1].series_pct | round | int }}% of {{ view.scorecard[1].series }}.{% endif %}</p>
         <figure class="register-figure" aria-labelledby="record-cap">
-          <figcaption id="record-cap" class="table-caption">Table II. Record by series and by game.<a class="note-ref" href="#note-4" aria-label="Note 4">4</a></figcaption>
+          <figcaption id="record-cap" class="table-caption">Table II. Series and games.<a class="note-ref" href="#note-4" aria-label="Note 4">4</a></figcaption>
           <div class="table-scroll">
             <table class="register register--record">
               <thead>
@@ -64,13 +62,13 @@
 
         {% set span = view.backtest_span %}
         <figure class="register-figure" aria-labelledby="market-cap">
-          <figcaption id="market-cap" class="table-caption">Table III. Against Kalshi’s last price before the start, on matches also priced 12 hours out. FORGE: calls within a major league; Other: every other call. Difference: our log loss minus Kalshi’s; below 0 beats the market. Saved: calls made before the match.{% if span %} Backtest: calls rebuilt from the day before, {{ span[0] | longdate }} – {{ span[1] | longdate }}; the forecast weights saw these games.{% endif %}<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
+          <figcaption id="market-cap" class="table-caption">Table III. Against Kalshi’s close, on matches priced 12h out. Negative difference favours us.<a class="note-ref" href="#note-5" aria-label="Note 5">5</a></figcaption>
           <div class="table-scroll">
             <table class="register register--record register--market register--edges">
               <thead>
                 <tr>
                   <th scope="col" rowspan="2" class="edges-calls">Calls</th>
-                  <th scope="col" rowspan="2">Source</th>
+                  <th scope="col" rowspan="2"{% if span %} title="Backtest: {{ span[0] | longdate }} – {{ span[1] | longdate }}"{% endif %}>Source</th>
                   <th scope="col" class="num" rowspan="2">Series</th>
                   <th scope="colgroup" colspan="2" class="num phone-hide">Favourite won</th>
                   <th scope="colgroup" colspan="2" class="num">Log loss</th>
@@ -88,7 +86,7 @@
                 {% for src in group.sources %}
                 {% for row in src.rows %}
                 <tr{% if src.name == 'backtest' %} class="edges-backtest"{% endif %}>
-                  {% if loop.first and src.name == 'saved' %}<th scope="rowgroup" rowspan="{{ group.sources | sum(attribute='rows', start=[]) | length }}" class="edges-calls">{{ group.label }}</th>{% endif %}
+                  {% if loop.first and src.name == 'saved' %}<th scope="rowgroup" rowspan="{{ group.sources | sum(attribute='rows', start=[]) | length }}" class="edges-calls" title="{{ 'Calls within a major league' if group.label == 'FORGE' else 'All other calls' }}">{{ group.label }}</th>{% endif %}
                   <th scope="row" class="edges-source"><span class="edges-method">{{ group.label }}, </span>{{ 'Backtest' if src.name == 'backtest' else 'Saved' }}</th>
                   <td class="num">{{ row.series }}</td>
                   {% if row.series %}
@@ -113,23 +111,23 @@
           </div>
         </figure>
         <figure class="register-figure" aria-labelledby="edges-cap">
-          <figcaption id="edges-cap" class="table-caption">Table IV. $1 per call with more than 5 points over Kalshi’s ask, 12 hours before start. Return after fees; CLV in points.</figcaption>
-          {% with edge_groups = view.edges %}{% include '_call_edges.html.j2' %}{% endwith %}
+          <figcaption id="edges-cap" class="table-caption">Table IV. Net &gt; 0 (Blend − ask − fees). 12h quotes; $1 + fees per pick. Return on total outlay. Other cross-league fixtures excluded.</figcaption>
+          {% with edge_groups = view.trading_edges, show_edge = false %}{% include '_call_edges.html.j2' %}{% endwith %}
         </figure>
-        <p class="section-prose record-note"><a href="call-performance.html">Call performance and all edges</a> · <a href="alerts.html">Alert history and profit</a></p>
+        <p class="section-prose record-note"><a href="call-performance.html">Call performance</a> · <a href="alerts.html">Alert history</a></p>
       </section>
 
       <section class="fixtures-block" aria-labelledby="past-heading">
         <div class="block-head">
           <h2 id="past-heading">Results</h2>
-          <a class="more" href="predictions.json">Every call as data</a>
+          <a class="more" href="predictions.json">Download calls</a>
         </div>
         <figure class="register-figure register-figure--main" aria-labelledby="past-cap">
-          <figcaption id="past-cap" class="table-caption">Table V. The last {{ view.recent_days }} days, newest first. <span class="count" data-count-for="past" aria-live="polite"></span></figcaption>
+          <figcaption id="past-cap" class="table-caption">Table V. Last {{ view.recent_days }} days. <span class="count" data-count-for="past" aria-live="polite"></span></figcaption>
           {% if view.past %}
           <div class="table-scroll">{{ fixtures(view.past, results=True, id='past') }}</div>
           {% endif %}
-          <p class="empty fx-empty" data-empty-for="past"{% if view.past %} hidden{% endif %}>{% if view.past %}No result fits these filters.{% else %}No results in the last {{ view.recent_days }} days.{% endif %}</p>
+          <p class="empty fx-empty" data-empty-for="past"{% if view.past %} hidden{% endif %}>{% if view.past %}No matching results.{% else %}No recent results.{% endif %}</p>
         </figure>
         {% if view.months %}
         <p class="month-index"><span class="month-index-lead">By month</span> {% for m in view.months %}<a href="results/{{ m.key }}.html">{{ m.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
@@ -138,12 +136,12 @@
     </div>
 
     <aside class="margin notes" id="about" aria-labelledby="about-heading">
-      <h2 id="about-heading" class="margin-head">How to read the predictions</h2>
+      <h2 id="about-heading" class="margin-head">Reading the odds</h2>
       <ol class="notes-list">
         {% for line in metric.how_to_read %}
-        <li id="note-{{ loop.index }}"><span class="note-mark" aria-hidden="true">{{ loop.index }}</span>{{ line }}</li>
+        <li id="note-{{ loop.index }}"><span class="note-mark" aria-hidden="true">{{ loop.index }}</span>{{ line }}{% if loop.index == 5 %} <a href="market-blend.html">Method</a>.{% endif %}</li>
         {% endfor %}
-        <li id="note-dagger" class="caveat"><span class="note-mark" aria-hidden="true">†</span><span class="visually-hidden">Caveat: </span>{{ metric.caveats }}{% if coverage %} In this update, {{ coverage.matched }} of {{ coverage.matches }} scheduled matches could be rated.{% endif %}</li>
+        <li id="note-dagger" class="caveat"><span class="note-mark" aria-hidden="true">†</span><span class="visually-hidden">Caveat: </span>{{ metric.caveats }}{% if coverage %} {{ coverage.matched }}/{{ coverage.matches }} fixtures rated.{% endif %}</li>
       </ol>
     </aside>
   </div>
