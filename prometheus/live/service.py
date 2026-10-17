@@ -107,6 +107,32 @@ def live_events(payload):
             yield event
 
 
+def feed_sides(game, out):
+    """`game` with its sides as Riot's feed has them; None until the feed has it.
+
+    getLive can still list the previous map's sides when a map starts (KC v MVK
+    map 3, FURIA v C9 maps 2 and 3, 2026-10-16). The collector refuses every frame
+    whose teams aren't on the selected sides, so a map selected that way shows no
+    stats, never finishes and leaves no snapshot.
+    """
+    try:
+        _, payload = fetch_json(WINDOW.split("?")[0].format(game["id"]), out)
+    except ValueError as error:
+        log("sides_failed", game=game["id"], reason=str(error))
+        return None
+    metadata = (payload or {}).get("gameMetadata") or {}
+    ids = {
+        side: (metadata.get(f"{side}TeamMetadata") or {}).get("esportsTeamId")
+        for side in ("blue", "red")
+    }
+    if None in ids.values():
+        return None
+    by_id = {team_id: side for side, team_id in ids.items()}
+    if set(by_id) != {t["id"] for t in game["teams"]}:
+        raise ValueError(f"feed teams {sorted(by_id)} are not getLive's")
+    return dict(game, teams=[dict(t, side=by_id[t["id"]]) for t in game["teams"]])
+
+
 def mapping_for(event, catalog, aliases):
     match = event["match"]
     teams = []
@@ -406,6 +432,10 @@ class Game:
         # An adopted game keeps another run's collector and session (its history).
         self.collector_dir, session = adopt or (self.dir / "collector", self.id)
         self.collector = Collector(self.collector_dir, "network_probe")
+        # A resumed session keeps the sides it was selected with.
+        saved = self.collector.state["used_sessions"].get(session)
+        if saved:
+            sides = {"blue": saved["blue_id"], "red": saved["red_id"]}
         self.collector.process(
             {
                 "action": "select",
@@ -800,6 +830,11 @@ def run(args):
                             continue
                         try:
                             mapping = mapping_for(event, catalog, aliases)
+                            if gid not in adopt:
+                                out = args.root / event["id"] / gid / "sides" / stamp
+                                game = feed_sides(game, out)
+                                if game is None:
+                                    continue  # draft or loading: next discovery
                             # A new map replaces the match's earlier one.
                             for old in [
                                 k

@@ -2,6 +2,15 @@
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-16 — Live: Kalshi names through aliases, map sides from the feed
+
+Branch `live-kalshi-aliases`, base `42b97f3` (PR #70). Two production faults on Worlds Play-Ins day:
+
+- **No Kalshi odds on FURIA v C9.** Kalshi calls the team "FURIA Esports"; `live/kalshi.contract` matched only our, Riot's and the code's names exactly, so neither the map nor the series contract was found. Names in the rules text now also go through `markets.MARKET_ALIASES` (already has FURIA Esports → FURIA). Against the open markets saved during map 4: before, none; after, `KXLOLMAP-26OCT161900C9FUR-4-FUR` and `KXLOLGAME-26OCT161900C9FUR-FUR`.
+- **Only map 4 of FURIA v C9 (and maps 1–2 of KC v MVK) on Live.** The service took each map's blue/red teams from getLive, which at a map's start can still list the previous map's sides (Riot corrected them later: getEventDetails now has the right ones). The collector then refuses every frame (`blue/red_team_identity_mismatch`, shown on KC v MVK map 3's last page), the map never finishes and no snapshot is written; the later snapshot attempt also fails because the re-selection's sides differ from the saved session's. Side swaps today: KC v MVK map 3, FURIA v C9 maps 2 and 3 (FURIA map 4 kept map 3's sides and worked). Map 1 of FURIA v C9 is also missing; its sides match getLive's final ones, so the cause there is not confirmed (worker logs not read). Now `service.feed_sides` reads the map's sides from one feed window (`gameMetadata`) before tracking it, waits for the next discovery on a 204, and refuses a feed whose teams aren't getLive's; a resumed `Game` keeps its saved selection's sides. Checked on Riot's real feed: KC v MVK map 3 with getLive's stale sides comes back corrected; the unplayed FURIA map 5 gives None.
+
+Checks: `uv run pytest -q tests/live` (new: Kalshi alias match, feed sides swap/wait/refuse, resume keeps sides), full suite and ruff below. CI cost: none (a few unit tests); the worker makes one extra feed request per new map. Not verified on a live production match; the worker picks this up at its next refresh (`deploy/live/refresh.sh`, every 6 hours or on boot). Earlier maps lost today are not recoverable from the published files.
+
 ## 2026-10-16 — Show preparing matches on Live
 
 - The running worker reads Riot's schedule once per discovery (one extra request per minute), publishes known fixtures from 75 minutes before their start through four hours after it, and keeps itself awake for them. Waiting pages use Riot's match ID, so the watch URL and stream survive the first map. Completed/expired/unknown fixtures leave the list; tracked maps, including between maps, take precedence. Schedule failures drop waiting fixtures without suppressing tracked maps.

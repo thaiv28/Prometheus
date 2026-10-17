@@ -47,6 +47,33 @@ class ContractTest(unittest.TestCase):
         markets = [*self.markets, market("Karmine Corp", event="E4b")]
         self.assertIsNone(contract(markets, {"teams": TEAMS}, 4, self.start))
 
+    def test_kalshi_names_go_through_market_aliases(self):
+        # Kalshi calls FURIA "FURIA Esports"; Riot, Prometheus and the code say FURIA.
+        rule = (
+            "If {side} wins game 4 in the Worlds 2026: Cloud9 vs. FURIA Esports "
+            "League of Legends match originally scheduled for Oct 16, 2026 at "
+            "4:50 PM EDT, then the market resolves to Yes."
+        )
+        markets = [
+            {
+                "ticker": f"E-{s}",
+                "event_ticker": "E",
+                "rules_primary": rule.format(side=s),
+            }
+            for s in ("FURIA Esports", "Cloud9")
+        ]
+        teams = [
+            {"name": "FURIA", "riot_name": "FURIA", "code": "FUR"},
+            {"name": "Cloud9", "riot_name": "Cloud9 Kia", "code": "C9"},
+        ]
+        start = "2026-10-16T23:00:00Z"
+        self.assertEqual(
+            contract(markets, {"teams": teams}, 4, start), "E-FURIA Esports"
+        )
+        self.assertEqual(
+            contract(markets, {"teams": teams[::-1]}, 4, start), "E-Cloud9"
+        )
+
     def test_eastern_date(self):
         self.assertEqual(scheduled_day("2026-10-16T02:00:00Z"), "Oct 15, 2026")
 

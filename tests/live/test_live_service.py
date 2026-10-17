@@ -3,9 +3,11 @@ import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 from prometheus.live.service import (
     Game,
+    feed_sides,
     live_events,
     mapping_for,
     patch_snapshot,
@@ -266,6 +268,62 @@ class GameStateTest(unittest.TestCase):
             patch_snapshot(snap, results, ["Karmine Corp", "Cloud9"])
             game = json.loads(snap.read_text())["game"]
             self.assertEqual((game["winner"], game["ended_at"]), (1, "end"))
+
+
+# getLive at the start of KC v MVK map 3 (2026-10-16): the last map's sides.
+MAP3 = {
+    "id": "g3",
+    "number": 3,
+    "teams": [{"id": "kc", "side": "blue"}, {"id": "mvk", "side": "red"}],
+}
+
+
+class FeedSidesTest(unittest.TestCase):
+    def sides(self, payload):
+        with mock.patch(
+            "prometheus.live.service.fetch_json", return_value=({}, payload)
+        ):
+            return feed_sides(MAP3, Path("unused"))
+
+    def window(self, blue, red):
+        return {
+            "gameMetadata": {
+                "blueTeamMetadata": {"esportsTeamId": blue},
+                "redTeamMetadata": {"esportsTeamId": red},
+            }
+        }
+
+    def test_feed_sides_replace_getlive_sides(self):
+        game = self.sides(self.window("mvk", "kc"))
+        self.assertEqual(
+            game["teams"], [{"id": "kc", "side": "red"}, {"id": "mvk", "side": "blue"}]
+        )
+        self.assertEqual(game["number"], 3)
+
+    def test_no_feed_yet_waits(self):
+        self.assertIsNone(self.sides(None))
+        self.assertIsNone(self.sides({"frames": []}))
+
+    def test_other_teams_in_the_feed_are_refused(self):
+        with self.assertRaises(ValueError):
+            self.sides(self.window("kc", "t1"))
+
+    def test_resumed_game_keeps_its_selected_sides(self):
+        with tempfile.TemporaryDirectory() as d:
+            mapping = mapping_for(event(), CATALOG, {})
+            sides = [{"id": "c9", "side": "blue"}, {"id": "kc", "side": "red"}]
+            game = {"id": "g4", "number": 4, "teams": sides}
+            Game(Path(d), mapping, game, None, None).close()
+            # getLive has since swapped them; the saved session still resumes.
+            swapped = [{"id": "c9", "side": "red"}, {"id": "kc", "side": "blue"}]
+            again = Game(Path(d), mapping, dict(game, teams=swapped), None, None)
+            try:
+                selection = again.collector.state["selection"]
+                self.assertEqual(
+                    (selection["blue_id"], selection["red_id"]), ("c9", "kc")
+                )
+            finally:
+                again.close()
 
 
 class StartSearchTest(unittest.TestCase):
