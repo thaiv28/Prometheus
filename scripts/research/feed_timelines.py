@@ -34,6 +34,7 @@ import random
 import sys
 import time
 from datetime import datetime, timedelta
+from http.client import HTTPException
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -99,7 +100,7 @@ def get(url, key=False):
         if error.code in (400, 404):
             return None
         raise Refused(f"{error.code} {url}") from error
-    except (URLError, TimeoutError, ConnectionError) as error:
+    except (URLError, OSError, HTTPException) as error:
         raise Unreachable(f"{getattr(error, 'reason', error)} {url}") from error
 
 

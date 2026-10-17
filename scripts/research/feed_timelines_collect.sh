@@ -2,12 +2,14 @@
 # Run feed_timelines.py collect in N shards that survive this machine sleeping or
 # going offline (exit 4: rerun a minute later). A refusal or server error from
 # Riot (exit 3) stops that shard for good. Logs: <out>/collect_<i>.log.
-#   bash scripts/research/feed_timelines_collect.sh [out] [shards]
+#   bash scripts/research/feed_timelines_collect.sh [out] [shards] [shard index ...]
 set -u
 cd "$(dirname "$0")/../.."
 out=${1:-data/feed_timelines}
 shards=${2:-4}
-for ((i = 0; i < shards; i++)); do
+shift $(($# < 2 ? $# : 2))
+which=${*:-$(seq 0 $((shards - 1)))}
+for i in $which; do
   (
     while true; do
       # PYTHON: an interpreter command (default: uv run python).
