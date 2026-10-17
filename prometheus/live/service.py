@@ -66,6 +66,7 @@ REFUSED = 3
 # Exit status after --idle-exit minutes with no live game: the unit backs up the
 # evidence and powers the worker off until the schedule starts it again.
 IDLE = 4
+QUOTE_INTERVAL = 2  # seconds; independent of the Riot feed cadence
 SERIES_SHOWN = 30  # minutes a decided series stays on the live pages
 
 
@@ -419,7 +420,7 @@ def publish_s3(page_out, uri):
         "--content-type",
         "application/json",
         "--cache-control",
-        "max-age=2",
+        "max-age=1",
     ]
     try:
         done = subprocess.run(command, capture_output=True, text=True, timeout=60)
@@ -596,7 +597,6 @@ class Game:
         )
         if self.state == "waiting" and page.get("game") and not page["game"]["frames"]:
             page.update(status="waiting", note=None)
-        quotes = self.quotes(self.dir / "quotes.jsonl")
         game = page.get("game")
         score = self.score()
         result = self.results().get(self.number)
@@ -649,10 +649,19 @@ class Game:
                 "kalshi": (self.quotes(self.series_quotes_path) or [None])[-1],
                 "kalshi_url": MATCH_URL if self.series_ticker else None,
             }
+        page["match"]["start"] = self.start_time
         if record:
             self.journal(page)
+        return self.add_quotes(page)
+
+    def add_quotes(self, page):
+        """Refresh prices on an existing page without replaying the game feed."""
+        quotes = self.quotes(self.dir / "quotes.jsonl")
+        series = page["match"].get("series")
+        if series:
+            series["kalshi"] = (self.quotes(self.series_quotes_path) or [None])[-1]
         url = MARKET_URL
-        if not self.ticker and self.deciding(score):
+        if not self.ticker and self.deciding(self.score()):
             # Kalshi lists no market for a deciding map: the series market is it.
             quotes, url = self.quotes(self.series_quotes_path), MATCH_URL
         if quotes and page.get("game"):
@@ -808,6 +817,7 @@ def run(args):
     events, last_active = None, time.monotonic()
     scheduled = []
     waiting_ids = set()
+    feed_polled = {}
     kalshi = True
     try:
         while True:
@@ -1018,7 +1028,8 @@ def run(args):
                         log("kalshi_stopped", reason=str(error))
                     except (ValueError, OSError) as error:
                         log("quote_failed", game=gid, reason=str(error))
-                if kalshi:
+                feed_due = cycle - feed_polled.get(gid, -float("inf")) >= args.interval
+                if kalshi and feed_due:
                     try:
                         game.settle()
                     except Stop as error:
@@ -1027,14 +1038,20 @@ def run(args):
                     except (ValueError, OSError) as error:
                         log("settle_failed", game=gid, reason=str(error))
                 try:
-                    if game.state != "finished":
-                        game.poll()
-                    # Stamp after polling so the newest receipt is not in the future.
-                    page = game.page(catalog, utc_now())
+                    path = args.page_out / f"{game.mapping['match_id']}.json"
+                    if feed_due or not path.exists():
+                        feed_polled[gid] = cycle
+                        if game.state != "finished":
+                            game.poll()
+                        # Stamp after polling; receipts must not be in the future.
+                        page = game.page(catalog, utc_now())
+                    else:
+                        page = game.add_quotes(json.loads(path.read_text()))
+                        page["published_at"] = utc_now()
                     write_atomic(
                         args.page_out / f"{game.mapping['match_id']}.json", page
                     )
-                    if game.state == "finished":
+                    if game.state == "finished" and feed_due:
                         game.write_snapshot(catalog)
                 except (
                     ValueError,
@@ -1074,7 +1091,8 @@ def run(args):
             ):
                 log("idle", minutes=args.idle_exit)
                 return IDLE
-            time.sleep(max(0, args.interval - (time.monotonic() - cycle)))
+            interval = QUOTE_INTERVAL if games and kalshi else args.interval
+            time.sleep(max(0, interval - (time.monotonic() - cycle)))
     except Stop as error:
         log("stopped", reason=str(error))
         return REFUSED

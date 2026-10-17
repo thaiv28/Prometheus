@@ -20,7 +20,7 @@
     return node;
   };
 
-  const POLL_MS = 5000;
+  const POLL_MS = 2000;
   const QUIET_MS = 60000;
   const RETRY_MS = 15000;
   const STALE_MS = 45000;
@@ -32,6 +32,21 @@
   let failed = false;
   let skew = 0;
   let timer = null;
+  const upcoming = root.querySelector(".live-idle");
+  const fixtureRows = upcoming ? [...upcoming.querySelectorAll("tr.fx")] : [];
+  const shownLive = new Set();
+
+  function updateUpcoming(matches) {
+    for (const row of fixtureRows) {
+      if (L.fixtureOnLive((row.dataset.teams || "").split("|"), row.dataset.start, matches)) shownLive.add(row);
+      row.hidden = shownLive.has(row);
+    }
+    if (!upcoming || !fixtureRows.length) return;
+    for (const body of upcoming.querySelectorAll("tbody.fx-day")) {
+      body.hidden = [...body.querySelectorAll("tr.fx")].every((r) => r.hidden);
+    }
+    upcoming.hidden = fixtureRows.every((r) => r.hidden);
+  }
 
   async function poll() {
     clearTimeout(timer);
@@ -79,6 +94,7 @@
     ].join("");
     $("matches-cap").classList.toggle("is-stale", stale);
     if (!rows) return;
+    updateUpcoming(matches);
     table.hidden = !n;
     empty.hidden = !!n;
     [...table.tBodies].forEach((b) => b.remove());
