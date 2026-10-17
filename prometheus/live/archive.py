@@ -21,14 +21,20 @@ the bucket (again when `SCHEMA` moves) and restores them (with each match's
 
 import json
 import sys
+import urllib.error
+import urllib.request
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 from pathlib import Path
 
 from .. import markets
 from .kalshi import MATCH_SERIES, SERIES, contract
+from .requests import SITE_API_KEY
 
-SCHEMA = 2  # 2: Kalshi backfilled from candlesticks
+SCHEMA = 3  # 2: Kalshi backfilled from candlesticks; 3: team codes
+SERIES_SCHEMA = 1
+FEED = "https://feed.lolesports.com/livestats/v1/window/{}"
+EVENT = "https://esports-api.lolesports.com/persisted/gw/getEventDetails?hl=en-US&id={}"
 
 MAX_SPREAD = 0.1  # as live_state.js: a wider quote is too thin to call a price
 GOLD_STEP = 30  # seconds of game time between kept gold readings
@@ -207,6 +213,7 @@ def compact(page):
             "event": match.get("event"),
             "best_of": match.get("best_of"),
             "teams": [t["name"] for t in match["teams"]],
+            "codes": [t.get("code") for t in match["teams"]],
         },
         "number": game["number"],
         "blue": game.get("blue"),
@@ -227,8 +234,129 @@ def compact(page):
     }
 
 
+def _riot(url, key=None):
+    """Riot's JSON, or None when it has nothing (204) or refuses."""
+    headers = {"User-Agent": "prometheus"} | ({"x-api-key": key} if key else {})
+    try:
+        with urllib.request.urlopen(
+            urllib.request.Request(url, headers=headers), timeout=30
+        ) as r:
+            body = r.read()
+    except urllib.error.HTTPError:
+        return None
+    return json.loads(body) if body else None
+
+
+def _candles(series, ticker, t0, t1, get):
+    """[(end of minute, bid, ask)] for YES on a contract between two times."""
+    out = []
+    for c in get(
+        f"/series/{series}/markets/{ticker}/candlesticks",
+        start_ts=int(t0.timestamp()),
+        end_ts=int(t1.timestamp()),
+        period_interval=1,
+    ).get("candlesticks", []):
+        bid, ask = _dollars(c.get("yes_bid")), _dollars(c.get("yes_ask"))
+        if bid is not None and ask is not None:
+            out.append((c["end_period_ts"], bid, ask))
+    return out
+
+
+def _before(candles, t):
+    """Kalshi's middle price in the last minute before `t`, if usable."""
+    last = None
+    for ts, bid, ask in candles:
+        if ts <= t.timestamp():
+            last = (bid, ask)
+    return _mid({"bid": last[0], "ask": last[1]}) if last else None
+
+
+def series_record(match_id, teams, codes, get=markets.get, riot=_riot):
+    """Every played map of a finished match: its start (the feed's first frame),
+    its winner (Kalshi's settled map market) and Kalshi's map and series prices
+    for the first team in the minute before it. None while a map is unplayed."""
+    event = riot(EVENT.format(match_id), SITE_API_KEY)
+    games = (
+        (((event or {}).get("data") or {}).get("event") or {})
+        .get("match", {})
+        .get("games")
+    )
+    if not games or any(g["state"] not in ("completed", "unneeded") for g in games):
+        return None
+    maps = []
+    for g in sorted(games, key=lambda g: g["number"]):
+        if g["state"] != "completed":
+            continue
+        window = riot(FEED.format(g["id"])) or {}
+        frames = window.get("frames") or []
+        start = frames[0]["rfc460Timestamp"] if frames else None
+        maps.append({"number": g["number"], "game_id": g["id"], "start": start})
+    starts = [
+        datetime.fromisoformat(m["start"].replace("Z", "+00:00"))
+        for m in maps
+        if m["start"]
+    ]
+    if not starts:
+        return None
+    first, last = min(starts), max(starts)
+    mapping = {
+        "teams": [{"name": n, "code": c} for n, c in zip(teams, codes, strict=True)]
+    }
+    found = _contract_markets(first - timedelta(hours=12), get)
+
+    def find(kind, number):
+        pool = [m for m in found if m["_series"] == kind]
+        for day in (first, first - timedelta(hours=6)):
+            ticker = contract(pool, mapping, number, day.astimezone(UTC).isoformat())
+            if ticker:
+                return next(m for m in pool if m["ticker"] == ticker)
+        return None
+
+    window = (first - timedelta(minutes=30), last + timedelta(minutes=5))
+    series = find(MATCH_SERIES, None)
+    series_candles = (
+        _candles(MATCH_SERIES, series["ticker"], *window, get) if series else []
+    )
+    for m in maps:
+        start = (
+            datetime.fromisoformat(m["start"].replace("Z", "+00:00"))
+            if m["start"]
+            else None
+        )
+        market = find(SERIES, m["number"])
+        result = (market or {}).get("result")
+        m["winner"] = 0 if result == "yes" else 1 if result == "no" else None
+        m["kalshi_map"] = (
+            _before(
+                _candles(
+                    SERIES, market["ticker"], start - timedelta(minutes=30), start, get
+                ),
+                start,
+            )
+            if market and start
+            else None
+        )
+        m["kalshi_series"] = _before(series_candles, start) if start else None
+    return {"schema": SERIES_SCHEMA, "match_id": match_id, "teams": teams, "maps": maps}
+
+
 def main(argv=None):
     args = argv or sys.argv[1:]
+    if args[:1] == ["series"]:
+        # python -m prometheus.live.archive series <match dir>: series.min.json
+        # from any compact map in it; nothing written while the match is unfinished.
+        folder = Path(args[1])
+        first = json.loads(
+            next(iter(sorted(folder.glob("pages/map*.min.json")))).read_text()
+        )
+        record = series_record(
+            folder.name, first["match"]["teams"], first["match"]["codes"]
+        )
+        if record:
+            (folder / "series.min.json").write_text(
+                json.dumps(record, separators=(",", ":")) + "\n"
+            )
+        return
     source, out = [a for a in args if not a.startswith("--")][:2]
     page = json.loads(Path(source).read_text())
     if "--offline" not in args:

@@ -426,3 +426,6 @@
 .lr-figures--wide .lr-cap { font-size: var(--fs-small); }
 .lr-before { max-width: 62rem; }
 .lr-notes { max-width: 40rem; margin-top: 28px; }
+.lr-before-maps { max-width: 40rem; margin: 0 0 22px; }
+.register--before th.lr-group { text-align: center; }
+.register--before td.lr-k { color: var(--ink-2); }

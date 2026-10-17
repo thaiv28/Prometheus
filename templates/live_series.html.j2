@@ -24,6 +24,40 @@
   </p>
   {% endif %}
 
+  <figure class="register-figure lr-before-maps" aria-labelledby="before-cap">
+    <figcaption id="before-cap" class="table-caption">Table I. Before each map: {{ s.names[0] }}’s chance in 100.</figcaption>
+    <div class="table-scroll">
+      <table class="register register--before">
+        <thead>
+          <tr>
+            <th scope="col" rowspan="2">Map</th>
+            <th scope="col" rowspan="2" class="num">Score</th>
+            <th scope="colgroup" colspan="2" class="lr-group">Map</th>
+            <th scope="colgroup" colspan="2" class="lr-group">Series</th>
+            <th scope="col" rowspan="2" class="phone-hide">Won</th>
+          </tr>
+          <tr>
+            <th scope="col" class="num">Ours</th><th scope="col" class="num">Kalshi</th>
+            <th scope="col" class="num">Ours</th><th scope="col" class="num">Kalshi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in s.maps %}{% set b = m.before %}
+          <tr>
+            <td class="lr-n">{% if m.recorded %}<a href="#map-{{ m.number }}">{{ m.number }}</a>{% else %}{{ m.number }}{% endif %}</td>
+            <td class="num">{{ b.score or '—' }}</td>
+            <td class="num">{{ b.map_ours if b.map_ours is not none else '—' }}</td>
+            <td class="num lr-k">{{ b.map_kalshi if b.map_kalshi is not none else '—' }}</td>
+            <td class="num">{{ b.series_ours if b.series_ours is not none else '—' }}</td>
+            <td class="num lr-k">{{ b.series_kalshi if b.series_kalshi is not none else '—' }}</td>
+            <td class="phone-hide">{{ m.winner or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </figure>
+
   <section class="lr-figures lr-figures--wide" aria-label="By map">
   <p class="chance-key lr-key" aria-hidden="true">
     <span><svg viewBox="0 0 18 10"><line class="k-ours" x1="0" y1="5" x2="18" y2="5"/></svg>Our call</span>
@@ -35,10 +69,9 @@
   <div class="lr-maps">
     {% for m in shown %}
     {% set f = m.figure %}
-    <figure class="lr-map" data-trace='{{ f.trace | tojson }}' data-team="{{ s.names[0] }}">
+    <figure class="lr-map" id="map-{{ m.number }}" data-trace='{{ f.trace | tojson }}' data-team="{{ s.names[0] }}">
       <figcaption class="lr-cap">
-        <span><b>Map {{ m.number }}</b>{% if m.length %} · {{ m.length }}{% endif %}{% if m.winner %} · {{ m.winner }} won{% endif %}</span>
-        <span class="lr-pre">{% if m.pre is not none %}Before: {{ m.pre }}{% endif %}{% if m.pre_market is not none %}, Kalshi {{ m.pre_market }}{% endif %}{% if m.backfilled %}<a class="note-ref" href="#note-kalshi" aria-label="Kalshi from its minute prices: note">‡</a>{% endif %}</span>
+        <span><b>Map {{ m.number }}</b>{% if m.length %} · {{ m.length }}{% endif %}{% if m.winner %} · {{ m.winner }} won{% endif %}{% if m.backfilled %}<a class="note-ref" href="#note-kalshi" aria-label="Kalshi from its minute prices: note">‡</a>{% endif %}</span>
       </figcaption>
       <div class="lr-plot-wrap">
       <svg class="lr-plot" tabindex="0" viewBox="0 0 {{ f.w }} {{ f.h }}" role="img" aria-label="{{ s.names[0] }}’s chance to win map {{ m.number }}. {{ f.label }} Use the left and right arrow keys to read moments of the map.">
@@ -71,7 +104,7 @@
 
   <aside class="notes lr-notes" aria-labelledby="about-heading">
     <h2 id="about-heading" class="margin-head">Reading the maps</h2>
-    <p class="margin-note">The chance {{ s.names[0] }} wins each map, over estimated game time, from our call before it (open circle). Before the series: as on <a href="../predictions.html">Predictions</a>.</p>
+    <p class="margin-note">The chance {{ s.names[0] }} wins each map, over estimated game time, from our call before it (open circle). Before the series: as on <a href="../predictions.html">Predictions</a>. Table I: ours from the live service's FORGE and the score; Kalshi's middle price in the minute before each map.</p>
     {% if s.maps | selectattr('backfilled') | list %}
     <ol class="notes-list">
       <li id="note-kalshi"><span class="note-mark" aria-hidden="true">‡</span>Kalshi from its minute prices, read after the map.</li>

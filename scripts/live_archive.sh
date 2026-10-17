@@ -8,7 +8,8 @@
 # copies (map<n>.min.json) and each match's results.json (settled map winners)
 # are synced down; each page file without a current compact copy is downloaded,
 # cut down by prometheus.live.archive (a few KB, with Kalshi's minute prices
-# where the service recorded none) and its copy uploaded beside it. A failure leaves the
+# where the service recorded none) and its copy uploaded beside it; each
+# finished match gets series.min.json (prometheus.live.archive series_record). A failure leaves the
 # pages without the newest maps, never fails the build.
 set -uo pipefail
 
@@ -27,7 +28,8 @@ prefix="${uri#s3://}"
 prefix="${prefix#*/}/"
 mkdir -p "$dest"
 aws s3 sync "$uri/" "$dest/" --only-show-errors --exclude '*' \
-    --include '*/pages/map*.min.json' --include '*/results.json' ||
+    --include '*/pages/map*.min.json' --include '*/results.json' \
+    --include '*/forge.json' --include '*/series.min.json' ||
     echo "::warning::Couldn't restore the live results."
 # A compact copy from an older prometheus.live.archive (SCHEMA) is made again.
 schema=$(uv run --no-sync python -c 'from prometheus.live.archive import SCHEMA; print(SCHEMA)')
@@ -47,4 +49,17 @@ for key in $(grep -E '/pages/map[0-9]+\.json$' <<<"$keys"); do
         rm -f "$min"
     fi
 done
-echo "Live results: $made maps compacted, $(find "$dest" -name 'map*.min.json' | wc -l | tr -d ' ') restored."
+# Each finished match without a series record gets one (every map's start, winner
+# and Kalshi's map and series prices before it; nothing while a map is unplayed).
+series=0
+for folder in "$dest"/*/; do
+    [ -f "$folder/series.min.json" ] && continue
+    compgen -G "$folder/pages/map*.min.json" >/dev/null || continue
+    id=$(basename "$folder")
+    if uv run --no-sync python -m prometheus.live.archive series "$folder" &&
+        [ -f "$folder/series.min.json" ]; then
+        aws s3 cp "$folder/series.min.json" "$uri/$id/series.min.json" --only-show-errors \
+            --content-type application/json && series=$((series + 1))
+    fi
+done
+echo "Live results: $made maps compacted, $series series recorded, $(find "$dest" -name 'map*.min.json' | wc -l | tr -d ' ') restored."
