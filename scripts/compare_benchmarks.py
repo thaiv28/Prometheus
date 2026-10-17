@@ -74,7 +74,13 @@ MARKET_KEY = ["kind", "event_ticker", "team1"]
 # Prop projections (on the Props page): every measure evaluate_props.py dumps.
 PROPS_KEY = ["measure", "unit"]
 # In-game calls (`evaluate_live.py`): every band and all minutes together.
-LIVE_BANDS = {"pregame": (0,), "early": (5, 10), "mid": (15, 20), "late": (25, 30)}
+LIVE_BANDS = {
+    "pre-map, every priced map": (-1,),
+    "pregame": (0,),
+    "early": (5, 10),
+    "mid": (15, 20),
+    "late": (25, 30),
+}
 LIVE_KEY = ["game", "checkpoint"]
 N_RESAMPLES = 2000
 # Base and head run on different machines, so identical code can differ by about
@@ -598,7 +604,10 @@ def compare_live(base, head, n_resamples=N_RESAMPLES, fit_through=None):
         return [_missing("Live", "log loss", True, only)]
     rows = []
     for name, minutes in [*LIVE_BANDS.items(), ("all", None)]:
-        pick = both if minutes is None else both[both["checkpoint"].isin(minutes)]
+        if minutes is None:  # all: the feed maps' checkpoints
+            pick = both[both["checkpoint"] >= 0]
+        else:
+            pick = both[both["checkpoint"].isin(minutes)]
         if pick.empty:
             continue
         b = game_losses(pick["ours_base"], pick["won_base"])["log_loss"].to_numpy()
