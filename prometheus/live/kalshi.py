@@ -66,6 +66,24 @@ def contract(markets, mapping, game_number, start_time):
     return tickers[0] if len(tickers) == 1 else None
 
 
+DEPTH = 5  # price levels kept a side
+
+
+def book_levels(book, depth=DEPTH):
+    """The best `depth` levels of each side as [[price, size], ...], best first:
+    `yes` bids, and `no` bids (1 - price is the cost of YES there)."""
+    levels = book.get("orderbook_fp") or {}
+    out = {}
+    for side in ("yes", "no"):
+        rows = [
+            [float(p), float(size)]
+            for p, size in levels.get(f"{side}_dollars") or []
+            if float(size) > 0
+        ]
+        out[side] = sorted(rows, key=lambda r: -r[0])[:depth]
+    return out
+
+
 def quote(book, at):
     """{at, bid, ask} for YES from an orderbook response, or None if one-sided."""
     levels = book.get("orderbook_fp") or {}

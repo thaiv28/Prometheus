@@ -13,6 +13,17 @@ Copy review: PASS — production-template Live/Watch at 1440px and 390px, whole-
 
 Append one dated entry for each substantive agent work session, newest first. Record what changed, the checks actually run, and any remaining limit. Update the other steering docs named in `AGENTS.md` in the same change. When this file passes about 60 KB, move the oldest days' entries to the top of [`work_log_archive.md`](work_log_archive.md).
 
+## 2026-10-17 — Freeze the draft model; Kalshi's book before each map
+
+Branch `draft-frozen`, base `main` at `761b1a3` (PR #78). User asked to merge #78 (done), freeze the draft model, record Kalshi's book around the draft, and look for a pick source; and asked whether trading in the first 30 s of the game would do instead of champion select.
+
+- **Trading after the start** (3,146 priced maps, Kalshi's last trade at each offset, full draft shift): weight beside Kalshi +0.87 (+0.53 to +1.22) at −60 s, +0.82 at the start, +0.76 (+0.42 to +1.10) at +30 s, +0.71 (+0.36 to +1.04) at +60 s, +0.67 at +3 min; Kalshi's move from −60 s correlates 0.06–0.15 with the shift. The feed's picks (first frame with champions ~32 s after the start on the pilot) keep roughly 80% of the draft signal, so no champion-select source is required.
+- **Pick source:** the public lolesports endpoints the worker uses (getLive, getEventDetails, the livestats window) carry no picks before the game loads (pilot: window 204 for 16 minutes, picks with the first frame). Nothing was live in a draft to probe further. Champion select would need reading the stream; recorded as optional.
+- **Frozen draft model:** `draft_score.py --freeze` wrote `scripts/research/draft_model_v1.json` (base and draft + matchup + synergy weights, constants, fit 2019-01-01 to 2026-10-11 on 76,299 games, script hash); it refuses to overwrite. `--prospective` scores only later games, against Elo and against Kalshi at 60 s before and 45 s after the start with paper bets on Kalshi's price plus the frozen shift; nothing after 2026-10-11 has been looked at. Smoke-tested on a copy dated 2026-09-27 (in-sample, code check only).
+- **Live worker, book before the map:** `service.PreMaps` reads Kalshi's map book every cycle while getLive lists the map in progress and the feed has no frames (draft, loading), into `<match>/<game>/pre_quotes.jsonl` with the top five levels a side (`kalshi.book_levels`), logs `pre_map_seen`, and stops once the map is tracked; in-game quote rows also carry the five levels. `backup.sh` syncs `pre_quotes.jsonl`. Not yet run on a real match.
+- **Lost and refetched data:** removing the #78 worktree with `--force` deleted its 8,096 pre-map trade tapes (gitignored). They are being refetched into the main checkout's `data/live_bench/pre_trades/`, and AGENTS.md now shares both tape caches by symlink and warns to move fetched data before removing a worktree.
+- Checks: below. Limits: one pilot for the feed's pick timing; the pre-map book poller is tested with a stub, not live.
+
 ## 2026-10-17 — Draft score research, pre-map prices in the live benchmark
 
 Branch `draft-model`, rebased on `main` at `ac5745c` (PR #76). The user asked to prioritise draft modelling (the draft is public, so no feed delay), to add Kalshi's price at every map's start to the live benchmark's profit tables, and to try champion matchups and team synergy.
