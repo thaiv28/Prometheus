@@ -36,6 +36,14 @@ target.parent.mkdir(parents=True, exist_ok=True)
 with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
     for path in sorted(stage.rglob("*")):
         if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc" and path.relative_to(stage).parts[0] != "bin":
-            archive.write(path, path.relative_to(stage))
+            info = zipfile.ZipInfo(str(path.relative_to(stage)), date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            content = path.read_bytes()
+            # pip's excluded console scripts have machine-specific shebang
+            # hashes in RECORD. Drop those absent files from wheel metadata.
+            if path.name == "RECORD" and path.parent.name.endswith(".dist-info"):
+                content = b"".join(line for line in content.splitlines(keepends=True) if not line.startswith(b"../"))
+            archive.writestr(info, content)
 print(target)
 PYTHON

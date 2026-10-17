@@ -33,7 +33,7 @@ Infrastructure PR #16 is merged at `349a744`; application PR #65 is merged at `e
 1. Build the isolated runtime zip from the reviewed application commit: `bash deploy/execution/package.sh /tmp/prometheus-execution.zip`. It contains only the adapter/executor/handler and signing dependency, no DB, saved log, `.env`, credentials or site output. The deployment artifact goes in the existing **private** artifacts bucket at `prometheus/execution/releases/<zip SHA256>.zip`.
 2. Secrets `prometheus/execution/demo` and `prometheus/execution/live` are provisioned. The live value is installed; demo remains empty. For future credential changes, create API credentials for the intended demo/live account and store each as a Secrets Manager JSON secret with `key_id` and `private_key_pem`. For demo-only setup, the separate live secret can remain empty; do not install live credentials before a separately authorized live rollout. Do not put keys in GitHub variables, the prediction log or application `.env`. Use the minimum order/read/cancel scopes the API supports for the account. If using a customer-managed KMS key, supply the narrowly scoped decrypt permission separately; the prepared stack assumes the normal Secrets Manager managed key.
 3. Supply stack parameters `ArtifactsBucketName`, immutable `CodeObjectKey`, the reviewed upload’s `CodeObjectVersion`, `demoSecretArn` and `liveSecretArn`. Store the secrets in `us-west-2`, the runner’s region. The table/config/schedule/private failure queue and exact-ARN IAM grants are created only by a separately authorized targeted deployment. Never deploy all application stacks for this change.
-4. Configure the SSM parameter `/prometheus/execution/config` with the fields below **while keeping mode off**. No spending values are provided by the implementation. Configure the GitHub variables `KALSHI_EXECUTION_CONTROL_ROLE_ARN` and `KALSHI_EXECUTION_CONFIG_PARAMETER` from the stack outputs. The dedicated main-branch OIDC control role can only read/write this one parameter; it cannot read credentials, invoke trades or change the ledger.
+4. Configure the SSM parameter `/prometheus/execution/config` with the fields below **while keeping mode off**. No spending values are provided by the implementation. Configure the GitHub variables `KALSHI_EXECUTION_CONTROL_ROLE_ARN` and `KALSHI_EXECUTION_CONFIG_PARAMETER` from the stack outputs. The dedicated main-branch OIDC control role reads/writes this one parameter and reads the executor release metadata; it cannot read credential secrets, invoke trades or change the ledger.
 5. The user elected to skip demo on 2026-10-16 after code/test review. Once sizing findings are reviewed and explicit limits/account precision are configured, use the manual **Kalshi execution mode** workflow’s `off`/`demo`/`live` dropdown. It validates explicit limits, preserves them and writes a fresh activation timestamp. Live remains a separate user decision; nothing in this implementation switches it on automatically.
 
 | Field | Meaning |
@@ -80,3 +80,42 @@ Let B = starting capital + ACCOUNT.realized − ACCOUNT.held. Fractional Kelly s
 The ledger atomically checks the observed held/realized values, total strategy capital and all existing caps when reserving. Raced funding snapshots cannot submit. Partial fills release only unused reservation; unknown responses keep funds reserved. Verified settlement credits our fill quantity’s contractual payout minus actual cost/fees, never pooled account revenue. Credit and release use the intent revision transaction, so retries cannot double-compound. Losses reduce future sizes; exhausted capital stops orders. Daily gross-spend caps do not refill on wins.
 
 This is sequential Kelly on free strategy capital under the existing one-order-per-fixture rule, not a joint optimizer of correlated open positions. Account exposure/reservations remain conservatively counted and may suppress bets. The probability estimate and fee bound determine the answer; sizing is not a profitability guarantee. The objective follows [Kelly’s original paper](https://www.princeton.edu/~wbialek/rome/refs/kelly_56.pdf); the fee-aware unit-contract conversion above is our derivation.
+
+## Deploy on merge and configure live
+
+The prepared `Publish` workflow adds `deploy-execution` after the existing checks, beside the site build. A main push touching packaged executor inputs triggers it; the changed-file range covers the entire push. PRs and scheduled site builds never deploy the executor. For repair, dispatch **Publish** on main with `deploy_execution` checked. An obsolete main revision is rejected before deployment. Identical source fingerprints skip the update after runtime verification.
+
+Infrastructure must be merged/deployed first, using **Deploy Prometheus Execution Infrastructure** (`diff`, then `deploy`): the execution-only stack adds `CodeSourceHash`, release tags, the dedicated `DeployRoleArn` output and read access to Lambda release metadata for the control role. Preserve the existing code key/version and all other parameters during this bootstrap. Copy `DeployRoleArn` into `KALSHI_EXECUTION_DEPLOY_ROLE_ARN` and `FunctionName` into `KALSHI_EXECUTION_FUNCTION_NAME`. Existing control/config variables remain required. This bootstrap has not been deployed yet.
+
+The deploy role uploads only under private `prometheus/execution/releases/` and can update only this stack/function. The release helper pins the zip checksum and S3 VersionId, reuses the deployed template, and preserves every non-release parameter (including masked secret ARNs). It waits for stack completion and verifies the healthy runtime, package checksum and source tags without invoking the handler. Unexpected current-code drift fails before upload. No mode/configuration/credential/ledger writes are permitted by the release role. Existing live mode would stay live during a later code deployment; switch off first if you want to pause it.
+
+After the first successful deployment:
+
+1. Open **Actions → Configure Kalshi execution → Run workflow**, on `main`. Supply the complete settings JSON below after replacing the account-precision placeholder. This saves limits only while mode is off; it cannot activate trading. Later changes may supply just the changed limit fields. Workflows serialize configuration and mode changes in one concurrency group; direct console/CLI SSM writers must not run concurrently (SSM has no compare-and-swap).
+2. Open **Actions → Kalshi execution mode → Run workflow**, on `main`, choose `live`. Activation checks the actual Lambda release fingerprint/checksum and all limits, then sets a fresh activation timestamp. An old or failed deployment cannot be activated by this workflow.
+3. To pause, run the same mode workflow with `off`. It remains available without release verification or valid limits. The next scheduled invocation stops submissions and reconciles tracked positions.
+
+Example for review: $50 seed, full Kelly, up to $50 on one order/fixture or open exposure, $100 gross UTC-day spend. These caps allow the starting capital to be used and limit later compounding until raised; they are not installed defaults. Kelly normally sizes below the order ceiling. `daily_budget_usd` is turnover, not a daily loss stop. `min_after_fee_edge: 0` still requires strictly positive net edge.
+
+```json
+{
+  "starting_bankroll_usd": "50",
+  "kelly_fraction": "1",
+  "order_budget_usd": "50",
+  "fixture_budget_usd": "50",
+  "daily_budget_usd": "100",
+  "max_exposure_usd": "50",
+  "min_balance_usd": "0",
+  "max_contracts": 10000,
+  "max_price": "0.99",
+  "min_after_fee_edge": "0",
+  "fee_rate_upper_bound": "0.07",
+  "balance_precision_usd": "REPLACE_WITH_VERIFIED_ACCOUNT_PRECISION",
+  "max_alert_age_seconds": 3600,
+  "max_quote_age_seconds": 30
+}
+```
+
+Verify `balance_precision_usd` for the actual account: `"0.0001"` for Direct membership, `"0.01"` for non-Direct, per [Kalshi's rounding documentation](https://docs.kalshi.com/getting_started/fee_rounding). Do not choose based on the displayed balance or to make more bets pass. The placeholder intentionally fails validation. Fee rates above the configured bound cause a skip. With the existing conservative rounding bound, a non-Direct account may produce no executable bets; no trade is preferable to treating an unverified precision as fact.
+
+The strategy spends only its seed plus verified profits and never deposits or borrows. Keeping the seed at $50 bounds planned strategy losses relative to inception to that funded capital (including reserved fees), even if the exchange account holds more. It does not enforce a $100 drawdown stop from a later profit peak: that feature is not implemented. Do not raise the seed merely to bypass losses or unresolved reservations. Existing positions/unknown fills can delay further trading and must reconcile from evidence. Full Kelly assumes the estimated probabilities are correct; profitability remains unproven.

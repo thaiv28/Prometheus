@@ -298,3 +298,7 @@ Two existing-key consistent reads (ACCOUNT and the UTC DAY) precede sizing. Free
 ### Live preparation (2026-10-16)
 
 Live preparation: `service.waiting_pages` selects known Riot `getSchedule` fixtures in the wake window (−4h to +75min), once per discovery. The page has `status: waiting`, `game: null` until a map is selected; `page.summary` preserves the nullable game. Tracked games take precedence; their no-observation state is also waiting. Waiting files are refreshed each cycle and removed on expiry/completion or discovery failure. Riot match IDs carry through to tracking.
+
+## Executor release/control boundary (2026-10-16)
+
+`deploy/execution/release.py` hashes the isolated executor sources, model artifact, handler, package script/requirements and canonical literal aliases without site imports. Deterministic zip entries remove local timestamps. `deploy.py` uses the deployed template and preserves every non-release parameter, uploads a checksum-keyed version-pinned private object, waits and verifies the runtime. It rejects current package drift before writes and no-ops matching sources. `control.configure` allowlists risk fields, validates a complete active configuration but persists off; activating requires healthy matching Lambda source/package tags. OFF remains independent. Offline boundary tests cover masked-parameter preservation, version/checksum/drift guards, rejected active configuration edits and activation with old code. No runtime loop, model, DB or site change.
