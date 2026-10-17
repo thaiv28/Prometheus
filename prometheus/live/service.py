@@ -828,6 +828,12 @@ def run(args):
                             or gid in skip
                         ):
                             continue
+                        if any(
+                            g.mapping["match_id"] == event["id"]
+                            and g.number > game["number"]
+                            for g in games.values()
+                        ):
+                            continue  # getLive relisting an earlier map as live
                         try:
                             mapping = mapping_for(event, catalog, aliases)
                             if gid not in adopt:
