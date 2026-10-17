@@ -582,6 +582,7 @@ def replay(data, db=DB_PATH, model_path=timeline.MODEL_PATH):
             "game": m["game"],
             "series": m["series"],
             "league": m["league"],
+            "start": m["start"],
             "won": int(m["won0"]),
         }
         if pregame is not None:
@@ -910,14 +911,31 @@ def report(data, calls, skipped):
     return "\n".join(lines) + "\n"
 
 
-def write_dump(calls, dirname):
+def fit_through(model):
+    """The last day the model's fit saw: its `fit_through` date, else the end of
+    its last training or calibration year. The PR check scores only maps after
+    both sides' dates, so a refit is never judged on maps it was fit on."""
+    if model.get("fit_through"):
+        return str(model["fit_through"])[:10]
+    years = list(model.get("trained_years") or [])
+    if model.get("calibration_year"):
+        years.append(model["calibration_year"])
+    return f"{max(years)}-12-31" if years else None
+
+
+def write_dump(calls, dirname, model_path=timeline.MODEL_PATH):
     """Each map's checkpoint calls for `compare_benchmarks.py` (Kalshi's price
-    rides along for the report; it is the same on both sides)."""
+    rides along for the report; it is the same on both sides), and the model's
+    fit date in `metrics.json`."""
     out = Path(dirname)
     out.mkdir(parents=True, exist_ok=True)
     frame = checkpoints(calls)
-    frame[["game", "series", "checkpoint", "ours", "kalshi", "won"]].to_csv(
-        out / "calls.csv.gz", index=False
+    frame["start"] = frame["start"].str[:10]
+    cols = ["game", "series", "start", "checkpoint", "ours", "kalshi", "won"]
+    frame[cols].to_csv(out / "calls.csv.gz", index=False)
+    model = json.loads(Path(model_path).read_text())
+    (out / "metrics.json").write_text(
+        json.dumps({"fit_through": fit_through(model)}) + "\n"
     )
 
 

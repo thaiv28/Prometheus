@@ -586,9 +586,13 @@ def compare_props(base, head, n_resamples=N_RESAMPLES):
     return rows
 
 
-def compare_live(base, head, n_resamples=N_RESAMPLES):
+def compare_live(base, head, n_resamples=N_RESAMPLES, fit_through=None):
     """Log loss of our in-game calls per minute band, on the map-minutes both
-    dumps scored, resampling series."""
+    dumps scored after `fit_through` (the later of the two models' fit dates),
+    resampling series."""
+    if fit_through and "start" in base and "start" in head:
+        base = base[base["start"] > fit_through]
+        head = head[head["start"] > fit_through]
     both, only = _pair(base, head, LIVE_KEY)
     if both.empty:
         return [_missing("Live", "log loss", True, only)]
@@ -746,7 +750,14 @@ def compare_dirs(base_dir, head_dir, n_resamples=N_RESAMPLES):
 
     b, h = (_read(sub(d, "live"), "calls.csv.gz") for d in (base_dir, head_dir))
     if b is not None and h is not None:
-        sections.append(("Live", compare_live(b, h, n_resamples)))
+        dates = [
+            (_meta(sub(d, "live"), "metrics.json") or {}).get("fit_through")
+            for d in (base_dir, head_dir)
+        ]
+        cutoff = max((x for x in dates if x), default=None)
+        sections.append(("Live", compare_live(b, h, n_resamples, cutoff)))
+        if cutoff:
+            notes.append(f"Live benchmark: maps after {cutoff} (the models' fit).")
     else:
         notes.append("Live benchmark: missing from one side, not compared.")
     return sections, notes

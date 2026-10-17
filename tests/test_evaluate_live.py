@@ -254,9 +254,13 @@ def test_replay_checkpoints_and_dump(tmp_path):
     assert list(dump.columns) == [
         "game",
         "series",
+        "start",
         "checkpoint",
         "ours",
         "kalshi",
         "won",
     ]
     assert np.isfinite(dump["ours"]).all()
+    meta = json.loads((tmp_path / "dump" / "metrics.json").read_text())
+    assert meta == {"fit_through": "2024-12-31"}  # v1: calibrated on 2024
+    assert el.fit_through({"fit_through": "2025-06-30T00:00"}) == "2025-06-30"

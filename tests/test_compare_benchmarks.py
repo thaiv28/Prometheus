@@ -377,6 +377,7 @@ def _live_calls(shift=0.0, seed=0):
                 {
                     "game": f"g{g}",
                     "series": f"s{g // 3}",
+                    "start": "2025-06-01" if g < 60 else "2026-03-01",
                     "checkpoint": minute,
                     "ours": p,
                     "kalshi": 0.5,
@@ -405,3 +406,14 @@ def test_live_worse_calls_fail_by_band_and_same_calls_pass():
     rows = cb.compare_live(_live_calls(), head, N)
     assert [r["result"] for r in rows if "late" in r["name"]] == ["worse"]
     assert cb.failures(rows)
+
+
+def test_live_scores_only_maps_after_both_models_fit():
+    # Head is much worse, but only on maps its fit date excludes.
+    head = _live_calls()
+    early = head["start"] < "2026-01-01"
+    head.loc[early, "ours"] = np.where(head.loc[early, "won"] == 1, 0.1, 0.9)
+    assert cb.failures(cb.compare_live(_live_calls(), head, N))
+    rows = cb.compare_live(_live_calls(), head, N, fit_through="2025-12-31")
+    assert not cb.failures(rows)
+    assert rows[-1]["name"] == "log loss, all (420)"
