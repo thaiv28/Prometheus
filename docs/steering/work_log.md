@@ -1,5 +1,42 @@
 # Work log
 
+## 2026-10-17 — Consolidate live candidates; momentum and calibration checks
+
+Branch `research/live-candidates`, based on `9b670eb` (unmerged PR #83).
+Imported the completed objectives candidate from `5cb5e0f` with its full script
+(the final commit alone depended on earlier protocol commits), the local draft
+candidate, and per-map Elo script/tests/report from `baf763a`. No push or PR.
+[Candidate review](../research/live_candidates.md) records all results and limits.
+Objectives − v1 −0.0111 (−0.0146 to −0.0075); draft −0.0027
+(−0.0052 to −0.0002), with overlapping feature selection and missing-pick/LPL
+coverage caveats. Neither is deployed. Reword objective report's “Adopted” as
+“Statistical threshold met; not shipped” to distinguish evidence from adoption.
+
+New fixed three-minute causal gold momentum: − v1 −0.0006 (−0.0022 to
++0.0010), − same-row refit −0.0011 (−0.0018 to −0.0004); not adopted.
+Calibration diagnostics: raw refit 0.4804 LL / 0.0048 ECE, global 0.4816 /
+0.0152, time-bucket 0.4814 / 0.0122. Neither alternative beats global overall
+significantly, and both have significantly worse slices; no calibration change.
+Tests cover causal history, irregular clocks, game separation, future-input
+invariance and bucket boundaries. No production, dependency, CI or build-cost
+change; the experiments run locally, with no extra work in publish/hourly jobs.
+Role-gap phase A remains unrun. Kalshi blend and participant recollection remain
+pending the handoff's explicit go-ahead; neither was started.
+
+Checks: full pytest with the main-checkout environment and worktree PYTHONPATH:
+781 passed, 2 skipped in 38.20 s; base `9b670eb`: 768 passed, 2 skipped in
+42.66 s on the same laptop while objectives research ran. Thirteen added cases;
+these loaded single runs show no measurable suite slowdown and are not a speedup
+claim. Both had the existing physical-core-detection warning. Repository-wide
+ruff check and format check, `git diff --check`, and all 40 relative link targets
+in the reviewed summary/report/steering documents pass. Draft and objectives
+reports reproduced their recorded numerical tables; momentum/calibration report
+generated from the new script. Per-map Elo and v2/v3 reports were imported,
+not rerun. No DB rebuild, site build or forecast/season-stat weight refit: no
+published algorithm, data pipeline or UI changed. Remote Actions timings remain
+unmeasured until this local research is submitted.
+
+
 ## 2026-10-17 — Live map model candidate: objectives on top of gold
 
 Branch `cand-objectives` from `9b670eb` (time-model-v3).

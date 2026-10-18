@@ -70,6 +70,8 @@ Last reviewed: 2026-10-03 (Predictions page). This is a code baseline. Read `db/
 
 ## Future work
 
+- **Live candidate review (2026-10-17):** [consolidated results](../research/live_candidates.md). Objectives pass the retrospective all-map threshold (−0.0111 log loss), but calibration and production objective semantics need validation. Draft is exploratory because feature selection overlaps the test. Momentum and calibration changes do not pass overall. Next: prospective objective validation; objectives + draft with an objectives-only control; role-gap phase A. Kalshi blend and participant recollection await the go-ahead recorded in the handoff. No runtime model changed.
+
 - **Trading follow-up (2026-10-16).** Validate new blended signals and personal vetoes on untouched forward fixtures; review an offline refit before updating the packaged snapshot (latest snapshot stays active until replaced). Actual fills/pause remain unverified; the user elected to skip demo. Kelly sizing now compounds verified profit; the approved seed/fraction/account limits are configured while off; funding and manual activation remain user steps.
 
 - **Trading activation and forward evidence:** the blended/Kelly runtime and approved $50/full-Kelly limits are deployed/configured while off. The user reported funding and enabled live; observe forward execution from exchange evidence. Preserve all price/fee/cash/fixture/day/exposure guards and reservations. User elected to skip demo; runtime credential access and actual order/fill/cancel/settlement remain unverified.

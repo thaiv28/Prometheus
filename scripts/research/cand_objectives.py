@@ -221,7 +221,7 @@ def run(args):
         "",
         *table(shared, p["primary"], p1, "v1", "Primary"),
         "",
-        f"**Adopted: {'yes' if adopt else 'no'}** (rule: primary − v1 on all maps, interval below zero).",
+        f"**Statistical threshold met: {'yes' if adopt else 'no'}; not shipped** (rule: primary − v1 on all maps, interval below zero).",
         "",
         "## Primary against the refit baseline (same rows, v1's features)",
         "",

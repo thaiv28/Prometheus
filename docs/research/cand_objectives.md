@@ -17,7 +17,7 @@ Log loss per map (each map's rows weighted equally); negative differences are be
 | International | 297 | 0.4581 | 0.4480 | -0.0101 (-0.0223 to +0.0028) |
 | Other | 476 | 0.4257 | 0.4261 | +0.0004 (-0.0102 to +0.0104) |
 
-**Adopted: yes** (rule: primary − v1 on all maps, interval below zero).
+**Statistical threshold met: yes; not shipped** (rule: primary − v1 on all maps, interval below zero).
 
 ## Primary against the refit baseline (same rows, v1's features)
 
