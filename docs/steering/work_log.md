@@ -1,5 +1,48 @@
 # Work log
 
+## 2026-10-17 — Second live research wave: conditional gains and role leads
+
+Branch `research/live-candidates`, continuing from `e0a9617` at the user's request.
+Protocol in `cand_followups.py` declared before this wave's scoring: primary
+objectives + original draft versus objectives alone, all 3,857 feed test maps
+(zero shift for missing picks). Secondary interaction draft and momentum;
+objective raw/global/time-bucket calibration diagnostics. Role phase A at exact
+OE 10/15/20/25-minute snapshots: role gold+CS, secondary XP, versus identical-row
+gold+Elo controls. Unchanged chronological split. Research-only artifacts under
+`data/research/live_followups/`; no runtime, CI configuration or dependency change. The test has
+already been used for research, so gains are retrospective.
+
+Results (all deltas with 95% series-bootstrap intervals): original draft beyond
+objectives −0.0018 (−0.0035 to −0.0002); versus v1 −0.0129
+(−0.0168 to −0.0090). Secondary interaction draft beyond objectives −0.0026
+(−0.0044 to −0.0009); momentum beyond objectives −0.0025
+(−0.0033 to −0.0017), versus v1 −0.0136 (−0.0170 to −0.0100).
+No reported slice is significantly worse for original draft or momentum versus
+objectives. Objective raw calibration scores LL 0.4683 / ECE 0.0080 versus
+global 0.4700 / 0.0191; LL −0.0017 (−0.0031 to −0.0001). Time buckets improve
+overall by −0.0006 but significantly worsen 20–30 minutes. Combined candidates
+retain ECE around 0.018. No production adoption: calibration is diagnostic and
+the test is reused; no multiplicity adjustment or forward confirmation.
+
+Role phase A (3,378 test maps): gold+CS beyond checkpoint gold+Elo −0.0030
+(−0.0048 to −0.0012); +XP −0.0068 (−0.0100 to −0.0035). XP is not level.
+Gold+CS improves at 10/15/20 minutes; +XP improves at 20/25. Different cohort
+from the feed test; no demonstrated gain beyond objectives or live feed result.
+
+Focused tests caught an empty-cohort failure; return an empty frame and fail
+clearly if a whole requested checkpoint lacks data. Three cases pass (0.88 s,
+including import/startup); test side orientation, exact totals, duplicate/invalid
+role exclusion, checkpoint survival and zero unavailable-draft fallback.
+Full suite: 784 passed, 2 skipped in 9.58 s (previous wave: 781 passed,
+2 skipped in 38.20 s while research ran; load differs, so no speedup claim).
+The three added checks protect cohort validity/orientation and cost under a
+second in the focused run including startup. No additional CI job or benchmark
+step, publish/hourly work, DB read in production, or dependency. Repository-wide
+ruff check/format, whitespace check and 66 relative document link targets pass.
+Remote Actions timings pending submission. The follow-up script completed all
+four checkpoints and both reports; added summary comparisons reuse the saved
+predictions. No DB rebuild, site build, published metric/refit or new collection.
+
 ## 2026-10-17 — Consolidate live candidates; momentum and calibration checks
 
 Branch `research/live-candidates`, based on `9b670eb` (unmerged PR #83).

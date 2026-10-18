@@ -54,14 +54,51 @@ the overall loss difference is −0.0002 (−0.0006 to +0.0003), with harm at
 20–30 minutes and in other leagues. No calibration change is justified here.
 These diagnostics concern the six-feature refit, not the objectives model.
 
+## Second wave: gains conditional on objectives
+
+The [follow-up report](cand_followups.md) keeps all 3,857 feed test maps,
+using zero draft shift when picks are unavailable. Its primary adds the
+original four draft features, with weights fitted through 2023. This improves
+objectives by −0.0018 (−0.0035 to −0.0002); versus v1, −0.0129
+(−0.0168 to −0.0090), LL 0.4682. No reported slice is significantly worse
+than objectives. The interaction draft remains secondary and exploratory:
+−0.0026 (−0.0044 to −0.0009) versus objectives.
+
+Momentum's result changes when conditioned on objectives: −0.0025
+(−0.0033 to −0.0017) versus objectives, and −0.0136 (−0.0170 to −0.0100)
+versus v1, LL 0.4675. Its biggest incremental gain is after 30 minutes,
+−0.0120. No reported slice is significantly worse than objectives.
+These were declared secondary tests; objectives + draft + momentum together
+has not been tested, and their individual gains cannot simply be added.
+
+Objective calibration also differs from the six-feature diagnostic: raw
+objectives score 0.4683 LL / 0.0080 ECE versus calibrated 0.4700 / 0.0191.
+Raw minus global is −0.0017 (−0.0031 to −0.0001), without a significantly worse
+reported slice. Time-bucket calibration improves overall by −0.0006 but
+significantly worsens 20–30 minutes, so it does not pass the no-harm check.
+The raw result is diagnostic evidence, not an independently selected winner.
+Combined draft/momentum models still have ECE around 0.018; raw objectives is
+the only tested objective variant below 0.01. All need forward validation.
+
+[Role leads phase A](cand_role_leads.md) is now complete on exact OE
+10/15/20/25-minute snapshots. Relative to a same-row gold+Elo checkpoint
+control, role gold+CS gain −0.0030 (−0.0048 to −0.0012), and adding XP gives
+−0.0068 (−0.0100 to −0.0035), pooled over 3,378 maps with equal map weights.
+At 20 minutes gold+CS improves by −0.0051; at 25 minutes adding XP improves
+by −0.0123. This supports collecting participant fields, but does not measure
+additional gain over objectives or continuous-time/live-frame performance.
+The cohort differs from the feed test; XP is not level, and missing LPL
+snapshots restrict coverage. No participant collection was started.
+
+The same test was reused for both research waves, without multiplicity
+adjustment. These are retrospective gains rather than untouched confirmation.
+
 ## Remaining work
 
 - Validate objectives on the worker's ten-second frames and on a prospective
   cohort; compare a frozen objectives model with v1 on the same maps.
-- Test objectives plus draft on a fresh cohort, with an objectives-only control.
-- Per-role leads phase A remains unrun in this continuation. Existing
-  [snapshot research](snapshot_report.md) supports testing role gaps, but the
-  collected timelines lack participant fields needed for live validation.
+- Confirm the objectives-plus-original-draft and objectives-plus-momentum gains on a fresh cohort with an objectives-only control; test their combination without retuning on these results.
+- Role phase A now supports collecting role gold/CS/XP; the collected timelines still lack participant fields needed for live validation. The [earlier snapshot research](snapshot_report.md) provides additional context.
 - Kalshi blend remains pending explicit go-ahead, as requested in the handoff.
 - Recollecting participant data also remains pending explicit go-ahead: about
   a day of requests and an awake, plugged-in laptop. No collection was started.
@@ -78,7 +115,9 @@ PYTHONPATH=$PWD /Users/tvillalu/repos/Prometheus/.venv/bin/python scripts/resear
 PYTHONPATH=$PWD /Users/tvillalu/repos/Prometheus/.venv/bin/python scripts/research/cand_temporal.py --report docs/research/cand_temporal.md
 ```
 
+Run the second wave with `PYTHONPATH=$PWD OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 /Users/tvillalu/repos/Prometheus/.venv/bin/python scripts/research/cand_followups.py`. It saves reports and local prediction/model artifacts under `data/research/live_followups/`.
+
 Candidate scripts and tests are consolidated locally. No runtime/CI step or
 new dependency is added. Reports document retrospective results, not live trading
 profitability. Per-map Elo and v2/v3 numbers above are imported prior results;
-this continuation reruns draft, objectives, momentum and calibration only.
+the first wave reruns draft, objectives, momentum and calibration; the second tests conditional gains and role leads.

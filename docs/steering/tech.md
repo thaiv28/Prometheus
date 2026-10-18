@@ -338,3 +338,12 @@ Match pages and summaries carry the optional scheduled `start`. Live’s Coming 
 ### Local live-candidate research
 
 `cand_objectives.py`, `cand_draft.py`, `cand_map_elo.py` and `cand_temporal.py` under `scripts/research/` share v2 partitions. The temporal candidate uses causal gold-lead changes from the most recent sample at least 180 seconds earlier (zero without history); calibration diagnostics fit only on 2025 H1. Reports use equal-map losses and series bootstrap intervals. No pipeline, runtime model, dependency or CI step is changed. See [candidate review](../research/live_candidates.md).
+
+`cand_followups.py` tests objectives plus original draft (zero unavailable shifts),
+secondary interaction draft/momentum, and objective calibration. Phase A reads only
+OE gold/CS/XP snapshot columns through raw SQL, requires ten unique side-role
+rows and nonnegative finite snapshots, and fits one model per checkpoint with
+series-start Elo. It saves prediction CSVs and research model JSONs locally under
+`data/research/live_followups/`; no files there are committed. Reports use shared
+chronological partitions and series-cluster intervals. No participant collection
+or production inference is introduced.
