@@ -452,6 +452,40 @@ def run(args):
         lines.append(
             f"{later.game_id.nunique():,} maps: log loss change {ci(shift_delta)}."
         )
+        size = later.drop_duplicates("game_id").game_id.map(shift).abs()
+        lines += [
+            f"Median shift {size.median():.3f} log-odds (90th percentile {size.quantile(0.9):.3f}).",
+            "",
+            "| Slice | Maps | Shift minus none |",
+            "|---|---|---|",
+        ]
+        tier_later = later.league.map(
+            lambda lg: (
+                "International"
+                if lg in INTERNATIONAL
+                else ("Major league" if lg in MAJORS else "Other")
+            )
+        )
+        slices = [
+            (
+                f"Minutes {label}",
+                ((later.seconds >= lo) & (later.seconds < hi)).to_numpy(),
+            )
+            for label, lo, hi in (
+                ("0–10", 0, 600),
+                ("10–20", 600, 1200),
+                ("20+", 1200, 1e9),
+            )
+        ] + [
+            (name, (tier_later == name).to_numpy())
+            for name in ("Major league", "International", "Other")
+        ]
+        for label, mask in slices:
+            if later[mask].game_id.nunique() >= 30:
+                lines.append(
+                    f"| {label} | {later[mask].game_id.nunique():,} | "
+                    f"{ci(delta(later[mask], shifted[mask], q[mask]))} |"
+                )
     else:
         lines.append("No maps 2+ in the test.")
     text = "\n".join(lines) + "\n"
