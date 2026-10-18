@@ -266,7 +266,7 @@ def schedule(out):
     return saved
 
 
-def collect(out, limit=None, shard=(0, 1)):
+def collect(out, limit=None, shard=(0, 1), split=(0, 1)):
     """Maps in a fixed random order (a partial run still spans every year); `shard`
     (i, n) takes every n-th map so n runs can share the work."""
     saved = json.loads((out / "schedule.json").read_text())
@@ -275,6 +275,10 @@ def collect(out, limit=None, shard=(0, 1)):
     )
     random.Random(SEED).shuffle(games)
     games = games[shard[0] :: shard[1]]
+    # `split` (j, m) shares a shard's still-missing maps among m runs, so idle
+    # runs can help a slow shard finish.
+    games = [g for g in games if not (out / "games" / f"{g['game_id']}.json").exists()]
+    games = games[split[0] :: split[1]]
     (out / "games").mkdir(parents=True, exist_ok=True)
     done = 0
     for g in games:
@@ -310,6 +314,11 @@ def main(argv=None):
     parser.add_argument(
         "--shard", default="0/1", help="i/n: this run's share of the maps"
     )
+    parser.add_argument(
+        "--split",
+        default="0/1",
+        help="j/m: this run's part of the shard's missing maps",
+    )
     args = parser.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
     try:
@@ -317,7 +326,8 @@ def main(argv=None):
             schedule(args.out)
         elif args.command == "collect":
             i, n = (int(x) for x in args.shard.split("/"))
-            collect(args.out, args.limit, (i, n))
+            j, m = (int(x) for x in args.split.split("/"))
+            collect(args.out, args.limit, (i, n), (j, m))
         status(args.out)
     except Refused as error:
         print(f"Stopped: {error}. Saved maps are kept; run again later.")
