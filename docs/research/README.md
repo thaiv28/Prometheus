@@ -4,6 +4,8 @@ Finished research that changed no published metric: in-game snapshots, champions
 
 ## Status
 
+- **Draft player features (2026-10-17).** [Report](draft_player_feats.md), `scripts/research/draft_player_feats.py`: one fixed seven-feature block beyond v2, earlier days and prior-year fits: all −0.00199 (−0.00252 to −0.00144), pre-2025 −0.00220 (−0.00283 to −0.00158), majors essentially unchanged; other-league gain −0.00245. Whole block qualifies for the fixed v3 synthesis gate; no attribution to an individual feature, production change or market-edge claim.
+
 - **Draft meta (2026-10-17).** [Report](draft_meta.md), `scripts/research/draft_meta.py`: one fixed patch/local-league/pick-ban-priority block against v2, 63,638 maps. All +0.00013 (−0.00002 to +0.00027), pre-2025 +0.00021 (+0.00002 to +0.00041), majors +0.00008 (−0.00030 to +0.00045). First three patch days show no gain. Reject the whole block for v3; research only.
 
 - **Draft v2 as a live prior (2026-10-17):** [Report](live_draft_prior.md), `scripts/research/live_draft_prior.py`. On 3,825 July-2025-on feed maps, shift plus shift×time beats an identical-row six-feature refit: log loss −0.0029 (−0.0055 to −0.0003); majors −0.0044 (−0.0078 to −0.0007). Frozen v1 comparison is inconclusive: −0.0028 (−0.0057 to +0.0002). Early bands improve; later bands are uncertain. Draft weights freeze through 2021 for 2022–24 live training and through 2024 for calibration/test; no pre-2025 test under this split. Promising input, no production export or profitability claim.

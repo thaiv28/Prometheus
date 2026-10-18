@@ -1,5 +1,7 @@
 # Tech
 
+Draft player research: `scripts/research/draft_player_feats.py` imports the v2 walk-forward utilities, reads full rosters plus only gold/XP at 15 from `player_stats`, computes histories before each UTC day and fits prior years only. `tests/research/test_draft_player_feats.py` covers day boundaries, sparse lane data and annual fit isolation. Offline cache `data/research/draft_v2/player_feats_games.pkl` retains training years for later fixed-protocol synthesis; no production/CI changes.
+
 Draft meta research: `scripts/research/draft_meta.py` imports the v2 walk-forward utilities, reads historical OE patch/bans in bounded column-filtered chunks, and computes patch-relative/local-league WAE and pick-ban priority before each UTC day. `tests/research/test_draft_meta.py` covers history boundaries, future-patch isolation and prior-year-only fits. Offline cache `data/research/draft_v2/meta_games.pkl` retains training years for later fixed-protocol synthesis; no production/CI changes.
 
 ## Stack
