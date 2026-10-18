@@ -329,8 +329,17 @@ def paired(frame, a, b):
     lb = game_losses(frame[b], frame["won"])["log_loss"].to_numpy()
     diff = la - lb
     codes = pd.factorize(frame["series"])[0]
-    groups = [np.flatnonzero(codes == k) for k in range(codes.max() + 1)]
-    draws = [diff[i].mean() for i in resamples(groups, N_RESAMPLES)]
+    # Exact same series draws as resamples(groups, N_RESAMPLES), aggregated
+    # before drawing: repeated row concatenation is avoidable. Keep the ratio
+    # of row sums/counts so unequal-size series retain the original weighting.
+    valid = codes >= 0
+    totals = np.bincount(codes[valid], weights=diff[valid])
+    sizes = np.bincount(codes[valid])
+    rng = np.random.default_rng(0)  # resamples' unchanged default seed
+    draws = []
+    for _ in range(N_RESAMPLES):
+        pick = rng.integers(0, len(sizes), len(sizes))
+        draws.append(totals[pick].sum() / sizes[pick].sum())
     return la.mean(), lb.mean(), diff.mean(), *np.percentile(draws, [2.5, 97.5])
 
 
