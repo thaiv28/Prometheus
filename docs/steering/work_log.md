@@ -1,5 +1,14 @@
 # Work log
 
+## 2026-10-17 — Draft composition walk-forward research
+
+Branch `research/draft-composition`, base `draft-v2` at `5811254`. One predeclared augmentation of draft v2; research only, no published model, weights, DB or site changes.
+
+- Champion-role profiles from strictly earlier UTC days: duration-bucket result above Elo (scaling), mean scaling × production logit, and shrunk gold/XP lane gap at 15; the three-feature block is assessed jointly. No physical/magic damage mix exists in the DB. [Report](../research/draft_composition.md).
+- **Inconclusive; exclude from v3:** 63,638 maps, candidate minus v2 LL +0.000008 (series-bootstrap 95% −0.000072 to +0.000085); majors −0.000137 (−0.000322 to +0.000045); pre-2025 −0.000010 (−0.000104 to +0.000087). International −0.000529 (−0.001019 to −0.000018) does not override the predeclared all + pre-2025 gates. No individual-feature post-selection.
+- Reused frozen `forge.pkl` with the expected missing unrated games; compact `base_games.pkl` and `composition_games.pkl` retain 2019/2020 training rows, matching v2’s 80,791-row full cohort exactly. Feature construction/scoring 76.9 s under concurrent load, bootstrap reporting additional; opt-in only, no production/CI step or dependency added. Added three causal-history, chronological-fit and frozen-cache checks. Final full suite 28.73 s; targeted tests 4.54 s including imports under concurrent load.
+- Checks: `uv run ruff format`, `uv run ruff check`, `uv run pytest -q` (751 passed, 2 skipped); report links/local command paths checked. Limits: observational duration profile, sparse LPL lane snapshots, retrospective 2025–26 v2 selection and non-vintage production-call weights. No publication or tradable-edge claim.
+
 ## 2026-10-17 — Draft tracks synthesis and fixed v3 protocol
 
 Branch `research/draft-tracks-v3`, base `draft-v2` at `5811254`. Fixed whole-block inclusion/scoring protocol in [draft_v3_protocol.md](../research/draft_v3_protocol.md) before reading track results. The optional synthesis script enforces the complete four-block inventory, identical targets/cohorts/baseline calls, annual fits and named-slice safeguards. Research only; no production/site/weights changes or CI jobs. Protocol/helper checks: `uv run ruff format` / `ruff check`, five focused tests pass in 1.54 s; full `uv run pytest -q` 753 passed, 2 skipped in 17.46 s. Deterministic guard fixtures use 20 bootstrap draws instead of 2,000 (focused runtime 50.41 s → 1.54 s), preserving meaningful cohort/target/safeguard coverage without Monte Carlo cost in CI. Analysis still uses all 2,000 series draws. Final track outcomes and combined result follow after the research completes.
