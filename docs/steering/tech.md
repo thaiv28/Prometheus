@@ -1,5 +1,7 @@
 # Tech
 
+Draft meta research: `scripts/research/draft_meta.py` imports the v2 walk-forward utilities, reads historical OE patch/bans in bounded column-filtered chunks, and computes patch-relative/local-league WAE and pick-ban priority before each UTC day. `tests/research/test_draft_meta.py` covers history boundaries, future-patch isolation and prior-year-only fits. Offline cache `data/research/draft_v2/meta_games.pkl` retains training years for later fixed-protocol synthesis; no production/CI changes.
+
 ## Stack
 
 - **Python 3.12+**, managed with **uv** (`uv.lock` is committed; CI uses `uv sync --frozen`).
