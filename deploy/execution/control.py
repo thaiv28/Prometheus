@@ -3,13 +3,65 @@
 import argparse
 import datetime
 import json
+from pathlib import Path
+
+FIELDS = frozenset(
+    (
+        "starting_bankroll_usd",
+        "kelly_fraction",
+        "order_budget_usd",
+        "fixture_budget_usd",
+        "daily_budget_usd",
+        "max_exposure_usd",
+        "min_balance_usd",
+        "max_contracts",
+        "max_price",
+        "min_after_fee_edge",
+        "fee_rate_upper_bound",
+        "balance_precision_usd",
+        "max_alert_age_seconds",
+        "max_quote_age_seconds",
+    )
+)
 
 
-def set_mode(client, parameter, mode, now=None):
+def configure(client, parameter, settings):
+    from prometheus.execution.core import Config
+
+    if not isinstance(settings, dict) or not settings or set(settings) - FIELDS:
+        raise ValueError("Supply only explicit bankroll and risk-limit fields")
+    current = json.loads(client.get_parameter(Name=parameter)["Parameter"]["Value"])
+    if current.get("mode", "off") != "off":
+        raise ValueError("Turn execution off before changing limits")
+    current.update(settings)
+    # Validate the whole active configuration, but persist OFF with its original epoch.
+    Config.parse(
+        {
+            **current,
+            "mode": "live",
+            "activation_at": datetime.datetime.now(datetime.UTC).isoformat(),
+        }
+    )
+    client.put_parameter(
+        Name=parameter,
+        Type="String",
+        Value=json.dumps(current, separators=(",", ":")),
+        Overwrite=True,
+    )
+    return {"mode": "off", "updated_fields": sorted(settings)}
+
+
+def set_mode(client, parameter, mode, now=None, functions=None, function=None):
     from prometheus.execution.core import Config
 
     if mode not in ("off", "demo", "live"):
         raise ValueError("Mode must be off, demo or live")
+    if mode != "off":
+        from deploy.execution.release import verify_runtime
+
+        if functions is None or not function:
+            raise ValueError("A verified deployed executor is required for activation")
+        verify_runtime(functions, function)
     current = json.loads(client.get_parameter(Name=parameter)["Parameter"]["Value"])
     current["mode"] = mode
     current["activation_at"] = (now or datetime.datetime.now(datetime.UTC)).isoformat()
@@ -30,9 +82,33 @@ def main():
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--parameter", required=True)
-    parser.add_argument("--mode", required=True, choices=("off", "demo", "live"))
+    action = parser.add_mutually_exclusive_group(required=True)
+    action.add_argument("--mode", choices=("off", "demo", "live"))
+    action.add_argument(
+        "--settings", help="JSON object containing explicit limits; requires OFF"
+    )
+    action.add_argument(
+        "--settings-event", help="Read settings from a workflow dispatch event file"
+    )
+    parser.add_argument("--function")
     args = parser.parse_args()
-    print(json.dumps(set_mode(boto3.client("ssm"), args.parameter, args.mode)))
+    client = boto3.client("ssm")
+    if args.settings is not None or args.settings_event is not None:
+        settings = args.settings
+        if args.settings_event:
+            settings = json.loads(Path(args.settings_event).read_text())["inputs"][
+                "settings"
+            ]
+        result = configure(client, args.parameter, json.loads(settings))
+    else:
+        result = set_mode(
+            client,
+            args.parameter,
+            args.mode,
+            functions=boto3.client("lambda") if args.mode != "off" else None,
+            function=args.function,
+        )
+    print(json.dumps(result))
 
 
 if __name__ == "__main__":

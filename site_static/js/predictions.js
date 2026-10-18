@@ -12,6 +12,15 @@
   const tables = $$(".register--fixtures");
   if (!tables.length) return;
 
+  // A row with its own page (live results) opens it from anywhere on the row;
+  // links inside it (teams, Kalshi) keep their own targets.
+  document.addEventListener("click", (e) => {
+    const row = e.target.closest("tr.fx[data-href]");
+    if (!row || e.target.closest("a") || String(window.getSelection())) return;
+    if (e.metaKey || e.ctrlKey) window.open(row.dataset.href);
+    else location.href = row.dataset.href;
+  });
+
   const timeFormat = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
   const dayFormat = new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long" });
   const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -52,7 +61,7 @@
       if (time) time.textContent = timeFormat.format(start);
       if (upcoming && start <= now) {
         tr.classList.add("fx-started");
-        time.title = "Started; the result comes with the next update";
+        time.title = "Started; result pending.";
       }
       body.appendChild(tr);
     });
@@ -73,6 +82,13 @@
       $$("tr.fx[data-match]").forEach((tr) => {
         const m = data.matches[tr.dataset.match];
         if (!m) return;
+        const trade = $(".fx-trade", tr);
+        if (trade) {
+          trade.textContent = m.trading ? `${m.trading.p1}–${m.trading.p2}` : "—";
+          trade.title = m.trading
+            ? `${stamp(m.trading.at)} · Net ${(100 * m.trading.net_edge).toFixed(1)} points`
+            : "No eligible trading estimate";
+        }
         const bar = $(".fx-bar", tr);
         if (bar) {
           let caret = $(".fx-mkt", bar);
@@ -98,7 +114,7 @@
           } else {
             cell.textContent = pair;
           }
-          cell.title = `As of ${stamp(m.at)}${m.url ? "; opens the match on Kalshi" : ""}`;
+          cell.title = `Kalshi · ${stamp(m.at)}`;
         }
       });
       tables
@@ -115,7 +131,7 @@
             cap.insertBefore(note, link);
             cap.insertBefore(document.createTextNode(" "), link ? link : note);
           }
-          note.textContent = `Kalshi prices as of ${stamp(data.at)}.`;
+          note.textContent = `Kalshi · ${stamp(data.at)}.`;
         });
     })
     .catch(() => {});
@@ -168,7 +184,7 @@
       });
       const which = table.id;
       const count = $(`[data-count-for="${which}"]`);
-      if (count) count.textContent = shown === total ? `${total.toLocaleString()} shown.` : `${shown.toLocaleString()} of ${total.toLocaleString()} shown.`;
+      if (count) count.textContent = shown === total ? `${total.toLocaleString()} matches.` : `${shown.toLocaleString()}/${total.toLocaleString()} matches.`;
       const empty = $(`[data-empty-for="${which}"]`);
       if (empty) empty.hidden = shown > 0;
       // The last visible row closes the register with the heavy rule.

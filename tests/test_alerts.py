@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from prometheus import alerts, markets
+from prometheus import alerts, markets, trading
 
 UTC = datetime.UTC
 NOW = datetime.datetime(2026, 10, 6, 10, 0, tzinfo=UTC)
@@ -33,7 +33,7 @@ def _entry(
         "event": "Demacia Cup",
         "league": "DCup",
         "market": {
-            "p": 0.53,
+            "p": 0.54,
             "spread": 0.01,
             "ask1": ask1,
             "ask2": ask2,
@@ -53,7 +53,7 @@ def test_select_takes_forge_edges_6_or_more_hours_out_with_fresh_prices():
         "soon": _entry("soon", start="2026-10-06T14:00Z"),  # 4 hours out
         "late": _entry("late", start="2026-10-09T10:00Z"),  # 72 hours out: no cap
         "stale": _entry("stale", at="2026-10-05T10:00Z"),  # yesterday's price
-        "other": _entry("other", p=0.30, ask2=0.62),  # backs team 2: 70 - 62 = +8
+        "other": _entry("other", p=0.30, ask2=0.50),  # positive blended team-2 edge
     }
     chosen = alerts.select(log, NOW)
     assert [(a["entry"]["match_id"], a["side"]) for a in chosen] == [
@@ -63,7 +63,8 @@ def test_select_takes_forge_edges_6_or_more_hours_out_with_fresh_prices():
         ("other", 2),
         ("late", 1),
     ]
-    assert chosen[0]["edge"] == pytest.approx(0.07)
+    assert chosen[0]["p"] == pytest.approx(0.5677572107)
+    assert chosen[0]["net_edge"] == pytest.approx(0.0061572107)
 
 
 def test_record_keeps_the_first_alert_and_paper_record_scores_it_after_fees():
@@ -86,15 +87,12 @@ SLUG = lambda n: n.lower().replace(" ", "-")
 def test_update_writes_the_issue_with_links_and_a_comment_for_new_matches():
     log = {"m": _entry("m")}
     alert = alerts.update(log, NOW, "2026-10-05", SLUG, {"jd-gaming"})
-    assert (
-        alert["title"]
-        == "Kalshi edges for Tue 6 Oct: 1 call more than 5 points above Kalshi"
-    )
+    assert alert["title"] == "Kalshi edges for Tue 6 Oct: 1 blended call above fees"
     assert alert["day"] == alerts.day_key(NOW) and alert["title"].startswith(
         alert["day"]
     )
     body = alert["body"]
-    row = "| Wed 7 Oct 11:00 / 04:00 | Demacia Cup | **JD Gaming** v LGD Gaming | 61% | 54¢ | **+7.0** |"
+    row = "| Wed 7 Oct 11:00 / 04:00 | Demacia Cup | **JD Gaming** v LGD Gaming | 57% | 54¢ | **+0.6** |"
     assert row in body
     assert (
         "[Kalshi](https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct070700jdglgd)"
@@ -123,7 +121,7 @@ def test_update_an_hour_later_edits_quietly_and_marks_a_gone_edge():
     )  # edge grows: no new match, no comment
     again = alerts.update(log, later, "2026-10-05", SLUG, set())
     assert (
-        again["new"] == 0 and again["comment"] is None and "**+9.0**" in again["body"]
+        again["new"] == 0 and again["comment"] is None and "**+2.7**" in again["body"]
     )
     log["m"]["market"].update(
         ask1=0.60, at="2026-10-06T12:00Z"
@@ -131,8 +129,8 @@ def test_update_an_hour_later_edits_quietly_and_marks_a_gone_edge():
     gone = alerts.update(
         log, NOW + datetime.timedelta(hours=2), "2026-10-05", SLUG, set()
     )
-    assert gone["title"].endswith("0 calls more than 5 points above Kalshi (1 gone)")
-    assert "gone: +1.0 now (alerted at +7.0)" in gone["body"]
+    assert gone["title"].endswith("0 blended calls above fees (1 gone)")
+    assert "gone: -5.0 now (alerted at +0.6)" in gone["body"]
     assert log["m"]["alert"]["price"] == 0.54  # the paper bet keeps its first price
     # Next day: an alert from yesterday that no longer qualifies isn't shown.
     assert (
@@ -152,10 +150,16 @@ def test_prices_file_lists_recent_priced_matches():
     out = markets.prices_file(log, NOW)
     assert out["at"] == AT and list(out["matches"]) == ["m"]
     assert out["matches"]["m"] == {
-        "p1": 53,
-        "p2": 47,
+        "p1": 54,
+        "p2": 46,
         "at": AT,
         "url": "https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct070700jdglgd",
+        "trading": {
+            "p1": 57,
+            "p2": 43,
+            "net_edge": pytest.approx(0.0061572107),
+            "at": AT,
+        },
     }
 
 
@@ -216,14 +220,14 @@ def test_settled_alerts_score_clv_against_the_last_price_for_the_side():
         ),
     }
     bets = alerts.settled_alerts(log)
-    # market.p is 0.53: team1 closed at 53 (bought at 54), team2 at 47 (bought at 50).
-    assert [b["clv"] for b in bets] == pytest.approx([-0.01, -0.03])
+    # market.p is 0.54: team1 closed at 54, team2 at 46.
+    assert [b["clv"] for b in bets] == pytest.approx([0.0, -0.04])
     assert [b["won"] for b in bets] == [True, False]
     assert alerts.clv_summary(bets) == pytest.approx((-0.02, 0.0))
     assert alerts.clv_summary([]) == (None, None)
 
 
-def test_minor_domestic_and_other_cross_league_notify_under_the_same_rules():
+def test_minor_domestic_notifies_but_other_cross_league_is_excluded():
     log = {
         "minor": _entry("minor", home1="LDL", home2="LDL"),
         "minor_elo": _entry("minor_elo", method="elo", home1="LDL", home2="LDL"),
@@ -237,10 +241,11 @@ def test_minor_domestic_and_other_cross_league_notify_under_the_same_rules():
         ),
     }
     issue = alerts.update(log, NOW, "5 Oct", SLUG, set())
-    assert issue["new"] == 3
+    assert issue["new"] == 2
     assert "## Minor domestic" in issue["comment"]
-    assert "## Other cross-league" in issue["comment"]
-    assert all("alert" in e and "paper_alert" not in e for e in log.values())
+    assert "## Other cross-league" not in issue["comment"]
+    assert all("alert" in log[k] for k in ("minor", "minor_elo"))
+    assert "alert" not in log["cup"]
     assert alerts.update(log, NOW, "5 Oct", SLUG, set())["comment"] is None
 
 
@@ -315,10 +320,8 @@ def test_every_scope_uses_same_timing_prices_and_probability_guards():
     }
     assert [a["entry"]["match_id"] for a in alerts.select(log, NOW)] == [
         "six",
-        "cup",
         "ok",
         "old",
-        "qual",
         "same",
     ]
 
@@ -342,7 +345,7 @@ def test_international_skips_results_missing_from_ratings():
 def test_international_only_issue_freezes_terms_snapshot_and_sends_one_notification():
     log = {"m": _international()}
     issue = alerts.update(log, NOW, "2026-10-05", SLUG, set())
-    assert "1 call more than 5 points" in issue["title"]
+    assert "1 blended call above fees" in issue["title"]
     assert "## Major vs major international" in issue["body"]
     assert "experimental" not in issue["body"]
     assert "First chance" in issue["body"] and "First ask" in issue["body"]
@@ -359,7 +362,7 @@ def test_international_only_issue_freezes_terms_snapshot_and_sends_one_notificat
     log["m"]["market"].update(ask1=0.7, at="2026-10-06T11:00Z")
     again = alerts.update(log, later, "2026-10-05", SLUG, set())
     assert again["comment"] is None and again["new"] == 0
-    assert "61% | 54¢" in again["body"]  # first terms, not current 80% / 70c
+    assert "57% | 54¢" in again["body"]  # first terms, not current 80% / 70c
     assert log["m"]["alert"] == first
     log["m"]["winner"] = 1
     assert alerts.paper_record(log)[:3] == (1, 1, 1.0)
@@ -374,7 +377,7 @@ def test_mixed_issue_has_separate_records_and_retains_gone_international_call():
     log["intl"]["market"].update(ask1=0.6, at="2026-10-06T11:00Z")
     later = NOW + datetime.timedelta(hours=1)
     again = alerts.update(log, later, "2026-10-05", SLUG, set())
-    assert "gone: +1.0 now (alerted at +7.0)" in again["body"]
+    assert "gone: -5.0 now (alerted at +0.6)" in again["body"]
     assert again["comment"] is None
 
 
@@ -407,7 +410,7 @@ def test_legacy_international_never_renotifies_or_rewrites_first_terms():
     e["p_series"] = 0.85
     issue = alerts.update({"m": e}, NOW, "5 Oct", SLUG, set())
     assert issue["new"] == 0 and issue["comment"] is None
-    assert "61% | 54¢" in issue["body"]
+    assert "57% | 54¢" in issue["body"]
     assert e[alerts.INTERNATIONAL_KEY] == original and "alert" not in e
 
 
@@ -419,6 +422,7 @@ def test_unposted_legacy_minor_can_notify_once_at_current_terms_without_rewritin
     original = copy.deepcopy(e["paper_alert"])
     e["p_series"] = 0.7
     issue = alerts.update({"m": e}, NOW, "5 Oct", SLUG, set())
-    assert issue["new"] == 1 and e["alert"]["p"] == 0.7
+    assert issue["new"] == 1
+    assert e["alert"]["p"] == round(trading.quote(e)["pick"]["p"], 4)
     assert e["paper_alert"] == original
     assert alerts.update({"m": e}, NOW, "5 Oct", SLUG, set())["new"] == 0

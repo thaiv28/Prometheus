@@ -37,6 +37,7 @@ from prometheus.player_tables import PlayerTables
 from prometheus.ranking import load_glory_games
 from prometheus.season import get_luck, get_record, load_season_games
 from prometheus.site import config as site_config
+from prometheus.site import live_results
 from prometheus.site.alert_history import render_alert_history
 from prometheus.site.call_performance import render_call_performance
 from prometheus.site.config import (
@@ -82,6 +83,7 @@ from prometheus.site.render import (
     copy_static,
     env,
     render_404,
+    render_market_blend,
     render_redirect,
     render_sunset,
 )
@@ -134,6 +136,7 @@ class Players:
 def render_fixed_pages():
     render_404()
     render_sunset()
+    render_market_blend()
     render_redirect("glory_plus", "glory.html", "GLORY+ is now part of GLORY")
     # GlorELO+ was renamed FORGE; keep its old address working.
     render_redirect("glorelo_plus", "forge.html", "GlorELO+ is now FORGE")
@@ -346,7 +349,15 @@ def predictions_pages(fc: Forecasts, teams) -> dict:
     render_results(predictions)
     render_call_performance(backtest_log, predictions)
     render_alert_history(log, now)
-    render_live(predictions["home"])
+    archive = live_results.load_archive()
+    series = live_results.series_view(log, archive, teams)
+    live_months = live_results.month_views(series)
+    live_results.render_live_results(live_months)
+    render_live(
+        predictions["home"],
+        live_results.recent(series, now) if archive else None,
+        live_months,
+    )
     write_json("predictions.json", markets.published_log(log), ensure_ascii=False)
     # The hourly price job (scripts/update_prices.py) replaces this between builds.
     write_json("kalshi.json", markets.prices_file(log, now))

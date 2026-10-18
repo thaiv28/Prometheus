@@ -1,0 +1,119 @@
+{% extends 'base.html.j2' %}
+{% from '_marks.html.j2' import league %}
+{% set r = s.row %}
+{% block title %}{{ s.names[0] }} v {{ s.names[1] }}, {{ s.date }} · Live results · Prometheus{% endblock %}
+{% block description %}{{ s.names[0] }} v {{ s.names[1] }}, {{ r.event }}, {{ s.date }}: our call before the series and through each map, against Kalshi.{% endblock %}
+{% block canonical_path %}live-results/{{ s.id }}.html{% endblock %}
+{% block head_extra %}<link rel="stylesheet" href="{{ root_path }}{{ asset('css/live.css') }}" />{% endblock %}
+{% block content %}
+  {#- One followed series: the call before it (as on Results), then a figure
+      per recorded map across the page (redrawn at full width by
+      live_results.js), always the first-listed team's chance; notes last. -#}
+  <header class="section-head lr-series-head">
+    <h1>{{ s.names[0] }} <span class="lr-score">{{ r.score or 'v' }}</span> {{ s.names[1] }}</h1>
+    <p class="lr-meta">{{ league(r.league, show_code=False) }} {{ r.event }} · {{ s.date }}</p>
+  </header>
+
+  {% if r.pct1 is defined %}
+  <p class="lr-before">
+    <span class="lr-label">Before the series</span>
+    <span class="lr-duel"><span class="{{ 'fx-fav' if r.fav == 1 else 'fx-dog' }}">{{ r.pct1 }}</span><span class="fx-bar" style="--p: {{ r.pct1 }}">{% if r.mkt1 %}<span class="fx-mkt" style="--m: {{ r.mkt1 }}"></span>{% endif %}</span><span class="{{ 'fx-fav' if r.fav == 2 else 'fx-dog' }}">{{ r.pct2 }}</span></span>
+    <span>{{ r.method }}</span>
+    {% if r.mkt1 %}<span>Kalshi close {{ r.mkt1 }}–{{ r.mkt2 }}</span>{% endif %}
+    {% if r.call %}<span>Call {{ 'right' if r.call == 'right' else 'missed' if r.call == 'missed' else 'even' }}</span>{% endif %}
+  </p>
+  {% endif %}
+
+  <figure class="register-figure lr-before-maps" aria-labelledby="before-cap">
+    <figcaption id="before-cap" class="table-caption">Table I. Before each map: {{ s.names[0] }}’s chance in 100.</figcaption>
+    <div class="table-scroll">
+      <table class="register register--before">
+        <thead>
+          <tr>
+            <th scope="col" rowspan="2">Map</th>
+            <th scope="col" rowspan="2" class="num">Score</th>
+            <th scope="colgroup" colspan="2" class="lr-group">Map</th>
+            <th scope="colgroup" colspan="2" class="lr-group">Series</th>
+            <th scope="col" rowspan="2" class="phone-hide">Won</th>
+          </tr>
+          <tr>
+            <th scope="col" class="num">Ours</th><th scope="col" class="num">Kalshi</th>
+            <th scope="col" class="num">Ours</th><th scope="col" class="num">Kalshi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in s.maps %}{% set b = m.before %}
+          <tr>
+            <td class="lr-n">{% if m.recorded %}<a href="#map-{{ m.number }}">{{ m.number }}</a>{% else %}{{ m.number }}{% endif %}</td>
+            <td class="num">{{ b.score or '—' }}</td>
+            <td class="num">{{ b.map_ours if b.map_ours is not none else '—' }}</td>
+            <td class="num lr-k">{{ b.map_kalshi if b.map_kalshi is not none else '—' }}</td>
+            <td class="num">{{ b.series_ours if b.series_ours is not none else '—' }}</td>
+            <td class="num lr-k">{{ b.series_kalshi if b.series_kalshi is not none else '—' }}</td>
+            <td class="phone-hide">{{ m.winner or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </figure>
+
+  <section class="lr-figures lr-figures--wide" aria-label="By map">
+  <p class="chance-key lr-key" aria-hidden="true">
+    <span><svg viewBox="0 0 18 10"><line class="k-ours" x1="0" y1="5" x2="18" y2="5"/></svg>Our call</span>
+    <span><svg viewBox="0 0 18 10"><line class="k-mkt" x1="0" y1="5" x2="18" y2="5"/></svg>Kalshi</span>
+    <span><svg viewBox="0 0 18 10"><rect class="k-gold" x="2" y="1" width="3" height="8"/><rect class="k-gold" x="8" y="4" width="3" height="5"/><rect class="k-gold" x="14" y="3" width="3" height="6"/></svg>Gold lead</span>
+  </p>
+  {% set shown = s.maps | selectattr('recorded') | list %}
+  {% if shown %}
+  <div class="lr-maps">
+    {% for m in shown %}
+    {% set f = m.figure %}
+    <figure class="lr-map" id="map-{{ m.number }}" data-trace='{{ f.trace | tojson }}' data-team="{{ s.names[0] }}">
+      <figcaption class="lr-cap">
+        <span><b>Map {{ m.number }}</b>{% if m.length %} · {{ m.length }}{% endif %}{% if m.winner %} · {{ m.winner }} won{% endif %}{% if m.backfilled %}<a class="note-ref" href="#note-kalshi" aria-label="Kalshi from its minute prices: note">‡</a>{% endif %}</span>
+      </figcaption>
+      <div class="lr-plot-wrap">
+      <svg class="lr-plot" tabindex="0" viewBox="0 0 {{ f.w }} {{ f.h }}" role="img" aria-label="{{ s.names[0] }}’s chance to win map {{ m.number }}. {{ f.label }} Use the left and right arrow keys to read moments of the map.">
+        <line class="grid" x1="{{ f.left }}" x2="{{ f.right }}" y1="{{ f.y100 }}" y2="{{ f.y100 }}"/>
+        <line class="base" x1="{{ f.left }}" x2="{{ f.right }}" y1="{{ f.y50 }}" y2="{{ f.y50 }}"/>
+        <line class="axis" x1="{{ f.left }}" x2="{{ f.right }}" y1="{{ f.y0 }}" y2="{{ f.y0 }}"/>
+        <text class="label" x="{{ f.left - 5 }}" y="{{ f.y100 + 4 }}" text-anchor="end">100</text>
+        <text class="label" x="{{ f.left - 5 }}" y="{{ f.y50 | float + 4 }}" text-anchor="end">50</text>
+        <text class="label" x="{{ f.left - 5 }}" y="{{ f.y0 + 4 }}" text-anchor="end">0</text>
+        <line class="grid" x1="{{ f.left }}" x2="{{ f.right }}" y1="{{ f.gold_mid }}" y2="{{ f.gold_mid }}"/>
+        <text class="label" x="{{ f.left - 5 }}" y="{{ f.gold_top + 8 }}" text-anchor="end">+{{ f.gold_label }}</text>
+        <text class="label" x="{{ f.left - 5 }}" y="{{ f.gold_bottom }}" text-anchor="end">−{{ f.gold_label }}</text>
+        {% for c in f.columns %}<rect class="gold" x="{{ c.x }}" y="{{ c.y }}" width="{{ c.w }}" height="{{ c.h }}"/>{% endfor %}
+        {% for t in f.ticks %}<line class="axis" x1="{{ t.x }}" x2="{{ t.x }}" y1="{{ f.gold_bottom + 2 }}" y2="{{ f.gold_bottom + 5 }}"/><text class="label" x="{{ t.x }}" y="{{ f.axis_y }}" text-anchor="middle">{{ t.label }}</text>{% endfor %}
+        {% if f.market %}<path class="mkt" d="{{ f.market }}"/>{% endif %}
+        {% if f.ours %}<path class="ours" d="{{ f.ours }}"/>{% endif %}
+        {% if f.pre %}<circle class="call call--pre" cx="{{ f.pre.x }}" cy="{{ f.pre.y }}" r="3"/>{% endif %}
+        {% if f.end %}<circle class="call" cx="{{ f.end.x }}" cy="{{ f.end.y }}" r="3"/>{% endif %}
+      </svg>
+      </div>
+      <p class="visually-hidden lr-readout" aria-live="polite"></p>
+    </figure>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if s.missing %}
+  <p class="lr-missing">Not recorded: {{ 'map' if s.missing | length == 1 else 'maps' }} {{ s.missing | join(', ') }}.</p>
+  {% endif %}
+  </section>
+
+  <aside class="notes lr-notes" aria-labelledby="about-heading">
+    <h2 id="about-heading" class="margin-head">Reading the maps</h2>
+    <p class="margin-note">The chance {{ s.names[0] }} wins each map, over estimated game time, from our call before it (open circle). Before the series: as on <a href="../predictions.html">Predictions</a>. Table I: ours from the live service's FORGE and the score; Kalshi's middle price in the minute before each map.</p>
+    {% if s.maps | selectattr('backfilled') | list %}
+    <ol class="notes-list">
+      <li id="note-kalshi"><span class="note-mark" aria-hidden="true">‡</span>Kalshi from its minute prices, read after the map.</li>
+    </ol>
+    {% endif %}
+  </aside>
+
+  <p class="month-index"><a href="{{ s.month }}.html">← Live results, {{ month_label }}</a></p>
+{% endblock %}
+{% block scripts %}
+  <script src="{{ root_path }}{{ asset('js/live_results.js') }}" defer></script>
+{% endblock %}

@@ -4,7 +4,7 @@
                 <tr>
                   <th scope="col" class="edges-calls">Calls</th>
                   <th scope="col">Source</th>
-                  <th scope="col" class="num">Edge</th>
+                  {% if show_edge | default(true) %}<th scope="col" class="num">Edge</th>{% endif %}
                   <th scope="col" class="num">Bets</th>
                   <th scope="col" class="num phone-hide">Won</th>
                   <th scope="col" class="num">Return <span class="ci">(95%)</span></th>
@@ -21,7 +21,7 @@
                 <tr{% if src.name == 'backtest' %} class="edges-backtest"{% endif %}>
                   {% if outer.first and loop.first %}<th scope="rowgroup" rowspan="{{ n }}" class="edges-calls">{{ group.label }}</th>{% endif %}
                   {% if loop.first %}<th scope="rowgroup" rowspan="{{ src.rows | length }}" class="edges-source"><span class="edges-method">{{ group.label }}, </span>{{ 'Backtest' if src.name == 'backtest' else 'Saved' }}</th>{% endif %}
-                  <td class="num">{% if row.edge is none %}<abbr title="Every match, backing our pick">Any</abbr>{% else %}&gt; {{ (100 * row.edge) | round | int }}{% endif %}</td>
+                  {% if show_edge | default(true) %}<td class="num">{% if row.edge is none %}<abbr title="Every match, backing our pick">Any</abbr>{% else %}&gt; {{ (100 * row.edge) | round | int }}{% endif %}</td>{% endif %}
                   <td class="num">{{ row.bets }}</td>
                   <td class="num phone-hide">{{ row.won }}</td>
                   {% if row.bets %}

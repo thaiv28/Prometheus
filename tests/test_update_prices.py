@@ -39,7 +39,7 @@ def test_run_prices_the_log_writes_site_files_and_the_alert(tmp_path):
         "start": "2026-10-07T11:00Z",
         "matched": True,
         "method": "forge",
-        "p_series": 0.566,
+        "p_series": 0.40,
         "ours1": "FlyQuest",
         "ours2": "Shopify Rebellion",
         "home1": "LCS",

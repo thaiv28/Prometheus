@@ -1,7 +1,8 @@
 """Kalshi map-winner (KXLOLMAP) contracts and top-of-book quotes for live games.
 
-A contract matches a game only on its rules text: the exact two team names, the
-map number and the match's scheduled US Eastern date. Several matching events
+A contract matches a game only on its rules text: the two team names (exact, or
+through the market benchmark's `MARKET_ALIASES`, Kalshi's name -> ours), the map
+number and the match's scheduled US Eastern date. Several matching events
 for one map are ambiguous and give no contract. Quotes are for YES on the
 match's first team: bid is the best YES bid, ask is 1 minus the best NO bid.
 """
@@ -9,6 +10,8 @@ match's first team: bid is the best YES bid, ask is 1 minus the best NO bid.
 import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
+
+from ..markets import MARKET_ALIASES
 
 KALSHI = "https://api.elections.kalshi.com/trade-api/v2"
 SERIES = "KXLOLMAP"  # one map's winner
@@ -24,6 +27,12 @@ RULES = re.compile(
 
 def names(team):
     return {team["name"], team.get("riot_name"), team.get("code")} - {None}
+
+
+def known(name, team_names):
+    """Whether Kalshi's `name` is one of a team's names, directly or by alias."""
+    name = name.strip()
+    return name in team_names or MARKET_ALIASES.get(name) in team_names
 
 
 def scheduled_day(start_time):
@@ -44,15 +53,35 @@ def contract(markets, mapping, game_number, start_time):
         number = int(rule["map"]) if rule and rule["map"] else None
         if not rule or number != game_number or rule["day"] != day:
             continue
-        pair = {rule["team1"].strip(), rule["team2"].strip()}
-        if not any(a in pair for a in first) or not any(b in pair for b in second):
+        pair = (rule["team1"], rule["team2"])
+        if not any(known(n, first) for n in pair) or not any(
+            known(n, second) for n in pair
+        ):
             continue
-        if rule["side"].strip() in first:
+        if known(rule["side"], first):
             hits.setdefault(market["event_ticker"], []).append(market["ticker"])
     if len(hits) != 1:
         return None
     (tickers,) = hits.values()
     return tickers[0] if len(tickers) == 1 else None
+
+
+DEPTH = 5  # price levels kept a side
+
+
+def book_levels(book, depth=DEPTH):
+    """The best `depth` levels of each side as [[price, size], ...], best first:
+    `yes` bids, and `no` bids (1 - price is the cost of YES there)."""
+    levels = book.get("orderbook_fp") or {}
+    out = {}
+    for side in ("yes", "no"):
+        rows = [
+            [float(p), float(size)]
+            for p, size in levels.get(f"{side}_dollars") or []
+            if float(size) > 0
+        ]
+        out[side] = sorted(rows, key=lambda r: -r[0])[:depth]
+    return out
 
 
 def quote(book, at):

@@ -2,7 +2,7 @@
 compare_benchmarks.py: Compare two benchmark dumps (base and head) on the same units.
 
 Reads the `--dump` output of `evaluate_metrics.py`, `evaluate_season_stats.py`,
-`evaluate_aura.py`, `evaluate_markets.py` and `evaluate_props.py` for two versions of the code, pairs them on shared keys (games,
+`evaluate_aura.py`, `evaluate_markets.py`, `evaluate_props.py` and `evaluate_live.py` for two versions of the code, pairs them on shared keys (games,
 team-seasons, player-seasons) and reports each headline difference with a 95%
 paired-bootstrap interval:
 
@@ -19,11 +19,14 @@ paired-bootstrap interval:
   the same series, with head minus base return and CLV over markets.
 - Props: held-out log score of the prop projections per measure (one map per
   stat, series kills and assists), head minus base, resampling matches.
+- Live: log loss of our in-game calls on past maps with a Kalshi map market, by
+  game-minute band (pregame, early 5-10, mid 15-20, late 25-30) and all
+  together, head minus base, resampling series.
 
 A line is "better" or "worse" when its interval lies entirely on one side of 0,
 otherwise "within noise". The exit code is 1 when a guarded value is significantly
-worse (see `GUARDED_*`), or AURA's ECE is above `ECE_LIMIT` at any snapshot, and 0
-otherwise. Rows present in only one dump are counted, not compared.
+worse (see `GUARDED_*`), or AURA's ECE is above `ECE_LIMIT` at any snapshot, 2
+when the comparison itself fails, and 0 otherwise. Rows present in only one dump are counted, not compared.
 
 Usage:
     uv run python scripts/compare_benchmarks.py BASE_DIR HEAD_DIR [--out report.md]
@@ -33,6 +36,7 @@ import argparse
 import json
 import os
 import sys
+import traceback
 
 import numpy as np
 import pandas as pd
@@ -70,6 +74,15 @@ GUARDED_MARKETS = {("series", "all"), ("series", "forge (major)"), ("map1", "all
 MARKET_KEY = ["kind", "event_ticker", "team1"]
 # Prop projections (on the Props page): every measure evaluate_props.py dumps.
 PROPS_KEY = ["measure", "unit"]
+# In-game calls (`evaluate_live.py`): every band and all minutes together.
+LIVE_BANDS = {
+    "pre-map, every priced map": (-1,),
+    "pregame": (0,),
+    "early": (5, 10),
+    "mid": (15, 20),
+    "late": (25, 30),
+}
+LIVE_KEY = ["game", "checkpoint"]
 N_RESAMPLES = 2000
 # Base and head run on different machines, so identical code can differ by about
 # 1e-16 per row (floating point); over thousands of rows every resample then lands
@@ -580,6 +593,45 @@ def compare_props(base, head, n_resamples=N_RESAMPLES):
     return rows
 
 
+def compare_live(base, head, n_resamples=N_RESAMPLES, fit_through=None):
+    """Log loss of our in-game calls per minute band, on the map-minutes both
+    dumps scored after `fit_through` (the later of the two models' fit dates),
+    resampling series."""
+    # Feed game ids are numbers and OE ids text: read every key as text.
+    base, head = (f.assign(game=f["game"].astype(str)) for f in (base, head))
+    if fit_through and "start" in base and "start" in head:
+        base = base[base["start"] > fit_through]
+        head = head[head["start"] > fit_through]
+    both, only = _pair(base, head, LIVE_KEY)
+    if both.empty:
+        return [_missing("Live", "log loss", True, only)]
+    rows = []
+    for name, minutes in [*LIVE_BANDS.items(), ("all", None)]:
+        if minutes is None:  # all: the feed maps' checkpoints
+            pick = both[both["checkpoint"] >= 0]
+        else:
+            pick = both[both["checkpoint"].isin(minutes)]
+        if pick.empty:
+            continue
+        b = game_losses(pick["ours_base"], pick["won_base"])["log_loss"].to_numpy()
+        h = game_losses(pick["ours_head"], pick["won_head"])["log_loss"].to_numpy()
+        rows.append(
+            _row(
+                "Live",
+                f"log loss, {name} ({len(pick):,})",
+                b.mean(),
+                h.mean(),
+                _rows_bootstrap(
+                    np.mean, b[:, None], h[:, None], pick["series_head"], n_resamples
+                ),
+                True,
+                True,
+                only,
+            )
+        )
+    return rows
+
+
 def failures(rows):
     """Guarded rows that are significantly worse, or an ECE over the limit."""
     return [
@@ -606,7 +658,7 @@ def render(sections, notes=()):
     for title, part in sections:
         if not part or title == "Betting":
             continue
-        digits = 4 if title in ("Forecasts", "Markets", "Props") else 3
+        digits = 4 if title in ("Forecasts", "Markets", "Props", "Live") else 3
         lines += [
             "",
             f"#### {title}",
@@ -707,6 +759,19 @@ def compare_dirs(base_dir, head_dir, n_resamples=N_RESAMPLES):
         sections.append(("Props", compare_props(b, h, n_resamples)))
     else:
         notes.append("Prop projections: missing from one side, not compared.")
+
+    b, h = (_read(sub(d, "live"), "calls.csv.gz") for d in (base_dir, head_dir))
+    if b is not None and h is not None:
+        dates = [
+            (_meta(sub(d, "live"), "metrics.json") or {}).get("fit_through")
+            for d in (base_dir, head_dir)
+        ]
+        cutoff = max((x for x in dates if x), default=None)
+        sections.append(("Live", compare_live(b, h, n_resamples, cutoff)))
+        if cutoff:
+            notes.append(f"Live benchmark: maps after {cutoff} (the models' fit).")
+    else:
+        notes.append("Live benchmark: missing from one side, not compared.")
     return sections, notes
 
 
@@ -714,13 +779,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
         "base",
-        help="Base dump directory (metrics/, season/, aura/, markets/, props/ inside)",
+        help="Base dump directory (metrics/, season/, aura/, markets/, props/, live/ inside)",
     )
     parser.add_argument("head", help="Head dump directory (same layout)")
     parser.add_argument("--out", help="Also write the report to this Markdown file")
     args = parser.parse_args()
 
-    sections, notes = compare_dirs(args.base, args.head)
+    try:
+        sections, notes = compare_dirs(args.base, args.head)
+    except Exception:
+        # A crash is an error (exit 2), never a "significantly worse" verdict (1).
+        traceback.print_exc()
+        sys.exit(2)
     report = render(sections, notes)
     print(report)
     if args.out:

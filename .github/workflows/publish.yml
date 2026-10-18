@@ -13,6 +13,11 @@ on:
         type: boolean
         default: false
 
+      deploy_execution:
+        description: "Redeploy the current executor (mode and limits stay unchanged)"
+        type: boolean
+        default: false
+
 permissions:
   contents: read
   id-token: write
@@ -58,15 +63,30 @@ jobs:
     timeout-minutes: 5
     outputs:
       build: ${{ steps.diff.outputs.build }}
+      execution: ${{ steps.diff.outputs.execution }}
     steps:
       - uses: actions/checkout@v7
-        if: github.event_name == 'pull_request'
         with:
           fetch-depth: 2
-          persist-credentials: false
       - name: Changed files
         id: diff
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
         run: |
+          set -euo pipefail
+          echo "execution=false" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = push ]; then
+            if [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+              git ls-tree -r --name-only HEAD > "$RUNNER_TEMP/changed-files"
+            else
+              git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$BEFORE_SHA"
+              git diff --name-only "$BEFORE_SHA" HEAD > "$RUNNER_TEMP/changed-files"
+            fi
+            if grep -qE '^(prometheus/(__init__\.py|alert_contract\.py|market_blend\.(py|json)|markets\.py|execution/)|deploy/execution/|.github/workflows/publish\.yml$)' "$RUNNER_TEMP/changed-files"; then
+              echo "execution=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
           if [ "${{ github.event_name }}" != pull_request ] \
               || git diff --name-only HEAD^1 HEAD | grep -qvE '^(docs/|[^/]+\.md$)'; then
             echo "build=true" >> "$GITHUB_OUTPUT"
@@ -74,6 +94,30 @@ jobs:
             echo "Only docs changed; skipping the build."
             echo "build=false" >> "$GITHUB_OUTPUT"
           fi
+
+  deploy-execution:
+    needs: [check, changes]
+    if: github.ref == 'refs/heads/main' && ((github.event_name == 'push' && needs.changes.outputs.execution == 'true') || (github.event_name == 'workflow_dispatch' && inputs.deploy_execution))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - name: Refuse an obsolete release
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+      - name: Build isolated runtime
+        run: bash deploy/execution/package.sh "$RUNNER_TEMP/execution.zip"
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.KALSHI_EXECUTION_DEPLOY_ROLE_ARN }}
+          aws-region: us-west-2
+          role-session-name: kalshi-execution-deploy-${{ github.run_id }}
+          mask-aws-account-id: true
+          unset-current-credentials: true
+      - name: Release and verify Lambda
+        run: uv run --no-project --with boto3 python -m deploy.execution.deploy --package "$RUNNER_TEMP/execution.zip"
 
   build:
     needs: changes
@@ -199,6 +243,14 @@ jobs:
       - name: Restore Kalshi prices
         if: env.CAN_USE_AWS == 'true'
         run: aws s3 cp "$MARKET_PRICES_BACKUP" data/market_prices.json --only-show-errors || echo "No saved Kalshi prices."
+      # The live worker's finished maps, cut to a few KB each, for the live results
+      # pages (scripts/live_archive.sh: compacts each new map once, then restores
+      # the compact copies; under a second once they exist). Never fails the build.
+      - name: Restore live results
+        if: env.CAN_USE_AWS == 'true'
+        env:
+          LIVE_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/live
+        run: bash scripts/live_archive.sh
       # Two read-only checks run alongside the site build (they only read the DB):
       # the e2e tests again on today's full DB, and a refit of the FORGE weights on
       # today's data, which warns (does not fail) on a big move. The step fails if

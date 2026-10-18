@@ -1,4 +1,4 @@
-"""One first-qualifying alert policy across every rated fixture group.
+"""First positive after-fee blended edges in domestic/international fixtures.
 
 Legacy international records remain authoritative; unposted minor records are
 retained as history. Notifications never reconstruct historical candidates.
@@ -10,9 +10,9 @@ import math
 import urllib.parse
 from zoneinfo import ZoneInfo
 
-from prometheus import alert_contract, forecast_groups, markets, schedule
+from prometheus import alert_contract, forecast_groups, markets, schedule, trading
 
-EDGE = 0.05
+EDGE = 0.0
 MIN_HOURS = 6
 SITE_URL = "https://prometheus.thaiv.dev"
 PACIFIC = ZoneInfo("America/Los_Angeles")
@@ -36,7 +36,7 @@ def _stale(log, entry, now):
 
 
 def select(log, now, edge=EDGE):
-    """Same >edge, 6h, fresh-ask and complete-results rules in every group."""
+    """Blended net edge >edge, 6h, same-run prices and complete team results."""
     now_s = now.strftime("%Y-%m-%dT%H:%MZ")
     out = []
     for entry in log.values():
@@ -46,7 +46,7 @@ def select(log, now, edge=EDGE):
             not entry.get("matched")
             or entry.get("winner") in (1, 2)
             or entry.get("method") not in ("forge", "elo", "elo-cross")
-            or forecast_groups.classify(entry) is None
+            or forecast_groups.classify(entry) not in alert_contract.TRADE_GROUPS
             or not isinstance(p, (int, float))
             or not math.isfinite(p)
             or not 0 < p < 1
@@ -58,25 +58,9 @@ def select(log, now, edge=EDGE):
             continue
         if _stale(log, entry, now):
             continue
-        sides = [
-            (1, entry["p_series"], market.get("ask1")),
-            (2, 1 - entry["p_series"], market.get("ask2")),
-        ]
-        best = max(
-            (
-                (p - price, side, p, price)
-                for side, p, price in sides
-                if isinstance(price, (int, float))
-                and math.isfinite(price)
-                and 0 < price < 1
-            ),
-            default=None,
-        )
-        if best and best[0] > edge:
-            gap, side, p, price = best
-            out.append(
-                {"entry": entry, "side": side, "p": p, "price": price, "edge": gap}
-            )
+        estimate = trading.quote(entry)
+        if estimate and estimate["pick"]["net_edge"] > edge:
+            out.append({"entry": entry, **estimate["pick"]})
     return sorted(out, key=lambda a: (a["entry"]["start"], a["entry"]["match_id"]))
 
 
@@ -97,6 +81,13 @@ def record(alerts, now, key="alert"):
                 "edge": round(a["edge"], 4),
                 "at": now_s,
             }
+            if a.get("trading"):
+                a["entry"][key].update(
+                    trading=copy.deepcopy(a["trading"]),
+                    policy=a["trading"]["policy"],
+                    net_edge=round(a["net_edge"], 6),
+                    fee=a["fee"],
+                )
             if key in ("alert", INTERNATIONAL_KEY):
                 a["entry"][key]["forecast"] = copy.deepcopy(
                     {
@@ -115,6 +106,9 @@ def record(alerts, now, key="alert"):
                 )
             a["entry"][key]["group"] = forecast_groups.classify(a["entry"])
             if key == "alert":
+                a["entry"][key]["forecast"]["international"] = (
+                    forecast_groups.international(a["entry"])
+                )
                 a["entry"][key]["execution"] = alert_contract.identity(
                     a["entry"], a["entry"][key]
                 )
@@ -214,9 +208,12 @@ def _current(entry, side, now_s):
     """Current model chance for `side`, what a contract on it costs now (None when this
     run has no price for the match) and the edge."""
     market = entry.get("market") or {}
-    p = entry["p_series"] if side == 1 else 1 - entry["p_series"]
-    price = market.get(f"ask{side}") if market.get("at") == now_s else None
-    return p, price, None if price is None else p - price
+    if market.get("at") != now_s or (estimate := trading.quote(entry)) is None:
+        return None, None, None
+    quote = next((q for q in estimate["choices"] if q["side"] == side), None)
+    return (
+        (quote["p"], quote["price"], quote["net_edge"]) if quote else (None, None, None)
+    )
 
 
 INTERNATIONAL_KEY = "international_paper_alert"  # immutable legacy records
@@ -259,7 +256,7 @@ def _row(entry, now_s, slugify, team_slugs):
     saved = entry["alert"]
     side = alert_side(entry, saved)
     _, _, edge = _current(entry, side, now_s)
-    was = 100 * saved["edge"]
+    was = 100 * saved.get("net_edge", saved["edge"])
     if edge is None:
         edge_cell = f"no price now (alerted at +{was:.1f})"
     elif edge > EDGE:
@@ -275,7 +272,7 @@ def _row(entry, now_s, slugify, team_slugs):
 
 
 HEAD = [
-    "| Start (UTC / Pacific) | Event | Back | First chance | First ask | Current edge | Links |",
+    "| Start (UTC / Pacific) | Event | Back | First chance | First ask | Net edge | Links |",
     "|---|---|---|---:|---:|---:|---|",
 ]
 
@@ -318,12 +315,12 @@ def issue(entries, log, now, data_through, slugify, team_slugs):
     )
     gone = len(entries) - live
     title = (
-        f"{day_key(now)} {live} call{'s' if live != 1 else ''} more than {round(100 * EDGE)} points above Kalshi"
+        f"{day_key(now)} {live} blended call{'s' if live != 1 else ''} above fees"
         + (f" ({gone} gone)" if gone else "")
     )
     body = "\n".join(
         [
-            f"Series chance >{round(100 * EDGE)} points above a fresh ask, {MIN_HOURS}+ hours before start; complete team results required. "
+            f"Blended chance above a fresh ask and estimated fees, {MIN_HOURS}+ hours before start. Domestic and international fixtures; other cross-league excluded. "
             f"Prices as of {now:%H:%M} UTC; games through {data_through}.",
             "",
             *_sections(entries, now_s, slugify, team_slugs, log),

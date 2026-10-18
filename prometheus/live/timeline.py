@@ -2,9 +2,12 @@
 
 import math
 import sqlite3
+from pathlib import Path
 
 from .feed import timestamp
 
+# The model the live service calls with (and `scripts/evaluate_live.py` scores).
+MODEL_PATH = Path(__file__).with_name("time_model_v1.json")
 FEATURES = ["gold_k", "gold_fraction", "elo_hundred", "time", "gold_time", "elo_time"]
 
 

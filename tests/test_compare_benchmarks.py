@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -360,3 +361,98 @@ def test_props_worse_scores_fail_and_same_scores_pass():
     )
     rows = cb.compare_props(_prop_scores(), head, N)
     assert [r["result"] for r in rows] == ["not paired", "within noise"]
+
+
+def _live_calls(shift=0.0, seed=0):
+    """In-game calls on 120 maps (40 series) at the seven checkpoints."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for g in range(120):
+        won = int(rng.random() < 0.5)
+        for minute in (0, 5, 10, 15, 20, 25, 30):
+            p = np.clip(0.5 + (0.3 if won else -0.3) * minute / 30, 0.05, 0.95)
+            p = np.clip(
+                p + rng.normal(0, 0.05) - (shift if won else -shift), 0.01, 0.99
+            )
+            rows.append(
+                {
+                    "game": f"g{g}",
+                    "series": f"s{g // 3}",
+                    "start": "2025-06-01" if g < 60 else "2026-03-01",
+                    "checkpoint": minute,
+                    "ours": p,
+                    "kalshi": 0.5,
+                    "won": won,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def test_live_worse_calls_fail_by_band_and_same_calls_pass():
+    same = cb.compare_live(_live_calls(), _live_calls(), N)
+    assert [r["name"].split(" (")[0] for r in same] == [
+        "log loss, pregame",
+        "log loss, early",
+        "log loss, mid",
+        "log loss, late",
+        "log loss, all",
+    ]
+    assert all(r["result"] == "within noise" and r["guarded"] for r in same)
+    worse = cb.compare_live(_live_calls(), _live_calls(shift=0.1), N)
+    assert {r["result"] for r in worse} == {"worse"} and cb.failures(worse)
+    # Only one band worse still fails the check.
+    head = _live_calls()
+    late = head["checkpoint"] >= 25
+    head.loc[late, "ours"] = np.where(head.loc[late, "won"] == 1, 0.3, 0.7)
+    rows = cb.compare_live(_live_calls(), head, N)
+    assert [r["result"] for r in rows if "late" in r["name"]] == ["worse"]
+    assert cb.failures(rows)
+
+
+def test_live_scores_only_maps_after_both_models_fit():
+    # Head is much worse, but only on maps its fit date excludes.
+    head = _live_calls()
+    early = head["start"] < "2026-01-01"
+    head.loc[early, "ours"] = np.where(head.loc[early, "won"] == 1, 0.1, 0.9)
+    assert cb.failures(cb.compare_live(_live_calls(), head, N))
+    rows = cb.compare_live(_live_calls(), head, N, fit_through="2025-12-31")
+    assert not cb.failures(rows)
+    assert rows[-1]["name"] == "log loss, all (420)"
+
+
+def test_live_pre_map_band_is_guarded_and_kept_out_of_all():
+    pre = _live_calls(seed=1)
+    pre = pre[pre["checkpoint"] == 0].assign(
+        checkpoint=-1, game=lambda f: "oe" + f["game"]
+    )
+    base = pd.concat([_live_calls(), pre])
+    worse = pre.assign(ours=np.where(pre["won"] == 1, 0.2, 0.8))
+    rows = cb.compare_live(base, pd.concat([_live_calls(), worse]), N)
+    by = {r["name"].split(" (")[0]: r for r in rows}
+    assert by["log loss, pre-map, every priced map"]["result"] == "worse"
+    assert by["log loss, all"]["result"] == "within noise"
+    assert cb.failures(rows)
+
+
+def test_live_pairs_numeric_and_text_game_ids(tmp_path):
+    # A base with only feed maps (numeric ids) against a head with OE pre-maps.
+    base = _live_calls().assign(game=lambda f: f["game"].str[1:].astype(int))
+    pre = base[base["checkpoint"] == 0].assign(checkpoint=-1, game="LOLTMNT_1")
+    head = pd.concat([base, pre])
+    for side, frame in (("base", base), ("head", head)):
+        (tmp_path / side / "live").mkdir(parents=True)
+        frame.to_csv(tmp_path / side / "live" / "calls.csv.gz", index=False)
+    sections, _ = cb.compare_dirs(str(tmp_path / "base"), str(tmp_path / "head"), N)
+    rows = dict(sections)["Live"]
+    assert all(r["result"] == "within noise" for r in rows if "diff" in r)
+
+
+def test_a_crash_exits_2_not_worse(tmp_path, monkeypatch):
+    def boom(*a, **k):
+        raise ValueError("bad dump")
+
+    monkeypatch.setattr(cb, "compare_dirs", boom)
+    monkeypatch.setattr(sys, "argv", ["compare_benchmarks.py", "a", "b"])
+    with pytest.raises(SystemExit) as stop:
+        cb.main()
+    assert stop.value.code == 2

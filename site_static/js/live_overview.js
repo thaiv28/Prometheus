@@ -20,7 +20,7 @@
     return node;
   };
 
-  const POLL_MS = 5000;
+  const POLL_MS = 2000;
   const QUIET_MS = 60000;
   const RETRY_MS = 15000;
   const STALE_MS = 45000;
@@ -32,6 +32,21 @@
   let failed = false;
   let skew = 0;
   let timer = null;
+  const upcoming = root.querySelector(".live-idle");
+  const fixtureRows = upcoming ? [...upcoming.querySelectorAll("tr.fx")] : [];
+  const shownLive = new Set();
+
+  function updateUpcoming(matches) {
+    for (const row of fixtureRows) {
+      if (L.fixtureOnLive((row.dataset.teams || "").split("|"), row.dataset.start, matches)) shownLive.add(row);
+      row.hidden = shownLive.has(row);
+    }
+    if (!upcoming || !fixtureRows.length) return;
+    for (const body of upcoming.querySelectorAll("tbody.fx-day")) {
+      body.hidden = [...body.querySelectorAll("tr.fx")].every((r) => r.hidden);
+    }
+    upcoming.hidden = fixtureRows.every((r) => r.hidden);
+  }
 
   async function poll() {
     clearTimeout(timer);
@@ -73,12 +88,13 @@
     const n = matches.length;
     const stale = failed || (n > 0 && age > STALE_MS);
     $("matches-caption").textContent = [
-      n ? `${n === 1 ? "One match" : `${n} matches`} in progress` : "Matches in progress",
+      n ? `${n === 1 ? "One match" : `${n} matches`} ${matches.every((m) => m.status === "waiting") ? "waiting" : matches.some((m) => m.status === "waiting") ? "live or waiting" : "in progress"}` : "Matches in progress",
       failed ? "; feed unreachable." : stale ? `; stalled, last update ${ago(age)}.` : n ? `, updated ${ago(age)}.` : ".",
       index.note ? ` ${index.note}` : "",
     ].join("");
     $("matches-cap").classList.toggle("is-stale", stale);
     if (!rows) return;
+    updateUpcoming(matches);
     table.hidden = !n;
     empty.hidden = !!n;
     [...table.tBodies].forEach((b) => b.remove());
@@ -95,7 +111,7 @@
     const fav = p == null ? 0 : p > 50 ? 1 : p < 50 ? 2 : 0;
     // Team names are the row's links, so the match opens from the keyboard too.
     const team = (i) => h("a", { class: "lm-name", href: watchUrl(m), title: (m.teams[i] && m.teams[i].name) || "" }, (m.teams[i] && m.teams[i].name) || "?");
-    const clock = g.ended_at ? "Ended" : L.clock(g.clock ?? g.clock_estimate) ?? "—";
+    const clock = m.status === "waiting" ? "Waiting" : g.ended_at ? "Ended" : L.clock(g.clock ?? g.clock_estimate) ?? "—";
     const bar = h("span", { class: "fx-bar", style: `--p:${p ?? 50}` }, q ? h("span", { class: "fx-mkt", style: `--m:${L.in100(q.mid)}` }) : null);
     if (p == null) bar.classList.add("is-empty");
     bar.title = [call ? `Ours ${p}–${100 - p}, ${call.note}` : "No call yet", q ? `Kalshi ${L.in100(q.mid)}–${100 - L.in100(q.mid)}` : "No Kalshi price"].join("; ");
@@ -109,7 +125,7 @@
     const statCell = ([, v], i) => h("td", { class: `num lm-stat${i >= 2 ? " lm-wide" : ""}` }, v ?? muted("—"));
     const score = Array.isArray(m.score) ? `${m.score[0]}–${m.score[1]}` : "—";
     const main = h("tr", { class: "lm" },
-      h("td", { class: "lm-clock" }, h("span", { class: "lm-time" }, clock), h("span", { class: "lm-map" }, `Map ${g.number ?? "?"}`)),
+      h("td", { class: "lm-clock" }, h("span", { class: "lm-time" }, clock), h("span", { class: "lm-map" }, m.status === "waiting" ? "" : `Map ${g.number ?? "?"}`)),
       h("td", { class: "lm-league wide-only" }, h("span", { class: "league", "data-league": m.league }, h("span", { class: "league-mark", "aria-hidden": "true" }), m.league)),
       h("td", { class: `lm-team lm-team--1${fav === 1 ? " fav" : ""}` }, team(0)),
       h("td", { class: `num lm-p${fav === 1 ? " fav" : ""}` }, p == null ? muted("—") : String(p)),
@@ -125,7 +141,7 @@
       h("span", { class: "lm-k" }, "Series"), ` ${score}`,
       ...(q ? [" · ", h("span", { class: "lm-k" }, "Kalshi"), ` ${L.in100(q.mid)}`] : []),
       ...stats.flatMap(([k, v]) => [" · ", h("span", { class: "lm-k" }, k), " ", v ?? "—"])));
-    const body = h("tbody", { class: "lm-match", "data-league": m.league }, main, line);
+    const body = h("tbody", { class: "lm-match", "data-league": m.league }, main, m.status === "waiting" ? null : line);
     body.addEventListener("click", (e) => { if (!e.target.closest("a")) location.href = watchUrl(m); });
     return body;
   }

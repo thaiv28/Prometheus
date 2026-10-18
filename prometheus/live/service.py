@@ -12,6 +12,7 @@ retries); 401/403/429 from Riot stops the service, from Kalshi only its quotes.
 
 import argparse
 import json
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -31,6 +32,7 @@ from .kalshi import (
     MATCH_SERIES,
     MATCH_URL,
     SERIES,
+    book_levels,
     contract,
     quote,
 )
@@ -38,8 +40,9 @@ from .page import build_page, summary, write_atomic
 from .requests import SITE_API_HOST, probe, utc_now
 from .series import map_prior, map_shift, series_chance
 from .start import find_start
-from .timeline import latest_elo
+from .timeline import MODEL_PATH, latest_elo
 
+GETSCHEDULE = f"https://{SITE_API_HOST}/persisted/gw/getSchedule?hl=en-US"
 GETLIVE = f"https://{SITE_API_HOST}/persisted/gw/getLive?hl=en-US"
 WINDOW = "https://feed.lolesports.com/livestats/v1/window/{}?{}"
 # Riot league slug -> Prometheus league name (picks the page's default stream).
@@ -64,6 +67,7 @@ REFUSED = 3
 # Exit status after --idle-exit minutes with no live game: the unit backs up the
 # evidence and powers the worker off until the schedule starts it again.
 IDLE = 4
+QUOTE_INTERVAL = 2  # seconds; independent of the Riot feed cadence
 SERIES_SHOWN = 30  # minutes a decided series stays on the live pages
 
 
@@ -90,11 +94,11 @@ def fetch_json(url, out):
 
 def resolve_team(team, catalog, aliases):
     names = {t["n"] for t in catalog}
-    if team["id"] in aliases:
+    if team.get("id") in aliases:
         return aliases[team["id"]]
     if team.get("name") in names:
         return team["name"]
-    slugs = [t["n"] for t in catalog if t.get("s") == team.get("slug")]
+    slugs = [t["n"] for t in catalog if team.get("slug") and t.get("s") == team["slug"]]
     return slugs[0] if len(slugs) == 1 else None
 
 
@@ -103,6 +107,52 @@ def live_events(payload):
         match = event.get("match")
         if event.get("state") == "inProgress" and match and len(match["teams"]) == 2:
             yield event
+
+
+def feed_sides(game, out):
+    """`game` with its sides as Riot's feed has them; None until the feed has it.
+
+    getLive can still list the previous map's sides when a map starts (KC v MVK
+    map 3, FURIA v C9 maps 2 and 3, 2026-10-16). The collector refuses every frame
+    whose teams aren't on the selected sides, so a map selected that way shows no
+    stats, never finishes and leaves no snapshot.
+    """
+    try:
+        _, payload = fetch_json(WINDOW.split("?")[0].format(game["id"]), out)
+    except ValueError as error:
+        log("sides_failed", game=game["id"], reason=str(error))
+        return None
+    metadata = (payload or {}).get("gameMetadata") or {}
+    ids = {
+        side: (metadata.get(f"{side}TeamMetadata") or {}).get("esportsTeamId")
+        for side in ("blue", "red")
+    }
+    if None in ids.values():
+        return None
+    by_id = {team_id: side for side, team_id in ids.items()}
+    if set(by_id) != {t["id"] for t in game["teams"]}:
+        raise ValueError(f"feed teams {sorted(by_id)} are not getLive's")
+    return dict(game, teams=[dict(t, side=by_id[t["id"]]) for t in game["teams"]])
+
+
+def pin_order(event, root):
+    """`event` with its teams in the order first seen for the match.
+
+    Team 0 is who every stored record is for (settled map winners, FORGE, the
+    quotes, the score), and getLive can swap a match's teams between maps (FURIA
+    v C9 2026-10-16: C9 first on map 1, FURIA from map 2).
+    """
+    teams = event["match"]["teams"]
+    ids = [t["id"] for t in teams]
+    path = root / event["id"] / "teams.json"
+    if not path.exists():
+        write_atomic(path, ids)
+        return event
+    saved = json.loads(path.read_text())
+    if saved == ids or sorted(saved) != sorted(ids):
+        return event
+    teams = sorted(teams, key=lambda t: saved.index(t["id"]))
+    return dict(event, match=dict(event["match"], teams=teams))
 
 
 def mapping_for(event, catalog, aliases):
@@ -132,6 +182,81 @@ def mapping_for(event, catalog, aliases):
         "games": {g["id"]: g["number"] for g in match["games"]},
         "score": mapping_score(event),
     }
+
+
+def waiting_pages(events, catalog, aliases, at, tracked=(), failed=()):
+    """Due Riot fixtures while this worker is on; same IDs as getLive.
+
+    Schedule teams have names/codes but no Riot IDs or map assignments. Keep
+    those unknown, and never replace a tracked map (including between maps).
+    """
+    now = timestamp(at)
+    pages = []
+    seen = set(tracked)
+    # A failed/skipped active map is unavailable, never a pre-match fallback.
+    # getSchedule lacks games, so exclude its duplicate using getLive first.
+    seen.update(
+        event.get("id") or (event.get("match") or {}).get("id")
+        for event in events
+        if any(
+            g.get("state") == "inProgress" and g.get("id") in failed
+            for g in (event.get("match") or {}).get("games", [])
+        )
+    )
+    for event in events:
+        match = event.get("match") or {}
+        mid = match.get("id") or event.get("id")
+        if (
+            not mid
+            or not re.fullmatch(r"[\w-]+", str(mid))
+            or mid in seen
+            or event.get("state") not in {"unstarted", "inProgress"}
+        ):
+            continue
+        try:
+            if (
+                not -240 * 60
+                <= (timestamp(event["startTime"]) - now).total_seconds()
+                <= 75 * 60
+            ):
+                continue
+            teams = [
+                {"name": resolve_team(t, catalog, aliases), "code": t.get("code")}
+                for t in match["teams"]
+            ]
+            if (
+                len(teams) != 2
+                or any(not t["name"] for t in teams)
+                or teams[0]["name"] == teams[1]["name"]
+            ):
+                continue
+            league = event["league"]
+            pages.append(
+                {
+                    "schema": 1,
+                    "published_at": at,
+                    "status": "waiting",
+                    "note": None,
+                    "match": {
+                        "id": mid,
+                        "league": LEAGUES.get(league["slug"], league["name"]),
+                        "event": " ".join(
+                            filter(None, [league["name"], event.get("blockName")])
+                        ),
+                        "best_of": match.get("strategy", {}).get("count"),
+                        "teams": teams,
+                        "score": None,
+                        "series": {},
+                        "maps": [],
+                    },
+                    "game": None,
+                    "live_state_verified": False,
+                }
+            )
+            seen.add(mid)
+        except (ValueError, KeyError, TypeError):
+            continue
+    return pages
 
 
 def settle_map(ticker, number, results_path, out):
@@ -296,7 +421,7 @@ def publish_s3(page_out, uri):
         "--content-type",
         "application/json",
         "--cache-control",
-        "max-age=2",
+        "max-age=1",
     ]
     try:
         done = subprocess.run(command, capture_output=True, text=True, timeout=60)
@@ -305,6 +430,68 @@ def publish_s3(page_out, uri):
         return
     if done.returncode:
         log("s3_failed", reason=done.stderr.strip()[:300])
+
+
+class PreMaps:
+    """Kalshi's book for maps getLive lists as in progress before the feed has
+    them (the draft and the loading screen), until the map is tracked.
+
+    Each poll appends {at, bid, ask, yes, no (top levels), ticker} to
+    `<root>/<match>/<game>/pre_quotes.jsonl`; the first sighting is logged as
+    `pre_map_seen` (when the draft was first seen live).
+    """
+
+    def __init__(self, root):
+        self.root, self.maps, self.seq = root, {}, 0
+
+    def seen(self, event, game, mapping):
+        gid = game["id"]
+        if gid in self.maps:
+            return
+        self.maps[gid] = {
+            "dir": self.root / event["id"] / gid,
+            "mapping": mapping,
+            "number": game["number"],
+            "start_time": event.get("startTime"),
+            "ticker": None,
+        }
+        log("pre_map_seen", game=gid, match=event["id"], map=game["number"])
+
+    def drop(self, gid):
+        self.maps.pop(gid, None)
+
+    def keep(self, match_ids):
+        for gid in [
+            g for g, m in self.maps.items() if m["mapping"]["match_id"] not in match_ids
+        ]:
+            self.drop(gid)
+
+    def want_tickers(self):
+        return any(m["ticker"] is None for m in self.maps.values())
+
+    def match(self, markets):
+        for gid, m in self.maps.items():
+            if m["ticker"] is None and m["start_time"]:
+                m["ticker"] = contract(
+                    markets, m["mapping"], m["number"], m["start_time"]
+                )
+                if m["ticker"]:
+                    log("pre_map_contract", game=gid, ticker=m["ticker"])
+
+    def poll(self):
+        for m in self.maps.values():
+            if not m["ticker"]:
+                continue
+            self.seq += 1
+            stamp = datetime.now(UTC).strftime("%H%M%S")
+            out = m["dir"] / "prebook" / f"{self.seq:06d}_{stamp}"
+            _, book = fetch_json(f"{KALSHI}/markets/{m['ticker']}/orderbook", out)
+            q = quote(book or {}, utc_now())
+            if q:
+                m["dir"].mkdir(parents=True, exist_ok=True)
+                with (m["dir"] / "pre_quotes.jsonl").open("a") as f:
+                    row = dict(q, ticker=m["ticker"], **book_levels(book))
+                    f.write(json.dumps(row) + "\n")
 
 
 class Game:
@@ -329,6 +516,10 @@ class Game:
         # An adopted game keeps another run's collector and session (its history).
         self.collector_dir, session = adopt or (self.dir / "collector", self.id)
         self.collector = Collector(self.collector_dir, "network_probe")
+        # A resumed session keeps the sides it was selected with.
+        saved = self.collector.state["used_sessions"].get(session)
+        if saved:
+            sides = {"blue": saved["blue_id"], "red": saved["red_id"]}
         self.collector.process(
             {
                 "action": "select",
@@ -463,7 +654,8 @@ class Game:
         q = quote(book or {}, utc_now())
         if q:
             with path.open("a") as f:
-                f.write(json.dumps(dict(q, ticker=ticker)) + "\n")
+                row = dict(q, ticker=ticker, **book_levels(book))
+                f.write(json.dumps(row) + "\n")
 
     @staticmethod
     def quotes(path):
@@ -489,7 +681,8 @@ class Game:
         page = build_page(
             self.collector_dir, self.mapping, catalog, at, timeline=timeline
         )
-        quotes = self.quotes(self.dir / "quotes.jsonl")
+        if self.state == "waiting" and page.get("game") and not page["game"]["frames"]:
+            page.update(status="waiting", note=None)
         game = page.get("game")
         result = self.results().get(self.number)
         if score:
@@ -542,10 +735,19 @@ class Game:
                 "kalshi": (self.quotes(self.series_quotes_path) or [None])[-1],
                 "kalshi_url": MATCH_URL if self.series_ticker else None,
             }
+        page["match"]["start"] = self.start_time
         if record:
             self.journal(page)
+        return self.add_quotes(page)
+
+    def add_quotes(self, page):
+        """Refresh prices on an existing page without replaying the game feed."""
+        quotes = self.quotes(self.dir / "quotes.jsonl")
+        series = page["match"].get("series")
+        if series:
+            series["kalshi"] = (self.quotes(self.series_quotes_path) or [None])[-1]
         url = MARKET_URL
-        if not self.ticker and self.deciding(score):
+        if not self.ticker and self.deciding(self.score()):
             # Kalshi lists no market for a deciding map: the series market is it.
             quotes, url = self.quotes(self.series_quotes_path), MATCH_URL
         if quotes and page.get("game"):
@@ -663,7 +865,7 @@ def write_index(page_dir, at):
             age = (timestamp(at) - timestamp(page["published_at"])).total_seconds()
             if (
                 age <= FRESH
-                and page.get("game")
+                and page.get("match")
                 and page["status"]
                 not in {
                     "unavailable",
@@ -698,7 +900,11 @@ def run(args):
         gid, path, session = spec.split(":", 2)
         adopt[gid] = (Path(path), session)
     games, failed, last_discovery = {}, {}, 0.0
+    pre = PreMaps(args.root)
     events, last_active = None, time.monotonic()
+    scheduled = []
+    waiting_ids = set()
+    feed_polled = {}
     kalshi = True
     try:
         while True:
@@ -711,7 +917,11 @@ def run(args):
                 except ValueError as error:
                     log("discovery_failed", reason=str(error))
                     payload = None
-                events = list(live_events(payload)) if payload else None
+                events = (
+                    [pin_order(e, args.root) for e in live_events(payload)]
+                    if payload
+                    else None
+                )
                 if events is not None:
                     live_ids = {e["id"] for e in events}
                     for gid in [
@@ -721,6 +931,15 @@ def run(args):
                     ]:
                         games.pop(gid).close()
                         log("untracked", game=gid, reason="match no longer live")
+                    pre.keep(live_ids)
+                try:
+                    _, schedule = fetch_json(
+                        GETSCHEDULE, args.root / "schedule" / stamp
+                    )
+                    scheduled = schedule["data"]["schedule"].get("events") or []
+                except (ValueError, KeyError, TypeError) as error:
+                    scheduled = []
+                    log("schedule_failed", reason=str(error))
                 for event in events or []:
                     for game in event["match"]["games"]:
                         gid = game["id"]
@@ -731,8 +950,21 @@ def run(args):
                             or gid in skip
                         ):
                             continue
+                        if any(
+                            g.mapping["match_id"] == event["id"]
+                            and g.number > game["number"]
+                            for g in games.values()
+                        ):
+                            continue  # getLive relisting an earlier map as live
                         try:
                             mapping = mapping_for(event, catalog, aliases)
+                            if gid not in adopt:
+                                out = args.root / event["id"] / gid / "sides" / stamp
+                                listed, game = game, feed_sides(game, out)
+                                if game is None:
+                                    # Draft or loading: read Kalshi's book meanwhile.
+                                    pre.seen(event, listed, mapping)
+                                    continue
                             # A new map replaces the match's earlier one.
                             for old in [
                                 k
@@ -753,6 +985,7 @@ def run(args):
                                 adopt.get(gid),
                             )
                             games[gid].page_out = args.page_out
+                            pre.drop(gid)
                             log(
                                 "tracking",
                                 game=gid,
@@ -836,8 +1069,12 @@ def run(args):
                             g.mapping["score"] = mapping_score(event)
                     if g.forge is None and args.forge:
                         g.forge = forge_for(args, g.mapping, g.start_time)
-                if kalshi and any(
-                    g.ticker is None or g.series_ticker is None for g in games.values()
+                if kalshi and (
+                    any(
+                        g.ticker is None or g.series_ticker is None
+                        for g in games.values()
+                    )
+                    or pre.want_tickers()
                 ):
                     try:
                         markets = []
@@ -847,6 +1084,7 @@ def run(args):
                                 args.root / "kalshi" / f"{stamp}_{series}",
                             )
                             markets += (payload or {}).get("markets", [])
+                        pre.match(markets)
                         for g in games.values():
                             if not g.start_time:
                                 continue
@@ -873,6 +1111,14 @@ def run(args):
                         log("kalshi_stopped", reason=str(error))
                     except ValueError as error:
                         log("kalshi_discovery_failed", reason=str(error))
+            if kalshi:
+                try:
+                    pre.poll()
+                except Stop as error:
+                    kalshi = False
+                    log("kalshi_stopped", reason=str(error))
+                except (ValueError, OSError) as error:
+                    log("pre_quote_failed", reason=str(error))
             for gid, game in list(games.items()):
                 if kalshi:
                     try:
@@ -886,7 +1132,8 @@ def run(args):
                         log("kalshi_stopped", reason=str(error))
                     except (ValueError, OSError) as error:
                         log("quote_failed", game=gid, reason=str(error))
-                if kalshi:
+                feed_due = cycle - feed_polled.get(gid, -float("inf")) >= args.interval
+                if kalshi and feed_due:
                     try:
                         game.settle()
                     except Stop as error:
@@ -895,14 +1142,20 @@ def run(args):
                     except (ValueError, OSError) as error:
                         log("settle_failed", game=gid, reason=str(error))
                 try:
-                    if game.state != "finished":
-                        game.poll()
-                    # Stamp after polling so the newest receipt is not in the future.
-                    page = game.page(catalog, utc_now())
+                    path = args.page_out / f"{game.mapping['match_id']}.json"
+                    if feed_due or not path.exists():
+                        feed_polled[gid] = cycle
+                        if game.state != "finished":
+                            game.poll()
+                        # Stamp after polling; receipts must not be in the future.
+                        page = game.page(catalog, utc_now())
+                    else:
+                        page = game.add_quotes(json.loads(path.read_text()))
+                        page["published_at"] = utc_now()
                     write_atomic(
                         args.page_out / f"{game.mapping['match_id']}.json", page
                     )
-                    if game.state == "finished":
+                    if game.state == "finished" and feed_due:
                         game.write_snapshot(catalog)
                 except (
                     ValueError,
@@ -914,19 +1167,39 @@ def run(args):
                     failed[gid] = str(error)
                     games.pop(gid).close()
                     log("game_failed", game=gid, reason=str(error))
+            at = utc_now()
+            tracked = {g.mapping["match_id"] for g in games.values()}
+            pending = waiting_pages(
+                scheduled + (events or []),
+                catalog,
+                aliases,
+                at,
+                tracked,
+                set(failed) | skip,
+            )
+            current_waiting = {p["match"]["id"] for p in pending}
+            for mid in waiting_ids - current_waiting - tracked:
+                (args.page_out / f"{mid}.json").unlink(missing_ok=True)
+            for page in pending:
+                write_atomic(args.page_out / f"{page['match']['id']}.json", page)
+            waiting_ids = current_waiting
             count, changed = write_index(args.page_out, utc_now())
             if args.s3 and (games or changed):
                 publish_s3(args.page_out, args.s3)
             log("cycle", tracked=len(games), published=count)
             # Activity is a map not yet over; getLive can list a decided match for hours.
-            if any(g.state != "finished" for g in games.values()):
+            if pending or any(g.state != "finished" for g in games.values()):
                 last_active = time.monotonic()
             elif (
                 args.idle_exit and time.monotonic() - last_active > args.idle_exit * 60
             ):
                 log("idle", minutes=args.idle_exit)
                 return IDLE
-            time.sleep(max(0, args.interval - (time.monotonic() - cycle)))
+            # Every 2 s while a map is tracked or in its draft (its book is read).
+            interval = (
+                QUOTE_INTERVAL if (games or pre.maps) and kalshi else args.interval
+            )
+            time.sleep(max(0, interval - (time.monotonic() - cycle)))
     except Stop as error:
         log("stopped", reason=str(error))
         return REFUSED
@@ -970,7 +1243,7 @@ def main():
         default=HERE / "team_aliases.json",
         help="Riot team ID -> Prometheus team name, for names that don't match",
     )
-    parser.add_argument("--model", type=Path, default=HERE / "time_model_v1.json")
+    parser.add_argument("--model", type=Path, default=MODEL_PATH)
     parser.add_argument(
         "--inputs",
         type=Path,

@@ -143,3 +143,16 @@ test("goldLeader names the team ahead", () => {
   assert.equal(L.goldLeader([{ gold: 28000 }, { gold: 28800 }], names), "GEN +0.8k");
   assert.equal(L.goldLeader([{ gold: 28000 }, { gold: 28020 }], names), "even");
 });
+
+
+test("Coming up waits for the same started series on Live", () => {
+  const m = { id: "riot-id", status: "live", start: at(0), teams: [{name:"Cloud9"}, {name:"Karmine Corp"}] };
+  const check = (match) => L.fixtureOnLive(["Karmine Corp", "Cloud9"], at(0), L.liveMatches({matches:[match]}));
+  assert.equal(check(m), true);
+  for (const status of ["waiting", "idle", "unavailable"]) assert.equal(check({...m, status}), false);
+  assert.equal(check({...m, status:"between_games"}), true);
+  assert.equal(check({...m, start:at(86400)}), false);
+  assert.equal(check({...m, teams:[{name:"T1"},{name:"Cloud9"}]}), false);
+  assert.equal(check({...m, start:null}), true); // compatible with an older worker
+  assert.equal(L.fixtureOnLive(["Cloud9"], at(0), [m]), false);
+});

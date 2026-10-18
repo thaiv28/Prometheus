@@ -500,7 +500,7 @@ def test_fixture_row_and_register_carry_the_market_price():
         and 'href="https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct041600t1gen"'
         in html
     )
-    assert ">Kalshi<" in html and 'colspan="11"' in html
+    assert ">Kalshi<" in html and ">Blend<" in html and 'colspan="12"' in html
     plain = predictions.fixture_row(_log()["soon"], set())
     assert "mkt1" not in plain
 
@@ -515,8 +515,8 @@ def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
     assert 'aria-current="page">Predictions' in html
     assert 'data-start="2026-10-04T08:00Z"' in html and "Sunday 4 October" in html
     assert 'href="results/2026-09.html">September 2026' in html
-    assert "3 of 4 scheduled matches" in html
-    assert 'href="alerts.html">Alert history and profit</a>' in html
+    assert "3/4 fixtures rated." in html
+    assert 'href="alerts.html">Alert history</a>' in html
     assert "Intervals from" not in html
     predictions.render_results(view)
     month = (tmp_path / "results" / "2026-09.html").read_text()
@@ -746,6 +746,7 @@ def test_live_pages_render_streams_and_fixtures(tmp_path, monkeypatch):
     assert streams == site_config.LIVE_STREAMS
     assert "js/live.js?v=" in html
     assert all(s.get("youtube") or s.get("twitch") for s in site_config.LIVE_STREAMS)
+    assert "WLDs" in next(s for s in streams if s["key"] == "riot-tw")["leagues"]
     predictions.render_live([])
     empty = (tmp_path / "live.html").read_text()
     assert "None in the next four days." in empty

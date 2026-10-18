@@ -5,7 +5,10 @@
 {% block content %}
 <div class="spread"><div class="spread-main">
   <header class="section-head"><h1>Call performance</h1><p class="lede">$1 per call, 12 hours before start. After fees. <a href="predictions.html">Predictions</a> · <a href="alerts.html">Alert history</a></p></header>
-  <figure class="register-figure" aria-labelledby="edges-cap"><figcaption id="edges-cap" class="table-caption">Table I. Every edge threshold. “Any” backs our favourite; other rows back the larger edge.</figcaption>
+  <figure class="register-figure" aria-labelledby="trading-cap"><figcaption id="trading-cap" class="table-caption">Table I. <a href="market-blend.html">Market Blend</a>. Bets require net edge &gt; 0: blended chance minus ask and estimated fees. $1 plus fees per pick; return on total outlay.</figcaption>
+  {% with edge_groups = view.trading_edges, show_edge = false %}{% include '_call_edges.html.j2' %}{% endwith %}
+  </figure>
+  <figure class="register-figure" aria-labelledby="edges-cap"><figcaption id="edges-cap" class="table-caption">Table II. Raw forecast comparisons. “Any” backs our favourite; other rows back the larger edge. Includes excluded cross-league fixtures.</figcaption>
   {% with edge_groups = view.performance_edges %}{% include '_call_edges.html.j2' %}{% endwith %}
   </figure>
   {% for group in groups %}

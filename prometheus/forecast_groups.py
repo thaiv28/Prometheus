@@ -14,6 +14,13 @@ GROUPS = (
 )
 
 
+def international(entry):
+    """Event scope, including two teams from the same home pool."""
+    return regional_calibration.eligible(
+        entry.get("league"), entry.get("event", ""), entry.get("start")
+    )
+
+
 def classify(entry):
     """Group by home pools and event scope, independently of forecast method."""
     homes = entry.get("home1"), entry.get("home2")
@@ -22,9 +29,7 @@ def classify(entry):
     major_count = sum(home in MAJORS for home in homes)
     if homes[0] == homes[1]:
         return "major-domestic" if major_count else "minor-domestic"
-    if not regional_calibration.eligible(
-        entry.get("league"), entry.get("event", ""), entry.get("start")
-    ):
+    if not international(entry):
         return "other-cross-league"
     return {
         2: "major-international",
