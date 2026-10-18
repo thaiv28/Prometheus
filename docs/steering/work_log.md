@@ -1,5 +1,11 @@
 # Work log
 
+## 2026-10-17 — Draft player-feature walk-forward research
+
+Branch `research/draft-player-feats`, based on `draft-v2` `5811254`. One fixed seven-feature block: career pool breadth/depth and top-three membership, heavily shrunk champion lane gold/XP above own mean, role-swap and previous-day role-incumbent flags. Earlier UTC days only; no variants or tuning. Research only. On 63,638 test games, candidate − v2 LL −0.00199 (series-bootstrap 95% −0.00252 to −0.00144); before 2025 −0.00220 (−0.00283 to −0.00158), majors −0.00000 (−0.00095 to +0.00097), LPL −0.00069 (−0.00215 to +0.00079), international −0.00075 (−0.00329 to +0.00190), other leagues −0.00245 (−0.00308 to −0.00180). Whole block qualifies for the fixed v3 synthesis gate, without claiming which component helps. Report [draft_player_feats.md](../research/draft_player_feats.md).
+
+Checks: causal/annual-fit tests 3 passed (3.87 s under concurrent load); full `uv run pytest -q`: 751 passed, 2 skipped in 28.55 s; repository-wide ruff format/check clean. Baseline cohort and all five baseline feature values exactly match the shared baseline cache: 80,791 maps including 7,842 from 2019 and 9,311 from 2020. Feature construction/scoring 94.8 s, excluding the bootstrap report; offline only, no new build/benchmark job, dependency, DB/production/site/weights change. Full-suite timing is under concurrent research load, not a base/head speed comparison; Actions timings pending. Limits: LPL current snapshots cover 19.9% of player rows (prior champion history 71.0%); career pools can proxy overall experience, flags are historical proxies, upstream FORGE weights and 2025–26 were already viewed; no prospective/market-edge claim. The draft Future work decision is unchanged.
+
 ## 2026-10-18 — Draft model v2: walk-forward backtest and Kalshi time split
 
 Branch `draft-v2`, base `main` at `0cc01bd` (PR #80). The user asked for a real backtest with a proper split instead of waiting on the 53 games after v1's freeze, and for v2 to use only the features significant in both draft studies (this one and the Codex follow-up on branch `research/draft-patch-handoff-2026-10-17`, reviewed first: its five-feature full-roster, prior-day candidate beat FORGE by −0.0060 on 23,956 maps; solo-queue patch rates and its map-level market blend were inconclusive).

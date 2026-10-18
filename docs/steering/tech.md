@@ -1,5 +1,7 @@
 # Tech
 
+Draft player research: `scripts/research/draft_player_feats.py` imports the v2 walk-forward utilities, reads full rosters plus only gold/XP at 15 from `player_stats`, computes histories before each UTC day and fits prior years only. `tests/research/test_draft_player_feats.py` covers day boundaries, sparse lane data and annual fit isolation. Offline cache `data/research/draft_v2/player_feats_games.pkl` retains training years for later fixed-protocol synthesis; no production/CI changes.
+
 ## Stack
 
 - **Python 3.12+**, managed with **uv** (`uv.lock` is committed; CI uses `uv sync --frozen`).
