@@ -292,14 +292,17 @@ def ci(d, digits=4):
     return f"{d['delta']:+.{digits}f} ({lo:+.{digits}f} to {hi:+.{digits}f})"
 
 
-def run(args):
+def partitions(feed_dir, gol_dir, min_maps=30):
+    """The fixed split every live-model refit shares (v2, v3): feed maps joined to
+    Oracle's Elixir plus gol.gg maps through 2024, partitioned by date, cut to the
+    minutes every partition covers with `min_maps` maps."""
     maps = [
-        json.loads(p.read_text()) for p in sorted((args.feed / "games").glob("*.json"))
+        json.loads(p.read_text()) for p in sorted((feed_dir / "games").glob("*.json"))
     ]
     g = team_games()
     joined, why = join(maps, g)
     feed, clock_error = feed_rows(joined)
-    gol = gol_rows(args.gol, set(feed["game_id"]))
+    gol = gol_rows(gol_dir, set(feed["game_id"]))
     data = add_features(pd.concat([feed, gol], ignore_index=True))
     # gol.gg dates carry an offset, Oracle's Elixir's are naive UTC.
     when_ = pd.to_datetime(data["date"], utc=True, format="mixed").dt.tz_convert(None)
@@ -310,13 +313,32 @@ def run(args):
     test = data[(when_ >= CALIBRATION_END) & (data.source == "feed")].copy()
     counts = [p.groupby("minute").game_id.nunique() for p in (train, calibration, test)]
     high = 0
-    while all(c.get(high + 1, 0) >= args.min_maps for c in counts) and high < 40:
+    while all(c.get(high + 1, 0) >= min_maps for c in counts) and high < 40:
         high += 1
     if high < 20:
-        raise ValueError(f"under {args.min_maps} maps a minute before minute 20")
+        raise ValueError(f"under {min_maps} maps a minute before minute 20")
     train, calibration, test = (
         p[p.seconds <= high * 60].copy() for p in (train, calibration, test)
     )
+    return {
+        "maps": maps,
+        "g": g,
+        "joined": joined,
+        "why": why,
+        "clock_error": clock_error,
+        "data": data,
+        "train": train,
+        "calibration": calibration,
+        "test": test,
+        "high": high,
+    }
+
+
+def run(args):
+    parts = partitions(args.feed, args.gol, args.min_maps)
+    maps, g, joined, why = parts["maps"], parts["g"], parts["joined"], parts["why"]
+    clock_error, data, high = parts["clock_error"], parts["data"], parts["high"]
+    train, calibration, test = parts["train"], parts["calibration"], parts["test"]
 
     fitted = fit(train, calibration, FEATURES)
     model = model_json(fitted, high, sorted(train.year.unique().tolist()))

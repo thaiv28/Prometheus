@@ -1,14 +1,55 @@
 """Dependency-free inference for the separate full-timeline research model."""
 
+import json
 import math
 import sqlite3
+from bisect import bisect_right
+from functools import lru_cache
 from pathlib import Path
 
 from .feed import timestamp
 
 # The model the live service calls with (and `scripts/evaluate_live.py` scores).
-MODEL_PATH = Path(__file__).with_name("time_model_v1.json")
+LEGACY_MODEL_PATH = Path(__file__).with_name("time_model_v1.json")
+MODEL_PATH = Path(__file__).with_name("time_model_objectives_v1.json")
 FEATURES = ["gold_k", "gold_fraction", "elo_hundred", "time", "gold_time", "elo_time"]
+
+OBJECTIVES = ("towers", "dragons", "barons", "inhibitors", "kills", "soul")
+STATE_FEATURES = (
+    FEATURES
+    + [name for stat in OBJECTIVES for name in (f"obj_{stat}", f"obj_{stat}_time")]
+    + ["momentum", "momentum_time"]
+)
+
+
+@lru_cache(maxsize=1)
+def legacy_model():
+    """Frozen v1 fallback for frames without valid objective counts."""
+    return json.loads(LEGACY_MODEL_PATH.read_text())
+
+
+def objective_gaps(blue, red):
+    """Same cumulative feed counters and dragon-count proxy used in training."""
+    values = []
+    for key in OBJECTIVES[:-1]:
+        pair = [side.get(key) for side in (blue, red)]
+        if not all(type(v) is int and v >= 0 for v in pair):
+            raise ValueError("nonnegative integer objective counts required")
+        values.append(pair[0] - pair[1])
+    values.append(int(blue["dragons"] >= 4) - int(red["dragons"] >= 4))
+    return values
+
+
+def state_features(
+    clock_seconds, blue_gold, red_gold, blue_elo, red_elo, objectives, momentum
+):
+    """The fixed objective/momentum training design in blue-team orientation."""
+    x = features(clock_seconds, blue_gold, red_gold, blue_elo, red_elo)
+    if type(momentum) not in (int, float) or not math.isfinite(momentum):
+        raise ValueError("finite gold momentum required")
+    for gap in objective_gaps(*objectives):
+        x.extend((gap, gap * x[3]))
+    return x + [momentum, momentum * x[3]]
 
 
 def features(clock_seconds, blue_gold, red_gold, blue_elo, red_elo):
@@ -30,18 +71,40 @@ def features(clock_seconds, blue_gold, red_gold, blue_elo, red_elo):
     ]
 
 
-def predict(model, clock_seconds, blue_gold, red_gold, blue_elo, red_elo):
-    if model.get("schema") != "time_gold_elo_v1" or model.get("features") != FEATURES:
+def predict(
+    model,
+    clock_seconds,
+    blue_gold,
+    red_gold,
+    blue_elo,
+    red_elo,
+    *,
+    objectives=None,
+    momentum=0.0,
+):
+    schema = model.get("schema")
+    names = FEATURES if schema == "time_gold_elo_v1" else STATE_FEATURES
+    if (
+        schema not in ("time_gold_elo_v1", "time_objectives_momentum_v1")
+        or model.get("features") != names
+    ):
         raise ValueError("unsupported time-aware model contract")
     low, high = model["supported_seconds"]
     if not low <= clock_seconds <= high:
         raise ValueError("outside measured model time range")
-    x = features(clock_seconds, blue_gold, red_gold, blue_elo, red_elo)
+    if schema == "time_gold_elo_v1":
+        x = features(clock_seconds, blue_gold, red_gold, blue_elo, red_elo)
+    else:
+        if objectives is None:
+            raise ValueError("objective teams required")
+        x = state_features(
+            clock_seconds, blue_gold, red_gold, blue_elo, red_elo, objectives, momentum
+        )
     mean, scale, coef = model["mean"], model["scale"], model["coef"]
     if (
-        len(mean) != 6
-        or len(scale) != 6
-        or len(coef) != 6
+        len(mean) != len(names)
+        or len(scale) != len(names)
+        or len(coef) != len(names)
         or not all(v > 0 and math.isfinite(v) for v in scale)
     ):
         raise ValueError("invalid numeric model parameters")
@@ -145,8 +208,12 @@ def timeline_calls(page, model, ratings, start=None, shift=0.0):
         return 1 / (1 + math.exp(-(math.log(p / (1 - p)) + shift)))
 
     elo = [ratings[blue]["elo"], ratings[1 - blue]["elo"]]
-    pregame = first(predict(model, 0, START_GOLD, START_GOLD, *elo))
+    state_model = model.get("schema") == "time_objectives_momentum_v1"
+    # Upgrade in-game inference only; keep pre-map calls on frozen v1.
+    pregame_model = legacy_model() if state_model else model
+    pregame = first(predict(pregame_model, 0, START_GOLD, START_GOLD, *elo))
     calls = []
+    history_seconds, history_lead = [], []
     frames = game["frames"]
     for frame, seconds in zip(frames, elapsed_seconds(frames, start)):
         frame["clock_estimate"] = None if seconds is None else round(seconds, 1)
@@ -155,11 +222,27 @@ def timeline_calls(page, model, ratings, start=None, shift=0.0):
         gold = [frame["teams"][blue]["gold"], frame["teams"][1 - blue]["gold"]]
         if None in gold or min(gold) <= 0:
             continue
+        active_model, options = model, {}
+        if state_model:
+            teams = (frame["teams"][blue], frame["teams"][1 - blue])
+            try:
+                objective_gaps(*teams)
+            except ValueError:
+                active_model = legacy_model()
+            else:
+                # Latest observed gold at or before t−180; never future data.
+                lag = bisect_right(history_seconds, seconds - 180) - 1
+                lead = gold[0] - gold[1]
+                momentum = (lead - history_lead[lag]) / 1000 if lag >= 0 else 0.0
+                options = {"objectives": teams, "momentum": momentum}
+            history_seconds.append(seconds)
+            history_lead.append(gold[0] - gold[1])
         call = {
             "minute": round(seconds / 60, 1),
-            "p": first(predict(model, seconds, *gold, *elo)),
+            "p": first(predict(active_model, seconds, *gold, *elo, **options)),
             "by": BY,
             "at": frame["at"],
+            "model": active_model.get("schema"),
         }
         # One call per estimated minute keeps the chart readable; the newest wins.
         if calls and int(calls[-1]["minute"]) == int(call["minute"]):

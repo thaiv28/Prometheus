@@ -201,6 +201,10 @@ Shared statistics in `prometheus/evaluation.py` (since 2026-10-08): `resamples(u
 
 `feed_timelines.py` saves past maps' gold timelines from the live-stats feed (one window a minute from the first 2,500/2,500 frame; sides from the feed's metadata, not `getEventDetails`, whose `side` is often swapped; `feed_timelines_collect.sh` runs shards and reruns only after no answer). `train_time_model_v2.py` joins them to Oracle's Elixir by start time (within 10 minutes, both names; within 3 minutes, one name) for the result and pre-series Elo, estimates the clock (feed `paused` state and flat-gold samples removed), refits v1's features through 2024, calibrates on 2025 H1 and tests v1 against v2 from July 2025. Tests in `tests/research/test_feed_timelines.py`.
 
+`train_time_model_v3.py` refits on v2's split (`train_time_model_v2.partitions`, shared) with each input's weight on a clamped cubic B-spline of game time; its spline basis and inference stay in the script (not adopted). Tests in `tests/research/test_time_model_v3.py`.
+
+`cand_objectives.py` adds the feed's objective counts (blue − red towers, dragons, barons, inhibitors, kills, soul flag; x and x·time) to v1's features on v2's split, training on the feed rows only; `objective_rows` repeats `feed_rows`' filter and clock so rows align by position (one map repeats a clock, so a game/seconds key is not unique). Tests in `tests/research/test_cand_objectives.py`.
+
 `series_checkpoint.py` scores the live map model (`time_model_v1`) with and without the series lead at Oracle's Elixir's 0/10/15/20/25-minute gold, reusing `series_independence.load` (whose duplicate home-league merge was removed: `gamelog.add_calls` now adds `home` and `opp_home`); tests in `tests/research/test_series_checkpoint.py`.
 
 Finished research (in-game snapshots, champions, snapshot and visible-input Elo, gol.gg objectives, Elo margins, league moves) lives in `scripts/research/`, with reports and the scripts' descriptions in [`docs/research/README.md`](../research/README.md) and tests in `tests/research/` (marker `research`). Most remains opt-in; the persistent regional-correction experiment supplies the separately validated international calibration artifact described above.
@@ -330,3 +334,36 @@ Match pages and summaries carry the optional scheduled `start`. Live’s Coming 
 ### Alert/execution fee alignment (2026-10-17)
 
 `trading.quote(..., execution_fees=True)` calls the executor’s stdlib `core.fee_bound` directly with `ALERT_FEE_RATE=0.07` / `ALERT_BALANCE_PRECISION=0.0001` (the approved live settings). Both `alerts.select` and `alerts._current` opt in; default `quote` retains the ordinary paper fee convention for page/backtest calculations. Decimal subtraction before float conversion prevents a zero edge from becoming a positive floating-point residual. `alerts.record` deep-copies optional `fee_policy` (version, rate bound, balance precision, unit fee) only for new alerts; legacy records remain untouched. The public fee profile requires a coordinated code update if those two private fee settings change. No AWS/config/account calls, dependencies or runtime fitting enter either publisher; importing this fee function never imports the Kalshi API/signing adapter. Executor source/fingerprint and its actual order policy are unchanged.
+
+### Local live-candidate research
+
+`cand_objectives.py`, `cand_draft.py`, `cand_map_elo.py` and `cand_temporal.py` under `scripts/research/` share v2 partitions. The temporal candidate uses causal gold-lead changes from the most recent sample at least 180 seconds earlier (zero without history); calibration diagnostics fit only on 2025 H1. Reports use equal-map losses and series bootstrap intervals. No pipeline, runtime model, dependency or CI step is changed. See [candidate review](../research/live_candidates.md).
+
+`cand_followups.py` tests objectives plus original draft (zero unavailable shifts),
+secondary interaction draft/momentum, and objective calibration. Phase A reads only
+OE gold/CS/XP snapshot columns through raw SQL, requires ten unique side-role
+rows and nonnegative finite snapshots, and fits one model per checkpoint with
+series-start Elo. It saves prediction CSVs and research model JSONs locally under
+`data/research/live_followups/`; no files there are committed. Reports use shared
+chronological partitions and series-cluster intervals. No participant collection
+or production inference is introduced.
+
+### Objective/momentum live inference (2026-10-17 release)
+
+`timeline.MODEL_PATH` selects `time_model_objectives_v1.json`, schema
+`time_objectives_momentum_v1`: v1's six inputs, each blue-minus-red raw tower,
+dragon, Baron, inhibitor, kill and dragons>=4 proxy gap and its time interaction,
+then three-minute gold momentum and its time interaction (20 inputs).
+`freeze_live_objectives.py` reproduces the unchanged offline training/calibration
+and verifies every test prediction against dependency-free runtime inference.
+`fit_through=2025-06-30` prevents the PR benchmark scoring fitted maps.
+
+`timeline_calls` uses valid past gold frames on the existing estimated clock,
+looking back to the latest observation at or before t−180 seconds. No such
+observation means zero momentum. Missing/non-integer/negative objective counts
+use frozen `time_model_v1.json`; the pre-map call also stays on v1, regardless
+of available counters. The same model runs in live service and benchmark.
+Calls record model schema, page quality records selected schema/version. No
+runtime fit/DB read/network dependency or cadence change. Counts intentionally
+match training; the dragon threshold is not a verified elemental soul and
+inhibitors are raw counters rather than an active-buff state.

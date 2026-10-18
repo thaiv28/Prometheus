@@ -78,6 +78,8 @@ When the data falls behind anyway, the site says so: the home page's title line 
 
 `s3://$DATA_BACKUP_BUCKET/prometheus/markets/market_prices.json` holds Kalshi's last price before each past series, for the game logs on team and player pages. Main builds restore it before `build_site.py` (read-only; the build never writes it). It is refreshed by hand: run `scripts/evaluate_markets.py` (slow, fetches Kalshi), then `scripts/export_market_prices.py`, then `aws s3 cp data/market_prices.json s3://$DATA_BACKUP_BUCKET/prometheus/markets/market_prices.json`. Without it, logs show only the prices saved in the prediction log.
 
+`s3://$DATA_BACKUP_BUCKET/prometheus/feed-timelines/feed_timelines_2026-10-17.tar.gz` (7.8 MB, with a `.sha256`) is a one-time copy of `data/feed_timelines/` (9,046 past maps' gold timelines from `scripts/research/feed_timelines.py`), uploaded by hand on 2026-10-17 and checked by downloading it again. Restore: download, check the hash, `tar -xzf` in `data/`. Nothing refreshes it; a new collection is a new dated archive.
+
 ## Live worker (`deploy/live/`)
 
 The live pages' files (`current/live/index.json`, one per match, `<match>/map<n>.json`) are written by a worker that runs only around matches, not by the build. Deployed 2026-10-16: instance `i-026b4649ad0e7dd80`; the repository variable `LIVE_WORKER_INSTANCE_ID` holds its ID.
@@ -153,3 +155,22 @@ The existing worker refresh/restart deploys the two-second Kalshi quote cycle; t
 ### Alert fee alignment (2026-10-17)
 
 The ordinary publish/hourly paths use the same stdlib fee-bound function as Lambda for alert selection and issue refresh. No new API call, AWS permission, job or dependency. Public fee constants mirror the approved live 0.07 rate / 0.0001 precision and must be updated together if those private settings change. No packaged executor input changed, so this change does not trigger an execution release or modify live configuration. It takes effect for new notifications when the merged publish/hourly jobs run; earlier saved alerts remain frozen.
+
+## Live model release — objectives and momentum (2026-10-17)
+
+The frozen `prometheus/live/time_model_objectives_v1.json` and stdlib inference
+ship through the existing main-branch worker refresh. No infrastructure,
+IAM, credentials, SSM trading settings or order-execution artifact changes.
+The stopped worker must be started and allowed to register with SSM; then
+`systemctl start prometheus-live-refresh.service` runs backup, fetch, dependency
+sync and ratings refresh, and restarts the service if the code changed. Verify
+its deployed git SHA, packaged model hash, selected default model schema and
+systemd service health. Publishing the static site alone does not refresh a
+running worker until its next timer.
+
+Rollback: revert the release on main and refresh the worker, or run the service
+with `--model .../prometheus/live/time_model_v1.json` for the previous full model.
+Automatic per-frame fallback covers unavailable objective counters only; it is
+not an online accuracy monitor. Preserve archived calls as made. See
+[release validation](../research/live_model_release.md) for checked evidence and
+actual rollout status.

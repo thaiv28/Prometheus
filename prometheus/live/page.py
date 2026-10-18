@@ -340,6 +340,8 @@ def attach_timeline(page, model, ratings, start=None, shift=0.0):
     game["pregame"] = {"p": pregame, "by": "Dated Elo (research)", "market": None}
     game["calls"] = sorted(game["calls"] + calls, key=lambda c: c["at"])
     page["quality"]["timeline_model"] = {
+        "schema": model.get("schema"),
+        "version": model.get("version"),
         "clock": "estimated from source time since 2,500/2,500 gold, pauses removed",
         "start": start,
         "series_shift": shift,

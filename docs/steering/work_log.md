@@ -1,5 +1,146 @@
 # Work log
 
+## 2026-10-18 — Release objective and gold-momentum in-game calls
+
+Branch `live-model-release`, based on research `de6ec95` (which builds on
+`9b670eb` / PR #83); runtime base main `27c3013`. User requested deployment.
+`time_model_objectives_v1.json` freezes the tested objective+momentum model:
+2024 feed training, Jan–Jun 2025 calibration, no test-year refit. Runtime uses
+the same raw counters, approximate dragons>=4 soul proxy, and blue-oriented
+gold-lead change from the latest prior sample at least 180 estimated seconds
+earlier (zero without history). Missing/invalid objective counts fall back
+to frozen v1; supported clock stays 0–40. The original pre-map model is kept:
+the first production replay found a pre-map regression +0.0025
+(+0.0012 to +0.0038), so the new inputs are restricted to in-game calls.
+No calibration retuning, draft/participant collection or trading change.
+Per-call schema and page model/version metadata retain provenance.
+
+Export parity: 122,815 test rows, max error 5e-16; 3,857 maps, model LL
+0.46754, delta −v1 −0.01357 (−0.01696 to −0.00998), ECE 0.01815.
+Recorded KC–MVK map 2: 7,768 real frames, 32 calls, no objective fallbacks;
+causal prefix invariant. Five-run median replay v1 22.45 ms → new 55.15 ms
+(+32.71 ms per complete map replay, comfortably inside the 10 s model cadence).
+New runtime has no dependency, network request, DB read or fitting; quote-only
+cycles remain separate. These are functional/latency checks on one real map,
+not prospective calibration evidence. Forecast and season-stat evaluations completed against the existing DB (reports
+in temporary files; no core forecast/season code or weights changed). Full
+fetch-disabled site build completed. Pinned production benchmark: every guard
+passes, pre-map/pregame identical; all checkpoint LL −0.0127
+(−0.0177 to −0.0073), mid −0.0147, late −0.0287. The first full test pass
+caught a v1-specific metadata expectation: update its explicit calibration
+cutoff to 2025-06-30 so the guard excludes fitted games. Final full-suite and
+rollout evidence follow below. No DB rebuild: this is dependency-free live
+inference, and the shared DB is a read-only benchmark input.
+
+Final local suite: 789 passed, 2 skipped in 9.10 s (research base: 784 passed,
+2 skipped in 9.58 s; difference is noise). Five new runtime cases take 0.02 s;
+no CI job/step added. Repository-wide ruff check/format, whitespace and 49
+relative link targets pass. Site build generated 2,087 team and 4,854 player
+pages; the old local DB lacks match_players prop-total columns, so Props was
+skipped with a warning (unrelated to this release); no market-price files were
+linked. Native CI rebuilds its own DB from the pinned inputs. Local forecast
+and season evaluations completed. No templates, assets or rendered copy changed,
+so a UI/copy review is not applicable. AWS sign-in renewed by the user before
+rollout. PR checks/merge/worker readback still pending.
+
+## 2026-10-17 — Second live research wave: conditional gains and role leads
+
+Branch `research/live-candidates`, continuing from `e0a9617` at the user's request.
+Protocol in `cand_followups.py` declared before this wave's scoring: primary
+objectives + original draft versus objectives alone, all 3,857 feed test maps
+(zero shift for missing picks). Secondary interaction draft and momentum;
+objective raw/global/time-bucket calibration diagnostics. Role phase A at exact
+OE 10/15/20/25-minute snapshots: role gold+CS, secondary XP, versus identical-row
+gold+Elo controls. Unchanged chronological split. Research-only artifacts under
+`data/research/live_followups/`; no runtime, CI configuration or dependency change. The test has
+already been used for research, so gains are retrospective.
+
+Results (all deltas with 95% series-bootstrap intervals): original draft beyond
+objectives −0.0018 (−0.0035 to −0.0002); versus v1 −0.0129
+(−0.0168 to −0.0090). Secondary interaction draft beyond objectives −0.0026
+(−0.0044 to −0.0009); momentum beyond objectives −0.0025
+(−0.0033 to −0.0017), versus v1 −0.0136 (−0.0170 to −0.0100).
+No reported slice is significantly worse for original draft or momentum versus
+objectives. Objective raw calibration scores LL 0.4683 / ECE 0.0080 versus
+global 0.4700 / 0.0191; LL −0.0017 (−0.0031 to −0.0001). Time buckets improve
+overall by −0.0006 but significantly worsen 20–30 minutes. Combined candidates
+retain ECE around 0.018. No production adoption: calibration is diagnostic and
+the test is reused; no multiplicity adjustment or forward confirmation.
+
+Role phase A (3,378 test maps): gold+CS beyond checkpoint gold+Elo −0.0030
+(−0.0048 to −0.0012); +XP −0.0068 (−0.0100 to −0.0035). XP is not level.
+Gold+CS improves at 10/15/20 minutes; +XP improves at 20/25. Different cohort
+from the feed test; no demonstrated gain beyond objectives or live feed result.
+
+Focused tests caught an empty-cohort failure; return an empty frame and fail
+clearly if a whole requested checkpoint lacks data. Three cases pass (0.88 s,
+including import/startup); test side orientation, exact totals, duplicate/invalid
+role exclusion, checkpoint survival and zero unavailable-draft fallback.
+Full suite: 784 passed, 2 skipped in 9.58 s (previous wave: 781 passed,
+2 skipped in 38.20 s while research ran; load differs, so no speedup claim).
+The three added checks protect cohort validity/orientation and cost under a
+second in the focused run including startup. No additional CI job or benchmark
+step, publish/hourly work, DB read in production, or dependency. Repository-wide
+ruff check/format, whitespace check and 66 relative document link targets pass.
+Remote Actions timings pending submission. The follow-up script completed all
+four checkpoints and both reports; added summary comparisons reuse the saved
+predictions. No DB rebuild, site build, published metric/refit or new collection.
+
+## 2026-10-17 — Consolidate live candidates; momentum and calibration checks
+
+Branch `research/live-candidates`, based on `9b670eb` (unmerged PR #83).
+Imported the completed objectives candidate from `5cb5e0f` with its full script
+(the final commit alone depended on earlier protocol commits), the local draft
+candidate, and per-map Elo script/tests/report from `baf763a`. No push or PR.
+[Candidate review](../research/live_candidates.md) records all results and limits.
+Objectives − v1 −0.0111 (−0.0146 to −0.0075); draft −0.0027
+(−0.0052 to −0.0002), with overlapping feature selection and missing-pick/LPL
+coverage caveats. Neither is deployed. Reword objective report's “Adopted” as
+“Statistical threshold met; not shipped” to distinguish evidence from adoption.
+
+New fixed three-minute causal gold momentum: − v1 −0.0006 (−0.0022 to
++0.0010), − same-row refit −0.0011 (−0.0018 to −0.0004); not adopted.
+Calibration diagnostics: raw refit 0.4804 LL / 0.0048 ECE, global 0.4816 /
+0.0152, time-bucket 0.4814 / 0.0122. Neither alternative beats global overall
+significantly, and both have significantly worse slices; no calibration change.
+Tests cover causal history, irregular clocks, game separation, future-input
+invariance and bucket boundaries. No production, dependency, CI or build-cost
+change; the experiments run locally, with no extra work in publish/hourly jobs.
+Role-gap phase A remains unrun. Kalshi blend and participant recollection remain
+pending the handoff's explicit go-ahead; neither was started.
+
+Checks: full pytest with the main-checkout environment and worktree PYTHONPATH:
+781 passed, 2 skipped in 38.20 s; base `9b670eb`: 768 passed, 2 skipped in
+42.66 s on the same laptop while objectives research ran. Thirteen added cases;
+these loaded single runs show no measurable suite slowdown and are not a speedup
+claim. Both had the existing physical-core-detection warning. Repository-wide
+ruff check and format check, `git diff --check`, and all 40 relative link targets
+in the reviewed summary/report/steering documents pass. Draft and objectives
+reports reproduced their recorded numerical tables; momentum/calibration report
+generated from the new script. Per-map Elo and v2/v3 reports were imported,
+not rerun. No DB rebuild, site build or forecast/season-stat weight refit: no
+published algorithm, data pipeline or UI changed. Remote Actions timings remain
+unmeasured until this local research is submitted.
+
+
+## 2026-10-17 — Live map model candidate: objectives on top of gold
+
+Branch `cand-objectives` from `9b670eb` (time-model-v3).
+
+- **`scripts/research/cand_objectives.py`** (report `docs/research/cand_objectives.md`, tests `tests/research/test_cand_objectives.py`): protocol committed before scoring (`e33fa23`). v2's split; candidate and a refit baseline (v1's six features) both trained on the 2024 feed rows only (2,757 maps; gol.gg rows have no objectives), C=1, map weights, v1's calibration. Primary: v1's six plus blue − red towers, dragons, barons, inhibitors, kills, soul flag (x and x·time, 18 columns); declared secondary: towers, dragons, barons only. The first run stopped on a duplicate (game, seconds) key (one map's clock repeats 19 rows), so rows now align by position with checks; fixed before any score was produced.
+- **Result (3,857 test maps):** primary − v1 −0.0111 (−0.0146 to −0.0075), **passes the adoption rule**; − refit baseline −0.0116 (−0.0151 to −0.0082). Minutes 0–10 +0.0012 (−0.0006 to +0.0030), 10–20 −0.0134, 20–30 −0.0168, 30+ −0.0284; major −0.0130, international −0.0101 (−0.0223 to +0.0028), other +0.0004. Secondary − v1 −0.0124 (−0.0154 to −0.0091). ECE 0.0147 (v1) → 0.0191. Not shipped: needs a new model contract in `prometheus/live` and a prospective check.
+- Checks: `pytest tests/research tests/test_steering.py`; ruff check/format on the new files; `git diff --check`. Report regenerated from the script.
+
+## 2026-10-17 — Back up the feed timelines; live model v3 (weights that change with game time)
+
+Branch `time-model-v3` from `27c3013` (PR #66 merged; merge of main resolved there, docs kept both sides).
+
+- **Backup:** `data/feed_timelines/` (9,046 maps, 100 MB) packed to a 7.8 MB tarball and uploaded to `s3://$DATA_BACKUP_BUCKET/prometheus/feed-timelines/` with its SHA-256; downloaded again and the hash matched. Recorded in `deployment.md`.
+- **`train_time_model_v2.partitions`:** v2's data and split as one function for every refit; v2's report regenerated byte-identical.
+- **`scripts/research/train_time_model_v3.py`** (report `docs/research/time_model_v3.md`, tests `tests/research/test_time_model_v3.py`): protocol fixed before scoring (one candidate, no tuning). Cubic B-spline of game time, knots 0/5/…/30/40 minutes; time, gold lead, gold share and Elo gap each times the basis (40 columns), C=1, map weights and v1's calibration. Test (3,857 maps): v3 − v1 +0.0000 (−0.0012 to +0.0013), **not adopted**. Better at 10–20 minutes (−0.0025, −0.0042 to −0.0008) and 30+ (−0.0061), worse at 0–10 (+0.0013, +0.0004 to +0.0021). The spline basis matches SciPy's to 1e-12; it stays in the script, not the live module.
+- Conclusion recorded in Future work: with gold, Elo and time the in-game model looks saturated; the next tests are new inputs (per-map Elo, objectives, draft).
+- Checks: `pytest tests/live tests/research tests/test_steering.py`; ruff; `git diff --check`.
+
 ## 2026-10-17 — Align alert selection with execution fees
 
 Branch `alert-execution-fees`, based on main `0cc01bd` (PR #80). User requested matching alert fees to Lambda after the KC v MVK alert was rejected. `trading.quote(execution_fees=True)` calls the existing Lambda `core.fee_bound` using approved live bounds (rate 0.07, Direct precision 0.0001); new-alert selection and current issue edges opt in. At 86¢ the fee reserve is 3¢, so saved 87.66% does not clear it. Subtract in Decimal to reject exactly-zero edges. Freeze optional fee-policy evidence on new records; preserve old alert terms and ordinary paper/backtest conventions. No metric, executor source/fingerprint, mode/settings, credentials, orders or private ledger changes. Update the two public fee constants alongside any future private fee-profile change; orders still need fresh quotes/liquidity/cash/caps/vetoes.
