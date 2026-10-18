@@ -1,5 +1,9 @@
 # Work log
 
+## 2026-10-17 — Draft tracks synthesis and fixed v3 protocol
+
+Branch `research/draft-tracks-v3`, base `draft-v2` at `5811254`. Fixed whole-block inclusion/scoring protocol in [draft_v3_protocol.md](../research/draft_v3_protocol.md) before reading track results. The optional synthesis script enforces the complete four-block inventory, identical targets/cohorts/baseline calls, annual fits and named-slice safeguards. Research only; no production/site/weights changes or CI jobs. Protocol/helper checks: `uv run ruff format` / `ruff check`, five focused tests pass in 1.54 s; full `uv run pytest -q` 753 passed, 2 skipped in 17.46 s. Deterministic guard fixtures use 20 bootstrap draws instead of 2,000 (focused runtime 50.41 s → 1.54 s), preserving meaningful cohort/target/safeguard coverage without Monte Carlo cost in CI. Analysis still uses all 2,000 series draws. Final track outcomes and combined result follow after the research completes.
+
 ## 2026-10-18 — Draft model v2: walk-forward backtest and Kalshi time split
 
 Branch `draft-v2`, base `main` at `0cc01bd` (PR #80). The user asked for a real backtest with a proper split instead of waiting on the 53 games after v1's freeze, and for v2 to use only the features significant in both draft studies (this one and the Codex follow-up on branch `research/draft-patch-handoff-2026-10-17`, reviewed first: its five-feature full-roster, prior-day candidate beat FORGE by −0.0060 on 23,956 maps; solo-queue patch rates and its map-level market blend were inconclusive).
