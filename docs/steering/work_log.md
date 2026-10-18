@@ -1,5 +1,13 @@
 # Work log
 
+## 2026-10-18 — Publish completed draft research for review
+
+Continued clean synthesis `66b058e` on `research/draft-tracks-v3`, based on `draft-v2` `5811254`. Baseline [PR #84](https://github.com/thaiv28/Prometheus/pull/84) is green/mergeable: check, build and all benchmark/compare jobs passed; deployment jobs correctly skipped. User's continuation after the local handoff supplied go-ahead to push completed research for review. Pushed synthesis plus the three promising track branches without force; null/rejected branch heads stay local, but their commits are included in the aggregate. Opened draft aggregate [PR #89](https://github.com/thaiv28/Prometheus/pull/89), with focused player [#86](https://github.com/thaiv28/Prometheus/pull/86), live [#87](https://github.com/thaiv28/Prometheus/pull/87), series [#88](https://github.com/thaiv28/Prometheus/pull/88), all targeting `draft-v2`. They overlap; use the aggregate merge path to retain all research evidence, then close focused drafts. No merge/deployment, production code, runtime/weights or trading changes.
+
+Clarified the user's live-model question in the summary and Future work: the live experiment tested draft v2; the new player-augmented v3 has not been benchmarked inside the live model, and live draft ingestion is not enabled. Next: test v3 against the actual live model and validate prospective champion/player/side inputs before considering an inference export. This is a research review, not activation.
+
+Checks: the pre-push source was unchanged from the validated integrated suite (780 passed, 2 skipped); PR targets/draft status verified after creation. Documentation-only follow-up: all touched research links resolve; `ruff format --check`, `ruff check` and `git diff --check` pass; diff inspection confirms only the summary/current-state/work-log changed. No code/test changes since the validated suite. Aggregate source check/build/core jobs passed before this metadata update; remaining/new-head CI is tracked on the PR. Baseline Actions: check37s, build3m03s, head core2m27s, head markets3m02s, compare1m01s; no new CI job was added. New research review checks pending at publication. Preserve caches/worktrees until merged/abandoned; main checkout untouched.
+
 ## 2026-10-17 — Complete seven draft tracks; fixed v3 synthesis
 
 Branch `research/draft-tracks-v3`, base `draft-v2` `5811254`; all seven isolated track commits integrated with documentation insertions preserved. [Summary/reproduction](../research/draft_tracks_summary.md), [v3](../research/draft_v3.md), [protocol](../research/draft_v3_protocol.md). All candidate definitions preceded scoring; v3 whole-block gates preceded reading track results. No production/DB/site/weight/runtime/configuration change.
