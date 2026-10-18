@@ -300,7 +300,7 @@ def test_replay_checkpoints_and_dump(tmp_path):
     ]
     assert np.isfinite(dump["ours"]).all()
     meta = json.loads((tmp_path / "dump" / "metrics.json").read_text())
-    assert meta == {"fit_through": "2024-12-31"}  # v1: calibrated on 2024
+    assert meta == {"fit_through": "2025-06-30"}  # objective model: 2025 H1 calibration
     assert el.fit_through({"fit_through": "2025-06-30T00:00"}) == "2025-06-30"
 
 

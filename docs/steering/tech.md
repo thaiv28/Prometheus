@@ -347,3 +347,23 @@ series-start Elo. It saves prediction CSVs and research model JSONs locally unde
 `data/research/live_followups/`; no files there are committed. Reports use shared
 chronological partitions and series-cluster intervals. No participant collection
 or production inference is introduced.
+
+### Objective/momentum live inference (2026-10-17 release)
+
+`timeline.MODEL_PATH` selects `time_model_objectives_v1.json`, schema
+`time_objectives_momentum_v1`: v1's six inputs, each blue-minus-red raw tower,
+dragon, Baron, inhibitor, kill and dragons>=4 proxy gap and its time interaction,
+then three-minute gold momentum and its time interaction (20 inputs).
+`freeze_live_objectives.py` reproduces the unchanged offline training/calibration
+and verifies every test prediction against dependency-free runtime inference.
+`fit_through=2025-06-30` prevents the PR benchmark scoring fitted maps.
+
+`timeline_calls` uses valid past gold frames on the existing estimated clock,
+looking back to the latest observation at or before t−180 seconds. No such
+observation means zero momentum. Missing/non-integer/negative objective counts
+use frozen `time_model_v1.json`; the pre-map call also stays on v1, regardless
+of available counters. The same model runs in live service and benchmark.
+Calls record model schema, page quality records selected schema/version. No
+runtime fit/DB read/network dependency or cadence change. Counts intentionally
+match training; the dragon threshold is not a verified elemental soul and
+inhibitors are raw counters rather than an active-buff state.

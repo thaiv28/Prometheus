@@ -4,6 +4,8 @@ Last reviewed: 2026-10-03 (Predictions page). This is a code baseline. Read `db/
 
 ## Working
 
+- **Live in-game model release (prepared 2026-10-17):** objective counts plus three-minute gold momentum; frozen research fit improves the 3,857-map test by −0.0136 LL. V1 pre-map calls and missing-counter fallback retained. See [release validation](../research/live_model_release.md); deployment status is recorded there. No draft/participant input shipped, no order-execution change. ECE 0.0182 and estimated clock remain limits.
+
 - **Live freshness (2026-10-17, prepared):** Kalshi map/series quotes and active browser reads target two seconds; live JSON caches for one second. Feed/model/journal cadence remains ten seconds; slow requests/uploads can extend the price interval. Live’s Coming up removes only a matching started series already displayed in Table I, keeping waiting/unobserved fixtures and hiding exhausted day groups. Local checks cover both desktop and phone; production latency awaits deployment.
 
 - **Research (not published):** in-game snapshots, champions, snapshot and visible-input Elo, the gol.gg objective corpus and benchmarks, and the broadcast OCR pilot. Status and findings are in [`docs/research/README.md`](../research/README.md#status).

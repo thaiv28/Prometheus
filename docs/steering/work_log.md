@@ -1,5 +1,48 @@
 # Work log
 
+## 2026-10-18 — Release objective and gold-momentum in-game calls
+
+Branch `live-model-release`, based on research `de6ec95` (which builds on
+`9b670eb` / PR #83); runtime base main `27c3013`. User requested deployment.
+`time_model_objectives_v1.json` freezes the tested objective+momentum model:
+2024 feed training, Jan–Jun 2025 calibration, no test-year refit. Runtime uses
+the same raw counters, approximate dragons>=4 soul proxy, and blue-oriented
+gold-lead change from the latest prior sample at least 180 estimated seconds
+earlier (zero without history). Missing/invalid objective counts fall back
+to frozen v1; supported clock stays 0–40. The original pre-map model is kept:
+the first production replay found a pre-map regression +0.0025
+(+0.0012 to +0.0038), so the new inputs are restricted to in-game calls.
+No calibration retuning, draft/participant collection or trading change.
+Per-call schema and page model/version metadata retain provenance.
+
+Export parity: 122,815 test rows, max error 5e-16; 3,857 maps, model LL
+0.46754, delta −v1 −0.01357 (−0.01696 to −0.00998), ECE 0.01815.
+Recorded KC–MVK map 2: 7,768 real frames, 32 calls, no objective fallbacks;
+causal prefix invariant. Five-run median replay v1 22.45 ms → new 55.15 ms
+(+32.71 ms per complete map replay, comfortably inside the 10 s model cadence).
+New runtime has no dependency, network request, DB read or fitting; quote-only
+cycles remain separate. These are functional/latency checks on one real map,
+not prospective calibration evidence. Forecast and season-stat evaluations completed against the existing DB (reports
+in temporary files; no core forecast/season code or weights changed). Full
+fetch-disabled site build completed. Pinned production benchmark: every guard
+passes, pre-map/pregame identical; all checkpoint LL −0.0127
+(−0.0177 to −0.0073), mid −0.0147, late −0.0287. The first full test pass
+caught a v1-specific metadata expectation: update its explicit calibration
+cutoff to 2025-06-30 so the guard excludes fitted games. Final full-suite and
+rollout evidence follow below. No DB rebuild: this is dependency-free live
+inference, and the shared DB is a read-only benchmark input.
+
+Final local suite: 789 passed, 2 skipped in 9.10 s (research base: 784 passed,
+2 skipped in 9.58 s; difference is noise). Five new runtime cases take 0.02 s;
+no CI job/step added. Repository-wide ruff check/format, whitespace and 49
+relative link targets pass. Site build generated 2,087 team and 4,854 player
+pages; the old local DB lacks match_players prop-total columns, so Props was
+skipped with a warning (unrelated to this release); no market-price files were
+linked. Native CI rebuilds its own DB from the pinned inputs. Local forecast
+and season evaluations completed. No templates, assets or rendered copy changed,
+so a UI/copy review is not applicable. AWS sign-in renewed by the user before
+rollout. PR checks/merge/worker readback still pending.
+
 ## 2026-10-17 — Second live research wave: conditional gains and role leads
 
 Branch `research/live-candidates`, continuing from `e0a9617` at the user's request.
