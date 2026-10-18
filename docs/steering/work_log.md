@@ -1,5 +1,13 @@
 # Work log
 
+## 2026-10-17 — Live map model candidate: objectives on top of gold
+
+Branch `cand-objectives` from `9b670eb` (time-model-v3).
+
+- **`scripts/research/cand_objectives.py`** (report `docs/research/cand_objectives.md`, tests `tests/research/test_cand_objectives.py`): protocol committed before scoring (`e33fa23`). v2's split; candidate and a refit baseline (v1's six features) both trained on the 2024 feed rows only (2,757 maps; gol.gg rows have no objectives), C=1, map weights, v1's calibration. Primary: v1's six plus blue − red towers, dragons, barons, inhibitors, kills, soul flag (x and x·time, 18 columns); declared secondary: towers, dragons, barons only. The first run stopped on a duplicate (game, seconds) key (one map's clock repeats 19 rows), so rows now align by position with checks; fixed before any score was produced.
+- **Result (3,857 test maps):** primary − v1 −0.0111 (−0.0146 to −0.0075), **passes the adoption rule**; − refit baseline −0.0116 (−0.0151 to −0.0082). Minutes 0–10 +0.0012 (−0.0006 to +0.0030), 10–20 −0.0134, 20–30 −0.0168, 30+ −0.0284; major −0.0130, international −0.0101 (−0.0223 to +0.0028), other +0.0004. Secondary − v1 −0.0124 (−0.0154 to −0.0091). ECE 0.0147 (v1) → 0.0191. Not shipped: needs a new model contract in `prometheus/live` and a prospective check.
+- Checks: `pytest tests/research tests/test_steering.py`; ruff check/format on the new files; `git diff --check`. Report regenerated from the script.
+
 ## 2026-10-17 — Back up the feed timelines; live model v3 (weights that change with game time)
 
 Branch `time-model-v3` from `27c3013` (PR #66 merged; merge of main resolved there, docs kept both sides).

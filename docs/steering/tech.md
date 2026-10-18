@@ -203,6 +203,8 @@ Shared statistics in `prometheus/evaluation.py` (since 2026-10-08): `resamples(u
 
 `train_time_model_v3.py` refits on v2's split (`train_time_model_v2.partitions`, shared) with each input's weight on a clamped cubic B-spline of game time; its spline basis and inference stay in the script (not adopted). Tests in `tests/research/test_time_model_v3.py`.
 
+`cand_objectives.py` adds the feed's objective counts (blue − red towers, dragons, barons, inhibitors, kills, soul flag; x and x·time) to v1's features on v2's split, training on the feed rows only; `objective_rows` repeats `feed_rows`' filter and clock so rows align by position (one map repeats a clock, so a game/seconds key is not unique). Tests in `tests/research/test_cand_objectives.py`.
+
 `series_checkpoint.py` scores the live map model (`time_model_v1`) with and without the series lead at Oracle's Elixir's 0/10/15/20/25-minute gold, reusing `series_independence.load` (whose duplicate home-league merge was removed: `gamelog.add_calls` now adds `home` and `opp_home`); tests in `tests/research/test_series_checkpoint.py`.
 
 Finished research (in-game snapshots, champions, snapshot and visible-input Elo, gol.gg objectives, Elo margins, league moves) lives in `scripts/research/`, with reports and the scripts' descriptions in [`docs/research/README.md`](../research/README.md) and tests in `tests/research/` (marker `research`). Most remains opt-in; the persistent regional-correction experiment supplies the separately validated international calibration artifact described above.
