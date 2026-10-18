@@ -331,9 +331,9 @@ def summary(page):
     }
 
 
-def attach_timeline(page, model, ratings, start=None):
+def attach_timeline(page, model, ratings, start=None, shift=0.0):
     """Estimated-clock research calls after any reviewed checkpoint calls."""
-    pregame, calls = timeline_calls(page, model, ratings, start)
+    pregame, calls = timeline_calls(page, model, ratings, start, shift)
     if pregame is None:
         return
     game = page["game"]
@@ -342,6 +342,7 @@ def attach_timeline(page, model, ratings, start=None):
     page["quality"]["timeline_model"] = {
         "clock": "estimated from source time since 2,500/2,500 gold, pauses removed",
         "start": start,
+        "series_shift": shift,
         "ratings": [
             {"name": t["name"], "elo": r["elo"], "as_of": r["as_of"]}
             for t, r in zip(page["match"]["teams"], ratings)

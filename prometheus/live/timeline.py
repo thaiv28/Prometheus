@@ -127,10 +127,11 @@ def latest_elo(db_path, team_name, before):
     return {"elo": row[1], "as_of": row[0]}
 
 
-def timeline_calls(page, model, ratings, start=None):
+def timeline_calls(page, model, ratings, start=None, shift=0.0):
     """Pregame and per-minute calls for teams[0]; ratings in match-team order.
 
-    Also sets each frame's `clock_estimate` (seconds, or None).
+    `shift` (log-odds for teams[0], `series.map_shift`) carries the maps already
+    played in the series. Also sets each frame's `clock_estimate` (seconds, or None).
     """
     game = page.get("game")
     if not game or game.get("blue") not in (0, 1):
@@ -138,7 +139,10 @@ def timeline_calls(page, model, ratings, start=None):
     blue = game["blue"]
 
     def first(p_blue):
-        return p_blue if blue == 0 else 1 - p_blue
+        p = p_blue if blue == 0 else 1 - p_blue
+        if not shift:
+            return p
+        return 1 / (1 + math.exp(-(math.log(p / (1 - p)) + shift)))
 
     elo = [ratings[blue]["elo"], ratings[1 - blue]["elo"]]
     pregame = first(predict(model, 0, START_GOLD, START_GOLD, *elo))

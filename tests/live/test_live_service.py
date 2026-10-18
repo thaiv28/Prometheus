@@ -225,6 +225,31 @@ class GameStateTest(unittest.TestCase):
             finally:
                 g.close()
 
+    def test_score_before_this_map(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            mapping = mapping_for(event(), CATALOG, {})
+            sides = [{"id": "c9", "side": "blue"}, {"id": "kc", "side": "red"}]
+            g = Game(
+                root,
+                mapping,
+                {"id": "g4", "number": 4, "teams": sides},
+                None,
+                None,
+                "2026-10-15T18:00:00Z",
+            )
+            try:
+                self.assertEqual(g.score_before([2, 1]), [2, 1])  # map 4 live
+                # Map 4 counted but its winner unknown yet: no score to use.
+                self.assertIsNone(g.score_before([2, 2]))
+                (root / "m1" / "results.json").write_text(
+                    json.dumps({"4": {"winner": 1, "at": "t"}})
+                )
+                self.assertEqual(g.score_before([2, 2]), [2, 1])
+                self.assertIsNone(g.score_before(None))
+            finally:
+                g.close()
+
     def test_deciding_map_is_the_series(self):
         with tempfile.TemporaryDirectory() as d:
             mapping = mapping_for(event(), CATALOG, {})

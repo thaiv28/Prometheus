@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from prometheus.live.series import series_chance
+from prometheus.live.series import map_prior, map_shift, series_chance
 
 
 def prometheus_series(p, best_of, rho):
@@ -34,6 +34,25 @@ class SeriesChanceTest(unittest.TestCase):
         self.assertGreater(high, series_chance(0.62, 5, 0.054, [1, 2]))
         # Losing map 4 at 1-2 ends a best of five.
         self.assertAlmostEqual(series_chance(0.62, 5, 0.054, [1, 2], 0.0), 0.0)
+
+
+class MapShiftTest(unittest.TestCase):
+    def test_no_maps_played_no_shift(self):
+        self.assertEqual(map_shift(0.62, 0.054, 0, 0), 0.0)
+        self.assertAlmostEqual(map_prior(0.62, 0.054, 0, 0), 0.62)
+
+    def test_a_map_won_is_the_beta_update(self):
+        # A map won moves the next map's chance from p to p + rho (1 - p).
+        self.assertAlmostEqual(map_prior(0.5, 0.054, 1, 0), 0.5 + 0.054 * 0.5)
+        shift = map_shift(0.5, 0.054, 1, 0)
+        p = 1 / (1 + math.exp(-shift))
+        self.assertAlmostEqual(p, 0.5 + 0.054 * 0.5)
+
+    def test_leader_up_trailer_down(self):
+        self.assertGreater(map_shift(0.4, 0.127, 2, 1), 0)
+        self.assertLess(map_shift(0.4, 0.127, 1, 2), 0)
+        # A split series pulls an underdog's chance toward even.
+        self.assertGreater(map_shift(0.4, 0.127, 1, 1), 0)
 
 
 if __name__ == "__main__":
