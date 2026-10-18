@@ -58,7 +58,7 @@ def select(log, now, edge=EDGE):
             continue
         if _stale(log, entry, now):
             continue
-        estimate = trading.quote(entry)
+        estimate = trading.quote(entry, execution_fees=True)
         if estimate and estimate["pick"]["net_edge"] > edge:
             out.append({"entry": entry, **estimate["pick"]})
     return sorted(out, key=lambda a: (a["entry"]["start"], a["entry"]["match_id"]))
@@ -88,6 +88,8 @@ def record(alerts, now, key="alert"):
                     net_edge=round(a["net_edge"], 6),
                     fee=a["fee"],
                 )
+            if a.get("fee_policy"):
+                a["entry"][key]["fee_policy"] = copy.deepcopy(a["fee_policy"])
             if key in ("alert", INTERNATIONAL_KEY):
                 a["entry"][key]["forecast"] = copy.deepcopy(
                     {
@@ -208,7 +210,10 @@ def _current(entry, side, now_s):
     """Current model chance for `side`, what a contract on it costs now (None when this
     run has no price for the match) and the edge."""
     market = entry.get("market") or {}
-    if market.get("at") != now_s or (estimate := trading.quote(entry)) is None:
+    if (
+        market.get("at") != now_s
+        or (estimate := trading.quote(entry, execution_fees=True)) is None
+    ):
         return None, None, None
     quote = next((q for q in estimate["choices"] if q["side"] == side), None)
     return (
@@ -320,7 +325,7 @@ def issue(entries, log, now, data_through, slugify, team_slugs):
     )
     body = "\n".join(
         [
-            f"Blended chance above a fresh ask and estimated fees, {MIN_HOURS}+ hours before start. Domestic and international fixtures; other cross-league excluded. "
+            f"Blended chance above a fresh ask and the execution fee bound, {MIN_HOURS}+ hours before start. Domestic and international fixtures; other cross-league excluded. "
             f"Prices as of {now:%H:%M} UTC; games through {data_through}.",
             "",
             *_sections(entries, now_s, slugify, team_slugs, log),

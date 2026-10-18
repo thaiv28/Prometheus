@@ -142,3 +142,65 @@ def test_record_uses_early_inputs_and_all_in_outlay_without_mutation():
     assert record.history([entry]) == []
     del entry["market_12h"]["p"]
     assert record.history([entry]) == []
+
+
+def test_kc_alert_clears_paper_fees_but_not_execution_bound():
+    entry = fixture(p_series=0.8554)
+    entry["market"].update(p=0.86, ask1=0.86, ask2=0.16)
+    paper = trading.quote(entry)["pick"]
+    execution = trading.quote(entry, execution_fees=True)["pick"]
+    assert paper["p"] == pytest.approx(0.8766152350432808)
+    assert paper["net_edge"] > 0 > execution["net_edge"]
+    assert execution["unit_fee"] == 0.03
+    assert alerts.select({"f": entry}, NOW) == []
+    assert alerts.record(alerts.select({"f": entry}, NOW), NOW) == 0
+    assert "alert" not in entry
+
+
+@pytest.mark.parametrize("price", ["0.01", "0.15", "0.49", "0.50", "0.86", "0.96"])
+@pytest.mark.parametrize("delta", ["-0.000001", "0", "0.000001"])
+def test_alert_fee_gate_matches_lambda_including_exact_zero(monkeypatch, price, delta):
+    from decimal import Decimal
+
+    from prometheus.execution.core import fee_bound
+
+    price = Decimal(price)
+    fee = fee_bound(
+        price, Decimal(1), trading.ALERT_FEE_RATE, trading.ALERT_BALANCE_PRECISION
+    )
+    chance = price + fee + Decimal(delta)
+    monkeypatch.setattr(
+        market_blend,
+        "estimate",
+        lambda *a: {
+            "probability": float(chance),
+            "raw_probability": 0.5,
+            "market_probability": 0.5,
+        },
+    )
+    entry = fixture()
+    entry["market"].update(ask1=float(price), ask2=None)
+    picked = alerts.select({"f": entry}, NOW)
+    assert bool(picked) == (chance - price - fee > 0)
+    if picked:
+        assert picked[0]["unit_fee"] == float(fee)
+        assert picked[0]["net_edge"] == pytest.approx(float(Decimal(delta)))
+
+
+def test_alert_freezes_fee_profile_and_preserves_pre_policy_alert():
+    entry = fixture()
+    pick = alerts.select({"f": entry}, NOW)[0]
+    assert alerts.record([pick], NOW) == 1
+    policy = entry["alert"]["fee_policy"]
+    assert policy == {
+        "version": "execution-fee-bound-v1",
+        "rate_upper_bound": "0.07",
+        "balance_precision_usd": "0.0001",
+        "unit_fee": "0.03",
+    }
+    assert entry["alert"]["net_edge"] == round(pick["p"] - pick["price"] - 0.03, 6)
+    original = copy.deepcopy(entry["alert"])
+    del original["fee_policy"]
+    entry["alert"] = copy.deepcopy(original)
+    assert alerts.record([pick], NOW) == 0
+    assert entry["alert"] == original

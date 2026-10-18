@@ -368,3 +368,8 @@ Waiting fixtures reuse the Live register and Watch stage: “Waiting” replaces
 ### Live freshness and Coming up (2026-10-17)
 
 Live and Watch refresh active data every two seconds. On Live, a fixture leaves Coming up only once the same started series appears in the Live register; waiting alone does not remove it. Empty day rules and the exhausted Coming up section hide. The existing register, labels, notes and Almanac styling remain the visual contract; Watch keeps its existing idle-only Coming up section.
+
+
+### Alert fee definition (2026-10-17)
+
+Market Blend’s Signals paragraph names the execution fee bound for alerts, while the paper record keeps its estimated-fee definition. No new visual component; preserve the existing prose and register hierarchy.
