@@ -8,6 +8,7 @@ Type=oneshot
 User=prometheus
 EnvironmentFile=/etc/prometheus-live.env
 ExecStart=/bin/bash /srv/prometheus-live/app/deploy/live/refresh.sh
-# Root, as systemd's "+": restart the service only when the refresh changed something.
-ExecStartPost=+/bin/bash -c 'if [ -e /srv/prometheus-live/restart ]; then rm /srv/prometheus-live/restart; systemctl try-restart prometheus-live.service; fi'
+# Root, as systemd's "+": queue a restart only when the refresh changed something.
+# The publisher is ordered After this unit; waiting for its restart here deadlocks.
+ExecStartPost=+/bin/bash -c 'if [ -e /srv/prometheus-live/restart ]; then rm /srv/prometheus-live/restart; systemctl --no-block try-restart prometheus-live.service; fi'
 TimeoutStartSec=1800
