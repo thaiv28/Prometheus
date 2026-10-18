@@ -40,11 +40,15 @@ EXPECTED = {"composition", "form", "meta", "player_feats"}
 def merge_blocks(specs):
     """Refuse changing cohorts/targets/baselines or duplicate columns silently."""
     base, blocks, manifest = None, {}, []
+    original_order = None
     if {s[0] for s in specs} != EXPECTED or len(specs) != len(EXPECTED):
         raise ValueError("supply exactly the four declared blocks")
     for name, filename, names in specs:
         path = Path(filename)
-        frame = pd.read_pickle(path).set_index("gameid").sort_index()
+        loaded = pd.read_pickle(path)
+        if original_order is None:
+            original_order = loaded["gameid"].tolist()
+        frame = loaded.set_index("gameid").sort_index()
         cols = names.split(",")
         if not frame.index.is_unique:
             raise ValueError(f"duplicate game IDs: {name}")
@@ -73,7 +77,7 @@ def merge_blocks(specs):
                 "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
             }
         )
-    return base.reset_index(), blocks, manifest
+    return base.loc[original_order].reset_index(), blocks, manifest
 
 
 def score(games, extras):

@@ -1,9 +1,5 @@
 # Tech
 
-Draft player research: `scripts/research/draft_player_feats.py` imports the v2 walk-forward utilities, reads full rosters plus only gold/XP at 15 from `player_stats`, computes histories before each UTC day and fits prior years only. `tests/research/test_draft_player_feats.py` covers day boundaries, sparse lane data and annual fit isolation. Offline cache `data/research/draft_v2/player_feats_games.pkl` retains training years for later fixed-protocol synthesis; no production/CI changes.
-
-Draft meta research: `scripts/research/draft_meta.py` imports the v2 walk-forward utilities, reads historical OE patch/bans in bounded column-filtered chunks, and computes patch-relative/local-league WAE and pick-ban priority before each UTC day. `tests/research/test_draft_meta.py` covers history boundaries, future-patch isolation and prior-year-only fits. Offline cache `data/research/draft_v2/meta_games.pkl` retains training years for later fixed-protocol synthesis; no production/CI changes.
-
 ## Stack
 
 - **Python 3.12+**, managed with **uv** (`uv.lock` is committed; CI uses `uv sync --frozen`).
@@ -345,3 +341,12 @@ Match pages and summaries carry the optional scheduled `start`. Live’s Coming 
 ## Draft-block synthesis (opt-in research)
 
 `scripts/research/draft_v3.py` consumes complete private game-table caches from the four fixed draft tracks. It rejects baseline/target/cohort discrepancies, gates whole feature blocks under `docs/research/draft_v3_protocol.md`, and reuses `draft_walkforward` fits and series bootstrap on their union. Research-only report/JSON outputs; no DB read, model export, build or CI job. Tests in `tests/research/test_draft_v3.py` exercise inventory, cohort/target integrity and subgroup safeguards.
+
+
+### Draft feature inputs
+
+Draft player research: `scripts/research/draft_player_feats.py` imports the v2 walk-forward utilities, reads full rosters plus only gold/XP at 15 from `player_stats`, computes histories before each UTC day and fits prior years only. `tests/research/test_draft_player_feats.py` covers day boundaries, sparse lane data and annual fit isolation. Offline cache `data/research/draft_v2/player_feats_games.pkl` retains training years for later fixed-protocol synthesis; no production/CI changes.
+
+Draft meta research: `scripts/research/draft_meta.py` imports the v2 walk-forward utilities, reads historical OE patch/bans in bounded column-filtered chunks, and computes patch-relative/local-league WAE and pick-ban priority before each UTC day. `tests/research/test_draft_meta.py` covers history boundaries, future-patch isolation and prior-year-only fits. Offline cache `data/research/draft_v2/meta_games.pkl` retains training years for later fixed-protocol synthesis; no production/CI changes.
+
+The research-only `draft_walkforward.paired` bootstrap now aggregates each series's loss sum and row count before drawing. It uses the unchanged seed, series choices and ratio-of-sums row weighting; `tests/research/test_draft_bootstrap_exact.py` checks numerical equality with original concatenated-row resampling on unequal series. On 63,638 maps / 37,318 series / 200 identical draws: 1.413 s → 0.0316 s, maximum result difference 2.71e−20. Analysis still uses 2,000 draws. Synthesis preserves source row order so its seeded intervals reproduce the individual track reports. [Seven-track result](../research/draft_tracks_summary.md).

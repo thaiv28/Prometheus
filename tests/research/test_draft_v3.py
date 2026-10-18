@@ -17,7 +17,7 @@ spec.loader.exec_module(v3)
 def specs(tmp_path):
     rows = pd.DataFrame(
         {
-            "gameid": ["a", "b"],
+            "gameid": ["z", "a"],
             "date": pd.to_datetime(["2019-01-01", "2021-01-01"]),
             "year": [2019, 2021],
             "league": ["LCK", "LPL"],
