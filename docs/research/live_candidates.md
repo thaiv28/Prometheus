@@ -1,5 +1,7 @@
 # Live model candidate review — 2026-10-17
 
+Update 2026-10-18: objectives + momentum deployed through PR #85; [release validation and limits](live_model_release.md). The research-only status below describes the original candidate review.
+
 Research only, branch `research/live-candidates`, base `9b670eb` (unmerged PR #83).
 No production model or worker change, push, merge, or deployment.
 

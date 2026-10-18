@@ -1,5 +1,45 @@
 # Work log
 
+## 2026-10-18 — Fix refresh/publisher ordering during live rollout
+
+Branch `live-refresh-ordering`, based on merged release `f522db3` (PR #85).
+All release CI passed, including the full paired benchmark matrix (run
+39146063514); main merge is f522db3003c4d82a242371d69d92f06e7f2ea134.
+The worker was stopped, started for rollout, and its standard refresh exposed
+a pre-existing deadlock: refresh remained activating/start-post while the
+publisher start job waited on its After=prometheus-live-refresh.service order.
+Old logs show the same 30-minute timeout on 2026-10-17. Queue the conditional
+try-restart with `--no-block`, allowing refresh to finish before the publisher
+starts. No polling, sleep, dependency, extra job, network/API request or changed
+restart condition. This removes an existing half-hour startup failure rather
+than adding CI/runtime work.
+
+Installed that exact unit correction through SSM, ran daemon-reload and
+systemd-analyze verify, and terminated only the old stuck refresh control
+process to release the dependency cycle. The verifier reports an unrelated
+AL2023 acpid.socket legacy /var/run path warning. The initial health read caught
+the expected nonblocking restart while the publisher was deactivating; final
+health/model verification is recorded below. No trading mode/settings/order
+changes. Unit files are installed once, so this live fix is also committed for
+future hosts; refresh.sh's git pull alone does not install changed units.
+
+CI timing evidence for PR #85: check 41 s, site build 3m58 s; core benchmark
+step head 2m33 s vs base 2m38 s (total jobs head 3m50 vs base 3m04 due setup/
+cache differences). Market jobs head 4m56 vs base 2m49; the new live replay
+itself takes 3.5 s on the runner. These one-off full-job differences do not
+isolate model cost; local paired native replay adds about 0.5 s, real full-map
+replay +33 ms. No new CI job/step. Final checks: 789 passed, 2 skipped in 9.27 s; repository-wide ruff check/format
+and whitespace pass. Remote `systemd-analyze verify` passes apart from the
+unrelated acpid warning. No new test/job added for a one-line unit correction;
+real systemd state is the meaningful check. SSM readback
+371b2f6d-4342-4067-83d7-aaa6f18e4fce succeeds: deployed revision f522db3,
+model hash 1e6832a9d1a6a40287fe66199adc903d23b1f2f0aadb83deac478dfec875a1bc,
+schema time_objectives_momentum_v1, version objectives-momentum-2026-10-17,
+smoke PASS without fallback, publisher active/running and normal publish cycles.
+Refresh inactive/success and no publisher/refresh job remains blocked. No
+tracked game at readback, so first new-map behavior/calibration is still open.
+Main static publish 39146569946 remained in progress at this readback.
+
 ## 2026-10-18 — Release objective and gold-momentum in-game calls
 
 Branch `live-model-release`, based on research `de6ec95` (which builds on

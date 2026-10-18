@@ -50,16 +50,16 @@ excluded from the causal-prefix equality comparison.
 ```json
 {
   "v1": {
-    "median_ms": 22.449249983765185,
+    "median_ms": 20.94116702210158,
     "calls": 32,
     "fallback_calls": 0,
     "pregame": 0.8861479048633999
   },
   "objectives_momentum": {
-    "median_ms": 55.15479203313589,
+    "median_ms": 52.17199993785471,
     "calls": 32,
     "fallback_calls": 0,
-    "pregame": 0.8978833725467904
+    "pregame": 0.8861479048633999
   },
   "production_frames": 7768,
   "causal_prefix": "PASS"
@@ -112,4 +112,28 @@ and formatting pass; 49 relative document links resolve. The site build generate
 local DB lacks prop-total columns; no shared DB was rebuilt. Forecast and
 season-stat evaluations completed. No UI/template/copy changes.
 
-PR CI, merge and worker verification pending.
+[PR #85](https://github.com/thaiv28/Prometheus/pull/85) merged 2026-10-18
+16:46:51 UTC as `f522db3003c4d82a242371d69d92f06e7f2ea134`. All required
+PR checks passed ([benchmark run](https://github.com/thaiv28/Prometheus/actions/runs/39146063514)).
+The CI database scores 3,344 pre-maps, unchanged from base, and the live
+all-checkpoint delta is −0.0125 (−0.0176 to −0.0070); mid −0.0147, late
+−0.0282. Local figures above use the older local DB, hence small differences.
+
+Worker `i-026b4649ad0e7dd80` was started from stopped and refreshed. A pre-existing
+systemd dependency deadlock held refresh in start-post; synchronous try-restart
+waited for the publisher ordered After refresh. Prior 2026-10-17 boots show the
+same timeout. Queueing the restart with `--no-block` fixed it; the old blocked
+control process was terminated, and the corrected refresh completed.
+
+Final SSM readback `371b2f6d-4342-4067-83d7-aaa6f18e4fce`: exact release revision;
+model SHA256 `1e6832a9d1a6a40287fe66199adc903d23b1f2f0aadb83deac478dfec875a1bc`;
+schema `time_objectives_momentum_v1`, version `objectives-momentum-2026-10-17`;
+runtime smoke PASS with no fallback; service active/running, ExecMainStatus=0;
+regular publish cycles. No match was tracked at readback, so a new real match's
+calls and prospective calibration remain unverified. No trading settings or
+execution code changed.
+
+The unit correction and deployment record are committed separately so future
+hosts retain the verified nonblocking ordering. Static main publish
+[39146569946](https://github.com/thaiv28/Prometheus/actions/runs/39146569946)
+was still building at worker verification; the worker deployment is independent.

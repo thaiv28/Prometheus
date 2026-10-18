@@ -156,7 +156,7 @@ The existing worker refresh/restart deploys the two-second Kalshi quote cycle; t
 
 The ordinary publish/hourly paths use the same stdlib fee-bound function as Lambda for alert selection and issue refresh. No new API call, AWS permission, job or dependency. Public fee constants mirror the approved live 0.07 rate / 0.0001 precision and must be updated together if those private settings change. No packaged executor input changed, so this change does not trigger an execution release or modify live configuration. It takes effect for new notifications when the merged publish/hourly jobs run; earlier saved alerts remain frozen.
 
-## Live model release — objectives and momentum (2026-10-17)
+## Live model release — objectives and momentum (deployed 2026-10-18)
 
 The frozen `prometheus/live/time_model_objectives_v1.json` and stdlib inference
 ship through the existing main-branch worker refresh. No infrastructure,
@@ -174,3 +174,22 @@ Automatic per-frame fallback covers unavailable objective counters only; it is
 not an online accuracy monitor. Preserve archived calls as made. See
 [release validation](../research/live_model_release.md) for checked evidence and
 actual rollout status.
+
+### Refresh unit ordering (2026-10-18)
+
+`prometheus-live-refresh.service` queues `systemctl --no-block try-restart`
+in its post-step. A synchronous restart deadlocks with the publisher's `After`
+order; this was observed during the model rollout and in prior boot logs.
+When changing a unit, install its reviewed file under `/etc/systemd/system/`
+and run `systemctl daemon-reload`; a code refresh alone does not replace unit
+files. For an already deadlocked old post-step, terminate only its control
+process, then run the corrected refresh and let the queued publisher restart
+finish before checking health. Do not wait for the old 30-minute timeout.
+
+Rollout verified on worker `i-026b4649ad0e7dd80`: main release `f522db3`,
+model `objectives-momentum-2026-10-17`, SHA256
+`1e6832a9d1a6a40287fe66199adc903d23b1f2f0aadb83deac478dfec875a1bc`,
+runtime smoke PASS, active/running publisher and successful regular cycles.
+The nonblocking refresh correction is installed; the original deadlocked
+post-step was terminated. No match was tracked during verification; confirm
+new-map schema/prospective accuracy when matches start. No execution rollout.

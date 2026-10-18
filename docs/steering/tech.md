@@ -367,3 +367,10 @@ Calls record model schema, page quality records selected schema/version. No
 runtime fit/DB read/network dependency or cadence change. Counts intentionally
 match training; the dragon threshold is not a verified elemental soul and
 inhibitors are raw counters rather than an active-buff state.
+
+### Refresh restart ordering
+
+The publisher has `After=prometheus-live-refresh.service`. Its refresh post-step
+must use `systemctl --no-block try-restart`: a synchronous restart waits on
+the publisher, which waits for the refresh post-step itself. The queued restart
+keeps the existing changed-code/data condition and lets systemd apply ordering.
