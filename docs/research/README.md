@@ -4,6 +4,8 @@ Finished research that changed no published metric: in-game snapshots, champions
 
 ## Status
 
+- **Draft v2 as a live prior (2026-10-17):** [Report](live_draft_prior.md), `scripts/research/live_draft_prior.py`. On 3,825 July-2025-on feed maps, shift plus shift×time beats an identical-row six-feature refit: log loss −0.0029 (−0.0055 to −0.0003); majors −0.0044 (−0.0078 to −0.0007). Frozen v1 comparison is inconclusive: −0.0028 (−0.0057 to +0.0002). Early bands improve; later bands are uncertain. Draft weights freeze through 2021 for 2022–24 live training and through 2024 for calibration/test; no pre-2025 test under this split. Promising input, no production export or profitability claim.
+
 - **Draft market-edge execution follow-up (2026-10-17).** [Report](draft_market_edge.md), `scripts/research/draft_market_edge.py`: fixed May 1 split, capped/shrunk shift and recent-trade/adverse-fill proxies. No setting clears the fixed 30 first-half bets (zero at −60 s; at most eight at +45 s), so no second-half policy is selected. Prices move toward the shift by 0.7–0.8 points at +1/+3 min; no demonstrated trading edge or local draft books. Research only.
 
 - **Draft composition (2026-10-17, research only).** [Frozen three-feature block](draft_composition.md): champion-role scaling, scaling × strength and early lane profiles, strictly earlier UTC days. Candidate minus v2 on 63,638 maps: +0.000008 (95% −0.000072 to +0.000085); majors −0.000137 (−0.000322 to +0.000045); pre-2025 −0.000010 (−0.000104 to +0.000087). Inconclusive: exclude the whole block from v3; international subgroup gain cannot override failed primary gates. No production changes.
