@@ -1,0 +1,95 @@
+from pathlib import Path
+import sys,sqlite3,pandas as pd,numpy as np,json,time
+from scipy.special import expit,logit
+from sklearn.linear_model import LogisticRegression
+OUT=Path(__file__).parent;ROOT=OUT.parent/'prometheus-audit'
+sys.path[:0]=[str(ROOT),str(ROOT/'scripts')]
+from prometheus import form,forge,regional_calibration as rc
+from prometheus.types import INTERNATIONAL_LEAGUES,ALL_MAJOR_LEAGUES,GLORY_FEATURES
+MAJOR={x.value for x in ALL_MAJOR_LEAGUES};t=time.time()
+c=sqlite3.connect(f'file:{ROOT}/db/prometheus.db?mode=ro',uri=True)
+print('integrity',c.execute('pragma quick_check').fetchone(),flush=True)
+team=pd.read_sql('SELECT m.*,e.main_elo,e.post_match_elo,e.pre_match_elo,e.home_league,e.league_offset FROM matches m JOIN game_length_elo e USING(gameid,teamid)',c)
+team['date']=pd.to_datetime(team.date);team['day']=team.date.dt.normalize();team=team.sort_values(['date','gameid','teamid']).reset_index(drop=True)
+g=team[team.side=='Blue'][['gameid','date','day','year','league','teamid','teamname','result','gamelength']].rename(columns={'teamid':'a','teamname':'an','result':'y'})
+g=g.merge(team[team.side=='Red'][['gameid','teamid','teamname']].rename(columns={'teamid':'b','teamname':'bn'}),on='gameid',validate='one_to_one').sort_values(['day','date','gameid']).reset_index(drop=True)
+# All native pairs before any new model fitting.
+s=form.load_states();s['date']=pd.to_datetime(s.date);s['day']=s.date.dt.normalize()
+print('states',s.shape,'games',len(g),flush=True)
+pre=s.set_index(['gameid','teamid']);ix_a=pd.MultiIndex.from_arrays([g.gameid,g.a]);ix_b=pd.MultiIndex.from_arrays([g.gameid,g.b])
+native=np.column_stack([(pre['pre_'+f].reindex(ix_a).to_numpy()-pre['pre_'+f].reindex(ix_b).to_numpy()) for f in GLORY_FEATURES])
+weights={};fw= form.load_weights()['weights']
+for year in sorted(g.year.unique()):
+ tr=(g.year<year)&g.league.isin(MAJOR)
+ if tr.sum()>100:
+  w=form.fit_form_weights(native[tr],g.y.to_numpy()[tr]);weights[int(year)]=dict(zip(GLORY_FEATURES,w.tolist()))
+ else:weights[int(year)]={k:0. for k in GLORY_FEATURES}
+# For each query, strictly prior-day last team state; do not consult this map's starters.
+last=team.sort_values(['day','date','gameid']).drop_duplicates(['teamid','day'],keep='last')
+query=pd.concat([g[['gameid','day','a']].rename(columns={'a':'teamid'}).assign(side='a'),g[['gameid','day','b']].rename(columns={'b':'teamid'}).assign(side='b')],ignore_index=True)
+cols=['teamid','day','main_elo','post_match_elo','home_league','league_offset']
+q=pd.merge_asof(query.sort_values('day'),last[cols].sort_values('day'),on='day',by='teamid',allow_exact_matches=False)
+off=pd.read_sql('select league,league_offset,date from game_length_elo_league_offsets order by rowid',c)
+off['day']=pd.to_datetime(off.date).dt.normalize();off=off.drop_duplicates(['league','day'],keep='last').rename(columns={'league':'home_league','league_offset':'latest_offset'})
+valid=q[q.home_league.notna()]
+valid=pd.merge_asof(valid.sort_values('day'),off[['day','home_league','latest_offset']].sort_values('day'),on='day',by='home_league',allow_exact_matches=False)
+valid['elo']=valid.main_elo.fillna(valid.post_match_elo)+(valid.latest_offset-valid.league_offset).fillna(0)
+ss=s.sort_values(['day','date','gameid']).drop_duplicates(['teamid','day'],keep='last')
+valid=pd.merge_asof(valid.sort_values('day'),ss[['teamid','day','form_games']+['post_'+f for f in GLORY_FEATURES]].sort_values('day'),on='day',by='teamid',allow_exact_matches=False)
+for side in ['a','b']:
+ v=valid[valid.side==side].drop(columns=['day','teamid','side']);g=g.merge(v,on='gameid',how='left',validate='one_to_one',suffixes=('', '_'+side)) if side=='a' else g.merge(v.rename(columns={k:k+'_b' for k in v.columns if k!='gameid'}),on='gameid',how='left',validate='one_to_one')
+# Rename first-side values explicitly.
+for col in ['elo','home_league','form_games']+['post_'+f for f in GLORY_FEATURES]:g=g.rename(columns={col:col+'_a'})
+g['gap']=g.elo_a-g.elo_b;g['same']=g.home_league_a==g.home_league_b;g['major']=g.home_league_a.isin(MAJOR)&g.home_league_b.isin(MAJOR)
+g['intl_event']=[rc.eligible(event=r.league,event_day=r.day.date()) for r in g.itertuples()]
+g['scope']=np.where(g.intl_event,np.where(g.same,'international_same_home','international'),np.where(g.same,np.where(g.major,'major_domestic','minor_domestic'),'other_cross'))
+g['tier']=np.where(g.major,'major_major',np.where(g.home_league_a.isin(MAJOR)|g.home_league_b.isin(MAJOR),'major_minor','minor_minor'))
+g['entry']=False
+intl=g[g.scope=='international'];first={}
+for r in intl.itertuples():
+ key=(r.league,r.year)
+ seen=first.setdefault(key,{})
+ entry=seen.get(r.a,r.day)>=r.day or seen.get(r.b,r.day)>=r.day;g.loc[r.Index,'entry']=entry
+ seen[r.a]=min(seen.get(r.a,r.day),r.day);seen[r.b]=min(seen.get(r.b,r.day),r.day)
+# Raw post-state gap; a common league centering cancels for same-home forecasts.
+z=np.column_stack([g['post_'+f+'_a'].fillna(0)-g['post_'+f+'_b'].fillna(0) for f in GLORY_FEATURES])
+g['form_prod']=z@np.array([fw[f] for f in GLORY_FEATURES]);g['form_chrono']=0.
+for y,w in weights.items():
+ rows=g.year==y;g.loc[rows,'form_chrono']=z[rows]@np.array([w[f] for f in GLORY_FEATURES])
+g=g[g.gap.notna()].reset_index(drop=True)
+g['p_prod']=expit(forge.CROSS_REGION_ELO_WEIGHT*g.gap)
+for major,e,f in [(True,forge.ELO_WEIGHT,forge.FORM_WEIGHT),(False,forge.OTHER_LEAGUE_FORGE_ELO_WEIGHT,forge.OTHER_LEAGUE_FORM_WEIGHT)]:
+ rows=g.same&(g.major==major);g.loc[rows,'p_prod']=expit(e*g.loc[rows,'gap']+f*g.loc[rows,'form_prod'])
+g['p_chrono']=np.nan
+fitmeta={}
+for year in sorted(g.year.unique()):
+ for group in ['major_domestic','minor_domestic','cross']:
+  scope=g.scope==group if group!='cross' else ~g.same
+  tr=(g.year<year)&scope
+  target=(g.same & (g.major==(group=='major_domestic'))) if group!='cross' else ~g.same
+  te=(g.year==year)&target
+  if te.sum()==0:continue
+  cols=['gap','form_chrono'] if group!='cross' else ['gap']
+  if tr.sum()<100:g.loc[te,'p_chrono']=g.loc[te,'p_prod'];continue
+  x=g.loc[tr,cols].to_numpy();scale=np.std(x,axis=0);scale[scale==0]=1
+  m=LogisticRegression(C=1e6,fit_intercept=False,max_iter=1000).fit(x/scale,g.loc[tr,'y'])
+  g.loc[te,'p_chrono']=m.predict_proba(g.loc[te,cols].to_numpy()/scale)[:,1]
+  fitmeta[str(year)+'_'+group]={'n':int(tr.sum()),'columns':cols,'coef':(m.coef_[0]/scale).tolist()}
+# International artifact is earlier-event frozen, and applies identically to both controls.
+for r in g[g.scope=='international'].itertuples():
+ for k in ['p_prod','p_chrono']:
+  p=rc.probability(getattr(r,k),r.gap,r.home_league_a,r.home_league_b,at=r.day.date(),event=r.league,event_day=r.day.date())
+  g.loc[r.Index,k]=p
+# Player histories and map metadata retained for isolated candidate feature construction.
+players=pd.read_sql('SELECT p.*,m.date,m.year,m.league,m.side,m.result,e.home_league,e.pre_match_elo FROM match_players p JOIN matches m USING(gameid,teamid) JOIN game_length_elo e USING(gameid,teamid)',c)
+players['date']=pd.to_datetime(players.date);players['day']=players.date.dt.normalize()
+pg=pd.read_sql('SELECT gameid,teamid,playerid,position,goldat15-opp_goldat15 AS gd15 FROM player_stats',c)
+players=players.merge(pg[['gameid','teamid','playerid','gd15']],on=['gameid','teamid','playerid'],how='left',validate='one_to_one')
+players.to_parquet(OUT/'players.parquet',index=False)
+# Team observed stats for historical style likelihoods.
+stats=pd.read_sql('SELECT * FROM match_stats',c);stats=team[['gameid','teamid','day','date','gamelength','result']].merge(stats,on=['gameid','teamid'])
+gd=players.groupby(['gameid','teamid']).gd15.sum(min_count=5).rename('gd15').reset_index();stats=stats.merge(gd,on=['gameid','teamid'],how='left')
+stats.to_parquet(OUT/'team_observations.parquet',index=False)
+g.to_parquet(OUT/'base.parquet',index=False);s.to_parquet(OUT/'form_states.parquet',index=False)
+(OUT/'baseline-fit.json').write_text(json.dumps({'form_weights':weights,'curves':fitmeta},indent=2))
+print('complete',len(g),g.groupby(['year','scope']).size().to_dict(),'seconds',time.time()-t,flush=True)

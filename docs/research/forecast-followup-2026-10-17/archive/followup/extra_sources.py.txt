@@ -1,0 +1,11 @@
+from pathlib import Path
+import urllib.request,concurrent.futures,json,time
+O=Path(__file__).parent
+urls={**{'lol_patch_'+p:'https://lolalytics.com/lol/tierlist/?tier=master_plus&patch='+p for p in ['16.19','16.18','16.10','15.24','14.24']},'hf_catalog':'https://huggingface.co/api/datasets?search=league&limit=100','hextech_tree':'https://api.github.com/repos/githubpsyche/hextech-studies/git/trees/main?recursive=1','mirror_tree':'https://api.github.com/repos/IbrahimBM75/LCK-LPL-LEC-LOL-2026-season-/git/trees/main?recursive=1'}
+def get(it):
+ k,u=it;t=time.time()
+ try:
+  with urllib.request.urlopen(u,timeout=15) as r:b=r.read();status=r.status;url=r.url
+  suf='.json' if k.endswith(('tree','catalog')) else '.html';(O/(k+suf)).write_bytes(b);return {'source':k,'url':u,'final':url,'status':status,'bytes':len(b),'seconds':round(time.time()-t,2)}
+ except Exception as e:return {'source':k,'url':u,'error':str(e)}
+a=list(concurrent.futures.ThreadPoolExecutor(max_workers=3).map(get,urls.items()));(O/'extra-source-probes.json').write_text(json.dumps(a,indent=2));print(json.dumps(a,indent=2))

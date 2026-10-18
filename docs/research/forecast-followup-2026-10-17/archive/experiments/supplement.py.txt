@@ -1,0 +1,47 @@
+from pathlib import Path
+import pandas as pd,numpy as np,json,gzip
+from evaluate import estimate,loss,report,fitpredict
+from scipy.special import logit
+O=Path(__file__).parent;g=pd.read_parquet(O/'base.parquet');res={}
+def event_ci(h,p,ref):
+ d=loss(h.y.to_numpy(),p)-loss(h.y.to_numpy(),ref);codes,_=pd.factorize(h.league.astype(str)+'|'+h.year.astype(str));s=np.bincount(codes,weights=d);n=np.bincount(codes);rng=np.random.default_rng(20261017);boot=[]
+ for _ in range(10000):
+  k=rng.integers(0,len(n),len(n));boot.append(s[k].sum()/n[k].sum())
+ return {'n':len(h),'events':len(n),'delta':float(np.mean(d)),'ci95_event':np.quantile(boot,[.025,.975]).tolist(),'event_deltas':{str(k):float(v.mean()) for k,v in pd.Series(d).groupby(codes)}}
+for fam,refname in [('dynamic',None),('lineups',None),('bridges',None),('static','calibration_control'),('draft','postdraft_control')]:
+ f=O/('predictions-'+fam+'.parquet')
+ if not f.exists():continue
+ pp=pd.read_parquet(f);h=g.merge(pp,on='gameid',suffixes=('','_copy'));h=h[h.year>=2024].reset_index(drop=True)
+ control=h[refname].to_numpy() if refname else fitpredict(h,np.empty((len(h),0)),np.ones(len(h),bool),np.ones(len(h),bool),0)[0] if False else None
+ if control is None:
+  full=g.merge(pp,on='gameid',suffixes=('','_copy'));te=(full.year>=2024).to_numpy();tr=(full.year<=2023).to_numpy();control=fitpredict(full,np.empty((len(full),0)),tr,te,0)[0]
+ intl=(h.scope=='international').to_numpy()
+ for name in pp.columns:
+  if name in ['gameid','p_prod','p_chrono',refname] or name.endswith('_raw'):continue
+  res[fam+':'+name]=event_ci(h[intl],h.loc[intl,name],control[intl])
+# Map-price comparison: no blend fit on these outcomes.
+d=pd.read_parquet(O/'predictions-draft.parquet');h=g.merge(d,on='gameid');lookup=h.set_index('gameid');raw=json.load(gzip.open(O/'pr78-live-data.json.gz','rt'));rows=[]
+for r in raw['premaps']:
+ if r['game'] not in lookup.index:continue
+ x=lookup.loc[r['game']]
+ if set(r['teams'])!={x.an,x.bn}:continue
+ if r['market'][4] is None:continue
+ p=float(r['market'][4]);p=p if r['teams'][0]==x.an else 1-p
+ rows.append({'gameid':r['game'],'market':p})
+market=h.merge(pd.DataFrame(rows),on='gameid');mask=np.ones(len(market),bool);res['market_comparison']={name:estimate(market,market[name],market.market,mask) for name in ['p_prod','postdraft_control','pr78_meta','pr78_draft','pr78_full']}
+# Data and feature availability audit.
+f=pd.read_parquet(O/'features-final.parquet');test=f.year>=2024
+res['data']={'accepted_team_rows':196108,'paired_maps_before_prior_state_filter':98026,'maps_with_prior_state':len(g),'minimum_date':str(g.date.min()),'maximum_date':str(g.date.max()),'test_maps':int(test.sum()),'scope_counts':g[g.year>=2024].scope.value_counts().to_dict(),'year_scope_counts':{str(k):int(v) for k,v in g.groupby(['year','scope']).size().items()},'patch_coverage':{str(k):v.to_dict() for k,v in f[test].groupby('scope')[['patch_cover1_mean','patch_cover14_mean','draft_cover1_mean','draft_cover14_mean']].mean().iterrows()},'patch_80pct_maps':{str(lag):int((test&(f['patch_cover'+str(lag)+'_mean']>=.8)).sum()) for lag in [1,14]}}
+# Proper covered-subset controls for post-draft and pool ablations.
+ss=pd.read_parquet(O/'predictions-static.parquet');ff=f.merge(ss[['gameid','postdraft_control','patch_post_1','patch_post_14','pool_controls','patch_options_1','patch_options_14']],on='gameid')
+res['covered_controls']={}
+for lag in [1,14]:
+ mask=(ff.year>=2024).to_numpy()&(ff['draft_cover'+str(lag)+'_mean']>=.8).to_numpy()
+ res['covered_controls']['post_'+str(lag)]=report(ff,ff['patch_post_'+str(lag)],ff.postdraft_control,mask)
+ mask=(ff.year>=2024).to_numpy()&(ff['patch_cover'+str(lag)+'_mean']>=.8).to_numpy()
+ res['covered_controls']['options_'+str(lag)]=report(ff,ff['patch_options_'+str(lag)],ff.pool_controls,mask)
+cc=pd.read_parquet(O/'predictions-conditional.parquet');ff=f.merge(cc,on='gameid').merge(d[['gameid','pr78_full']],on='gameid')
+for lag in [1,14]:
+ mask=(ff.year>=2024).to_numpy()&(ff['draft_cover'+str(lag)+'_mean']>=.8).to_numpy()
+ res['covered_controls']['conditional_'+str(lag)]=report(ff,ff['external_after_pr78_'+str(lag)],ff.pr78_full,mask)
+(O/'results-supplement.json').write_text(json.dumps(res,indent=2));print('complete',res['data'],flush=True)

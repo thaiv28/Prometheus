@@ -1,0 +1,11 @@
+from pathlib import Path
+import ast,sys,sqlite3,importlib.util,json
+import pandas as pd,numpy as np
+O=Path(__file__).parent;R=O.parent/'prometheus-audit';sys.path.insert(0,str(R))
+spec=importlib.util.spec_from_file_location('draft',O/'draft_score_source.py');d=importlib.util.module_from_spec(spec);spec.loader.exec_module(d)
+# Load only pure feature functions, without invoking the research script's full pipeline.
+tree=ast.parse((O/'wide_roster.py').read_text());ns={'np':np,'pd':pd,'d':d};defs=ast.Module(body=[x for x in tree.body if isinstance(x,ast.FunctionDef)],type_ignores=[]);exec(compile(defs,'wide_feature_functions','exec'),ns)
+c=sqlite3.connect(f'file:{R}/db/prometheus.db?mode=ro',uri=True)
+r=pd.read_sql('''SELECT p.gameid,p.teamid,p.playerid,p.position,p.champion,m.date,m.result,e.pre_match_elo elo,oe.pre_match_elo opp_elo FROM match_players p JOIN matches m USING(gameid,teamid) JOIN game_length_elo e USING(gameid,teamid) JOIN game_length_elo oe ON oe.gameid=p.gameid AND oe.teamid!=p.teamid WHERE m.date>='2025-01-01' AND m.date<'2025-02-01' ''',c);r['date']=pd.to_datetime(r.date);r=r[r.champion.notna()].sort_values(['date','gameid','teamid','position']).reset_index(drop=True);r['day']=r.date.dt.normalize();r['p']=1/(1+10**(-(r.elo-r.opp_elo)/400));r['gd15']=np.nan;day=sorted(r.day.unique())[len(r.day.unique())//2];F=['exp','champ_wae','meta','matchup','synergy'];key=['gameid','teamid','playerid','position']
+a=ns['day_features'](r).set_index(key)[F];changed=r.copy();changed.loc[changed.day==day,'result']=1-changed.loc[changed.day==day,'result'];b=ns['day_features'](changed).set_index(key)[F];before=pd.MultiIndex.from_frame(r.loc[r.day<=day,key]);after=pd.MultiIndex.from_frame(r.loc[r.day>day,key]);same=float((a.reindex(before)-b.reindex(before)).abs().max().max());future=float((a.reindex(after)-b.reindex(after)).abs().max().max());trunc=ns['day_features'](r[r.day<=day].copy()).set_index(key)[F];prefix=float((a.reindex(trunc.index)-trunc).abs().max().max());assert same<1e-12 and prefix<1e-12 and future>1e-6
+out={'intervention_day':str(day),'rows':len(r),'same_day_or_earlier_max_error_after_flipping_day_results':same,'later_features_change':future,'prefix_max_error_after_removing_future_games':prefix,'passes':True};(O/'leakage-check.json').write_text(json.dumps(out,indent=2));print(out)

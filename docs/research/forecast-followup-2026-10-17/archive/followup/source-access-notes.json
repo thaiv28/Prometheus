@@ -1,0 +1,16 @@
+{
+  "official_drive": {
+    "file_id": "1hnpbrUpBMS1TZI7IovfpKeZfWJH1Aptm",
+    "attempt": "one gdown download attempt",
+    "outcome": "FileURLRetrievalError: Too many users have viewed or downloaded this file recently; no replacement of prior CSV"
+  },
+  "unauthenticated_api_probe": {
+    "url": "https://oe.datalisk.io/matches/recentResults/",
+    "outcome": "HTTP 403; no retry with credentials"
+  },
+  "official_homepage": {
+    "url": "https://oracleselixir.com/",
+    "outcome": "HTTP 403"
+  },
+  "credentials": "No third-party API key was used; third-party downloader source is excluded from the deliverable."
+}

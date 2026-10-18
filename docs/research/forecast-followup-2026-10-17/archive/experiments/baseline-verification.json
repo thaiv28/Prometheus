@@ -1,0 +1,170 @@
+[
+  {
+    "gameid": "10660-10660_game_1",
+    "scope": "major_domestic",
+    "vector": 0.847449441864328,
+    "native": 0.8474494418643282,
+    "delta": 2.220446049250313e-16,
+    "method": "forge"
+  },
+  {
+    "gameid": "LOLTMNT01_57068",
+    "scope": "major_domestic",
+    "vector": 0.8135934688743574,
+    "native": 0.8135934688743574,
+    "delta": 0.0,
+    "method": "forge"
+  },
+  {
+    "gameid": "LOLTMNT04_31142",
+    "scope": "major_domestic",
+    "vector": 0.4371646455244769,
+    "native": 0.43716464552447676,
+    "delta": -1.6653345369377348e-16,
+    "method": "forge"
+  },
+  {
+    "gameid": "10947-10947_game_2",
+    "scope": "major_domestic",
+    "vector": 0.5310481075735367,
+    "native": 0.531048107573537,
+    "delta": 3.3306690738754696e-16,
+    "method": "forge"
+  },
+  {
+    "gameid": "LOLTMNT02_110673",
+    "scope": "major_domestic",
+    "vector": 0.07727656811801828,
+    "native": 0.07727656811801828,
+    "delta": 0.0,
+    "method": "forge"
+  },
+  {
+    "gameid": "11301-11301_game_1",
+    "scope": "major_domestic",
+    "vector": 0.5776717272555547,
+    "native": 0.5776717272555548,
+    "delta": 1.1102230246251565e-16,
+    "method": "forge"
+  },
+  {
+    "gameid": "10663-10663_game_1",
+    "scope": "minor_domestic",
+    "vector": 0.2678216318416987,
+    "native": 0.2678216318416989,
+    "delta": 1.6653345369377348e-16,
+    "method": "forge"
+  },
+  {
+    "gameid": "LOLTMNT05_13559",
+    "scope": "minor_domestic",
+    "vector": 0.5280879471860767,
+    "native": 0.5280879471860764,
+    "delta": -2.220446049250313e-16,
+    "method": "forge"
+  },
+  {
+    "gameid": "LOLTMNT05_17274",
+    "scope": "minor_domestic",
+    "vector": 0.28092269642989137,
+    "native": 0.28092269642989126,
+    "delta": -1.1102230246251565e-16,
+    "method": "forge"
+  },
+  {
+    "gameid": "LOLTMNT01_51583",
+    "scope": "minor_domestic",
+    "vector": 0.5760934777878346,
+    "native": 0.5760934777878349,
+    "delta": 3.3306690738754696e-16,
+    "method": "forge"
+  },
+  {
+    "gameid": "LOLTMNT01_58775",
+    "scope": "minor_domestic",
+    "vector": 0.30036842552578363,
+    "native": 0.3003684255257836,
+    "delta": -5.551115123125783e-17,
+    "method": "forge"
+  },
+  {
+    "gameid": "LOLTMNT05_23394",
+    "scope": "minor_domestic",
+    "vector": 0.5214555530486926,
+    "native": 0.5214555530486931,
+    "delta": 4.440892098500626e-16,
+    "method": "forge"
+  },
+  {
+    "gameid": "11038-11038_game_1",
+    "scope": "international",
+    "vector": 0.37987560409208493,
+    "native": 0.37987560409208493,
+    "delta": 0.0,
+    "method": "elo-cross"
+  },
+  {
+    "gameid": "LOLTMNT03_261593",
+    "scope": "international",
+    "vector": 0.755593915561568,
+    "native": 0.755593915561568,
+    "delta": 0.0,
+    "method": "elo-cross"
+  },
+  {
+    "gameid": "11363-11363_game_1",
+    "scope": "international_same_home",
+    "vector": 0.5346254334610022,
+    "native": 0.5346254334610021,
+    "delta": -1.1102230246251565e-16,
+    "method": "forge"
+  },
+  {
+    "gameid": "LOLTMNT06_13667",
+    "scope": "other_cross",
+    "vector": 0.49827264813614386,
+    "native": 0.49827264813614386,
+    "delta": 0.0,
+    "method": "elo-cross"
+  },
+  {
+    "gameid": "LOLTMNT06_31320",
+    "scope": "other_cross",
+    "vector": 0.47696551932080167,
+    "native": 0.47696551932080167,
+    "delta": 0.0,
+    "method": "elo-cross"
+  },
+  {
+    "gameid": "LOLTMNT05_74535",
+    "scope": "other_cross",
+    "vector": 0.444015941510022,
+    "native": 0.444015941510022,
+    "delta": 0.0,
+    "method": "elo-cross"
+  },
+  {
+    "gameid": "LOLTMNT01_162027",
+    "scope": "other_cross",
+    "vector": 0.42563537527381057,
+    "native": 0.42563537527381057,
+    "delta": 0.0,
+    "method": "elo-cross"
+  },
+  {
+    "gameid": "LOLTMNT06_95764",
+    "scope": "other_cross",
+    "vector": 0.6712609806875731,
+    "native": 0.6712609806875731,
+    "delta": 0.0,
+    "method": "elo-cross"
+  },
+  {
+    "gameid": "LOLTMNT04_116339",
+    "scope": "other_cross",
+    "vector": 0.36524176878261,
+    "native": 0.36524176878261,
+    "delta": 0.0,
+    "method": "elo-cross"
+  }
+]

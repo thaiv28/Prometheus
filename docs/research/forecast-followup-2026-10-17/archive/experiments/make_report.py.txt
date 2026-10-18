@@ -1,0 +1,213 @@
+from pathlib import Path
+import json,pandas as pd,numpy as np,hashlib,zipfile,re
+O=Path(__file__).parent;ROOT=O.parent
+load=lambda n:json.loads((O/('results-'+n+'.json')).read_text())
+s=load('static');sc=load('static-chrono');d=load('dynamic');l=load('lineups');b=load('bridges');q=load('draft');qc=load('draft-chrono');c=load('conditional');u=load('supplement');g=pd.read_parquet(O/'features-final.parquet');a=json.loads((O/'patch-source-audit.json').read_text())
+def n(v):return f'{v:,}'
+def num(v):return f'{v:.5f}'
+def delta(v):
+ if not v.get('n'):return '—'
+ lo,hi=v['ci95'];return f"{v['delta']:+.5f} [{lo:+.5f}, {hi:+.5f}]"
+def tabmodels(entries,ref='vs_calibration'):
+ out=['| Experiment | All maps Δ log loss [95% CI] | Major domestic Δ [95% CI] | International Δ [95% CI] |','|---|---:|---:|---:|']
+ for label,v in entries:out.append('| '+label+' | '+' | '.join(delta(v[ref][k]) for k in ['all','major_domestic','international'])+' |')
+ return '\n'.join(out)
+def event(k):
+ v=u[k];return f"{v['delta']:+.5f} [{v['ci95_event'][0]:+.5f}, {v['ci95_event'][1]:+.5f}], {v['events']} event/year clusters"
+counts=[int((g.year<=2021).sum()),int(g.year.between(2022,2023).sum()),int((g.year>=2024).sum())]
+base=s['calibration_control']['vs_production'];lines=[]
+lines.append(f'''# Prometheus experiment results — before any merge
+
+Research date: October 17, 2026. No production source edits, commit, PR creation, or merge. No reusable skill was created.
+
+The strongest measured signal is **post-draft professional champion information**, including the features in the still-unmerged draft research branch. The new pre-draft families do not establish a broadly safe improvement over current FORGE. External patch champion win rates remain a plausible input, but the unrestricted addition worsens held-out loss. A well-covered post-draft subgroup shows a small incremental gain; pre-draft and 2026 evidence remain insufficient.
+
+These are completed minimum experiments and feasibility probes, not a claim that full implementations of every paper have been exhaustively optimized. Full fearless draft simulation, full BOCPD run-length inference with patch-conditioned hazards, and the published hypergraph graph-regularized model were not implemented. Their tested prerequisites and simpler nested comparisons are reported explicitly below.
+
+## 1. What was actually audited and rebuilt
+
+**Verified current main:** [`ac5745ca1982d7347d7caee2f98f70f7f1832c53`](https://github.com/thaiv28/Prometheus/tree/ac5745ca1982d7347d7caee2f98f70f7f1832c53). A final remote-head check still returned this revision. **Draft research head:** [`dd84749b364d4580b41e7236ca98188f6a6d6596`](https://github.com/thaiv28/Prometheus/tree/dd84749b364d4580b41e7236ca98188f6a6d6596), also checked remotely. [PR #78](https://github.com/thaiv28/Prometheus/pull/78) was inspected but not merged.
+
+The audit covered AGENTS.md; product, current state, technical, deployment, and UI steering; README, PRODUCT.md and DESIGN.md; research history and conclusions; and the Elo, Form, FORGE, regional calibration, series and market implementations. The earlier detailed research report supplies the literature review and novelty audit. This report supplies newly executed experiments.
+
+The unmodified ingestion, Elo bootstrap and Form functions were run on pinned public copies of Oracle’s Elixir CSVs. Official Drive downloads hit quota. Sources and SHA256 values are in `mirror-manifest.json`: 2014–2024 from [LouisPoutrain/Lol-ML](https://github.com/LouisPoutrain/Lol-ML/tree/69a2856df3a6e566af49473f801b9ad7af8c85ad/raw_data); 2025–2026 from [chrisvu1007/league-of-legends-match-predictor](https://github.com/chrisvu1007/league-of-legends-match-predictor/tree/29838abc074d60a83c7a9638a456a2d366b5546d/data).
+
+**Important limitation:** this reconstructs production algorithms on a historical mirror, not the exact October deployment database. Coverage ends **May 22, 2026**. A first scratch-local database failed integrity while building; a fresh rebuild in `/tmp` passed SQLite `quick_check`. Only the healthy rebuild was scored. It contains 196,108 team rows; 98,026 maps pair blue and red; 93,958 maps have both prior-day team states. Missing prior-state maps were excluded, rather than assigned invented ratings.
+
+The vectorized production forecast was checked against `schedule.RatingsBefore` and `schedule.game_probability` on 21 fixed-sample maps across major, minor, international, same-home international and other cross-league routes. Maximum absolute probability error: **4.44 × 10⁻¹⁶**. This validates those routing examples; it is not an exhaustive proof for every team-name alias or missing-Form fallback.
+
+## 2. Evaluation protocol and controls
+
+- Training through 2021: **{n(counts[0])} maps**. Hyperparameter selection in 2022–2023: **{n(counts[1])}**. Final retrospective evaluation in 2024 through the mirror cutoff: **{n(counts[2])}**.
+- Main pre-match features use strictly prior UTC-day histories and the last observed roster. Current picks and current actual starters are excluded. Online strength and performance states update after the day’s forecasts.
+- The draft comparison is explicitly post-draft and requires all ten picks plus player snapshot coverage. Its professional-history features use earlier OE timestamps, so earlier maps on the same day can enter. This is a different information horizon from a morning/12-hour forecast.
+- The current packaged FORGE coefficients are the production reference. A three-route temperature control, fitted through 2023, prevents a new feature from receiving credit merely for rescaling major, minor or cross-league probabilities. Post-draft controls also fit the common blue-side intercept. Every candidate is compared on identical maps.
+- A second control refits Form’s scoring weights and the FORGE/Elo curves from earlier years only. International regional calibration uses the packaged earlier-available, event-frozen snapshot. Current Elo heuristics and this study’s historical years have already been examined in repository research: this is **retrospective chronological evaluation, not prospective confirmation**.
+- Primary metric is paired map log loss. Negative Δ is better. Intervals below are nominal 95% paired bootstrap intervals from 1,500 samples of league/team-pair/UTC-day clusters, approximating series. International sensitivity resamples event/year clusters 10,000 times. Brier, ECE, and calibration intercept/slope are in the JSON results.
+- Penalties and small parameter grids were selected only on 2022–2023, using an equal-weight average over major domestic, minor domestic and international loss. Final feature coefficients fit through 2023; test outcomes may update allowed historical states but do not refit those coefficients.
+- Confidence intervals condition on the fitted models and omit some training and selection uncertainty. Many families were examined. A nominal interval excluding zero alone does not constitute a production shipping decision.
+
+### Production and calibration control
+
+| Test slice | Maps | Packaged production log loss | Calibration control log loss | Control Δ [95% CI] |
+|---|---:|---:|---:|---:|''')
+for k in ['all','major_domestic','minor_domestic','international','intl_entry']:
+ v=base[k];lines.append(f"| {k} | {n(v['n'])} | {v['ref_ll']:.5f} | {v['ll']:.5f} | {delta(v)} |")
+lines.append('''
+“International entry” here means a team’s first cross-home international appearance day in that event/year; 139 maps meet that proxy. It is **not** a validated tournament-entry forecast issued before the entire event. Same-home international maps are separately labeled. “Other cross-league” games are not silently counted as domestic or international.
+
+## 3. Ranked findings — predictive evidence, feasibility and upside
+
+### First: professional draft information — strongest measured signal, available after draft
+
+**Mechanism and failure mode.** FORGE knows team performance and player-carried Elo, but does not price the actual ten-champion composition. The draft model adds player champion experience; wins above Elo on that champion; player-relative lane gold performance; 60-day champion-role professional wins above Elo; and, in the full version, champion matchup and teammate-champion pair effects.
+
+**Nearest existing work.** These are the inspected PR #78 research features, not a newly discovered capability or a shipped pre-match feature. The original PR report compared chiefly with fitted Elo. This experiment instead adds its features to current FORGE plus regional calibration and a matched side/temperature control. Its train/development/test dates and corpus also differ from the PR report, so the numbers need not reproduce that report exactly.
+
+**Measured result.** This cohort has 21,361 test maps: 2,874 major domestic, 15,887 minor domestic, 371 cross-home international, and other separately labeled maps. Major coverage is materially smaller than in the primary cohort because the draft script requires player snapshots, excluding substantial historical LPL coverage.
+''')
+lines.append(tabmodels([(k,q[k]) for k in ['pr78_meta','pr78_draft','pr78_full']],ref='vs_postdraft_control'))
+v=q['pr78_full']['vs_postdraft_control']['all'];ch=qc['pr78_full']['vs_postdraft_control']['all']
+lines.append(f'''
+The full model’s all-map log loss is **{v['ll']:.5f}**, versus **{v['ref_ll']:.5f}** for the matched post-draft control. Its additional gain beyond the four-feature draft model is {delta(q['pr78_full']['vs_pr78_draft']['all'])}. On the earlier-only fitted baseline, the full-model gain remains {delta(ch)}.
+
+International evidence is weaker than the pooled headline. Its event-cluster sensitivity is {event('draft:pr78_full')}. The entry-proxy delta is {delta(q['pr78_full']['vs_postdraft_control']['intl_entry'])}, with only 114 maps. This does not resolve the original tournament-entry concern.
+
+**Risks and next experiment.** The champion pair features were already developed after earlier repository test years had been viewed. Champion identity is confounded by player skill, teams’ draft preferences and patch selection. A new untouched period and full current-data rerun are required. Compare incremental gains over the production market blend on a chronologically held-out priced cohort; do not infer market value from beating FORGE alone. Live adoption also requires actual draft availability before the intended forecast timestamp. Priority: highest for a separate post-draft forecast, conditional on those checks.
+
+### Second: your patch champion win-rate idea — tested at two forecast horizons
+
+The idea is feasible in principle: use the **competition patch**, whose ranked games may already have been played, rather than automatically using the latest live patch. The important exposure is whose usable champions benefit on that patch, not just the patch number.
+
+**Pre-draft experiment.** Each player’s last 40 observed professional champion appearances form a role-specific pool. Before the day’s games, the last known five-player roster yields an appearance-weighted patch win-rate level, a change from the preceding archived patch, coverage, and a top-three available-champion value. No actual current picks are used. Level-only, shift-only, combined and comfort/experience controls were tested. The top-three score is a pool-value screen, not a full draft optimizer.
+
+**Post-draft experiment.** Average current champion-role ranked win rate is added after picks are known. A second comparison adds it to the full professional draft model, which is the stronger and more relevant baseline for incremental draft value.
+
+**Data and repair.** Source: [HakimT/lol-champion-ranked-stats](https://huggingface.co/datasets/HakimT/lol-champion-ranked-stats), 53,370 rows. It supplies champion, role, nominal date, patch, pick rate, win rate and ban rate, but no game counts, original provider identity or independently verified historical publication timestamps. {n(a['zero_winrate_and_pickrate'])} records have both zero win rate and zero pick rate, including {n(a['by_year']['2026'])} in 2026. These were conservatively treated as missing placeholders. Initial runs that treated them as observations were invalidated, retained as diagnostics, and excluded from this report’s substantive comparisons. This was a data repair, not a test-driven model selection change.
+
+For each map, only a matching-patch record dated at least one day earlier is admitted. A 14-day delay is a sensitivity check. The archive’s date is an assumption about availability, not proof that it was accessible then. Competition-patch knowledge before the forecast is also assumed. There is no sample-count-based beta-binomial shrinkage, because the source does not supply counts.
+''')
+lines.append(tabmodels([(k,s[k]) for k in ['patch_level_1','patch_shift_1','patch_pre_1','patch_pre_14','patch_options_1','patch_options_14']]))
+lines.append('''
+The pool-value variants also contain familiarity/experience controls. Their incremental comparison must therefore use those same controls, rather than attributing all of the combined model’s performance to patch information:
+''')
+for k in ['patch_options_1','patch_options_14']:
+ lines.append(f"- {k} beyond pool controls: {delta(s[k]['vs_pool_controls']['all'])} all maps; {delta(s[k]['vs_pool_controls']['major_domestic'])} major domestic.")
+lines.append('''
+| External ranked win-rate addition | All-map Δ [95% CI] | Major domestic Δ [95% CI] | International Δ [95% CI] |
+|---|---:|---:|---:|''')
+for lag in [1,14]:
+ v=s['patch_post_'+str(lag)]['vs_postdraft_control'];lines.append(f"| After draft, {lag}-day delay; vs side/calibration control | "+' | '.join(delta(v[k]) for k in ['all','major_domestic','international'])+' |')
+ v=c['external_after_pr78_'+str(lag)]['vs_pr78_full'];lines.append(f"| Added to full professional draft model, {lag}-day delay | "+' | '.join(delta(v[k]) for k in ['all','major_domestic','international'])+' |')
+lines.append('''
+Coverage is material, not a footnote. The next table shows the average fraction of historical pool exposure with an admissible ranked observation. Missing champions contribute neutral values plus explicit coverage-difference features; they are not counted as 0% winners.
+
+| Slice | Pre-draft pool coverage, 1 day | Pre-draft pool coverage, 14 days | Actual-pick coverage, 1 day |
+|---|---:|---:|---:|''')
+for k,v in u['data']['patch_coverage'].items():lines.append(f"| {k} | {v['patch_cover1_mean']:.1%} | {v['patch_cover14_mean']:.1%} | {v['draft_cover1_mean']:.1%} |")
+lines.append(f'''
+On all test maps, {n(u['data']['patch_80pct_maps']['1'])} have at least 80% *average* pool coverage under a one-day delay, versus {n(u['data']['patch_80pct_maps']['14'])} under 14 days. Full covered-subset scores are in `results-static.json`; that subset is selected by information availability, not randomly sampled.
+
+**Coverage-conditioned result.** On the already-reported availability slice (at least 80% average actual-pick coverage), adding one-day ranked features to the full professional draft model gives **{delta(u['covered_controls']['conditional_1']['all'])}**, on **{n(u['covered_controls']['conditional_1']['all']['n'])} maps**. Major domestic: {delta(u['covered_controls']['conditional_1']['major_domestic'])}; international: {delta(u['covered_controls']['conditional_1']['international'])}. Those maps are entirely in 2024–2025; **zero 2026 maps** meet this coverage condition. The 14-day covered increment is {delta(u['covered_controls']['conditional_14']['all'])}, on {n(u['covered_controls']['conditional_14']['all']['n'])} maps.
+
+The same coverage check for the pre-draft combined exposure gives {delta(s['patch_pre_1']['covered_vs_calibration']['all'])}; major domestic remains {delta(s['patch_pre_1']['covered_vs_calibration']['major_domestic'])}. Thus the observed positive subgroup signal concerns known picks, not a confirmed improvement to morning or tournament-entry forecasts.
+
+A transparent follow-up routes to the existing professional draft model when coverage is insufficient. This routing was evaluated **after viewing coverage results**, so it is exploratory even though the 80% diagnostic threshold was already specified in the analysis code. The one-day routed increment is {delta(load('availability-followup')['1']['vs_pr78_full']['all'])}. It earns no untouched-validation claim. For the covered international subgroup, the event-cluster interval is {load('availability-followup')['1']['covered_international_event_ci']['ci95']}, based on only {load('availability-followup')['1']['covered_international_event_ci']['events']} events.
+
+**Conclusion and relative upside.** The unrestricted archive feature fails, while better-covered post-draft maps show a modest incremental signal worth confirming. This is mixed evidence, not grounds to discard the patch idea or deploy it broadly. In particular, adding its one-day ranked features to that full model changes loss by {delta(c['external_after_pr78_1']['vs_pr78_full']['all'])}. This pooled result argues against an unrestricted rollout; the covered subgroup motivates testing an availability-gated version on untouched data. Solo-queue champion strength transfers imperfectly to coordinated pro play; sample size, rank, role, hotfix handling and pool selection all matter. Priority: obtain a trustworthy timestamped archive with counts, then run the same frozen exposure tests. Expected general benefit remains uncertain; the measured covered-subgroup gain must not be generalized to unsupported patches, 2026, or pre-draft forecasts.
+
+### Third: opponent-style matchups — small, cohort-dependent signal
+
+Lagged team EWMAs summarize kills per minute, objective rate and lane gold differential. Linear differences control for ordinary team performance. The novel test adds antisymmetric cross-products, so reversing opponents reverses the effect. These target non-transitive stylistic advantages that additive FORGE cannot express.
+''')
+lines.append(tabmodels([(k,s[k]) for k in ['style_linear','style_interactions']]))
+lines.append(f'''
+Interactions beyond linear style differences: {delta(s['style_interactions']['vs_style_linear']['all'])} all maps; {delta(s['style_interactions']['vs_style_linear']['major_domestic'])} major domestic. On the earlier-only control, the combined interaction model’s all-map delta is {delta(sc['style_interactions']['vs_calibration']['all'])}.
+
+This remains a small exploratory specification. Lane coverage and play-style stats are confounded with strength; EWMA values are computed from past results, not the current map. This is materially different from simply re-adding early-game stats to Form, which the repository already tried. Priority: retain only if the interaction-specific gain, rather than the linear control, survives an untouched cohort and major/minor checks. No large universal effect is established.
+
+### Fourth: transfer bridges — estimable in part, no demonstrated international improvement
+
+The broad movement audit found {n(l['bridge_before2024'])} home-league transition observations before 2024, but many are academy moves, recurring players or league transitions, not independent cross-region bridges. A stricter test requires 20 same-role maps in one of twelve prespecified top leagues, followed by ten stable-role destination maps; at least 15/8 have valid lane-gold observations. It admits an episode only after the final destination observation.
+
+This yields **{b['episodes']} episodes from {b['players']} players**, {b['before2024']} available before 2024. A ridge graph estimates origin/destination difficulty from changes in lane gold differential; its coefficients are frozen by year and tested as a cross-league residual beyond FORGE plus existing regional calibration. International delta: {delta(b['vs_calibration']['international'])}; entry-proxy delta: {delta(b['vs_calibration']['intl_entry'])}. Event sensitivity: {event('bridges:transfer_bridge')}.
+
+A separate lagged player-relative performance probe gives {delta(l['player_performance']['vs_calibration']['all'])} all maps. This is not a validated AURA replacement or a full cross-league translation system.
+
+The graph has sparse directions, limited snapshot coverage, endogenous recruitment, adaptation and changing teammates. The same player can contribute correlated episodes. The bridge’s lane-performance endpoint is not match win probability. Its measurement fit is a prototype, not a causal estimate of region strength. Priority: below better timestamped patch data and draft confirmation; no adoption based on this test.
+
+### Fifth: likelihood-based changes and abrupt breaks — baseline already absorbs most simple residuals
+
+A bounded latent residual grid is layered on FORGE. Stable residuals are compared with resets triggered by already-observed roster changes and a Bayesian state transition that mixes retained strength with a fresh prior at each active day. The change-point grid tests hazards 0.01/0.05 and prior scales 0.35/0.70; stable/reset comparators use a 0.001 hazard. Team posteriors are factorized and updated with opponent posterior means, while forecasts integrate independent team uncertainties.
+
+This is a tractable Bayesian reset-mixture prototype inspired by [Adams & MacKay](https://arxiv.org/abs/0710.3742). It is **not** a full BOCPD run-length implementation and does not test patch-dependent hazards or known announced rosters. It differs from shipped inactivity/roster heuristics by using predictive evidence for latent strength resets, but that distinction did not translate into a useful broad gain here.
+''')
+lines.append(tabmodels([(k,d[k]) for k in ['bayes_stable','bayes_roster_reset','bayes_change_point','score_binary','score_joint']]))
+lines.append(f'''
+Change-point versus stable residual directly: {delta(d['bayes_change_point']['vs_bayes_stable']['all'])}. For score-driven models, the binary score is proportional to `y − p`, making the simplest Bernoulli version an Elo-like update rather than a fundamentally new observation. The joint prototype adds a robustly bounded, standardized gold-at-15 innovation using an earlier-year observation regression. It improves minor-domestic loss by {delta(d['score_joint']['vs_calibration']['minor_domestic'])}, but worsens major-domestic loss by {delta(d['score_joint']['vs_calibration']['major_domestic'])}. Joint versus binary directly: {delta(d['score_joint']['vs_score_binary']['all'])}.
+
+The joint observation prototype is not the full correctly specified joint latent-outcome likelihood from the [GAS literature](https://doi.org/10.1002/jae.1279). Gold differential is noisy, role/patch dependent, correlated with winning, and missing in some leagues. The broader methodology is not disproved. Priority: low until a measured, identifiable observation model justifies a more expensive filter; do not ship the mixed cohort result.
+
+### Sixth: higher-order player interactions — identifiable subsets exist, no added forecast value established
+
+Use last-observed rosters only. The nested sparse logistic residual designs contain individuals, then all pairs, then all triples. Pair/triple penalties are 4×/16× the individual penalty, and the penalty grid is selected in development. Current lineups are not treated as known before announcement. This is an interaction identifiability probe inspired by [hypergraph adjusted plus-minus](https://doi.org/10.1515/jqas-2024-0057), not that paper’s complete estimator or graph regularizer.
+
+Among training-period features, individuals/pairs/triples have {l['identification']['1']['features']:,}/{l['identification']['2']['features']:,}/{l['identification']['3']['features']:,} distinct terms. Only {l['identification']['1']['at_least_3_partner_configurations']:,}/{l['identification']['2']['at_least_3_partner_configurations']:,}/{l['identification']['3']['at_least_3_partner_configurations']:,} appear with at least three distinct complementary configurations. This is a basic variation diagnostic, not a sufficient-rank proof or a count of independent natural experiments.
+''')
+lines.append(tabmodels([(k,l[k]) for k in ['player_residual','pair_residual','trio_residual']]))
+lines.append(f'''
+Pair effects beyond individuals: {delta(l['pair_residual']['vs_player']['all'])}. Triple effects beyond pairs: {delta(l['trio_residual']['vs_pair']['all'])}. The individual residual’s major-domestic gain coexists with minor-domestic harm, {delta(l['player_residual']['vs_calibration']['minor_domestic'])}; it does not establish a safe all-league replacement. Player Elo already exists in Prometheus, so an individual-effect gain must not be mislabeled new synergy.
+
+Stable rosters confound players with their teammates; transfer selection is endogenous; many test players/groups are unseen by the frozen fit. Ridge makes coefficients numerically estimable without making them causally identifiable. Priority: low for higher-order modeling on this evidence; investigate substitutes or within-team role variation before scaling the full hypergraph method.
+
+### Seventh: fearless draft option value — prerequisite tested, full simulation not completed
+
+The pool-control and patch top-three-option screens test whether usable role depth contains forecast signal beyond familiarity and experience. Their results appear in the patch tables. They do **not** encode actual series-specific fearless availability, earlier picks/bans, pick order, or opponent drafting strategy. A positive combined pool result would not demonstrate fearless value.
+
+A full test needs historically correct tournament/series format flags and pre-map available champion sets, and must compare against the already-shipped beta-binomial series update. The OE corpus alone did not supply a verified format/availability table for every series. Consequently, no full fearless simulator result or claimed log-loss gain is reported. Priority: collect and validate that table before implementing a large simulator; the simpler screens do not justify a forecast uplift claim.
+
+## 4. Market and calibration checks
+
+The released [live benchmark archive](https://github.com/thaiv28/Prometheus/releases/tag/live-bench-data) was downloaded and hash-checked (`77df40cd869115150d33ae093acde59955e69c89e55d8e2072d10e8293a7e716`). Price comparisons below use exact OE game and team-name matches, the archive’s game-start price, and no market-outcome coefficient fitting. This is a selected 2026 overlap, not the earlier 33-series tournament-entry comparison. All maps in a series share a bootstrap cluster.
+
+| Forecast | Matched maps | Log loss | Market-only log loss | Δ vs market [95% CI] |
+|---|---:|---:|---:|---:|''')
+for k,v in u['market_comparison'].items():lines.append(f"| {k} | {n(v['n'])} | {v['ll']:.5f} | {v['ref_ll']:.5f} | {delta(v)} |")
+lines.append('''
+These are pure-model comparisons, not a test of adding the new signal to a market blend. The game-start market may observe draft and other news. Earlier-only development data is insufficient here to fit and fairly select a new market blend, so that incremental market claim remains untested.
+
+Brier and calibration estimates accompany every scored slice in the machine-readable outputs. Calibration should be assessed on sufficiently large samples; ten-bin ECE is unstable internationally. Score differences can be tiny yet have narrow conditional intervals after a residual coefficient shrinks almost to zero. Practical size and held-out robustness matter alongside significance.
+
+### Computational cost of the prototypes
+
+All runs used one BLAS/OMP thread per process, with independent jobs sometimes run concurrently. These are observed local wall times, not production CI budgets: healthy ingestion/bootstrap about 62 seconds; preparation 39 seconds; corrected patch/history features 84 seconds; static selection/scoring about 80 seconds per baseline; sparse player/pair/triple suite about 70 seconds for a 93,958 × 165,597 design; strict transfer bridge probe 17 seconds; draft feature preparation plus first scoring roughly 54 seconds, and cached scoring 39 seconds. Bootstrap and reporting are included in the scoring timings. The Bayesian grid sweep completed its forecasts/results but its ancillary serialization error prevented a trustworthy final timer; no exact dynamic-suite runtime is claimed. Peak-memory profiling and deployment latency were not measured. Full BOCPD, draft simulation and graph-regularized hypergraph costs remain unmeasured.
+
+## 5. Already implemented or tested — do not rediscover as novel
+
+Verified mechanisms include opponent-adjusted Form/GLORY; FORGE’s domestic Elo–Form blend; player-carried team Elo; rookie, inactivity and roster-aware adjustments; persistent international regional calibration; minor-league forecast handling; beta-binomial series probabilities; and market blending. These serve as controls, not new proposals.
+
+The research history already tested higher K, alternative margins of victory, early-game Form additions, some champion features, and recency-weighted regional corrections without convincing incremental gains. Pairwise familiarity/synergy and predictive AURA had appeared in future work. PR #78 already contains professional champion-role and draft interaction research, although its features were not merged into the inspected main revision. The novelty of this execution is the explicit FORGE-controlled comparisons, patch-ranked exposure tests, and feasibility/ablation results; it is not authorship of those existing ideas.
+
+The native repository’s out-of-year fitting can include future years in a historical fold. That is why this report also supplies an earlier-only control. Previously published benchmark numbers, including the 1,006-map regional-calibration result, must not be substituted for scores on this different mirror, period and forecast horizon.
+
+## 6. Recommended sequence and merge position
+
+1. **Do not merge from this report alone.** Restore the exact current deployment corpus and rerun the frozen experiments and regional slices. Preserve a new untouched evaluation period; do not retune on the results reported here.
+2. **Confirm the professional draft model against FORGE and production market blending.** Keep it a distinct post-draft forecast. Resolve live pick availability and the historical LPL coverage gap; use series and event intervals. It is the most promising measured extension in this run, but it does not solve pre-draft tournament-entry forecasting.
+3. **Acquire a trustworthy patch archive with counts and publication timestamps.** Preserve competition-patch IDs/hotfixes, role/rank/region, daily cumulative counts and rates. Reuse the frozen pre-draft exposure and post-draft conditional tests; validate metadata before outcomes. Confirm the covered-draft signal and availability gate on untouched data, then revisit pre-draft pool exposure. The lag between live and competition patches creates an information opportunity, not automatic predictive value.
+4. **Keep only interaction-specific style evidence.** Recheck the small antisymmetric effect against linear controls on new data. Treat familiarity and player residuals as existing-backlog refinements with cohort harms to resolve, not novel universal wins.
+5. **Defer costly full models until prerequisites improve.** More independent transfer bridges, format-correct fearless availability, and lineup variation would justify richer translation, draft optimization or hypergraph work. A fully specified patch-aware change-point/joint-observation model remains untested; current simpler prototypes give it low immediate priority.
+
+Results precede any merge decision. No measured speculative gain is assigned to the unimplemented full models, no background Work task or automation is claimed, and no reusable research skill was created.
+
+## 7. Reproducibility and files
+
+The accompanying archive contains research scripts outside the repository; the frozen protocol; source pins and hashes; corrected derived analysis features; scored forecast files; machine-readable cohort results; nominal series/event confidence intervals; source-quality diagnostics; the invalidated placeholder runs; the pinned draft source reference; and reproduction instructions. It excludes the raw 833 MB CSV collection, rebuilt database and credentials. The scripts do not commit, open PRs, merge or edit production source.
+
+An ancillary NumPy-key JSON serialization failed after the first dynamic run had already saved its forecasts and scores. That metadata file was regenerated, and the source serialization was corrected. Initial placeholder-data scores remain explicitly invalidated. Repeated runs corrected data/serialization issues and added the stated earlier-only baseline check. The availability-gated routing is separately labeled as a follow-up after inspecting the covered-subgroup result; it is not presented as an untouched test.
+''')
+report=ROOT/'Prometheus-Experiment-Results-2026-10-17.md';report.write_text(re.sub(r'(?<=\|)\n{2,}(?=\|)', '\n', '\n\n'.join(lines)))
+# Compact analysis matrix sufficient for static/draft-result review; raw DB can be rebuilt.
+keep=['gameid','date','day','year','league','a','b','an','bn','y','gap','same','major','scope','tier','entry','patch','p_prod','p_chrono']+[x for x in g.columns if x.startswith(('pool_','experience','line_games','rookie_experience','roster_known','patch_','draft_','tempo','objectives','lane','interaction','roster_change'))]
+g[list(dict.fromkeys(keep))].to_parquet(O/'analysis-features.parquet',index=False)
+print('report',report,'words',len(report.read_text().split()))

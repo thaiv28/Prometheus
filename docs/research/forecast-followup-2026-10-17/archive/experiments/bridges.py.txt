@@ -1,0 +1,31 @@
+from pathlib import Path
+import pandas as pd,numpy as np,json,time
+from evaluate import fitpredict,utility,report
+O=Path(__file__).parent;t=time.time();p=pd.read_parquet(O/'players.parquet');g=pd.read_parquet(O/'base.parquet');p=p.sort_values(['playerid','date','gameid']);regions={'LCK','LPL','LEC','LCS','PCS','VCS','CBLOL','LJL','LLA','TCL','LCO','LCL'};episodes=[]
+# Stable 20-map origin and ten-map destination windows, available only after their final observation.
+for pl,h in p.groupby('playerid',sort=False):
+ h=h.reset_index(drop=True)
+ for i in range(20,len(h)-9):
+  if h.home_league.iloc[i]==h.home_league.iloc[i-1]:continue
+  a=h.iloc[i-20:i];b=h.iloc[i:i+10];old=a.home_league.iloc[-1];new=b.home_league.iloc[0]
+  if old not in regions or new not in regions or a.home_league.nunique()!=1 or b.home_league.nunique()!=1:continue
+  if a.position.nunique()!=1 or b.position.nunique()!=1 or a.position.iloc[0]!=b.position.iloc[0]:continue
+  if a.gd15.notna().sum()<15 or b.gd15.notna().sum()<8:continue
+  episodes.append({'player':pl,'old':old,'new':new,'role':b.position.iloc[0],'available':b.day.iloc[-1],'pre':a.gd15.mean()/1000,'post':b.gd15.mean()/1000,'delta':(b.gd15.mean()-a.gd15.mean())/1000,'days_gap':(b.day.iloc[0]-a.day.iloc[-1]).days})
+e=pd.DataFrame(episodes);nodes=sorted(regions);idx={x:i for i,x in enumerate(nodes)};features=np.zeros((len(g),1));fits={}
+for year in sorted(g.year.unique()):
+ tr=e[e.available<pd.Timestamp(year=year,month=1,day=1)] if len(e) else e
+ if len(tr)<15:continue
+ x=np.zeros((len(tr),len(nodes)));yy=tr.delta.to_numpy()
+ for j,r in enumerate(tr.itertuples()):x[j,idx[r.old]]=1;x[j,idx[r.new]]=-1
+ # Conservative ridge 10 pseudo-observations per league, frozen in advance; stronger destination -> lower observed gold differential.
+ beta=np.linalg.solve(x.T@x+10*np.eye(len(nodes)),x.T@yy)
+ for i in np.flatnonzero((g.year==year).to_numpy()):
+  a=idx.get(g.home_league_a.iloc[i]);b=idx.get(g.home_league_b.iloc[i]);features[i,0]=beta[a]-beta[b] if a is not None and b is not None and a!=b else 0
+ fits[str(year)]={'episodes':len(tr),'unique_players':tr.player.nunique(),'effects':dict(zip(nodes,beta.tolist()))}
+train=(g.year<=2021).to_numpy();dev=g.year.between(2022,2023).to_numpy();final=(g.year<=2023).to_numpy();test=(g.year>=2024).to_numpy();base=g.p_prod.to_numpy();control=base.copy();control[test],_=fitpredict(g,np.empty((len(g),0)),final,test,0);trials=[]
+for lam in [.001,.01,.1]:
+ pp=base.copy();pp[dev],_=fitpredict(g,features,train,dev,lam);trials.append((float(utility(g,pp,dev)),lam))
+_,lam=min(trials);pp=base.copy();pp[test],meta=fitpredict(g,features,final,test,lam)
+res={'protocol':'stable20origin/10destination, 15/8 valid gd15 required, same role, twelve prespecified top leagues, ridge10, available only at last destination day; year-frozen','episodes':len(e),'players':int(e.player.nunique()) if len(e) else 0,'before2024':int((e.available<pd.Timestamp('2024-01-01')).sum()) if len(e) else 0,'directions':e.groupby(['old','new']).size().to_dict() if len(e) else {},'year_fits':fits,'penalty':lam,'dev_trials':trials,'fit':meta,'vs_production':report(g,pp,base,test),'vs_calibration':report(g,pp,control,test)}
+res['directions']={' -> '.join(k):v for k,v in res['directions'].items()};(O/'results-bridges.json').write_text(json.dumps(res,indent=2));e.to_parquet(O/'bridge-stable-episodes.parquet',index=False);pd.DataFrame({'gameid':g.gameid,'transfer_bridge':pp}).to_parquet(O/'predictions-bridges.parquet',index=False);print('episodes',len(e),'result',res['vs_calibration']['international'],'seconds',time.time()-t,flush=True)

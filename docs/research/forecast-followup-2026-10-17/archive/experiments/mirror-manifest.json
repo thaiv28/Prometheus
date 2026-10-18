@@ -1,0 +1,80 @@
+[
+  {
+    "year": 2014,
+    "url": "https://media.githubusercontent.com/media/LouisPoutrain/Lol-ML/69a2856df3a6e566af49473f801b9ad7af8c85ad/raw_data/2014_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "7ffa7af94294fdb072e765c0894d73528b2b877cf951eeccbd345d9095f0c004",
+    "bytes": 8153574
+  },
+  {
+    "year": 2015,
+    "url": "https://media.githubusercontent.com/media/LouisPoutrain/Lol-ML/69a2856df3a6e566af49473f801b9ad7af8c85ad/raw_data/2015_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "943f38cbb6c23c8b37dcbd0c5346cd2c3ab74b23d168140fe8a0fc03373db3e0",
+    "bytes": 16052190
+  },
+  {
+    "year": 2016,
+    "url": "https://media.githubusercontent.com/media/LouisPoutrain/Lol-ML/69a2856df3a6e566af49473f801b9ad7af8c85ad/raw_data/2016_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "3ba2218b1e110fb35965de6cf44de8ca5ff3622c21e1a5e6bfeef9de5223f88b",
+    "bytes": 35159645
+  },
+  {
+    "year": 2017,
+    "url": "https://media.githubusercontent.com/media/LouisPoutrain/Lol-ML/69a2856df3a6e566af49473f801b9ad7af8c85ad/raw_data/2017_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "b8041d3c4027d76338badb37eab88af05e614677c3ac88d2d98646549497f8c0",
+    "bytes": 48251500
+  },
+  {
+    "year": 2018,
+    "url": "https://media.githubusercontent.com/media/LouisPoutrain/Lol-ML/69a2856df3a6e566af49473f801b9ad7af8c85ad/raw_data/2018_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "97816ae0964639637dc85298a69e27c325383f46d30fe8684c78ed6ba9882f22",
+    "bytes": 57764235
+  },
+  {
+    "year": 2019,
+    "url": "https://media.githubusercontent.com/media/LouisPoutrain/Lol-ML/69a2856df3a6e566af49473f801b9ad7af8c85ad/raw_data/2019_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "28335055c7853040f7d9403fb48eeaad635590b5cb591885e2e99ecdd1d47f10",
+    "bytes": 72870119
+  },
+  {
+    "year": 2020,
+    "url": "https://media.githubusercontent.com/media/LouisPoutrain/Lol-ML/69a2856df3a6e566af49473f801b9ad7af8c85ad/raw_data/2020_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "f173ea290cc9be9eb73aba392e61a5d407170e950434a5155050734bde01e856",
+    "bytes": 89133196
+  },
+  {
+    "year": 2021,
+    "url": "https://media.githubusercontent.com/media/LouisPoutrain/Lol-ML/69a2856df3a6e566af49473f801b9ad7af8c85ad/raw_data/2021_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "035cb85a3b82902309ffc2425886fcf3e06b69a38e71aeaeccba5d713a2626e5",
+    "bytes": 110049901
+  },
+  {
+    "year": 2022,
+    "url": "https://media.githubusercontent.com/media/LouisPoutrain/Lol-ML/69a2856df3a6e566af49473f801b9ad7af8c85ad/raw_data/2022_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "3eab964a3b3d25404934146ada209da55e9b300b039bf0f38c14da13f166f3c1",
+    "bytes": 97271534
+  },
+  {
+    "year": 2023,
+    "url": "https://media.githubusercontent.com/media/LouisPoutrain/Lol-ML/69a2856df3a6e566af49473f801b9ad7af8c85ad/raw_data/2023_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "9a16f9014bba2a5830a82c81816bb337dc2be5b72933879159ee6006728cd5c4",
+    "bytes": 84713022
+  },
+  {
+    "year": 2024,
+    "url": "https://media.githubusercontent.com/media/LouisPoutrain/Lol-ML/69a2856df3a6e566af49473f801b9ad7af8c85ad/raw_data/2024_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "f108342a81c22fa9b5718fb319b30d070cb560eb57b74fcd1b08833b2c4017fb",
+    "bytes": 75613787
+  },
+  {
+    "year": 2025,
+    "url": "https://raw.githubusercontent.com/chrisvu1007/league-of-legends-match-predictor/29838abc074d60a83c7a9638a456a2d366b5546d/data/2025_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "90b48f02b94c8768c90b5c7925eb89d7823db6d4ba3a79df1b1b002a097bbdf8",
+    "bytes": 79028616
+  },
+  {
+    "year": 2026,
+    "url": "https://raw.githubusercontent.com/chrisvu1007/league-of-legends-match-predictor/29838abc074d60a83c7a9638a456a2d366b5546d/data/2026_LoL_esports_match_data_from_OraclesElixir.csv",
+    "sha256": "fb65687c8a27f9b8ad54c5611a599947837d316c167393fa1bf3f7e896e4011e",
+    "bytes": 39314270
+  }
+]

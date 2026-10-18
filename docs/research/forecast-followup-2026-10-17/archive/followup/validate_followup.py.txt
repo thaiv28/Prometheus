@@ -1,0 +1,16 @@
+from pathlib import Path
+import pandas as pd,numpy as np,json,hashlib,subprocess,sqlite3
+O=Path(__file__).parent;P=O.parent/'prior-research/experiments';R=O.parent/'prometheus-audit';v={}
+for f in sorted(O.glob('*predictions*.parquet')):
+ x=pd.read_parquet(f);assert x.gameid.is_unique,f.name;z=x.drop(columns='gameid').to_numpy(float);assert np.isfinite(z).all() and ((z>0)&(z<1)).all(),f.name;v[f.name]={'rows':len(x),'probability_columns':z.shape[1],'bounded_and_finite':True}
+for f in O.glob('*results.json'):json.loads(f.read_text())
+for name in ['timestamp','prior_day']:
+ w=pd.read_parquet(O/('wide-features-'+name+'.parquet'));a=pd.read_parquet(P/'analysis-features.parquet')[['gameid','y']].merge(w[['gameid','won']],on='gameid');assert (a.y==a.won).all()
+assert json.load(open(O/'professional-results.json'))['reproduction_max_abs_error']<1e-12;assert json.load(open(O/'leakage-check.json'))['passes']
+bad=[]
+for item in json.load(open(P/'mirror-manifest.json')):
+ f=R/'data/raw'/f"{item['year']}_LoL_esports_match_data_from_OraclesElixir.csv"
+ if hashlib.sha256(f.read_bytes()).hexdigest()!=item['sha256']:bad.append(item['year'])
+assert not bad;v['raw_hash_mismatches']=bad
+c=sqlite3.connect(f'file:{R}/db/prometheus.db?mode=ro',uri=True);v['sqlite_quick_check']=c.execute('pragma quick_check').fetchone()[0];assert v['sqlite_quick_check']=='ok';v['database']=c.execute('select count(*),min(date),max(date) from matches').fetchone();v['repository_status']=subprocess.check_output(['git','-C',str(R),'status','--porcelain'],text=True);assert v['repository_status']==''
+(O/'verification.json').write_text(json.dumps(v,indent=2));print(json.dumps(v,indent=2))

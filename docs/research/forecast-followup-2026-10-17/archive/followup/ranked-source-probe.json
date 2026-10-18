@@ -1,0 +1,1723 @@
+[
+  {
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.1&lane=top",
+    "patch": "16.1",
+    "tier": "master_plus",
+    "role": "top",
+    "rows": [
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 1,
+        "winrate": 0.5407,
+        "games": 135,
+        "pickrate": 0.05,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 2,
+        "winrate": 0.5544,
+        "games": 7433,
+        "pickrate": 2.77,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 3,
+        "winrate": 0.5283,
+        "games": 1079,
+        "pickrate": 0.4,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 4,
+        "winrate": 0.5663,
+        "games": 279,
+        "pickrate": 0.1,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 5,
+        "winrate": 0.5,
+        "games": 604,
+        "pickrate": 0.22,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 6,
+        "winrate": 0.5567,
+        "games": 7902,
+        "pickrate": 2.94,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 7,
+        "winrate": 0.48960000000000004,
+        "games": 337,
+        "pickrate": 0.13,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 8,
+        "winrate": 0.5384,
+        "games": 7788,
+        "pickrate": 2.9,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 9,
+        "winrate": 0.5803,
+        "games": 498,
+        "pickrate": 0.19,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 10,
+        "winrate": 0.5486,
+        "games": 8706,
+        "pickrate": 3.24,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 11,
+        "winrate": 0.484,
+        "games": 626,
+        "pickrate": 0.23,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 12,
+        "winrate": 0.3846,
+        "games": 39,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 13,
+        "winrate": 0.5328,
+        "games": 5595,
+        "pickrate": 2.08,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 14,
+        "winrate": 0.5242,
+        "games": 12337,
+        "pickrate": 4.59,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 15,
+        "winrate": 0.6315999999999999,
+        "games": 19,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 16,
+        "winrate": 0.5028,
+        "games": 177,
+        "pickrate": 0.07,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 17,
+        "winrate": 0.5444,
+        "games": 3626,
+        "pickrate": 1.35,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 18,
+        "winrate": 0.456,
+        "games": 250,
+        "pickrate": 0.09,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 19,
+        "winrate": 0.5401,
+        "games": 3590,
+        "pickrate": 1.34,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 20,
+        "winrate": 0.5172,
+        "games": 29,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 21,
+        "winrate": 0.8332999999999999,
+        "games": 6,
+        "pickrate": 0.0,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 22,
+        "winrate": 0.5489999999999999,
+        "games": 51,
+        "pickrate": 0.02,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 23,
+        "winrate": 0.5307,
+        "games": 4786,
+        "pickrate": 1.78,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 24,
+        "winrate": 0.5436,
+        "games": 19375,
+        "pickrate": 7.22,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 25,
+        "winrate": 0.5519,
+        "games": 212,
+        "pickrate": 0.08,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 26,
+        "winrate": 0.5614,
+        "games": 456,
+        "pickrate": 0.17,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 27,
+        "winrate": 0.5625,
+        "games": 8078,
+        "pickrate": 3.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 28,
+        "winrate": 0.31579999999999997,
+        "games": 19,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 29,
+        "winrate": 0.5152,
+        "games": 33,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 30,
+        "winrate": 0.5596,
+        "games": 109,
+        "pickrate": 0.04,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 31,
+        "winrate": 0.5322,
+        "games": 5624,
+        "pickrate": 2.09,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 32,
+        "winrate": 0.0,
+        "games": 4,
+        "pickrate": 0.0,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 33,
+        "winrate": 0.5765,
+        "games": 196,
+        "pickrate": 0.07,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 34,
+        "winrate": 0.5754,
+        "games": 2513,
+        "pickrate": 0.94,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 35,
+        "winrate": 0.4104,
+        "games": 134,
+        "pickrate": 0.05,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 36,
+        "winrate": 0.5342,
+        "games": 9851,
+        "pickrate": 3.67,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 37,
+        "winrate": 0.5185,
+        "games": 54,
+        "pickrate": 0.02,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 38,
+        "winrate": 0.5789,
+        "games": 646,
+        "pickrate": 0.24,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 39,
+        "winrate": 0.5527000000000001,
+        "games": 13300,
+        "pickrate": 4.95,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 40,
+        "winrate": 0.5726,
+        "games": 117,
+        "pickrate": 0.04,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 41,
+        "winrate": 0.5524,
+        "games": 13306,
+        "pickrate": 4.96,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 42,
+        "winrate": 0.48979999999999996,
+        "games": 441,
+        "pickrate": 0.16,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 43,
+        "winrate": 0.44880000000000003,
+        "games": 566,
+        "pickrate": 0.21,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 44,
+        "winrate": 0.2609,
+        "games": 23,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 45,
+        "winrate": 0.5796,
+        "games": 245,
+        "pickrate": 0.09,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 48,
+        "winrate": 0.5217,
+        "games": 1265,
+        "pickrate": 0.47,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 50,
+        "winrate": 0.556,
+        "games": 2831,
+        "pickrate": 1.05,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 51,
+        "winrate": 0.46399999999999997,
+        "games": 125,
+        "pickrate": 0.05,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 53,
+        "winrate": 0.4286,
+        "games": 7,
+        "pickrate": 0.0,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 54,
+        "winrate": 0.5444,
+        "games": 17586,
+        "pickrate": 6.55,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 55,
+        "winrate": 0.5339,
+        "games": 354,
+        "pickrate": 0.13,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 56,
+        "winrate": 0.5476,
+        "games": 431,
+        "pickrate": 0.16,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 57,
+        "winrate": 0.5398,
+        "games": 804,
+        "pickrate": 0.3,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 58,
+        "winrate": 0.529,
+        "games": 17385,
+        "pickrate": 6.47,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 59,
+        "winrate": 0.5625,
+        "games": 96,
+        "pickrate": 0.04,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 60,
+        "winrate": 0.5297,
+        "games": 185,
+        "pickrate": 0.07,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 61,
+        "winrate": 0.5,
+        "games": 190,
+        "pickrate": 0.07,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 62,
+        "winrate": 0.5413,
+        "games": 1840,
+        "pickrate": 0.69,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 63,
+        "winrate": 0.5428999999999999,
+        "games": 536,
+        "pickrate": 0.2,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 64,
+        "winrate": 0.521,
+        "games": 1000,
+        "pickrate": 0.37,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 67,
+        "winrate": 0.5433,
+        "games": 8227,
+        "pickrate": 3.06,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 68,
+        "winrate": 0.5433,
+        "games": 12814,
+        "pickrate": 4.77,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 69,
+        "winrate": 0.5604,
+        "games": 3849,
+        "pickrate": 1.43,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 72,
+        "winrate": 0.5882000000000001,
+        "games": 221,
+        "pickrate": 0.08,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 74,
+        "winrate": 0.5511,
+        "games": 1477,
+        "pickrate": 0.55,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 75,
+        "winrate": 0.5411,
+        "games": 5614,
+        "pickrate": 2.09,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 76,
+        "winrate": 0.48590000000000005,
+        "games": 496,
+        "pickrate": 0.18,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 77,
+        "winrate": 0.5446,
+        "games": 2154,
+        "pickrate": 0.8,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 78,
+        "winrate": 0.5416,
+        "games": 3584,
+        "pickrate": 1.33,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 79,
+        "winrate": 0.5407,
+        "games": 6634,
+        "pickrate": 2.47,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 80,
+        "winrate": 0.5409,
+        "games": 4500,
+        "pickrate": 1.68,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 81,
+        "winrate": 0.5398,
+        "games": 113,
+        "pickrate": 0.04,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 82,
+        "winrate": 0.5132,
+        "games": 7668,
+        "pickrate": 2.86,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 83,
+        "winrate": 0.5378000000000001,
+        "games": 5013,
+        "pickrate": 1.87,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 84,
+        "winrate": 0.5356000000000001,
+        "games": 7571,
+        "pickrate": 2.82,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 85,
+        "winrate": 0.5589999999999999,
+        "games": 10493,
+        "pickrate": 3.91,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 86,
+        "winrate": 0.5273,
+        "games": 8056,
+        "pickrate": 3.0,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 89,
+        "winrate": 0.0,
+        "games": 2,
+        "pickrate": 0.0,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 90,
+        "winrate": 0.5191,
+        "games": 472,
+        "pickrate": 0.18,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 91,
+        "winrate": 0.5411,
+        "games": 146,
+        "pickrate": 0.05,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 92,
+        "winrate": 0.5721,
+        "games": 14429,
+        "pickrate": 5.37,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 96,
+        "winrate": 0.5347,
+        "games": 101,
+        "pickrate": 0.04,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 98,
+        "winrate": 0.552,
+        "games": 9598,
+        "pickrate": 3.57,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 99,
+        "winrate": 0.5323,
+        "games": 62,
+        "pickrate": 0.02,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 101,
+        "winrate": 0.4054,
+        "games": 37,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 102,
+        "winrate": 0.5082,
+        "games": 61,
+        "pickrate": 0.02,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 103,
+        "winrate": 0.5498,
+        "games": 673,
+        "pickrate": 0.25,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 104,
+        "winrate": 0.49369999999999997,
+        "games": 397,
+        "pickrate": 0.15,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 105,
+        "winrate": 0.5091,
+        "games": 220,
+        "pickrate": 0.08,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 106,
+        "winrate": 0.5402,
+        "games": 8002,
+        "pickrate": 2.98,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 107,
+        "winrate": 0.5324,
+        "games": 1375,
+        "pickrate": 0.51,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 110,
+        "winrate": 0.5417000000000001,
+        "games": 5302,
+        "pickrate": 1.97,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 111,
+        "winrate": 0.5,
+        "games": 54,
+        "pickrate": 0.02,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 112,
+        "winrate": 0.5467,
+        "games": 439,
+        "pickrate": 0.16,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 113,
+        "winrate": 0.5379,
+        "games": 1621,
+        "pickrate": 0.6,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 114,
+        "winrate": 0.5509000000000001,
+        "games": 14483,
+        "pickrate": 5.39,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 115,
+        "winrate": 0.4167,
+        "games": 24,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 117,
+        "winrate": 0.5396,
+        "games": 265,
+        "pickrate": 0.1,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 119,
+        "winrate": 0.4907,
+        "games": 430,
+        "pickrate": 0.16,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 120,
+        "winrate": 0.1875,
+        "games": 16,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 121,
+        "winrate": 0.35710000000000003,
+        "games": 14,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 122,
+        "winrate": 0.5386,
+        "games": 11546,
+        "pickrate": 4.3,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 126,
+        "winrate": 0.5404,
+        "games": 9453,
+        "pickrate": 3.52,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 127,
+        "winrate": 0.5588000000000001,
+        "games": 442,
+        "pickrate": 0.16,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 131,
+        "winrate": 0.5535,
+        "games": 271,
+        "pickrate": 0.1,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 133,
+        "winrate": 0.5467,
+        "games": 3038,
+        "pickrate": 1.13,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 134,
+        "winrate": 0.5498,
+        "games": 211,
+        "pickrate": 0.08,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 136,
+        "winrate": 0.5753,
+        "games": 299,
+        "pickrate": 0.11,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 141,
+        "winrate": 0.46880000000000005,
+        "games": 337,
+        "pickrate": 0.13,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 142,
+        "winrate": 0.5567,
+        "games": 397,
+        "pickrate": 0.15,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 143,
+        "winrate": 0.55,
+        "games": 60,
+        "pickrate": 0.02,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 145,
+        "winrate": 0.4623,
+        "games": 199,
+        "pickrate": 0.07,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 147,
+        "winrate": 0.5357,
+        "games": 28,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 150,
+        "winrate": 0.5356000000000001,
+        "games": 9906,
+        "pickrate": 3.69,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 154,
+        "winrate": 0.5552,
+        "games": 2318,
+        "pickrate": 0.86,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 157,
+        "winrate": 0.5336,
+        "games": 7978,
+        "pickrate": 2.97,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 161,
+        "winrate": 0.5447,
+        "games": 358,
+        "pickrate": 0.13,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 163,
+        "winrate": 0.589,
+        "games": 146,
+        "pickrate": 0.05,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 164,
+        "winrate": 0.5489999999999999,
+        "games": 8266,
+        "pickrate": 3.08,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 166,
+        "winrate": 0.5474,
+        "games": 696,
+        "pickrate": 0.26,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 200,
+        "winrate": 0.5333,
+        "games": 90,
+        "pickrate": 0.03,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 201,
+        "winrate": 0.6,
+        "games": 5,
+        "pickrate": 0.0,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 202,
+        "winrate": 0.4685,
+        "games": 143,
+        "pickrate": 0.05,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 203,
+        "winrate": 0.2857,
+        "games": 21,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 221,
+        "winrate": 0.4874,
+        "games": 119,
+        "pickrate": 0.04,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 222,
+        "winrate": 0.4,
+        "games": 20,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 223,
+        "winrate": 0.5288,
+        "games": 2050,
+        "pickrate": 0.76,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 233,
+        "winrate": 0.4783,
+        "games": 138,
+        "pickrate": 0.05,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 234,
+        "winrate": 0.498,
+        "games": 253,
+        "pickrate": 0.09,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 235,
+        "winrate": 0.537,
+        "games": 54,
+        "pickrate": 0.02,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 236,
+        "winrate": 0.5111,
+        "games": 270,
+        "pickrate": 0.1,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 238,
+        "winrate": 0.5832999999999999,
+        "games": 1519,
+        "pickrate": 0.57,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 240,
+        "winrate": 0.5563,
+        "games": 5418,
+        "pickrate": 2.02,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 245,
+        "winrate": 0.5406,
+        "games": 468,
+        "pickrate": 0.17,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 246,
+        "winrate": 0.5625,
+        "games": 944,
+        "pickrate": 0.35,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 254,
+        "winrate": 0.45049999999999996,
+        "games": 222,
+        "pickrate": 0.08,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 266,
+        "winrate": 0.517,
+        "games": 14765,
+        "pickrate": 5.5,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 267,
+        "winrate": 0.3333,
+        "games": 3,
+        "pickrate": 0.0,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 268,
+        "winrate": 0.593,
+        "games": 855,
+        "pickrate": 0.32,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 350,
+        "winrate": 0.2,
+        "games": 15,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 360,
+        "winrate": 0.5345,
+        "games": 58,
+        "pickrate": 0.02,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 412,
+        "winrate": 0.0833,
+        "games": 12,
+        "pickrate": 0.0,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 420,
+        "winrate": 0.5275,
+        "games": 3259,
+        "pickrate": 1.21,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 421,
+        "winrate": 0.5172,
+        "games": 1365,
+        "pickrate": 0.51,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 427,
+        "winrate": 0.5367000000000001,
+        "games": 354,
+        "pickrate": 0.13,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 429,
+        "winrate": 0.5625,
+        "games": 128,
+        "pickrate": 0.05,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 432,
+        "winrate": 0.48700000000000004,
+        "games": 115,
+        "pickrate": 0.04,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 497,
+        "winrate": 0.3714,
+        "games": 35,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 498,
+        "winrate": 0.4167,
+        "games": 12,
+        "pickrate": 0.0,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 516,
+        "winrate": 0.5366,
+        "games": 10130,
+        "pickrate": 3.77,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 517,
+        "winrate": 0.5387,
+        "games": 3531,
+        "pickrate": 1.32,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 518,
+        "winrate": 0.593,
+        "games": 575,
+        "pickrate": 0.21,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 523,
+        "winrate": 0.4587,
+        "games": 109,
+        "pickrate": 0.04,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 526,
+        "winrate": 0.5,
+        "games": 10,
+        "pickrate": 0.0,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 555,
+        "winrate": 0.3846,
+        "games": 26,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 711,
+        "winrate": 0.5692,
+        "games": 195,
+        "pickrate": 0.07,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 777,
+        "winrate": 0.5216,
+        "games": 8704,
+        "pickrate": 3.24,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 799,
+        "winrate": 0.5249,
+        "games": 19730,
+        "pickrate": 7.35,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 800,
+        "winrate": 0.5417000000000001,
+        "games": 96,
+        "pickrate": 0.04,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 804,
+        "winrate": 0.425,
+        "games": 40,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 875,
+        "winrate": 0.5418999999999999,
+        "games": 7782,
+        "pickrate": 2.9,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 876,
+        "winrate": 0.46590000000000004,
+        "games": 88,
+        "pickrate": 0.03,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 887,
+        "winrate": 0.5587,
+        "games": 10826,
+        "pickrate": 4.03,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 893,
+        "winrate": 0.5143,
+        "games": 3290,
+        "pickrate": 1.23,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 895,
+        "winrate": 0.3333,
+        "games": 21,
+        "pickrate": 0.01,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 897,
+        "winrate": 0.5065999999999999,
+        "games": 14484,
+        "pickrate": 5.39,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 901,
+        "winrate": 0.47340000000000004,
+        "games": 959,
+        "pickrate": 0.36,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 902,
+        "winrate": 0.75,
+        "games": 4,
+        "pickrate": 0.0,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 904,
+        "winrate": 0.5414,
+        "games": 15209,
+        "pickrate": 5.66,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 910,
+        "winrate": 0.5529999999999999,
+        "games": 132,
+        "pickrate": 0.05,
+        "average_winrate": 0.5412
+      },
+      {
+        "patch": "16.1",
+        "tier": "master_plus",
+        "role": "top",
+        "cid": 950,
+        "winrate": 0.5573,
+        "games": 1841,
+        "pickrate": 0.69,
+        "average_winrate": 0.5412
+      }
+    ],
+    "sha256": "d7bfc5db6333c5c1d104fe166f0337b9e7fc941e60308a170671a3403aac0fbe",
+    "retrieved_utc": "2026-10-17T20:48:04Z",
+    "seconds": 3.76
+  }
+]

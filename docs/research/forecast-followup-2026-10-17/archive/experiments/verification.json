@@ -1,0 +1,58 @@
+{
+  "predictions-availability-followup.parquet": {
+    "rows": 68040,
+    "probability_columns": 2,
+    "finite_and_bounded": true
+  },
+  "predictions-bridges.parquet": {
+    "rows": 93958,
+    "probability_columns": 1,
+    "finite_and_bounded": true
+  },
+  "predictions-conditional.parquet": {
+    "rows": 68040,
+    "probability_columns": 2,
+    "finite_and_bounded": true
+  },
+  "predictions-draft-chrono.parquet": {
+    "rows": 68040,
+    "probability_columns": 4,
+    "finite_and_bounded": true
+  },
+  "predictions-draft.parquet": {
+    "rows": 68040,
+    "probability_columns": 4,
+    "finite_and_bounded": true
+  },
+  "predictions-dynamic.parquet": {
+    "rows": 93958,
+    "probability_columns": 10,
+    "finite_and_bounded": true
+  },
+  "predictions-lineups.parquet": {
+    "rows": 93958,
+    "probability_columns": 4,
+    "finite_and_bounded": true
+  },
+  "predictions-static-chrono.parquet": {
+    "rows": 93958,
+    "probability_columns": 15,
+    "finite_and_bounded": true
+  },
+  "predictions-static.parquet": {
+    "rows": 93958,
+    "probability_columns": 15,
+    "finite_and_bounded": true
+  },
+  "baseline": {
+    "matched_examples": 21,
+    "max_abs_error": 4.440892098500626e-16
+  },
+  "test_maps": 23956,
+  "input_hashes": {
+    "champion_ranked.parquet": "f5688e75714ca620f6fef251f7cc5fe07e9e83ed57a23a14c5803a6e549ba83b",
+    "features-final.parquet": "7a938b1cbb836cfeceff72b259d66116cbf3994afc37f8b767dddc73a6e90a46",
+    "pr78-live-data.json.gz": "77df40cd869115150d33ae093acde59955e69c89e55d8e2072d10e8293a7e716"
+  },
+  "git_status": ""
+}

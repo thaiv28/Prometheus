@@ -1,0 +1,48 @@
+from pathlib import Path
+import sys,json,time
+import pandas as pd,numpy as np
+O=Path(__file__).parent;P=O.parent/'prior-research/experiments';sys.path.insert(0,str(P))
+from evaluate import fitpredict,report,estimate
+from scipy.special import logit
+T=time.time();g=pd.read_parquet(P/'analysis-features.parquet').merge(pd.read_parquet(P/'draft-pr78-features.parquet')[['gameid','exp','champ_wae','champ_gd15','meta','matchup','synergy']],on='gameid',validate='one_to_one');g=g[g.year>=2019].reset_index(drop=True);g['blue_known']=1.
+F=['exp','champ_wae','champ_gd15','meta','matchup','synergy'];test=(g.year>=2024).to_numpy();tr=(g.year<=2023).to_numpy();pred=pd.DataFrame({'gameid':g.gameid});res={'protocol':'ridge0.1 fixed from previous development selection; all test periods retrospective, same archived corpus; earlier-year/expanding-month refits fit only earlier labels','models':{},'transport':{}};sets={'control':[],'meta':['meta'],'draft':F[:4],'full':F}
+sets.update({'only_'+x:[x] for x in F if x!='meta'});sets.update({'without_'+x:[z for z in F if z!=x] for x in F})
+for base in ['p_prod','p_chrono']:
+ btag='' if base=='p_prod' else 'chrono_';g['p_work']=g[base]
+ fixed={};rolling={}
+ for name,cols in sets.items():
+  pp=g[base].to_numpy().copy();pp[test],meta=fitpredict(g,g[['blue_known']+cols],tr,test,.1,base='p_work');fixed[name]=pp;pred[btag+'fixed_'+name]=pp
+  rr=g[base].to_numpy().copy();fm={}
+  for year in [2024,2025,2026]:
+   tt=(g.year==year).to_numpy();train=(g.year<year).to_numpy();rr[tt],m=fitpredict(g,g[['blue_known']+cols],train,tt,.1,base='p_work');fm[str(year)]=m
+  rolling[name]=rr;pred[btag+'annual_'+name]=rr
+  res['models'][btag+name]={'features':cols,'fixed_fit':meta,'annual_fits':fm}
+ print('fit base',base,'seconds',time.time()-T,flush=True)
+ for name in sets:
+  r=res['models'][btag+name];r['fixed_vs_control']=report(g,fixed[name],fixed['control'],test);r['annual_vs_control']=report(g,rolling[name],rolling['control'],test)
+  if name.startswith('without_'):
+   r['fixed_full_vs_ablation']=report(g,fixed['full'],fixed[name],test);r['annual_full_vs_ablation']=report(g,rolling['full'],rolling[name],test)
+ # Monthly model fitting uses only previous months; no selection on test outcomes.
+ months=g.day.dt.to_period('M');monthly={}
+ for name in ['control','full']:
+  pp=g[base].to_numpy().copy();fm={}
+  for month in sorted(months[test].unique()):
+   cutoff=month.start_time;train=(g.day<cutoff).to_numpy();tt=(months==month).to_numpy();pp[tt],m=fitpredict(g,g[['blue_known']+sets[name]],train,tt,.1,base='p_work');fm[str(month)]={'training_maps':int(train.sum()),**m}
+  monthly[name]=pp;pred[btag+'monthly_'+name]=pp;res['models'][btag+'monthly_'+name]={'fits':fm}
+ res['models'][btag+'monthly_full']['vs_control']=report(g,monthly['full'],monthly['control'],test)
+ # Transport of coefficient fit, not a claim of zero target-league historical input.
+ if base=='p_prod':
+  for league in ['LCK','LPL','LEC','LCS']:
+   tt=test&(g.league==league).to_numpy();train=tr&(g.league!=league).to_numpy()
+   if tt.sum()<20:res['transport'][league]={'n':int(tt.sum()),'status':'insufficient coverage'};continue
+   cc=g[base].to_numpy().copy();pp=cc.copy();cc[tt],_=fitpredict(g,g[['blue_known']],train,tt,.1,base='p_work');pp[tt],_=fitpredict(g,g[['blue_known']+F],train,tt,.1,base='p_work');res['transport'][league]=estimate(g,pp,cc,tt)
+ print('scored base',base,'seconds',time.time()-T,flush=True)
+# League-specific checks use the same frozen full coefficient vector.
+res['league_slices']={}
+for league,h in g[test].groupby('league'):
+ if len(h)<100:continue
+ m=test&(g.league==league).to_numpy();res['league_slices'][league]=estimate(g,pred.fixed_full,pred.fixed_control,m)
+# Archived original predictions must reproduce unchanged on shared IDs.
+old=pd.read_parquet(P/'predictions-draft.parquet').set_index('gameid');reference=old.pr78_full.reindex(g.gameid).to_numpy();res['reproduction_max_abs_error']=float(np.max(np.abs(pred.loc[test,'fixed_full'].to_numpy()-reference[test])));assert res['reproduction_max_abs_error']<1e-12
+res['n']={'total':len(g),'train':int(tr.sum()),'test':int(test.sum())};res['seconds']=time.time()-T
+pred.to_parquet(O/'professional-predictions.parquet',index=False);(O/'professional-results.json').write_text(json.dumps(res,indent=2));g.to_parquet(O/'professional-analysis.parquet',index=False);print('complete',res['n'],'seconds',res['seconds'],flush=True)

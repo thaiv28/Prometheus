@@ -1,0 +1,13 @@
+from pathlib import Path
+import sys,pandas as pd,numpy as np,json
+O=Path(__file__).parent;R=O.parent/'prometheus-audit';sys.path.insert(0,str(R))
+from prometheus import schedule
+s=pd.read_parquet(O/'form_states.parquet');g=pd.read_parquet(O/'base.parquet');lookup=schedule.RatingsBefore(s);records=[]
+# Fixed sample from each routing branch; no outcome selection.
+for scope in ['major_domestic','minor_domestic','international','international_same_home','other_cross']:
+ h=g[(g.scope==scope)&(g.year>=2024)].iloc[::251].head(6)
+ for r in h.itertuples():
+  rt=lookup(r.day.date()).reset_index();aa=rt[rt.teamname==r.an];bb=rt[rt.teamname==r.bn]
+  if len(aa)!=1 or len(bb)!=1:continue
+  p,method=schedule.game_probability(aa.iloc[0],bb.iloc[0],event=r.league,at=r.day.date(),event_day=r.day.date());records.append({'gameid':r.gameid,'scope':scope,'vector':r.p_prod,'native':p,'delta':p-r.p_prod,'method':method})
+print(json.dumps(records,indent=2));(O/'baseline-verification.json').write_text(json.dumps(records,indent=2))

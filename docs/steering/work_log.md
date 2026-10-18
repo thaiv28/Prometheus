@@ -1,5 +1,13 @@
 # Work log
 
+## 2026-10-18 — Archive external forecast research for agent handoff
+
+User requested a separate GitHub branch so another agent can inspect the research before further merge decisions. Added `docs/research/forecast-followup-2026-10-17/`: three reports, original protocols, archived text copies of analysis scripts, small machine-readable results/source manifests, checksums and a handoff. Linked the research index and future-work list. Raw CSVs, DB, derived Parquet files, page bodies, large ZIP and third-party credential-bearing downloader sources are excluded. No application, model artifact, runtime dependency, CI or deployment change.
+
+The studies used main `ac5745c` and draft source `dd84749`, with OE data through May 22, 2026. Packaging starts from newer main `0cc01bd` (draft research and frozen model now merged); the handoff explicitly separates those revisions. Draft ablation gains warrant current-data validation; rank-tier and market-edge claims remain inconclusive. Published reports and original verification JSON are historical records, not new runs against current main. Scripts are preserved as `.py.txt` rather than wired into the application; the package excludes required large rerun inputs.
+
+Packaging checks: full pytest suite 725 passed, 2 skipped (14.74 s); 35 JSON files parse; archived Python syntax compiles; all preserved file hashes match; touched handoff/navigation links resolve; credential-pattern scan and `git diff --check` pass. No fresh backtest, data refresh, live action or merge.
+
 ## 2026-10-17 — Faster Live prices and started fixture handoff
 
 Branch `live-refresh`, worktree based on main `ac5745c` (PR #76). Kalshi map/series books and publication target 2 s instead of 10 s; browser polling 5 → 2 s and live JSON cache 2 → 1 s. Separate the Riot feed/settlement/model/journal cadence (still 10 s); price-only cycles refresh the saved page without replaying the collector/model. Idle/Kalshi-disabled cycles keep the old interval. Live’s Coming up hides a canonical team-pair match only when that series is displayed live/between maps; waiting and elapsed scheduled time alone keep it. Optional scheduled start guards against a later repeat pairing; support older worker summaries. Keep matched rows hidden for the page session; hide empty day groups/section. Watch retains its existing idle-section behavior.

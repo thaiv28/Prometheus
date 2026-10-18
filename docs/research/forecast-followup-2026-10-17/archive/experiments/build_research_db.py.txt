@@ -1,0 +1,12 @@
+from pathlib import Path
+import sqlite3,runpy,os,time
+ROOT=Path(__file__).resolve().parent.parent/'prometheus-audit';os.chdir(ROOT)
+p=ROOT/'db/prometheus.db';p.parent.mkdir(exist_ok=True)
+if p.exists():raise RuntimeError('refusing to overwrite research DB')
+for script in sorted((ROOT/'scripts').glob('00[1-4]*')):
+ print(script.name,flush=True);t=time.time()
+ if script.suffix=='.sql':
+  with sqlite3.connect(p) as c:c.executescript(script.read_text())
+ elif script.suffix=='.py':runpy.run_path(str(script),run_name='__main__')
+ print('seconds',round(time.time()-t,2),flush=True)
+with sqlite3.connect(p) as c:print(c.execute('SELECT count(*),min(date),max(date) FROM matches').fetchone(),flush=True)

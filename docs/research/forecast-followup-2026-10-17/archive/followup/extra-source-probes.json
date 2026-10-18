@@ -1,0 +1,60 @@
+[
+  {
+    "source": "lol_patch_16.19",
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.19",
+    "final": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.19",
+    "status": 200,
+    "bytes": 325861,
+    "seconds": 3.58
+  },
+  {
+    "source": "lol_patch_16.18",
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.18",
+    "final": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.18",
+    "status": 200,
+    "bytes": 325932,
+    "seconds": 3.48
+  },
+  {
+    "source": "lol_patch_16.10",
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.10",
+    "final": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.10",
+    "status": 200,
+    "bytes": 325236,
+    "seconds": 3.48
+  },
+  {
+    "source": "lol_patch_15.24",
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=15.24",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "source": "lol_patch_14.24",
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=14.24",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "source": "hf_catalog",
+    "url": "https://huggingface.co/api/datasets?search=league&limit=100",
+    "final": "https://huggingface.co/api/datasets?search=league&limit=100",
+    "status": 200,
+    "bytes": 90553,
+    "seconds": 3.67
+  },
+  {
+    "source": "hextech_tree",
+    "url": "https://api.github.com/repos/githubpsyche/hextech-studies/git/trees/main?recursive=1",
+    "final": "https://api.github.com/repos/githubpsyche/hextech-studies/git/trees/main?recursive=1",
+    "status": 200,
+    "bytes": 7527,
+    "seconds": 3.47
+  },
+  {
+    "source": "mirror_tree",
+    "url": "https://api.github.com/repos/IbrahimBM75/LCK-LPL-LEC-LOL-2026-season-/git/trees/main?recursive=1",
+    "final": "https://api.github.com/repos/IbrahimBM75/LCK-LPL-LEC-LOL-2026-season-/git/trees/main?recursive=1",
+    "status": 200,
+    "bytes": 2720,
+    "seconds": 3.43
+  }
+]

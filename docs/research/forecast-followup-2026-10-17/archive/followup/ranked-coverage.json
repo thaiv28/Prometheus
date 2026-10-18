@@ -1,0 +1,62 @@
+{
+  "source_patches": [
+    "16.1",
+    "16.2"
+  ],
+  "source_rows": 5108,
+  "coverage": {
+    "platinum_plus": {
+      "positive_count_rows": 7450,
+      "complete_maps": 745,
+      "game_counts": {
+        "count": 1720.0,
+        "mean": 59140.72034883721,
+        "std": 125663.51843883442,
+        "min": 9.0,
+        "25%": 431.75,
+        "50%": 3065.5,
+        "75%": 43264.75,
+        "max": 1106996.0
+      }
+    },
+    "diamond_plus": {
+      "positive_count_rows": 7450,
+      "complete_maps": 745,
+      "game_counts": {
+        "count": 1718.0,
+        "mean": 11723.370779976716,
+        "std": 25126.7772541653,
+        "min": 1.0,
+        "25%": 67.25,
+        "50%": 556.5,
+        "75%": 8678.0,
+        "max": 194646.0
+      }
+    },
+    "master_plus": {
+      "positive_count_rows": 7450,
+      "complete_maps": 745,
+      "game_counts": {
+        "count": 1670.0,
+        "mean": 3605.4706586826346,
+        "std": 7649.310577692461,
+        "min": 1.0,
+        "25%": 21.0,
+        "50%": 205.5,
+        "75%": 2979.0,
+        "max": 59923.0
+      }
+    }
+  },
+  "eligible_maps": {
+    "('16.1', 'major_domestic')": 16,
+    "('16.1', 'minor_domestic')": 54,
+    "('16.1', 'other_cross')": 5,
+    "('16.2', 'major_domestic')": 13,
+    "('16.2', 'minor_domestic')": 84
+  },
+  "eligible7_maps": {
+    "('16.1', 'minor_domestic')": 9
+  },
+  "unmapped_champions": []
+}

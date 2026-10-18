@@ -1,0 +1,28 @@
+from pathlib import Path
+import sys,importlib.util,time,json
+import numpy as np,pandas as pd
+from evaluate import fitpredict,report,utility
+O=Path(__file__).parent;R=O.parent/'prometheus-audit';sys.path.insert(0,str(R));t=time.time()
+spec=importlib.util.spec_from_file_location('draft',O.parent/'draft_score_pr78.py');d=importlib.util.module_from_spec(spec);spec.loader.exec_module(d)
+cache=O/'draft-pr78-features.parquet'
+if cache.exists():draft=pd.read_parquet(cache)
+else:
+ rows=d.interaction_features(d.player_features(d.load_rows()));draft=d.game_table(rows);draft.to_parquet(cache,index=False)
+g=pd.read_parquet(O/'base.parquet').merge(draft[['gameid']+d.FEATURES+d.INTERACTIONS],on='gameid',validate='one_to_one');g=g[g.year>=2019].reset_index(drop=True);g['blue_known']=1.
+alternate='--chronological' in sys.argv
+if alternate:g['p_prod']=g['p_chrono']
+train=(g.year<=2021).to_numpy();dev=g.year.between(2022,2023).to_numpy();final=(g.year<=2023).to_numpy();test=(g.year>=2024).to_numpy();control=g.p_prod.to_numpy().copy();control[test],_=fitpredict(g,g[['blue_known']],final,test,.0001);res={};pred=pd.DataFrame({'gameid':g.gameid,'postdraft_control':control})
+for name,cols in {'pr78_meta':['meta'],'pr78_draft':d.FEATURES,'pr78_full':d.FEATURES+d.INTERACTIONS}.items():
+ trials=[]
+ for lam in [.001,.01,.1]:
+  pp=g.p_prod.to_numpy().copy();pp[dev],_=fitpredict(g,g[['blue_known']+cols],train,dev,lam);trials.append((float(utility(g,pp,dev)),lam))
+ _,lam=min(trials);pp=g.p_prod.to_numpy().copy();pp[test],meta=fitpredict(g,g[['blue_known']+cols],final,test,lam);pred[name]=pp
+ res[name]={'features':cols,'dev_trials':trials,'penalty':lam,'fit':meta,'vs_production':report(g,pp,g.p_prod,test),'vs_postdraft_control':report(g,pp,control,test)};print(name,res[name]['vs_postdraft_control']['all'],flush=True)
+res['pr78_full']['vs_pr78_draft']=report(g,pred.pr78_full,pred.pr78_draft,test)
+# Price subset is only overlapping maps with a pre-start trade. No fitting on test-market outcomes.
+import gzip
+raw=json.load(gzip.open(O/'pr78-live-data.json.gz','rt'));priced=raw['premaps'];matched=[]
+for r in priced:
+ if r.get('game') in set(g.gameid):matched.append(r)
+res['market_overlap_count']=len(matched);res['coverage']={'all':len(g),'test':int(test.sum()),'major_test':int((test&(g.scope=='major_domestic')).sum())}
+(O/('results-draft-chrono.json' if alternate else 'results-draft.json')).write_text(json.dumps(res,indent=2));pred.to_parquet(O/('predictions-draft-chrono.parquet' if alternate else 'predictions-draft.parquet'),index=False);print('seconds',time.time()-t,flush=True)

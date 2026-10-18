@@ -1,0 +1,20 @@
+[
+  {
+    "name": "oe2026",
+    "url": "https://raw.githubusercontent.com/chrisvu1007/league-of-legends-match-predictor/29838abc074d60a83c7a9638a456a2d366b5546d/data/2026_LoL_esports_match_data_from_OraclesElixir.csv",
+    "bytes": 39314270,
+    "sha256": "fb65687c8a27f9b8ad54c5611a599947837d316c167393fa1bf3f7e896e4011e"
+  },
+  {
+    "name": "ddragon",
+    "url": "https://ddragon.leagueoflegends.com/cdn/16.10.1/data/en_US/champion.json",
+    "bytes": 158112,
+    "sha256": "530ca6f3b097ed86ee149b5f73ceefa02324234ae2d45fe704342de624d44ca1"
+  },
+  {
+    "name": "patch_schedule",
+    "url": "https://support-leagueoflegends.riotgames.com/hc/en-us/articles/360018987893-Patch-Schedule-League-of-Legends",
+    "bytes": 178467,
+    "sha256": "7154d7d51648eb9bab8579d0c2dee7812176d2137e4a3221302ce04e94d3cbf3"
+  }
+]

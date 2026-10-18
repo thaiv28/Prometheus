@@ -1,0 +1,61 @@
+from pathlib import Path
+from collections import defaultdict,Counter
+from itertools import combinations
+import pandas as pd,numpy as np,json,time
+from scipy.special import expit,logit
+from scipy.optimize import minimize
+from sklearn.feature_extraction import DictVectorizer
+from scipy.sparse import hstack,csr_matrix
+from evaluate import utility,report,fitpredict
+O=Path(__file__).parent;t=time.time();g=pd.read_parquet(O/'base.parquet');p=pd.read_parquet(O/'players.parquet');days={k:v.index.to_numpy() for k,v in g.groupby('day',sort=False)}
+pdays={k:list(v.itertuples(index=False)) for k,v in p.groupby('day',sort=False)};state={};features=[];lines=[];gdstate={};teammean=p.groupby(['gameid','teamid']).gd15.mean();bridge=[];last={};counts=Counter();move={};perf=[]
+for day in sorted(set(p.day)|set(g.day)):
+ for i in days.get(day,[]):
+  r=g.iloc[i];row={};rr=[];pv=0;importv=0
+  for tid,sign,home in [(r.a,1,r.home_league_a),(r.b,-1,r.home_league_b)]:
+   line=tuple(sorted(state.get(tid,{}).values()));rr.append(line)
+   for order in [1,2,3]:
+    for items in combinations(line,order):
+     key=str(order)+':'+','.join(items);row[key]=row.get(key,0)+sign
+   for pl in line:
+    v=gdstate.get(pl,0);pv+=sign*v/5
+    if last.get(pl,{}).get('home')!=home:importv+=sign*v/5
+  features.append((i,row));lines.append((i,*rr));perf.append((i,pv,importv))
+ for r in pdays.get(day,[]):
+  old=last.get(r.playerid);center=r.gd15-teammean.get((r.gameid,r.teamid),np.nan)
+  if old and old['home']!=r.home_league:
+   key=(old['home'],r.home_league);counts[key]+=1;bridge.append({'player':r.playerid,'day':str(day),'old':old['home'],'new':r.home_league,'prior_n':old['n'],'prior':gdstate.get(r.playerid,0),'next_center':float(center) if np.isfinite(center) else None})
+  if np.isfinite(center):gdstate[r.playerid]=.9*gdstate.get(r.playerid,0)+.1*center/1000
+  last[r.playerid]={'home':r.home_league,'n':old['n']+1 if old else 1}
+  state.setdefault(r.teamid,{})[r.position]=r.playerid
+features=sorted(features);rows=[v for i,v in features];lines=sorted(lines);perf=sorted(perf);train=(g.year<=2021).to_numpy();dev=g.year.between(2022,2023).to_numpy();final=(g.year<=2023).to_numpy();test=(g.year>=2024).to_numpy();base=g.p_prod.to_numpy();z=logit(base);y=g.y.to_numpy();res={};pred=pd.DataFrame({'gameid':g.gameid});control=base.copy();control[test],_=fitpredict(g,np.empty((len(g),0)),final,test,0)
+# Design identification screen: distinct partner configurations in training only.
+seen=defaultdict(set)
+for i,a,b in lines:
+ if not final[i]:continue
+ for line in [a,b]:
+  for n in [1,2,3]:
+   for k in combinations(line,n):seen[(n,k)].add(tuple(x for x in line if x not in k))
+ident={str(n):{'features':sum(k[0]==n for k in seen),'at_least_3_partner_configurations':sum(k[0]==n and len(v)>=3 for k,v in seen.items())} for n in [1,2,3]}
+vec=DictVectorizer(sparse=True,dtype=np.float64);vec.fit([rows[i] for i in np.flatnonzero(final)]);x=vec.transform(rows).tocsr();names=vec.get_feature_names_out();orders=np.array([int(n[0]) for n in names]);print('design',x.shape,ident,flush=True)
+c=csr_matrix(np.column_stack([z*(g.same&g.major),z*(g.same&~g.major),z*(~g.same)]))
+def sparsefit(order,tr,te,lam):
+ xx=x[:,orders<=order];oo=orders[orders<=order];xx=hstack([c,xx],format='csr');pen=np.r_[np.zeros(3),lam*4.**(oo-1)];xt=xx[tr];zt=z[tr];yt=y[tr]
+ def fg(b):
+  e=zt+xt@b;d=expit(e)-yt
+  return np.mean(np.logaddexp(0,e)-yt*e)+.5*np.sum(pen*b*b),np.asarray(xt.T@d).ravel()/len(yt)+pen*b
+ fit=minimize(fg,np.zeros(xx.shape[1]),jac=True,method='L-BFGS-B',options={'maxiter':120,'ftol':1e-10})
+ return expit(z[te]+xx[te]@fit.x),{'success':bool(fit.success),'iterations':int(fit.nit),'dimensions':xx.shape[1]}
+for order in [1,2,3]:
+ trials=[]
+ for lam in [.0001,.001,.01]:
+  pv,_=sparsefit(order,train,dev,lam);pp=base.copy();pp[dev]=pv;trials.append((float(utility(g,pp,dev)),lam))
+ _,lam=min(trials);pp=base.copy();pp[test],meta=sparsefit(order,final,test,lam);name=['','player_residual','pair_residual','trio_residual'][order];pred[name]=pp;res[name]={'dev_trials':trials,'penalty':lam,'fit':meta,'vs_production':report(g,pp,base,test),'vs_calibration':report(g,pp,control,test)};print(name,res[name]['vs_calibration']['all']['delta'],flush=True)
+res['pair_residual']['vs_player']=report(g,pred.pair_residual,pred.player_residual,test);res['trio_residual']['vs_pair']=report(g,pred.trio_residual,pred.pair_residual,test)
+# Transfer screen: independently lagged player-within-team performance, not a regional residual correction.
+xx=np.array([[a,b] for i,a,b in perf]);trials=[]
+for lam in [.001,.01,.1]:
+ pv,_=fitpredict(g,xx,train,dev,lam);pp=base.copy();pp[dev]=pv;trials.append((float(utility(g,pp,dev)),lam))
+_,lam=min(trials);pp=base.copy();pp[test],meta=fitpredict(g,xx,final,test,lam);pred['player_performance']=pp;res['player_performance']={'dev_trials':trials,'penalty':lam,'fit':meta,'vs_production':report(g,pp,base,test),'vs_calibration':report(g,pp,control,test)}
+res['identification']=ident;res['bridge_counts']=[{'old':k[0],'new':k[1],'episodes':n} for k,n in counts.most_common()];res['bridge_total']=len(bridge);res['bridge_before2024']=sum(x['day']<'2024' for x in bridge);res['bridge_sufficient_prior']=sum(x['day']<'2024' and x['prior_n']>=20 and x['next_center'] is not None for x in bridge)
+(O/'bridge_episodes.json').write_text(json.dumps(bridge));(O/'results-lineups.json').write_text(json.dumps(res,indent=2));pred.to_parquet(O/'predictions-lineups.parquet',index=False);print('seconds',time.time()-t,flush=True)

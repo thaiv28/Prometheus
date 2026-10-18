@@ -1,0 +1,10 @@
+from pathlib import Path
+import json,pandas as pd,numpy as np
+from scipy.special import logit
+O=Path(__file__).parent
+h=pd.read_parquet(O/'wide-analysis-prior_day.parquet').merge(pd.read_parquet(O/'wide-predictions-prior_day.parquet'),on='gameid');h=h[(h.year>=2024)&(h.scope=='international')].reset_index(drop=True)
+def ll(y,p):z=logit(p);return np.logaddexp(0,z)-y*z
+d=ll(h.y,h.no_gd15)-ll(h.y,h.control);codes,_=pd.factorize(h.league.astype(str)+'|'+h.year.astype(str));s=np.bincount(codes,weights=d);n=np.bincount(codes);rng=np.random.default_rng(1922);bs=[]
+for _ in range(10000):
+ ix=rng.integers(0,len(n),len(n));bs.append(s[ix].sum()/n[ix].sum())
+x={'wide_prior_day_international':{'n':len(h),'events':len(n),'delta':float(d.mean()),'event_ci95':np.quantile(bs,[.025,.975]).tolist()}};(O/'event-results.json').write_text(json.dumps(x,indent=2));print(x)

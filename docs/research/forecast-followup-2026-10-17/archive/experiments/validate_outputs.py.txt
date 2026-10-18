@@ -1,0 +1,11 @@
+from pathlib import Path
+import pandas as pd,numpy as np,json,hashlib,subprocess
+O=Path(__file__).parent;checks={}
+for f in sorted(O.glob('predictions-*.parquet')):
+ x=pd.read_parquet(f);assert x.gameid.is_unique,f.name
+ pp=x.drop(columns='gameid').to_numpy(float);assert np.isfinite(pp).all() and ((pp>0)&(pp<1)).all(),f.name;checks[f.name]={'rows':len(x),'probability_columns':len(x.columns)-1,'finite_and_bounded':True}
+for f in sorted(O.glob('results-*.json')):json.loads(f.read_text())
+v=json.loads((O/'baseline-verification.json').read_text());assert len(v)==21 and max(abs(x['delta']) for x in v)<1e-12
+x=pd.read_parquet(O/'features-final.parquet');assert x.gameid.is_unique and not x[['p_prod','p_chrono']].isna().any().any();assert (x.year==x.date.dt.year).all()
+checks['baseline']={'matched_examples':len(v),'max_abs_error':max(abs(r['delta']) for r in v)};checks['test_maps']=int((x.year>=2024).sum());checks['input_hashes']={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in [O/'champion_ranked.parquet',O/'features-final.parquet',O/'pr78-live-data.json.gz']};checks['git_status']=subprocess.check_output(['git','-C',str(O.parent/'prometheus-audit'),'status','--porcelain'],text=True);assert checks['git_status']==''
+(O/'verification.json').write_text(json.dumps(checks,indent=2));print(json.dumps(checks,indent=2))

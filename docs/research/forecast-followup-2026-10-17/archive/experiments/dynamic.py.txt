@@ -1,0 +1,59 @@
+from pathlib import Path
+from collections import defaultdict
+import pandas as pd,numpy as np,json,time
+from scipy.special import expit,logit
+from evaluate import loss,utility,report,fitpredict
+O=Path(__file__).parent;t=time.time();g=pd.read_parquet(O/'base.parquet');players=pd.read_parquet(O/'players.parquet');obs=pd.read_parquet(O/'team_observations.parquet');train=(g.year<=2021).to_numpy();dev=g.year.between(2022,2023).to_numpy();test=(g.year>=2024).to_numpy();final=(g.year<=2023).to_numpy();y=g.y.to_numpy();base=g.p_prod.to_numpy();eta=logit(base);dates=g.day.to_numpy();ids=list(zip(g.a,g.b));days=[(k,v.index.to_numpy()) for k,v in g.groupby('day',sort=True)]
+rosters={k:tuple(sorted(v.playerid)) for k,v in players.groupby(['day','gameid','teamid'],sort=False)}
+obsdays={k:list(v.itertuples(index=False)) for k,v in obs.groupby('day',sort=False)}
+# Team state can change only when a lineup has already been observed, not from this map's unseen starters.
+def bayes(hazard,sigma,reset):
+ grid=np.linspace(-2,2,81);prior=np.exp(-.5*(grid/sigma)**2);prior/=prior.sum();state={};known={};used={};out=np.zeros(len(g))
+ for day,ix in days:
+  active=set(g.loc[ix,'a'])|set(g.loc[ix,'b'])
+  for a in active:
+   st=state.get(a,prior.copy());st=(1-hazard)*st+hazard*prior
+   if reset and used.get(a)!=known.get(a):st=prior.copy()
+   state[a]=st;used[a]=known.get(a)
+  mu={a:float(state[a]@grid) for a in active};ll=defaultdict(lambda:np.zeros(len(grid)))
+  for i in ix:
+   a,b=ids[i];pa=expit(eta[i]+grid-mu[b]);pb=expit(eta[i]+mu[a]-grid)
+   # Integrate independent posterior team uncertainties for the forecast.
+   out[i]=float(state[a]@expit(eta[i]+grid[:,None]-grid[None,:])@state[b])
+   ll[a]+=np.log(np.clip(pa if y[i] else 1-pa,1e-15,1));ll[b]+=np.log(np.clip(pb if y[i] else 1-pb,1e-15,1))
+  for a,v in ll.items():
+   w=state[a]*np.exp(v-v.max());state[a]=w/w.sum()
+  for r in obsdays.get(day,[]):known[r.teamid]=rosters.get((day,r.gameid,r.teamid),())
+ return out
+# Observation model is fit only on earlier calendar years, excluding held-out year's outcomes.
+gd=obs[obs.teamid.isin(g.a)].set_index(['gameid','teamid']).gd15;gda=np.array([gd.get((r.gameid,r.a),np.nan) for r in g.itertuples()]);measure={}
+for year in sorted(g.year.unique()):
+ tr=(g.year.to_numpy()<year)&np.isfinite(gda)
+ if tr.sum()>100:
+  beta=np.dot(eta[tr],gda[tr])/np.dot(eta[tr],eta[tr]);sigma=np.std(gda[tr]-beta*eta[tr]);measure[int(year)]=(float(beta),float(sigma))
+ else:measure[int(year)]=(1000.,3000.)
+def score(alpha,gamma):
+ state=defaultdict(float);out=np.zeros(len(g))
+ for day,ix in days:
+  updates=defaultdict(float)
+  for i in ix:
+   a,b=ids[i];e=eta[i]+state[a]-state[b];p=expit(e);out[i]=p;u=alpha*(y[i]-p)
+   if gamma and np.isfinite(gda[i]):
+    be,si=measure[int(g.year.iloc[i])];u+=gamma*np.clip((gda[i]-be*e)/si,-3,3)
+   updates[a]+=u;updates[b]-=u
+  for a,v in updates.items():state[a]=float(np.clip(.995*state[a]+v,-1.5,1.5))
+ return out
+# Hyperparameter choices use 2022-23 exclusively, equal cohort weight.
+settings={'bayes_stable':[(.001,.35,False),(.001,.7,False)],'bayes_roster_reset':[(.001,.35,True),(.001,.7,True)],'bayes_change_point':[(.01,.35,False),(.05,.35,False),(.01,.7,False),(.05,.7,False)],'score_binary':[(.02,0),(.05,0),(.1,0)],'score_joint':[(.02,.02),(.05,.02),(.05,.05)]}
+res={};pred=pd.DataFrame({'gameid':g.gameid});control=base.copy();control[test],_=fitpredict(g,np.empty((len(g),0)),final,test,0)
+for name,ss in settings.items():
+ trials=[];arrs=[]
+ for setting in ss:
+  p=bayes(*setting) if name.startswith('bayes') else score(*setting);trials.append([setting,float(utility(g,p,dev))]);arrs.append(p)
+ best=int(np.argmin([v[1] for v in trials]));raw=arrs[best];# Same residual effect with the same nuisance calibration as static tests.
+ x=(logit(np.clip(raw,1e-8,1-1e-8))-eta)[:,None];p=base.copy();p[test],meta=fitpredict(g,x,final,test,.001)
+ pred[name]=p;pred[name+'_raw']=raw;res[name]={'dev_trials':trials,'setting':ss[best],'fit':meta,'vs_production':report(g,p,base,test),'vs_calibration':report(g,p,control,test),'raw_vs_production':report(g,raw,base,test)}
+ print(name,'setting',ss[best],'all',res[name]['vs_calibration']['all']['delta'],'major',res[name]['vs_calibration']['major_domestic']['delta'],flush=True)
+# Explicit nested controls, same maps.
+for a,b in [('bayes_change_point','bayes_stable'),('bayes_roster_reset','bayes_stable'),('score_joint','score_binary')]:res[a]['vs_'+b]=report(g,pred[a],pred[b],test)
+(O/'results-dynamic.json').write_text(json.dumps(res,indent=2));pred.to_parquet(O/'predictions-dynamic.parquet',index=False);(O/'observation-fit.json').write_text(json.dumps(measure,indent=2));print('seconds',time.time()-t,flush=True)

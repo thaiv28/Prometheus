@@ -1,0 +1,32 @@
+from pathlib import Path
+import sys,sqlite3,importlib.util,pandas as pd,numpy as np,json,time
+O=Path(__file__).parent;R=O.parent/'prometheus-audit';P=O.parent/'prior-research/experiments';sys.path[:0]=[str(R),str(P)]
+from evaluate import fitpredict,report,estimate
+sp=importlib.util.spec_from_file_location('draft',O/'draft_score_source.py');d=importlib.util.module_from_spec(sp);sp.loader.exec_module(d);T=time.time()
+c=sqlite3.connect(f'file:{R}/db/prometheus.db?mode=ro',uri=True);assert c.execute('pragma quick_check').fetchone()[0]=='ok'
+rows=pd.read_sql('''SELECT p.gameid,p.teamid,p.playerid,p.position,p.champion,m.date,m.league,m.side,m.result,m.teamname,e.pre_match_elo AS elo,oe.pre_match_elo AS opp_elo FROM match_players p JOIN matches m USING(gameid,teamid) JOIN game_length_elo e USING(gameid,teamid) JOIN game_length_elo oe ON oe.gameid=p.gameid AND oe.teamid!=p.teamid''',c);rows['date']=pd.to_datetime(rows.date);rows=rows[rows.champion.notna()&(rows.champion!='')].sort_values(['date','gameid','teamid','position']).reset_index(drop=True);rows['gd15']=np.nan;rows['p']=1/(1+10**(-(rows.elo-rows.opp_elo)/400));rows['day']=rows.date.dt.normalize();print('rows',len(rows),flush=True)
+
+def prior_day(frame,keys,col):
+ a=frame.groupby(keys+['day'],sort=False)[col].sum().sort_index(level='day');p=a.groupby(level=list(range(len(keys)))).cumsum()-a;idx=pd.MultiIndex.from_frame(frame[keys+['day']]);return p.reindex(idx).to_numpy()
+def day_features(rows):
+ r=rows.copy();r['date']=r.day;r['one']=1.;r['wae']=r.result-r.p;n=prior_day(r,['playerid','champion'],'one');r['exp']=np.log1p(n);r['champ_wae']=prior_day(r,['playerid','champion'],'wae')/(n+10);r['champ_gd15']=0.;r['meta']=d._meta(r)
+ op=r[['gameid','teamid','position','champion']].rename(columns={'teamid':'otherteam','champion':'oppchamp'});lanes=r.reset_index().merge(op,on=['gameid','position']);lanes=lanes[lanes.teamid!=lanes.otherteam].set_index('index').sort_index();keys=['position','champion','oppchamp'];nn=prior_day(lanes,keys,'one');r['matchup']=0.;r.loc[lanes.index,'matchup']=prior_day(lanes,keys,'wae')/(nn+20)
+ r['token']=r.position+':'+r.champion;t=r.groupby(['gameid','teamid'],sort=False).agg(day=('day','first'),wae=('wae','first'),tokens=('token',list)).reset_index();t=t[t.tokens.map(len)==5];t['pair']=t.tokens.map(lambda x:[a+'|'+b for i,a in enumerate(sorted(x)) for b in sorted(x)[i+1:]]);p=t.explode('pair');p['one']=1.;n=prior_day(p,['pair'],'one');p['value']=prior_day(p,['pair'],'wae')/(n+20);v=p.groupby(['gameid','teamid']).value.sum().rename('synergy');r=r.merge(v,on=['gameid','teamid'],how='left');return r
+frames={}
+for timing in ['timestamp','prior_day']:
+ cache=O/('wide-features-'+timing+'.parquet')
+ if cache.exists():f=pd.read_parquet(cache)
+ else:
+  rr=d.interaction_features(d.player_features(rows)) if timing=='timestamp' else day_features(rows);f=d.game_table(rr);f.to_parquet(cache,index=False);del rr
+ frames[timing]=f;print('features',timing,len(f),'seconds',time.time()-T,flush=True)
+g=pd.read_parquet(P/'analysis-features.parquet');F=['exp','champ_wae','meta','matchup','synergy'];res={'status':'same pinned raw corpus and baseline, full-game champion rows broaden coverage; no GD15 input; timing sensitivity excludes all same-day observations','models':{}};preds={}
+for timing,f in frames.items():
+ h=g.merge(f[['gameid']+F],on='gameid',validate='one_to_one');h=h[h.year>=2019].reset_index(drop=True);h['blue_known']=1.;tr=(h.year<=2023).to_numpy();test=(h.year>=2024).to_numpy();pr=pd.DataFrame({'gameid':h.gameid});pp={}
+ for name,cols in [('control',[]),('meta',['meta']),('no_gd15',F)]:
+  p=h.p_prod.to_numpy().copy();p[test],fit=fitpredict(h,h[['blue_known']+cols],tr,test,.1);pp[name]=p;pr[name]=p;res['models'][timing+'_'+name]={'fit':fit,'n_test':int(test.sum())}
+  if name!='control':res['models'][timing+'_'+name]['vs_control']=report(h,p,pp['control'],test)
+ for league in ['LPL','LCK','LEC','LCS','LCP']:
+  mm=test&(h.league==league).to_numpy();res['models'][timing+'_no_gd15'][league]=estimate(h,pp['no_gd15'],pp['control'],mm)
+ pr.to_parquet(O/('wide-predictions-'+timing+'.parquet'),index=False);preds[timing]=pr;h.to_parquet(O/('wide-analysis-'+timing+'.parquet'),index=False)
+# Identical cohort comparison isolates timing and feature history changes.
+h=pd.read_parquet(O/'wide-analysis-timestamp.parquet');dd=preds['prior_day'].set_index('gameid');tt=preds['timestamp'].set_index('gameid');test=(h.year>=2024).to_numpy();res['prior_day_vs_timestamp']=report(h,dd.no_gd15.reindex(h.gameid).to_numpy(),tt.no_gd15.reindex(h.gameid).to_numpy(),test);res['seconds']=time.time()-T;(O/'wide-results.json').write_text(json.dumps(res,indent=2));print('complete',res['seconds'],flush=True)

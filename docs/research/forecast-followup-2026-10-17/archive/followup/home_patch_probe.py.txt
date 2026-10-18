@@ -1,0 +1,10 @@
+from pathlib import Path
+import urllib.request,concurrent.futures,json,re
+O=Path(__file__).parent
+urls=['https://lolalytics.com/?tier=master_plus&patch=16.3&lane=top','https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.3','https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.9','https://lolalytics.com/?tier=master_plus&patch=15.2&lane=top']
+def f(u):
+ try:
+  with urllib.request.urlopen(u,timeout=12) as r:b=r.read()
+  return {'url':u,'bytes':len(b),'patch_markers':list(set(re.findall(rb'master_plus_[\d.]+',b)))[:4].__str__()}
+ except Exception as e:return {'url':u,'error':str(e)}
+a=list(concurrent.futures.ThreadPoolExecutor(max_workers=3).map(f,urls));(O/'home-probes.json').write_text(json.dumps(a,indent=2));print(a)

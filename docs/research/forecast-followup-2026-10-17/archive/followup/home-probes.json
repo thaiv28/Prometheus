@@ -1,0 +1,18 @@
+[
+  {
+    "url": "https://lolalytics.com/?tier=master_plus&patch=16.3&lane=top",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.3",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.9",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "url": "https://lolalytics.com/?tier=master_plus&patch=15.2&lane=top",
+    "error": "HTTP Error 404: Not Found"
+  }
+]

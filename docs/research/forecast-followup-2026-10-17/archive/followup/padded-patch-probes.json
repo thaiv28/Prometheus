@@ -1,0 +1,65 @@
+[
+  {
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.01&lane=top",
+    "patch": "16.01",
+    "tier": "master_plus",
+    "role": "top",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.02&lane=top",
+    "patch": "16.02",
+    "tier": "master_plus",
+    "role": "top",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.03&lane=top",
+    "patch": "16.03",
+    "tier": "master_plus",
+    "role": "top",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.04&lane=top",
+    "patch": "16.04",
+    "tier": "master_plus",
+    "role": "top",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.05&lane=top",
+    "patch": "16.05",
+    "tier": "master_plus",
+    "role": "top",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.06&lane=top",
+    "patch": "16.06",
+    "tier": "master_plus",
+    "role": "top",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.07&lane=top",
+    "patch": "16.07",
+    "tier": "master_plus",
+    "role": "top",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.08&lane=top",
+    "patch": "16.08",
+    "tier": "master_plus",
+    "role": "top",
+    "error": "HTTP Error 404: Not Found"
+  },
+  {
+    "url": "https://lolalytics.com/lol/tierlist/?tier=master_plus&patch=16.09&lane=top",
+    "patch": "16.09",
+    "tier": "master_plus",
+    "role": "top",
+    "error": "HTTP Error 404: Not Found"
+  }
+]

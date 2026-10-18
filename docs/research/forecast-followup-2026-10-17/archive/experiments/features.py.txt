@@ -1,0 +1,94 @@
+from pathlib import Path
+from collections import defaultdict,deque,Counter
+import pandas as pd,numpy as np,json,re,time
+O=Path(__file__).parent;t=time.time()
+g=pd.read_parquet(O/'base.parquet');p=pd.read_parquet(O/'players.parquet');obs=pd.read_parquet(O/'team_observations.parquet')
+# Patch is a known event configuration assumption; do not infer it from later game outcomes.
+raw=[]
+for f in sorted((O.parent/'prometheus-audit/data/raw').glob('*.csv')):
+ if not f.name[:4].isdigit():continue
+ d=pd.read_csv(f,usecols=['gameid','patch'],dtype={'gameid':str,'patch':str}).drop_duplicates('gameid');raw.append(d)
+patch=pd.concat(raw).drop_duplicates('gameid');g=g.merge(patch,on='gameid',how='left')
+def norm(s):
+ s=re.sub('[^a-z0-9]','',str(s).lower());return {'monkeyking':'wukong','renataglasc':'renata','nunuandwillump':'nunu'}.get(s,s)
+def patchnorm(x):
+ a=str(x).split('.');return a[0]+'.'+str(int(a[1])) if len(a)>1 and a[1].isdigit() else str(x)
+g['patch']=g.patch.map(patchnorm);p['champ']=p.champion.map(norm)
+wr=pd.read_parquet(O/'champion_ranked.parquet');wr['patch']=wr.patch.map(patchnorm);wr['champ']=wr.champion.map(norm);wr['role']=wr.role.replace({'middle':'mid','jungle':'jng','adc':'bot','support':'sup'});wr['date']=pd.to_datetime(wr.date)
+zero=(wr.winrate==0)&(wr.pickrate==0)
+(O/'patch-source-audit.json').write_text(json.dumps({'rows':len(wr),'zero_winrate_and_pickrate':int(zero.sum()),'by_year':{str(k):int(v) for k,v in zero.groupby(wr.date.dt.year).sum().items()}},indent=2))
+wr=wr[~zero]
+wrmap={}
+for r in wr.sort_values('date').itertuples():wrmap.setdefault((r.patch,r.champ,r.role),[]).append((int(r.date.value//86400000000000),float(r.winrate)-50))
+patches=sorted(wr.patch.unique(),key=lambda x:tuple(int(v) for v in re.findall(r'\d+',x))+(str(x),));prev=dict(zip(patches[1:],patches[:-1]))
+def rate(pa,ch,role,day,lag):
+ a=wrmap.get((pa,ch,role),());v=None
+ for d,w in a:
+  if d<=day-lag:v=w
+ return v
+# All features are computed before processing any result on the same UTC day.
+hist=defaultdict(lambda:deque(maxlen=40));rosters={};styles={};seenline=Counter();seenpair=Counter();seenplayer=Counter();lastline={};results=[]
+pg=defaultdict(list)
+for r in p.itertuples(index=False):pg[(r.day,r.gameid,r.teamid)].append(r)
+ob=defaultdict(list)
+for r in obs.itertuples(index=False):ob[r.day].append(r)
+print('histories indexed',time.time()-t,flush=True)
+groups={k:v for k,v in g.groupby('day',sort=False)}
+# Style EWMA: tempo and objective rate; zero until observed, with missingness controls.
+roleorder=['top','jng','mid','bot','sup']
+def teamfeat_full(team,pa,day,actual=None):
+ day=int(day.value//86400000000000)
+ roster=rosters.get(team,{});out={};ent=[];ex=[]
+ for role,pl in roster.items():
+  h=hist[pl];counts=Counter(ch for ch,rr,gd,home in h if rr==role)
+  n=sum(counts.values());probs=np.array(list(counts.values()),float)/max(n,1);ent.append(float(-sum(probs*np.log(probs+1e-15))));ex.append(np.log1p(n))
+ out['pool_entropy']=np.mean(ent) if ent else 0;out['experience']=np.mean(ex) if ex else 0
+ # Higher-order overlap / familiarity controls use last observed roster only.
+ line=tuple(sorted(roster.values()));out['line_games']=np.log1p(seenline[line]);out['roster_known']=len(roster)/5
+ out['rookie_experience']=np.mean([np.log1p(seenplayer[x]) for x in line]) if line else 0
+ for lag in [1,14]:
+  level=[];shift=[];top=[];cov=[];post=[];postcov=[]
+  for role in roleorder:
+   pl=roster.get(role);counts=Counter(ch for ch,rr,gd,home in hist[pl] if rr==role) if pl else Counter()
+   total=sum(counts.values());v=[];dv=[];cc=0;best=[]
+   for ch,n in counts.items():
+    w=rate(pa,ch,role,day,lag);old=rate(prev.get(pa,''),ch,role,day,lag)
+    if w is not None:
+     v.append(n*w/max(total,1));cc+=n;best.append(w)
+     if old is not None:dv.append(n*(w-old)/max(total,1))
+   level.append(sum(v));shift.append(sum(dv));cov.append(cc/max(total,1));top.append(np.mean(sorted(best,reverse=True)[:3]) if best else 0)
+   ch=actual.get(role) if actual else None;w=rate(pa,ch,role,day,lag) if ch else None;post.append(w if w is not None else 0);postcov.append(w is not None)
+  for name,v in [('patch_level',level),('patch_shift',shift),('patch_options',top),('patch_cover',cov),('draft_wr',post),('draft_cover',postcov)]:out[name+str(lag)]=np.mean(v)
+ st=styles.get(team,np.zeros(3));out.update(dict(zip(['tempo','objectives','lane'],st)))
+ return out
+cache={}
+def teamfeat(team,pa,day,actual=None):
+ key=(team,pa,day)
+ if key not in cache:cache[key]=teamfeat_full(team,pa,day,None)
+ out=cache[key].copy();di=int(day.value//86400000000000)
+ for lag in [1,14]:
+  v=[];c=[]
+  for role in roleorder:
+   ch=actual.get(role) if actual else None;w=rate(pa,ch,role,di,lag) if ch else None;v.append(w if w is not None else 0);c.append(w is not None)
+  out['draft_wr'+str(lag)]=np.mean(v);out['draft_cover'+str(lag)]=np.mean(c)
+ return out
+lastyear=None
+for day in sorted(set(p.day)|set(g.day)):
+ if day.year!=lastyear:print('year',day.year,'seconds',time.time()-t,flush=True);lastyear=day.year
+ for r in groups.get(day,pd.DataFrame()).itertuples():
+  aa={x.position:x.champ for x in pg.get((day,r.gameid,r.a),[])};bb={x.position:x.champ for x in pg.get((day,r.gameid,r.b),[])}
+  a=teamfeat(r.a,r.patch,day,aa);b=teamfeat(r.b,r.patch,day,bb);v={'gameid':r.gameid}
+  for k in a:v[k]=a[k]-b[k]
+  for i,(ki,kj) in enumerate([('tempo','objectives'),('tempo','lane'),('objectives','lane')]):v['interaction'+str(i)]=a[ki]*b[kj]-a[kj]*b[ki]
+  for k in ['patch_cover1','patch_cover14','draft_cover1','draft_cover14']:v[k+'_mean']=(a[k]+b[k])/2
+  v['roster_change']=int(tuple(sorted(rosters.get(r.a,{}).values()))!=lastline.get(r.a,()) or tuple(sorted(rosters.get(r.b,{}).values()))!=lastline.get(r.b,()))
+  results.append(v)
+ # Commit observations only after all predictions for the day are formed.
+ daily=p[p.day==day] if False else None
+ for rr in ob.get(day,[]):
+  rows=pg.get((day,rr.gameid,rr.teamid),[]);line=tuple(sorted(x.playerid for x in rows));lastline[rr.teamid]=tuple(sorted(rosters.get(rr.teamid,{}).values()));rosters[rr.teamid]={x.position:x.playerid for x in rows}
+  seenline[line]+=1
+  for x in rows:hist[x.playerid].append((x.champ,x.position,x.gd15,x.home_league));seenplayer[x.playerid]+=1
+  z=np.array([rr.kills/(rr.gamelength/60), (rr.towers+rr.dragons+rr.barons)/(rr.gamelength/60),rr.gd15/1000 if np.isfinite(rr.gd15) else 0]);styles[rr.teamid]=.9*styles.get(rr.teamid,np.zeros(3))+.1*z
+f=pd.DataFrame(results);g=g.merge(f,on='gameid',validate='one_to_one');g.to_parquet(O/'features-clean.parquet',index=False)
+print('features',g.shape,'seconds',time.time()-t,'coverage',g.groupby('year')[['patch_cover1_mean','patch_cover14_mean','draft_cover1_mean']].mean().to_dict(),flush=True)

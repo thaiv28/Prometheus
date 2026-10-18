@@ -1,0 +1,5 @@
+from pathlib import Path
+from collect_ranked import fetch
+import concurrent.futures,json
+O=Path(__file__).parent;jobs=[(f'16.{i:02d}','master_plus','top') for i in range(1,10)]
+a=list(concurrent.futures.ThreadPoolExecutor(max_workers=3).map(fetch,jobs));(O/'padded-patch-probes.json').write_text(json.dumps(a,indent=2));print([{k:v for k,v in x.items() if k!='rows'} for x in a])

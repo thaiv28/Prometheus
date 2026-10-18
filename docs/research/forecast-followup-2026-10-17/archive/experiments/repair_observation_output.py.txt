@@ -1,0 +1,11 @@
+from pathlib import Path
+import pandas as pd,numpy as np,json
+from scipy.special import logit
+O=Path(__file__).parent;g=pd.read_parquet(O/'base.parquet');obs=pd.read_parquet(O/'team_observations.parquet');gd=obs.set_index(['gameid','teamid']).gd15;y=np.array([gd.get((r.gameid,r.a),np.nan) for r in g.itertuples()]);z=logit(g.p_prod.to_numpy());out={}
+for year in sorted(g.year.unique()):
+ tr=(g.year<year).to_numpy()&np.isfinite(y)
+ if tr.sum()>100:
+  b=np.dot(z[tr],y[tr])/np.dot(z[tr],z[tr]);s=np.std(y[tr]-b*z[tr])
+ else:b,s=1000.,3000.
+ out[str(year)]={'slope':float(b),'residual_sd':float(s),'n':int(tr.sum())}
+(O/'observation-fit.json').write_text(json.dumps(out,indent=2));print('ancillary serialization recovered')

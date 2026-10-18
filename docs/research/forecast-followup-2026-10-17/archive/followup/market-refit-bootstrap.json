@@ -1,0 +1,27 @@
+{
+  "100": {
+    "replicates": 400,
+    "method": "series bootstrap resamples training and test series and refits each expanding-month market model; eligibility months frozen from original data",
+    "draft_vs_market_forge_ci95": [
+      -0.009776232928724676,
+      0.004582763460775905
+    ],
+    "draft_vs_market_calibrated_ci95": [
+      -0.015014965185832903,
+      0.011993990032603206
+    ]
+  },
+  "300": {
+    "replicates": 400,
+    "method": "series bootstrap resamples training and test series and refits each expanding-month market model; eligibility months frozen from original data",
+    "draft_vs_market_forge_ci95": [
+      -0.021740120671898986,
+      0.0017846777193206418
+    ],
+    "draft_vs_market_calibrated_ci95": [
+      -0.03277547688031046,
+      -0.00021449185788593542
+    ]
+  },
+  "seconds": 4.91057825088501
+}

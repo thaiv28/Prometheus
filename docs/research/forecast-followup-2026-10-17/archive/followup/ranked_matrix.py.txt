@@ -1,0 +1,20 @@
+from pathlib import Path
+import pandas as pd,numpy as np,json,re
+O=Path(__file__).parent;P=O.parent/'prior-research/experiments'
+r=json.load(open(O/'ranked-manifest.json'));rows=[v for x in r for v in x.get('rows',[])];stats=pd.DataFrame(rows);stats.to_parquet(O/'ranked-stats.parquet',index=False)
+champ=json.load(open(O/'ddragon.json'))['data'];norm=lambda x:re.sub('[^a-z0-9]','',str(x).lower());cid={norm(v['name']):int(v['key']) for v in champ.values()};cid.update({norm(v['id']):int(v['key']) for v in champ.values()});cid.update({'monkeyking':62,'nunuandwillump':20,'renataglasc':888})
+p=pd.read_csv(O/'oe2026.csv',usecols=['gameid','position','teamid','side','champion','patch'],dtype={'patch':str});p=p[p.position!='team'].drop_duplicates(['gameid','teamid','position']);p['cid']=p.champion.map(lambda x:cid.get(norm(x)));p['patch']=p.patch.map(lambda x:'.'.join([str(x).split('.')[0],str(int(str(x).split('.')[1]))]) if '.'in str(x) else str(x));p['role']=p.position.replace({'jng':'jungle','mid':'middle','bot':'bottom','sup':'support'})
+g=pd.read_parquet(O/'professional-analysis.parquet');g=g[g.year==2026].reset_index(drop=True);pr=pd.read_parquet(O/'professional-predictions.parquet');g=g.merge(pr[['gameid','fixed_full','fixed_control']],on='gameid');patch=p.groupby('gameid').patch.first();g['patch']=g.gameid.map(patch);q=g[['gameid','day','a','b','patch']].merge(p[['gameid','teamid','role','cid']],on='gameid');q['sign']=np.where(q.teamid==q.a,1,-1)
+# These are completed-patch statistics retrieved later; original publication is not independently verified.
+end={'16.1':'2026-01-22','16.2':'2026-02-04'}
+g['patch_end']=pd.to_datetime(g.patch.map(end));g['eligible1']=g.day>=g.patch_end+pd.Timedelta(days=1);g['eligible7']=g.day>=g.patch_end+pd.Timedelta(days=7)
+coverage={}
+for tier in ['platinum_plus','diamond_plus','master_plus']:
+ z=q.merge(stats[stats.tier==tier],on=['patch','role','cid'],how='left',validate='many_to_one')
+ for shrink in [100,500,2000]:
+  # Normalize the bracket's asymmetric participant sampling; shrink toward its average, not a raw 50% rank comparison.
+  ww=(z.games*z.winrate+shrink*z.average_winrate)/(z.games+shrink);eta=np.log(ww/(1-ww))-np.log(z.average_winrate/(1-z.average_winrate));x=(eta*z.sign).groupby(z.gameid).sum(min_count=10)/5;g[tier+'_'+str(shrink)]=g.gameid.map(x)
+ counts=z.groupby('gameid').games.count();g[tier+'_complete']=g.gameid.map(counts)==10
+ coverage[tier]={'positive_count_rows':int(z.games.notna().sum()),'complete_maps':int(g[tier+'_complete'].sum()),'game_counts':stats[stats.tier==tier].games.describe().to_dict()}
+g['common_complete']=g[[x+'_complete' for x in ['platinum_plus','diamond_plus','master_plus']]].all(axis=1);g.to_parquet(O/'ranked-analysis.parquet',index=False)
+audit={'source_patches':stats.patch.unique().tolist(),'source_rows':len(stats),'coverage':coverage,'eligible_maps':{str(k):int(v) for k,v in g[g.common_complete&g.eligible1].groupby(['patch','scope']).size().items()},'eligible7_maps':{str(k):int(v) for k,v in g[g.common_complete&g.eligible7].groupby(['patch','scope']).size().items()},'unmapped_champions':p[p.cid.isna()].champion.unique().tolist()};(O/'ranked-coverage.json').write_text(json.dumps(audit,indent=2));print(json.dumps(audit,indent=2))

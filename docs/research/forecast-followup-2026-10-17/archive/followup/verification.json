@@ -1,0 +1,35 @@
+{
+  "market-predictions.parquet": {
+    "rows": 906,
+    "probability_columns": 18,
+    "bounded_and_finite": true
+  },
+  "professional-predictions.parquet": {
+    "rows": 68040,
+    "probability_columns": 64,
+    "bounded_and_finite": true
+  },
+  "ranked-test-predictions.parquet": {
+    "rows": 172,
+    "probability_columns": 11,
+    "bounded_and_finite": true
+  },
+  "wide-predictions-prior_day.parquet": {
+    "rows": 75737,
+    "probability_columns": 3,
+    "bounded_and_finite": true
+  },
+  "wide-predictions-timestamp.parquet": {
+    "rows": 75737,
+    "probability_columns": 3,
+    "bounded_and_finite": true
+  },
+  "raw_hash_mismatches": [],
+  "sqlite_quick_check": "ok",
+  "database": [
+    196108,
+    "2014-01-14 17:52:02",
+    "2026-05-22 21:16:51"
+  ],
+  "repository_status": ""
+}

@@ -1,0 +1,13 @@
+from pathlib import Path
+import urllib.request,json,hashlib,concurrent.futures
+O=Path(__file__).parent;urls={
+'oe2026':'https://raw.githubusercontent.com/chrisvu1007/league-of-legends-match-predictor/29838abc074d60a83c7a9638a456a2d366b5546d/data/2026_LoL_esports_match_data_from_OraclesElixir.csv',
+'ddragon':'https://ddragon.leagueoflegends.com/cdn/16.10.1/data/en_US/champion.json',
+'patch_schedule':'https://support-leagueoflegends.riotgames.com/hc/en-us/articles/360018987893-Patch-Schedule-League-of-Legends'}
+def get(it):
+ k,u=it
+ try:
+  with urllib.request.urlopen(u,timeout=25) as r:b=r.read()
+  suf='.csv' if k=='oe2026' else '.json' if k=='ddragon' else '.html';p=O/(k+suf);p.write_bytes(b);return {'name':k,'url':u,'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()}
+ except Exception as e:return {'name':k,'url':u,'error':str(e)}
+a=list(concurrent.futures.ThreadPoolExecutor(max_workers=3).map(get,urls.items()));(O/'needed-manifest.json').write_text(json.dumps(a,indent=2));print(json.dumps(a,indent=2))

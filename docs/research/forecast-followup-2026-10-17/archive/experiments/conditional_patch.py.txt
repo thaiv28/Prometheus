@@ -1,0 +1,13 @@
+from pathlib import Path
+import pandas as pd,numpy as np,json,time
+from evaluate import fitpredict,utility,report
+O=Path(__file__).parent;t=time.time();g=pd.read_parquet(O/'features-final.parquet');d=pd.read_parquet(O/'draft-pr78-features.parquet');g=g.merge(d[['gameid','exp','champ_wae','champ_gd15','meta','matchup','synergy']],on='gameid',validate='one_to_one');g=g[g.year>=2019].reset_index(drop=True);g['blue_known']=1.;train=(g.year<=2021).to_numpy();dev=g.year.between(2022,2023).to_numpy();final=(g.year<=2023).to_numpy();test=(g.year>=2024).to_numpy();base=g.p_prod.to_numpy();cols=['blue_known','exp','champ_wae','champ_gd15','meta','matchup','synergy'];res={};pred=pd.DataFrame({'gameid':g.gameid});trials=[]
+for lam in [.001,.01,.1]:
+ pp=base.copy();pp[dev],_=fitpredict(g,g[cols],train,dev,lam);trials.append((float(utility(g,pp,dev)),lam))
+_,lam=min(trials);control=base.copy();control[test],_=fitpredict(g,g[cols],final,test,lam)
+for lag in [1,14]:
+ cc=cols+['draft_wr'+str(lag),'draft_cover'+str(lag)];trials=[]
+ for lam in [.001,.01,.1]:
+  pp=base.copy();pp[dev],_=fitpredict(g,g[cc],train,dev,lam);trials.append((float(utility(g,pp,dev)),lam))
+ _,lam=min(trials);pp=base.copy();pp[test],meta=fitpredict(g,g[cc],final,test,lam);name='external_after_pr78_'+str(lag);pred[name]=pp;res[name]={'dev_trials':trials,'penalty':lam,'fit':meta,'vs_pr78_full':report(g,pp,control,test)};print(name,res[name]['vs_pr78_full']['all'],flush=True)
+pred.to_parquet(O/'predictions-conditional.parquet',index=False);(O/'results-conditional.json').write_text(json.dumps(res,indent=2));print('seconds',time.time()-t,flush=True)

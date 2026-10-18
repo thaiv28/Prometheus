@@ -1,0 +1,74 @@
+from pathlib import Path
+import pandas as pd,numpy as np,json,time,sys
+from scipy.special import expit,logit
+from scipy.optimize import minimize
+O=Path(__file__).parent
+def loss(y,p):return np.logaddexp(0,logit(np.clip(p,1e-8,1-1e-8)))-y*logit(np.clip(p,1e-8,1-1e-8))
+def fitpredict(g,x,tr,te,lam,base='p_prod',controls=True):
+ x=np.asarray(x,float);x=np.nan_to_num(x);sc=np.std(x[tr],axis=0);const=sc<1e-8;sc[const]=1;x=x/sc
+ z=logit(np.clip(g[base].to_numpy(),1e-7,1-1e-7));y=g.y.to_numpy()
+ if controls:
+  c=np.column_stack([z*((g.same)&g.major),z*(g.same&~g.major),z*(~g.same)])
+  x=np.column_stack([c,x]);pen=np.r_[np.zeros(3),np.where(const,0.,lam)]
+ else:pen=np.full(x.shape[1],lam)
+ xt=x[tr];yt=y[tr];zt=z[tr]
+ def fg(b):
+  eta=zt+xt@b;d=expit(eta)-yt
+  return np.mean(np.logaddexp(0,eta)-yt*eta)+.5*np.sum(pen*b*b),xt.T@d/len(yt)+pen*b
+ m=minimize(fg,np.zeros(x.shape[1]),jac=True,method='L-BFGS-B',options={'maxiter':200,'ftol':1e-12})
+ return expit(z[te]+x[te]@m.x),{'coef':m.x.tolist(),'scale':sc.tolist(),'success':bool(m.success)}
+def utility(g,p,mask):
+ # Equal weight to target cohorts rather than allowing minor leagues to decide every setting.
+ v=[]
+ for s in ['major_domestic','minor_domestic','international']:
+  k=mask&(g.scope==s).to_numpy()
+  if k.sum()>20:v.append(loss(g.y.to_numpy()[k],p[k]).mean())
+ return np.mean(v)
+def estimate(g,p,ref,mask):
+ k=np.flatnonzero(mask);h=g.iloc[k];y=h.y.to_numpy();a=np.asarray(p)[k];b=np.asarray(ref)[k]
+ if len(k)==0:return {'n':0}
+ d=loss(y,a)-loss(y,b);clusters=h.league.astype(str)+'|'+h.day.astype(str)+'|'+h.apply(lambda r:'|'.join(sorted([r.a,r.b])),axis=1)
+ codes,_=pd.factorize(clusters);s=np.bincount(codes,weights=d);n=np.bincount(codes);rng=np.random.default_rng(4721);boot=[]
+ for _ in range(1500):
+  idx=rng.integers(0,len(n),len(n));boot.append(s[idx].sum()/n[idx].sum())
+ ci=np.quantile(boot,[.025,.975]);z=logit(np.clip(a,1e-6,1-1e-6))
+ def f(v):
+  eta=v[0]+v[1]*z;return np.mean(np.logaddexp(0,eta)-y*eta)
+ cal=minimize(f,[0,1]).x if len(k)>30 else [None,None]
+ bins=np.minimum((a*10).astype(int),9);ece=sum(abs((y-a)[bins==i].sum()) for i in range(10))/len(y)
+ return {'n':len(k),'clusters':len(n),'ll':float(loss(y,a).mean()),'ref_ll':float(loss(y,b).mean()),'delta':float(d.mean()),'ci95':ci.tolist(),'brier':float(np.mean((a-y)**2)),'ref_brier':float(np.mean((b-y)**2)),'calibration_intercept':None if cal[0] is None else float(cal[0]),'calibration_slope':None if cal[1] is None else float(cal[1]),'ece10':float(ece)}
+def slices(g):
+ d={'all':np.ones(len(g),bool)}
+ for s in g.scope.unique():d[s]=(g.scope==s).to_numpy()
+ for t in ['major_major','major_minor','minor_minor']:d['intl_'+t]=((g.scope=='international')&(g.tier==t)).to_numpy()
+ d['intl_entry']=((g.scope=='international')&g.entry).to_numpy();d['intl_later']=((g.scope=='international')&~g.entry).to_numpy()
+ for year in [2024,2025,2026]:d[str(year)]=(g.year==year).to_numpy()
+ return d
+def report(g,p,ref,test):return {k:estimate(g,p,ref,test&v) for k,v in slices(g).items()}
+def run():
+ t=time.time();g=pd.read_parquet(O/'features-final.parquet');alternate='--chronological' in sys.argv
+ if alternate:g['p_prod']=g.p_chrono
+ g['blue_known']=1.
+ train=(g.year<=2021).to_numpy();dev=g.year.between(2022,2023).to_numpy();test=(g.year>=2024).to_numpy();final=(g.year<=2023).to_numpy();pred=pd.DataFrame({'gameid':g.gameid,'p_prod':g.p_prod,'p_chrono':g.p_chrono})
+ g['patch_prev1']=g.patch_level1-g.patch_shift1
+ models={'calibration_control':[], 'style_linear':['tempo','objectives','lane'], 'style_interactions':['tempo','objectives','lane','interaction0','interaction1','interaction2'], 'pool_controls':['pool_entropy','experience','line_games','rookie_experience','roster_known'], 'patch_pre_1':['patch_level1','patch_shift1','patch_cover1'], 'patch_pre_14':['patch_level14','patch_shift14','patch_cover14'], 'patch_options_1':['pool_entropy','experience','patch_level1','patch_shift1','patch_options1','patch_cover1'], 'patch_options_14':['pool_entropy','experience','patch_level14','patch_shift14','patch_options14','patch_cover14'], 'patch_post_1':['draft_wr1','draft_cover1'], 'patch_post_14':['draft_wr14','draft_cover14']}
+ models['postdraft_control']=['blue_known']
+ for lag in [1,14]:models['patch_post_'+str(lag)]=['blue_known','draft_wr'+str(lag),'draft_cover'+str(lag)]
+ models['patch_level_1']=['patch_level1','patch_cover1']
+ models['patch_shift_1']=['patch_shift1','patch_cover1']
+ for lag in [1,14]:models['patch_options_'+str(lag)]=models['pool_controls']+['patch_level'+str(lag),'patch_shift'+str(lag),'patch_options'+str(lag),'patch_cover'+str(lag)]
+ res={};dev_control,_=fitpredict(g,np.empty((len(g),0)),train,dev,0);control=np.asarray(g.p_prod).copy();control[test],_=fitpredict(g,np.empty((len(g),0)),final,test,0)
+ for name,cols in models.items():
+  x=g[cols].to_numpy();trials=[]
+  for lam in ([0] if not cols else [.001,.01,.1]):
+   pdv,_=fitpredict(g,x,train,dev,lam);pp=np.asarray(g.p_prod).copy();pp[dev]=pdv;trials.append((utility(g,pp,dev),lam))
+  _,lam=min(trials);pp=np.asarray(g.p_prod).copy();pp[test],meta=fitpredict(g,x,final,test,lam);pred[name]=pp
+  res[name]={'features':cols,'penalty':lam,'dev_trials':trials,'fit':meta,'vs_production':report(g,pp,g.p_prod,test),'vs_calibration':report(g,pp,control,test)}
+  if name.startswith('patch_'):
+   lag='14' if name.endswith('14') else '1';cover='draft_cover' if 'post' in name else 'patch_cover';mask=test&(g[cover+lag+'_mean']>=.8).to_numpy();res[name]['covered_vs_calibration']=report(g,pp,control,mask)
+  print(name,lam,'major',res[name]['vs_calibration']['major_domestic']['delta'],'all',res[name]['vs_calibration']['all']['delta'],flush=True)
+ for lag in [1,14]:res['patch_post_'+str(lag)]['vs_postdraft_control']=report(g,pred['patch_post_'+str(lag)],pred['postdraft_control'],test)
+ for a,b in [('style_interactions','style_linear'),('patch_options_1','pool_controls'),('patch_options_14','pool_controls'),('patch_pre_1','patch_level_1')]:res[a]['vs_'+b]=report(g,pred[a],pred[b],test)
+ for k in ['p_prod','p_chrono']:res[k]={'vs_production':report(g,g[k],g.p_prod,test)}
+ pred.to_parquet(O/('predictions-static-chrono.parquet' if alternate else 'predictions-static.parquet'),index=False);(O/('results-static-chrono.json' if alternate else 'results-static.json')).write_text(json.dumps(res,indent=2,allow_nan=False));print('complete',time.time()-t,flush=True)
+if __name__=='__main__':run()

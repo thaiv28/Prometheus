@@ -1,0 +1,34 @@
+from pathlib import Path
+import sys,json,gzip,time
+import pandas as pd,numpy as np
+from scipy.special import logit,expit
+from sklearn.linear_model import LogisticRegression
+O=Path(__file__).parent;P=O.parent/'prior-research/experiments';sys.path.insert(0,str(P));from evaluate import report,estimate
+T=time.time();g=pd.read_parquet(O/'professional-analysis.parquet');pred=pd.read_parquet(O/'professional-predictions.parquet');g=g.merge(pred[['gameid','fixed_full','fixed_control']],on='gameid');lookup=g.set_index('gameid');raw=json.load(gzip.open(P/'pr78-live-data.json.gz','rt'));rr=[]
+F=['exp','champ_wae','champ_gd15','meta','matchup','synergy'];fit=json.load(open(O/'professional-results.json'))['models']['full']['fixed_fit'];coef=np.array(fit['coef'])[4:];scale=np.array(fit['scale'])[1:]
+for r in raw['premaps']:
+ if r['game'] not in lookup.index:continue
+ a=lookup.loc[r['game']]
+ if set(r['teams'])!={a.an,a.bn} or any(r['market'][i] is None for i in [0,1,4]):continue
+ same=r['teams'][0]==a.an;sgn=1 if same else -1;d=a.to_dict();d['gameid']=r['game'];d['start']=pd.Timestamp(r['start']).tz_convert(None);d['series']=r['series'];d['map_number']=r['map'];d['before']=r['market'][0] if same else 1-r['market'][0];d['bet']=r['market'][1] if same else 1-r['market'][1];d['start_price']=r['market'][4] if same else 1-r['market'][4];scores=r['score_before'];w,ell=scores if same else scores[::-1];d['wins_before']=w;d['losses_before']=ell;rho=.054 if a.major else .127;k=1/rho-1;d['p_state']=(k*a.p_prod+w)/(k+w+ell);d['draft_component']=float(a[F].to_numpy(float)/scale@coef);d['draft_shift']=float(logit(a.fixed_full)-logit(a.fixed_control));rr.append(d)
+h=pd.DataFrame(rr).sort_values('start').reset_index(drop=True);months=h.start.dt.to_period('M');res={'status':'map-level chronological blend analogue, not exact production series blend; old scored corpus and release-price overlap; draft availability before the quote is an unverified deployment assumption','n':len(h),'series':h.series.nunique(),'months':{},'models':{}};pp=pd.DataFrame({'gameid':h.gameid,'market_bet':h.bet,'market_start':h.start_price});lo=lambda x:logit(np.clip(np.asarray(x,float),1e-6,1-1e-6))
+for cutoff in ['bet','start_price']:
+ z=lo(h[cutoff]);e=lo(h.p_state);xsets={'market_only':z[:,None],'market_forge':np.c_[z,e-z],'market_forge_draft':np.c_[z,e-z,h.draft_component],'market_forge_shift':np.c_[z,e-z,h.draft_shift]}
+ for minseries in [100,300]:
+  valid=np.zeros(len(h),bool);preds={k:np.full(len(h),np.nan) for k in xsets};fits={}
+  for month in sorted(months.unique()):
+   day=month.start_time;train=(h.start<day-pd.Timedelta(days=1)).to_numpy();test=(months==month).to_numpy();ns=h.loc[train,'series'].nunique()
+   fits[str(month)]={'training_maps':int(train.sum()),'training_series':int(ns),'test_maps':int(test.sum()),'admitted':bool(ns>=minseries)}
+   if ns<minseries or len(set(h.loc[train,'y']))<2:continue
+   valid|=test
+   for name,x in xsets.items():
+    m=LogisticRegression(C=1,fit_intercept=False,max_iter=500).fit(x[train],h.loc[train,'y']);preds[name][test]=m.predict_proba(x[test])[:,1];fits[str(month)][name]=m.coef_[0].tolist()
+  tag=cutoff+'_'+str(minseries);res['months'][tag]=fits
+  for name,p in preds.items():
+   full=np.where(np.isfinite(p),p,h[cutoff]);ref=np.where(np.isfinite(preds['market_only']),preds['market_only'],h[cutoff]);k=tag+'_'+name;pp[k]=full;res['models'][k]={'vs_market_calibrated':report(h,full,ref,valid),'vs_raw_market':report(h,full,h[cutoff],valid)}
+   if name in ['market_forge_draft','market_forge_shift']:
+    prior=np.where(np.isfinite(preds['market_forge']),preds['market_forge'],h[cutoff]);res['models'][k]['vs_market_forge']=report(h,full,prior,valid)
+    for which,mask in [('map_one',h.map_number==1),('later_maps',h.map_number>1)]:res['models'][k][which]=estimate(h,full,prior,valid&mask.to_numpy())
+  print(tag,'valid',int(valid.sum()),'series',h.loc[valid,'series'].nunique(),flush=True)
+# Event-cluster sensitivity on price-start min100 primary draft addition.
+key='start_price_100_market_forge_draft';prior='start_price_100_market_forge';valid=months.isin([pd.Period(x) for x,v in res['months']['start_price_100'].items() if v['admitted']]).to_numpy();res['series_sample_counts']={str(k):int(v) for k,v in h.groupby(months).series.nunique().items()};h.to_parquet(O/'market-analysis.parquet',index=False);pp.to_parquet(O/'market-predictions.parquet',index=False);res['seconds']=time.time()-T;(O/'market-results.json').write_text(json.dumps(res,indent=2));print('complete',len(h),res['series'],'seconds',res['seconds'],flush=True)

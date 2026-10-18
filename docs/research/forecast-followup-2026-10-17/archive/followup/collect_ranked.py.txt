@@ -1,0 +1,47 @@
+from pathlib import Path
+import urllib.request,json,re,gzip,hashlib,concurrent.futures,time,itertools
+O=Path(__file__).parent;D=O/'ranked-pages';D.mkdir(exist_ok=True)
+def parse(b,patch,tier,lane):
+ s=b.decode();m=re.search(r'<script type="qwik/json">(.*?)</script>',s)
+ if not m:raise ValueError('no structured page state')
+ a=json.loads(m[1])['objs']
+ def val(ref):
+  z=a[int(ref,36)]
+  if isinstance(z,dict):return {k:val(v) for k,v in z.items()}
+  if isinstance(z,list):return [val(v) for v in z]
+  return z
+ nav=next(v for v in a if isinstance(v,dict) and 'currentPatch'in v and 'modeName'in v)
+ actual={k:val(nav[k]) for k in ['patch','tier','lane','mode','region']}
+ assert actual=={'patch':patch,'tier':tier,'lane':lane,'mode':'ranked','region':'all'},actual
+ data=next(v for v in a if isinstance(v,dict) and 'cid'in v and 'avgWr'in v and 'queue'in v)
+ avg=val(data['avgWr']);assert 35<float(avg)<65,avg
+ rr=[]
+ for cid,ref in a[int(data['cid'],36)].items():
+  v=val(ref)
+  if v.get('lane')!=lane:raise ValueError('wrong row lane')
+  if v.get('games',0)>0:
+   assert 0<=float(v['wr'])<=100
+   rr.append({'patch':patch,'tier':tier,'role':lane,'cid':int(cid),'winrate':float(v['wr'])/100,'games':int(v['games']),'pickrate':float(v['pr']),'average_winrate':float(avg)/100})
+ return rr
+
+def fetch(it):
+ patch,tier,lane=it;u=f'https://lolalytics.com/lol/tierlist/?tier={tier}&patch={patch}&lane={lane}';p=D/(f'{patch}-{tier}-{lane}.html.gz');t=time.time()
+ try:
+  if p.exists():b=gzip.decompress(p.read_bytes())
+  else:
+   with urllib.request.urlopen(u,timeout=18) as r:b=r.read()
+   rr=parse(b,patch,tier,lane)
+   p.write_bytes(gzip.compress(b))
+  rr=parse(b,patch,tier,lane)
+  return {'url':u,'patch':patch,'tier':tier,'role':lane,'rows':rr,'sha256':hashlib.sha256(b).hexdigest(),'retrieved_utc':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),'seconds':round(time.time()-t,2)}
+ except Exception as e:return {'url':u,'patch':patch,'tier':tier,'role':lane,'error':str(e)}
+if __name__=='__main__':
+ import sys
+ jobs=[('16.1','master_plus','top')] if '--probe' in sys.argv else list(itertools.product([f'16.{i}' for i in range(1,10)],['platinum_plus','diamond_plus','master_plus'],['top','jungle','middle','bottom','support']))
+ rr=[]
+ with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
+  for i,r in enumerate(ex.map(fetch,jobs)):
+   rr.append(r)
+   if (i+1)%15==0 or '--probe'in sys.argv:print('sources',i+1,'errors',sum('error'in x for x in rr),'last',str({k:v for k,v in r.items() if k!='rows'}),flush=True)
+   (O/('ranked-source-probe.json' if '--probe'in sys.argv else 'ranked-manifest.json')).write_text(json.dumps(rr,indent=2))
+ print('done',len(rr),'rows',sum(len(r.get('rows',[])) for r in rr),flush=True)

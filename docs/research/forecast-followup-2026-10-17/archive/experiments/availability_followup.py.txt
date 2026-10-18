@@ -1,0 +1,13 @@
+from pathlib import Path
+import pandas as pd,numpy as np,json
+from evaluate import report,loss
+O=Path(__file__).parent
+f=pd.read_parquet(O/'features-final.parquet');p=pd.read_parquet(O/'predictions-conditional.parquet');q=pd.read_parquet(O/'predictions-draft.parquet');g=f.merge(p,on='gameid').merge(q[['gameid','pr78_full']],on='gameid');test=(g.year>=2024).to_numpy();res={'status':'Exploratory routing rule evaluated after examining coverage-subset results. Eighty-percent average coverage threshold had already been used as a diagnostic; routing is a follow-up, not a new untouched confirmation.'};pred=pd.DataFrame({'gameid':g.gameid})
+for lag in [1,14]:
+ good=(g['draft_cover'+str(lag)+'_mean']>=.8).to_numpy();pp=np.where(good,g['external_after_pr78_'+str(lag)],g.pr78_full);pred['availability_gate_'+str(lag)]=pp;res[str(lag)]={'covered_maps':int((good&test).sum()),'vs_pr78_full':report(g,pp,g.pr78_full,test)}
+ h=g[test&good&(g.scope=='international')];a=h['external_after_pr78_'+str(lag)].to_numpy();b=h.pr78_full.to_numpy();d=loss(h.y,a)-loss(h.y,b);codes,_=pd.factorize(h.league.astype(str)+'|'+h.year.astype(str));s=np.bincount(codes,weights=d);n=np.bincount(codes);rng=np.random.default_rng(9472);bb=[]
+ for _ in range(10000):
+  k=rng.integers(0,len(n),len(n));bb.append(s[k].sum()/n[k].sum())
+ res[str(lag)]['covered_international_event_ci']={'n':len(h),'events':len(n),'delta':float(d.mean()),'ci95':np.quantile(bb,[.025,.975]).tolist()}
+(O/'results-availability-followup.json').write_text(json.dumps(res,indent=2));pred.to_parquet(O/'predictions-availability-followup.parquet',index=False)
+print(json.dumps({k:{'all':v['vs_pr78_full']['all'],'intl_event':v['covered_international_event_ci']} for k,v in res.items() if isinstance(v,dict)},indent=2))

@@ -1,0 +1,8 @@
+{
+  "intervention_day": "2025-01-21 00:00:00",
+  "rows": 5180,
+  "same_day_or_earlier_max_error_after_flipping_day_results": 2.7755575615628914e-17,
+  "later_features_change": 0.5966011889924934,
+  "prefix_max_error_after_removing_future_games": 0.0,
+  "passes": true
+}

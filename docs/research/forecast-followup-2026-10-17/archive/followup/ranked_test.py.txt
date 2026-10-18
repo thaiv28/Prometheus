@@ -1,0 +1,11 @@
+from pathlib import Path
+import sys,pandas as pd,numpy as np,json
+O=Path(__file__).parent;sys.path.insert(0,str(O.parent/'prior-research/experiments'))
+from evaluate import fitpredict,report
+r=pd.read_parquet(O/'ranked-analysis.parquet');g=r[r.common_complete&r.eligible1].reset_index(drop=True);train=(g.patch=='16.1').to_numpy();test=(g.patch=='16.2').to_numpy();g['p_offset']=g.fixed_full;pred=pd.DataFrame({'gameid':g.gameid,'baseline':g.fixed_full});res={'primary_shrinkage':500,'status':'two-patch feasibility diagnostic; no independent hyperparameter selection, no international sample, no original-publication timestamp proof','train_maps':int(train.sum()),'test_maps':int(test.sum()),'test_series':int(g[test].groupby(['league','day','a','b']).ngroups),'test_dates':[str(g.loc[test,'day'].min()),str(g.loc[test,'day'].max())],'models':{}}
+for tier in ['platinum_plus','diamond_plus','master_plus']:
+ for n in [100,500,2000]:
+  name=tier+'_'+str(n);pp=g.fixed_full.to_numpy().copy();pp[test],fit=fitpredict(g,g[[name]],train,test,.1,base='p_offset',controls=False);pred[name]=pp;res['models'][name]={'fit':fit,'vs_professional':report(g,pp,g.fixed_full,test)}
+# Test the higher-rank residual after the common Platinum+ level, without selecting a winner on the held-out patch.
+g['rank_difference']=g.master_plus_500-g.platinum_plus_500;pp=g.fixed_full.to_numpy().copy();pp[test],fit=fitpredict(g,g[['platinum_plus_500','rank_difference']],train,test,.1,base='p_offset',controls=False);pred['platinum_and_master']=pp;res['models']['platinum_and_master']={'fit':fit,'vs_professional':report(g,pp,g.fixed_full,test),'vs_platinum':report(g,pp,pred.platinum_plus_500,test)}
+res['master_vs_platinum']=report(g,pred.master_plus_500,pred.platinum_plus_500,test);res['master_vs_diamond']=report(g,pred.master_plus_500,pred.diamond_plus_500,test);pred.to_parquet(O/'ranked-test-predictions.parquet',index=False);(O/'ranked-test-results.json').write_text(json.dumps(res,indent=2));print(json.dumps({'train':res['train_maps'],'test':res['test_maps'],'primary':{k:v['vs_professional']['all'] for k,v in res['models'].items() if k.endswith('_500')},'master_vs_platinum':res['master_vs_platinum']['all']},indent=2))

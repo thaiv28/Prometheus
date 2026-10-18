@@ -1,0 +1,21 @@
+from pathlib import Path
+import numpy as np,pandas as pd,json,time
+from scipy.special import logit
+from sklearn.linear_model import LogisticRegression
+O=Path(__file__).parent;T=time.time();h=pd.read_parquet(O/'market-analysis.parquet');months=h.start.dt.to_period('M');codes,names=pd.factorize(h.series);lo=lambda p:logit(np.clip(np.asarray(p,float),1e-6,1-1e-6));z=lo(h.bet);e=lo(h.p_state);xs=[z[:,None],np.c_[z,e-z],np.c_[z,e-z,h.draft_component]];y=h.y.to_numpy();rng=np.random.default_rng(99117);out={};R=400
+for minimum in [100,300]:
+ splits=[]
+ for m in sorted(months.unique()):
+  tr=(h.start<m.start_time-pd.Timedelta(days=1)).to_numpy();te=(months==m).to_numpy()
+  if h.loc[tr,'series'].nunique()>=minimum:splits.append((tr,te))
+ ds=[]
+ for rep in range(R):
+  counts=np.bincount(rng.integers(0,len(names),len(names)),minlength=len(names));w=counts[codes];sums=np.zeros(3);den=0.
+  for tr,te in splits:
+   if len(set(y[tr&(w>0)]))<2:continue
+   den+=w[te].sum()
+   for j,x in enumerate(xs):
+    model=LogisticRegression(C=1,fit_intercept=False,max_iter=500).fit(x[tr],y[tr],sample_weight=w[tr]);eta=model.decision_function(x[te]);loss=np.logaddexp(0,eta)-y[te]*eta;sums[j]+=loss@w[te]
+  if den:ds.append([(sums[2]-sums[1])/den,(sums[2]-sums[0])/den])
+ a=np.array(ds);out[str(minimum)]={'replicates':len(a),'method':'series bootstrap resamples training and test series and refits each expanding-month market model; eligibility months frozen from original data','draft_vs_market_forge_ci95':np.quantile(a[:,0],[.025,.975]).tolist(),'draft_vs_market_calibrated_ci95':np.quantile(a[:,1],[.025,.975]).tolist()};print(minimum,out[str(minimum)],'seconds',time.time()-T,flush=True)
+out['seconds']=time.time()-T;(O/'market-refit-bootstrap.json').write_text(json.dumps(out,indent=2))
