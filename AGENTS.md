@@ -68,10 +68,12 @@ mkdir -p data && ln -s "$MAIN/data/raw" data/raw    # raw CSVs: read-only, safe 
 cp "$MAIN/.env" .                                    # Leaguepedia bot login
 cp "$MAIN/data/predictions.json" "$MAIN/data/market_prices.json" data/   # prediction log and Kalshi prices, for site builds
 cp -R "$MAIN/data/markets" data/                     # Kalshi cache, only for evaluate_markets.py (rewrites frames.pkl)
+mkdir -p data/live_bench "$MAIN/data/live_bench/pre_trades"   # Kalshi trade tapes: one file per market, never rewritten,
+ln -s "$MAIN/data/live_bench/trades" "$MAIN/data/live_bench/pre_trades" data/live_bench/   # so share them (an hour to refetch)
 uv run bash scripts/setup_db.sh                      # own db/ (~1 min); never symlink db/, setup_db.sh deletes it
 ```
 
-Use a port other than 8000 for `http.server` if another worktree is serving.
+Use a port other than 8000 for `http.server` if another worktree is serving. Before removing a worktree, move any fetched data you want to keep into `$MAIN/data/`: `git worktree remove --force` deletes gitignored files.
 
 ## Layout
 

@@ -1,0 +1,44 @@
+{
+  "name": "draft_v1",
+  "frozen_at": "2026-10-17T21:33:05+00:00",
+  "fit_from": "2019-01-01",
+  "fit_through": "2026-10-11",
+  "games": 76299,
+  "base": {
+    "columns": [
+      "elo_logit"
+    ],
+    "intercept": 0.11151770600873122,
+    "coef": [
+      1.7019136999227424
+    ]
+  },
+  "draft": {
+    "columns": [
+      "elo_logit",
+      "exp",
+      "champ_wae",
+      "champ_gd15",
+      "meta",
+      "matchup",
+      "synergy"
+    ],
+    "intercept": 0.10392626675276258,
+    "coef": [
+      1.6215028539673504,
+      0.018674549115592083,
+      0.12739366881070213,
+      0.04983022351557402,
+      1.033921956797919,
+      0.315421160959447,
+      0.34760410521407475
+    ]
+  },
+  "constants": {
+    "SHRINK_PLAYER": 10,
+    "SHRINK_META": 50,
+    "META_DAYS": 60,
+    "SHRINK_PAIR": 20
+  },
+  "script_sha256": "5d00948050866533cd922cd2fc736ce360e959c899469912ca20d0986e271b3a"
+}

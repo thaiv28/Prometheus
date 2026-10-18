@@ -32,6 +32,7 @@ from .kalshi import (
     MATCH_SERIES,
     MATCH_URL,
     SERIES,
+    book_levels,
     contract,
     quote,
 )
@@ -431,6 +432,68 @@ def publish_s3(page_out, uri):
         log("s3_failed", reason=done.stderr.strip()[:300])
 
 
+class PreMaps:
+    """Kalshi's book for maps getLive lists as in progress before the feed has
+    them (the draft and the loading screen), until the map is tracked.
+
+    Each poll appends {at, bid, ask, yes, no (top levels), ticker} to
+    `<root>/<match>/<game>/pre_quotes.jsonl`; the first sighting is logged as
+    `pre_map_seen` (when the draft was first seen live).
+    """
+
+    def __init__(self, root):
+        self.root, self.maps, self.seq = root, {}, 0
+
+    def seen(self, event, game, mapping):
+        gid = game["id"]
+        if gid in self.maps:
+            return
+        self.maps[gid] = {
+            "dir": self.root / event["id"] / gid,
+            "mapping": mapping,
+            "number": game["number"],
+            "start_time": event.get("startTime"),
+            "ticker": None,
+        }
+        log("pre_map_seen", game=gid, match=event["id"], map=game["number"])
+
+    def drop(self, gid):
+        self.maps.pop(gid, None)
+
+    def keep(self, match_ids):
+        for gid in [
+            g for g, m in self.maps.items() if m["mapping"]["match_id"] not in match_ids
+        ]:
+            self.drop(gid)
+
+    def want_tickers(self):
+        return any(m["ticker"] is None for m in self.maps.values())
+
+    def match(self, markets):
+        for gid, m in self.maps.items():
+            if m["ticker"] is None and m["start_time"]:
+                m["ticker"] = contract(
+                    markets, m["mapping"], m["number"], m["start_time"]
+                )
+                if m["ticker"]:
+                    log("pre_map_contract", game=gid, ticker=m["ticker"])
+
+    def poll(self):
+        for m in self.maps.values():
+            if not m["ticker"]:
+                continue
+            self.seq += 1
+            stamp = datetime.now(UTC).strftime("%H%M%S")
+            out = m["dir"] / "prebook" / f"{self.seq:06d}_{stamp}"
+            _, book = fetch_json(f"{KALSHI}/markets/{m['ticker']}/orderbook", out)
+            q = quote(book or {}, utc_now())
+            if q:
+                m["dir"].mkdir(parents=True, exist_ok=True)
+                with (m["dir"] / "pre_quotes.jsonl").open("a") as f:
+                    row = dict(q, ticker=m["ticker"], **book_levels(book))
+                    f.write(json.dumps(row) + "\n")
+
+
 class Game:
     def __init__(
         self, root, mapping, game, model, ratings, start_time=None, adopt=None
@@ -575,7 +638,8 @@ class Game:
         q = quote(book or {}, utc_now())
         if q:
             with path.open("a") as f:
-                f.write(json.dumps(dict(q, ticker=ticker)) + "\n")
+                row = dict(q, ticker=ticker, **book_levels(book))
+                f.write(json.dumps(row) + "\n")
 
     @staticmethod
     def quotes(path):
@@ -814,6 +878,7 @@ def run(args):
         gid, path, session = spec.split(":", 2)
         adopt[gid] = (Path(path), session)
     games, failed, last_discovery = {}, {}, 0.0
+    pre = PreMaps(args.root)
     events, last_active = None, time.monotonic()
     scheduled = []
     waiting_ids = set()
@@ -844,6 +909,7 @@ def run(args):
                     ]:
                         games.pop(gid).close()
                         log("untracked", game=gid, reason="match no longer live")
+                    pre.keep(live_ids)
                 try:
                     _, schedule = fetch_json(
                         GETSCHEDULE, args.root / "schedule" / stamp
@@ -872,9 +938,11 @@ def run(args):
                             mapping = mapping_for(event, catalog, aliases)
                             if gid not in adopt:
                                 out = args.root / event["id"] / gid / "sides" / stamp
-                                game = feed_sides(game, out)
+                                listed, game = game, feed_sides(game, out)
                                 if game is None:
-                                    continue  # draft or loading: next discovery
+                                    # Draft or loading: read Kalshi's book meanwhile.
+                                    pre.seen(event, listed, mapping)
+                                    continue
                             # A new map replaces the match's earlier one.
                             for old in [
                                 k
@@ -895,6 +963,7 @@ def run(args):
                                 adopt.get(gid),
                             )
                             games[gid].page_out = args.page_out
+                            pre.drop(gid)
                             log(
                                 "tracking",
                                 game=gid,
@@ -978,8 +1047,12 @@ def run(args):
                             g.mapping["score"] = mapping_score(event)
                     if g.forge is None and args.forge:
                         g.forge = forge_for(args, g.mapping, g.start_time)
-                if kalshi and any(
-                    g.ticker is None or g.series_ticker is None for g in games.values()
+                if kalshi and (
+                    any(
+                        g.ticker is None or g.series_ticker is None
+                        for g in games.values()
+                    )
+                    or pre.want_tickers()
                 ):
                     try:
                         markets = []
@@ -989,6 +1062,7 @@ def run(args):
                                 args.root / "kalshi" / f"{stamp}_{series}",
                             )
                             markets += (payload or {}).get("markets", [])
+                        pre.match(markets)
                         for g in games.values():
                             if not g.start_time:
                                 continue
@@ -1015,6 +1089,14 @@ def run(args):
                         log("kalshi_stopped", reason=str(error))
                     except ValueError as error:
                         log("kalshi_discovery_failed", reason=str(error))
+            if kalshi:
+                try:
+                    pre.poll()
+                except Stop as error:
+                    kalshi = False
+                    log("kalshi_stopped", reason=str(error))
+                except (ValueError, OSError) as error:
+                    log("pre_quote_failed", reason=str(error))
             for gid, game in list(games.items()):
                 if kalshi:
                     try:
@@ -1091,7 +1173,10 @@ def run(args):
             ):
                 log("idle", minutes=args.idle_exit)
                 return IDLE
-            interval = QUOTE_INTERVAL if games and kalshi else args.interval
+            # Every 2 s while a map is tracked or in its draft (its book is read).
+            interval = (
+                QUOTE_INTERVAL if (games or pre.maps) and kalshi else args.interval
+            )
             time.sleep(max(0, interval - (time.monotonic() - cycle)))
     except Stop as error:
         log("stopped", reason=str(error))

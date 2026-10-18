@@ -490,3 +490,54 @@ class FastQuotesTest(unittest.TestCase):
             self.assertEqual(g.settle.call_count, 2)
             self.assertEqual(g.poll_quote.call_count, 12)  # two books in six cycles
             self.assertEqual(g.add_quotes.call_count, 4)
+
+
+PRE_EVENT = {"id": "m1", "startTime": "2026-10-17T09:00:00Z"}
+PRE_GAME = {"id": "g2", "number": 2}
+PRE_BOOK = {
+    "orderbook_fp": {
+        "yes_dollars": [["0.55", "100"], ["0.56", "40"], ["0.50", "0"]],
+        "no_dollars": [["0.42", "70"]],
+    }
+}
+
+
+class PreMapsTest(unittest.TestCase):
+    def test_polls_the_book_until_the_map_is_tracked(self):
+        import tempfile
+
+        from prometheus.live.service import PreMaps
+
+        with tempfile.TemporaryDirectory() as tmp:
+            pre = PreMaps(Path(tmp))
+            mapping = {"match_id": "m1", "teams": []}
+            pre.seen(PRE_EVENT, PRE_GAME, mapping)
+            pre.seen(PRE_EVENT, PRE_GAME, mapping)  # once per map
+            self.assertTrue(pre.want_tickers())
+            with mock.patch(
+                "prometheus.live.service.contract", return_value="KXLOLMAP-X-2-A"
+            ):
+                pre.match([])
+            self.assertFalse(pre.want_tickers())
+            with mock.patch(
+                "prometheus.live.service.fetch_json", return_value=({}, PRE_BOOK)
+            ):
+                pre.poll()
+                pre.poll()
+            rows = [
+                json.loads(line)
+                for line in (Path(tmp) / "m1" / "g2" / "pre_quotes.jsonl")
+                .read_text()
+                .splitlines()
+            ]
+            self.assertEqual(len(rows), 2)
+            self.assertEqual((rows[0]["bid"], rows[0]["ask"]), (0.56, 0.58))
+            self.assertEqual(rows[0]["yes"], [[0.56, 40.0], [0.55, 100.0]])
+            self.assertEqual(rows[0]["no"], [[0.42, 70.0]])
+            pre.keep({"m1"})
+            self.assertIn("g2", pre.maps)
+            pre.drop("g2")  # tracked now: the in-game poll takes over
+            self.assertEqual(pre.maps, {})
+            pre.seen(PRE_EVENT, PRE_GAME, mapping)
+            pre.keep(set())  # match no longer live
+            self.assertEqual(pre.maps, {})
