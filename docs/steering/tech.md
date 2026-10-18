@@ -328,6 +328,10 @@ Match pages and summaries carry the optional scheduled `start`. Live’s Coming 
 
 `trading.quote(..., execution_fees=True)` calls the executor’s stdlib `core.fee_bound` directly with `ALERT_FEE_RATE=0.07` / `ALERT_BALANCE_PRECISION=0.0001` (the approved live settings). Both `alerts.select` and `alerts._current` opt in; default `quote` retains the ordinary paper fee convention for page/backtest calculations. Decimal subtraction before float conversion prevents a zero edge from becoming a positive floating-point residual. `alerts.record` deep-copies optional `fee_policy` (version, rate bound, balance precision, unit fee) only for new alerts; legacy records remain untouched. The public fee profile requires a coordinated code update if those two private fee settings change. No AWS/config/account calls, dependencies or runtime fitting enter either publisher; importing this fee function never imports the Kalshi API/signing adapter. Executor source/fingerprint and its actual order policy are unchanged.
 
+## Draft-market research (opt-in)
+
+`scripts/research/draft_market_edge.py` reuses `draft_walkforward` annual shifts and `evaluate_live` cached trade matching/tapes. It writes only its report and private `data/research/draft_market_edge/` states/selected-policy cache; shared raw/trade directories are read-only. The declared protocol guards first-half fitting/selection, separates entry decisions from later fill proxies, and uses consistent all-in per-contract fee accounting for ROI and Kelly. Seven focused tests live in `tests/research/test_draft_market_edge.py`; no production algorithm or CI step changes.
+
 ## Draft-block synthesis (opt-in research)
 
 `scripts/research/draft_v3.py` consumes complete private game-table caches from the four fixed draft tracks. It rejects baseline/target/cohort discrepancies, gates whole feature blocks under `docs/research/draft_v3_protocol.md`, and reuses `draft_walkforward` fits and series bootstrap on their union. Research-only report/JSON outputs; no DB read, model export, build or CI job. Tests in `tests/research/test_draft_v3.py` exercise inventory, cohort/target integrity and subgroup safeguards.

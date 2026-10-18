@@ -1,5 +1,13 @@
 # Work log
 
+## 2026-10-17 — Draft v2 market-edge research
+
+Branch `research/draft-market-edge`, base `draft-v2` at `5811254`. Fixed protocol in `scripts/research/draft_market_edge.py`, report [draft_market_edge.md](../research/draft_market_edge.md): 2026-05-01 split, three capped shifts with ridge-shrunk nonnegative weight, four first-half edge thresholds, recent-trade/adverse nearby-fill proxies, consistent per-contract fee/ROI/Kelly accounting. 4,670 unique OE maps (one duplicate v2 priced-map row removed); no shared-cache writes.
+
+- **Inconclusive, no trading policy selected:** at −60 s, 395/1,195 first/second-half maps have a market trade within 30 s. First-half fitted weights 0.000/0.105/0.131 (caps .25/.5/1); every setting yields zero qualifying first-half fill-proxy bets, so the fixed minimum of 30 never clears. +45 s secondary: 714/1,871 maps, at most 8 first-half bets, also insufficient. Second-half policy abstains: zero bets/total Kelly growth; per-bet ROI/intervals and favourite/long-shot returns cannot be estimated. All declared cap forecast diagnostics are retained, none selected post-test. Cap1 − Kalshi LL −0.0006 (−0.0015 to +0.0002) at −60 s, not significant.
+- **Movement, not an executable edge:** second-half prices move toward the draft shift by +0.0067 (+0.0037 to +0.0099) at +1 min and +0.0076 (+0.0036 to +0.0116) at +3 min, against entry −60 s; +5 min +0.0051 crosses zero. League slices reported. No local `pre_quotes.jsonl` books found across the research/main/lol-live data roots; remote backup not inspected.
+- Checks: seven focused causality/staleness/adverse-fill/fee tests pass; full `uv run pytest -q` 755 passed, 2 skipped (34.97 s under concurrent research load), final reproduction then passed `ruff format --check`, `ruff check`, and the full suite again (755 passed, 2 skipped in 28.41 s). Offline tape/state build 48.9 s; cached full report including forecast/movement bootstraps 40.3 s (final run 25.8 s). No production/site/weight/CI changes or added runtime work. Limits: viewed time halves, conservative trade proxies without actual asks/depth, fixed ridge/cap/minimum choices, synthetic fractional bankroll accounting and no joint simultaneous-exposure optimization. No claimed profitability; policy is left unchanged after viewing results.
+
 ## 2026-10-17 — Draft composition walk-forward research
 
 Branch `research/draft-composition`, base `draft-v2` at `5811254`. One predeclared augmentation of draft v2; research only, no published model, weights, DB or site changes.
