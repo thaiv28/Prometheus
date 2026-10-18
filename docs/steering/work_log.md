@@ -1,5 +1,46 @@
 # Work log
 
+## 2026-10-18 — Historical live-map trading and Kelly research
+
+Branch `research/live-trading`, base main `f522db3` (merged objective/momentum
+release). User authorized research into map-only trading, earlier-only blending,
+fee-aware edge and freshness filters, plus Kelly sizing. Protocol recorded as
+a research file before scoring this run; no published model, account setting,
+order, runtime or deployment change. Source pinned 1,666 maps / 813 series;
+local stale 406-map asset was detected and not used. Reused verified pinned
+asset from `/private/tmp`, DB read-only via explicit argument; shared state
+was not linked or rebuilt. All-in return denominator includes modeled fees.
+
+Earlier-only monthly fits, equal-map training weight, series-end+24h availability
+and same-series exclusion yield 1,352 maps / 655 series from March–October 2026.
+Primary: first map entry in estimated minutes 5–30, net edge >=5 cents after
+7% quadratic taker fee rounded to $0.0001 per contract; valid objectives,
+non-flat source, last trade <=10s, >=2 trades within 21s/range <=1 cent.
+273 entries: +8.86% ROI (95% whole-series bootstrap −4.76% to +23.94%), CLV
++1.25 cents. Blend LL 0.45782 versus raw market 0.46425; delta −0.00643
+(−0.01331 to +0.00020), versus current model −0.00835
+(−0.01238 to −0.00438). Current-model-only entry ROI +7.42%; legacy v1 −6.59%.
+Thirty-second sensitivity +21.05% (+1.83% to +41.61%) is exploratory across
+multiple comparisons on reused history, not a selected strategy. Frozen-entry
+cost stress +2 cents reduces primary ROI to +3.85%, +5 cents to −2.58%.
+Full cash-reserved Kelly $100→$151.43 with 94.88% drawdown; quarter $370.91
+with 42.96%; quarter capped at 1% map/2% series $124.91 with 9.74%.
+Sequential log-growth intervals for every Kelly fraction include zero.
+Historical books/depth/fills, actual feed receipt ages and exchange settlement
+times are absent; cost and end+5min settlement are explicit proxies.
+
+Checks so far: baseline `uv run pytest -q`: 789 passed, 2 skipped in 8.40s;
+four meaningful research tests pass in 0.81s including startup. Complete analysis
+(including current/v1 replay, offline fits, intervals and stress/Kelly paths)
+5.57s. No build/hourly/benchmark step, dependency or production DB read added.
+Final suite: 793 passed, 2 skipped in 9.11s (baseline 8.40s; separate
+environments/system load, not a stable CI cost estimate). Repository-wide ruff
+check/format pass. Four tests cost 0.81s including startup; no CI job added.
+Final reproduction takes 6.30s; 84 relative document links resolve.
+Final whitespace/diff check passes. No remote Actions timing is available until
+submission; no workflow was changed. No UI changes, site
+build, DB rebuild or metric refit required for isolated offline research.
+
 ## 2026-10-18 — Release objective and gold-momentum in-game calls
 
 Branch `live-model-release`, based on research `de6ec95` (which builds on

@@ -1,5 +1,7 @@
 # Research
 
+- [Live map trading](live_trading.md): earlier-series-only market/model blend, fee-aware entries, freshness/stability proxies, execution-cost stress and Kelly paths; [fixed protocol](live_trading_protocol.md). Historical tape returns remain inconclusive; no trading change.
+
 - [Conditional objective gains](cand_followups.md) and [role leads phase A](cand_role_leads.md): original draft and momentum add to objectives; role gold/CS/XP add to gold+Elo on exact checkpoints. Retrospective, no runtime change.
 
 - [Live model candidate review](live_candidates.md): objectives, draft, per-map Elo, momentum and calibration; retrospective research, no model deployed.

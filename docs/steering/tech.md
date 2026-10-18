@@ -367,3 +367,18 @@ Calls record model schema, page quality records selected schema/version. No
 runtime fit/DB read/network dependency or cadence change. Counts intentionally
 match training; the dragon threshold is not a verified elemental soul and
 inhibitors are raw counters rather than an active-buff state.
+
+### Historical live trading research (2026-10-18)
+
+`scripts/research/live_trading.py` reuses the pinned live benchmark and runtime
+objective/momentum model without writes to either. Monthly logistic market/model
+blends and a market-only control fit equal-map-weight rows only from series whose
+last observed end +24h precedes the month; current-month series are excluded.
+First fee-aware map entries, tape stability/freshness proxies, purchase-price
+stresses, whole-series bootstrap intervals and event-time cash-reserved Kelly
+paths are written under gitignored `data/research/live_trading/`. Read-only DB
+and benchmark paths are explicit arguments. The fixed [protocol](../research/live_trading_protocol.md)
+and [report](../research/live_trading.md) document assumptions. Four focused tests
+cover outcome-availability chronology, after-fee selection, side orientation and
+settlement/cash/exposure accounting. No production pipeline, dependency or CI job
+is added.
