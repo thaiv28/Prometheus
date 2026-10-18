@@ -193,6 +193,8 @@ Shared statistics in `prometheus/evaluation.py` (since 2026-10-08): `resamples(u
 
 ## Research scripts (not part of the build)
 
+`series_score.py` is the opt-in draft-v2 handoff track ([report](../research/series_score.md)); it imports `draft_walkforward` for earlier-day draft features, fits, league slices and series bootstrap conventions. It inner-joins the handoff frozen `data/research/draft_v2/forge.pkl` rather than rebuilding uncovered production calls. Tests in `tests/research/test_series_score.py` verify chronological targets and aligned comparisons. No dependency, runtime export, DB write or CI step added.
+
 `scripts/research/draft_form.py` adds an opt-in, frozen-protocol draft-v2 augmentation ([report](../research/draft_form.md)); tests in `tests/research/test_draft_form.py` guard causal histories and earlier-year fitting. It reads its own rebuilt DB and frozen FORGE cache (unrated games intentionally lack a call), reuses/writes `data/research/draft_v2/base_games.pkl`, and writes reports and gitignored `data/research/draft_v2/form_games.pkl` (2019 onward, including training years) / `form_scored.pkl`, and adds no dependency, job or build step. Run `nice -n 10 uv run python scripts/research/draft_form.py`.
 
 `live_draft_prior.py` is the opt-in draft-v2 handoff track ([report](../research/live_draft_prior.md)); it imports `draft_walkforward` for earlier-day draft features, fits, league slices and series bootstrap conventions. It inner-joins the handoff frozen `data/research/draft_v2/forge.pkl` rather than rebuilding uncovered production calls. Tests in `tests/research/test_live_draft_prior.py` verify chronological targets and aligned comparisons. No dependency, runtime export, DB write or CI step added.

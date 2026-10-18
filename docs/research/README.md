@@ -4,6 +4,8 @@ Finished research that changed no published metric: in-game snapshots, champions
 
 ## Status
 
+- **Series score and draft adaptation (2026-10-17):** [Report](series_score.md), `scripts/research/series_score.py`. On 26,885 maps 2+, pooled rho fitted on earlier years (~0.09) beats a constant first-map call: −0.0055 (−0.0067 to −0.0043), before 2025 −0.0052 (−0.0067 to −0.0037); majors remain uncertain. Adding that posterior shift to v2 improves −0.0050 (−0.0062 to −0.0037). Draft v2 still beats recalibrated FORGE on maps 2+: −0.0066 (−0.0079 to −0.0053), majors −0.0053 (−0.0081 to −0.0026). Earlier drafts and champion reuse add no measurable gain (+0.0000, −0.0001 to +0.0002); exploratory only. Existing tier rho is descriptive, not clean early-year evaluation. No runtime or weight changes.
+
 - **Draft player-on-champion recency (2026-10-17, research only).** [Frozen comfort block](draft_form.md): decayed champion experience, days since last use and decayed share. The half-life (30 days) is chosen only on 2020 after a 2019 fit. Candidate minus v2 on 63,638 maps: −0.000103 (95% −0.000242 to +0.000035); majors +0.000153 (−0.000244 to +0.000532); pre-2025 −0.000118 (−0.000301 to +0.000056). Inconclusive: exclude the whole block from v3 because both primary gates fail. No production changes.
 
 - **Draft player features (2026-10-17).** [Report](draft_player_feats.md), `scripts/research/draft_player_feats.py`: one fixed seven-feature block beyond v2, earlier days and prior-year fits: all −0.00199 (−0.00252 to −0.00144), pre-2025 −0.00220 (−0.00283 to −0.00158), majors essentially unchanged; other-league gain −0.00245. Whole block qualifies for the fixed v3 synthesis gate; no attribution to an individual feature, production change or market-edge claim.
