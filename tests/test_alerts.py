@@ -13,7 +13,7 @@ AT = "2026-10-06T10:00Z"
 def _entry(
     mid,
     start="2026-10-07T11:00Z",
-    p=0.61,
+    p=0.65,
     ask1=0.54,
     ask2=0.47,
     method="forge",
@@ -46,14 +46,14 @@ def _entry(
 
 def test_select_takes_forge_edges_6_or_more_hours_out_with_fresh_prices():
     log = {
-        "edge": _entry("edge"),  # 61 - 54 = +7
-        "small": _entry("small", ask1=0.58),  # +3: below the bar
+        "edge": _entry("edge"),  # blended chance exceeds ask plus execution fee bound
+        "small": _entry("small", ask1=0.58),  # below the fee bound
         "elo": _entry("elo", method="elo"),  # not FORGE
         "minor": _entry("minor", home1="LDL", home2="LDL"),  # FORGE outside the majors
         "soon": _entry("soon", start="2026-10-06T14:00Z"),  # 4 hours out
         "late": _entry("late", start="2026-10-09T10:00Z"),  # 72 hours out: no cap
         "stale": _entry("stale", at="2026-10-05T10:00Z"),  # yesterday's price
-        "other": _entry("other", p=0.30, ask2=0.50),  # positive blended team-2 edge
+        "other": _entry("other", p=0.20, ask2=0.50),  # positive blended team-2 edge
     }
     chosen = alerts.select(log, NOW)
     assert [(a["entry"]["match_id"], a["side"]) for a in chosen] == [
@@ -63,8 +63,8 @@ def test_select_takes_forge_edges_6_or_more_hours_out_with_fresh_prices():
         ("other", 2),
         ("late", 1),
     ]
-    assert chosen[0]["p"] == pytest.approx(0.5677572107)
-    assert chosen[0]["net_edge"] == pytest.approx(0.0061572107)
+    assert chosen[0]["p"] == pytest.approx(0.5821424264485924)
+    assert chosen[0]["net_edge"] == pytest.approx(0.0121424264485924)
 
 
 def test_record_keeps_the_first_alert_and_paper_record_scores_it_after_fees():
@@ -92,7 +92,7 @@ def test_update_writes_the_issue_with_links_and_a_comment_for_new_matches():
         alert["day"]
     )
     body = alert["body"]
-    row = "| Wed 7 Oct 11:00 / 04:00 | Demacia Cup | **JD Gaming** v LGD Gaming | 57% | 54¢ | **+0.6** |"
+    row = "| Wed 7 Oct 11:00 / 04:00 | Demacia Cup | **JD Gaming** v LGD Gaming | 58% | 54¢ | **+1.2** |"
     assert row in body
     assert (
         "[Kalshi](https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct070700jdglgd)"
@@ -121,7 +121,7 @@ def test_update_an_hour_later_edits_quietly_and_marks_a_gone_edge():
     )  # edge grows: no new match, no comment
     again = alerts.update(log, later, "2026-10-05", SLUG, set())
     assert (
-        again["new"] == 0 and again["comment"] is None and "**+2.7**" in again["body"]
+        again["new"] == 0 and again["comment"] is None and "**+3.2**" in again["body"]
     )
     log["m"]["market"].update(
         ask1=0.60, at="2026-10-06T12:00Z"
@@ -130,7 +130,7 @@ def test_update_an_hour_later_edits_quietly_and_marks_a_gone_edge():
         log, NOW + datetime.timedelta(hours=2), "2026-10-05", SLUG, set()
     )
     assert gone["title"].endswith("0 blended calls above fees (1 gone)")
-    assert "gone: -5.0 now (alerted at +0.6)" in gone["body"]
+    assert "gone: -4.8 now (alerted at +1.2)" in gone["body"]
     assert log["m"]["alert"]["price"] == 0.54  # the paper bet keeps its first price
     # Next day: an alert from yesterday that no longer qualifies isn't shown.
     assert (
@@ -155,9 +155,9 @@ def test_prices_file_lists_recent_priced_matches():
         "at": AT,
         "url": "https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct070700jdglgd",
         "trading": {
-            "p1": 57,
-            "p2": 43,
-            "net_edge": pytest.approx(0.0061572107),
+            "p1": 58,
+            "p2": 42,
+            "net_edge": pytest.approx(0.02054242644859234),
             "at": AT,
         },
     }
@@ -362,7 +362,7 @@ def test_international_only_issue_freezes_terms_snapshot_and_sends_one_notificat
     log["m"]["market"].update(ask1=0.7, at="2026-10-06T11:00Z")
     again = alerts.update(log, later, "2026-10-05", SLUG, set())
     assert again["comment"] is None and again["new"] == 0
-    assert "57% | 54¢" in again["body"]  # first terms, not current 80% / 70c
+    assert "58% | 54¢" in again["body"]  # first terms, not current 80% / 70c
     assert log["m"]["alert"] == first
     log["m"]["winner"] = 1
     assert alerts.paper_record(log)[:3] == (1, 1, 1.0)
@@ -377,7 +377,7 @@ def test_mixed_issue_has_separate_records_and_retains_gone_international_call():
     log["intl"]["market"].update(ask1=0.6, at="2026-10-06T11:00Z")
     later = NOW + datetime.timedelta(hours=1)
     again = alerts.update(log, later, "2026-10-05", SLUG, set())
-    assert "gone: -5.0 now (alerted at +0.6)" in again["body"]
+    assert "gone: -4.8 now (alerted at +1.2)" in again["body"]
     assert again["comment"] is None
 
 
@@ -410,7 +410,7 @@ def test_legacy_international_never_renotifies_or_rewrites_first_terms():
     e["p_series"] = 0.85
     issue = alerts.update({"m": e}, NOW, "5 Oct", SLUG, set())
     assert issue["new"] == 0 and issue["comment"] is None
-    assert "57% | 54¢" in issue["body"]
+    assert "58% | 54¢" in issue["body"]
     assert e[alerts.INTERNATIONAL_KEY] == original and "alert" not in e
 
 
