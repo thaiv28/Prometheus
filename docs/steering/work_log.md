@@ -1,5 +1,14 @@
 # Work log
 
+## 2026-10-17 — Draft form walk-forward research
+
+Branch `research/draft-form`, base `draft-v2` at `5811254`. One predeclared augmentation of draft v2; research only, no published model, weights, DB or site changes.
+
+- One three-feature block: log decayed champion experience, log days since last professional champion game (365-day cap), and decayed champion share (denominator +5); strictly earlier UTC days. Half-life selected among 30/90/180 on 2020 after a 2019 fit: 30 days wins (LL 0.617581 vs 0.617876/0.617859). No test-year tuning or exploratory result-above-Elo candidate. [Report](../research/draft_form.md).
+- **Inconclusive; exclude from v3:** 63,638 maps, candidate minus v2 LL −0.000103 (series-bootstrap 95% −0.000242 to +0.000035); majors +0.000153 (−0.000244 to +0.000532); pre-2025 −0.000118 (−0.000301 to +0.000056). No named league slice significantly worse, but both primary gates fail. No individual-feature post-selection.
+- Reused frozen `forge.pkl` with expected missing unrated games; compact `base_games.pkl` and `form_games.pkl` retain 2019/2020 training rows, matching v2’s 80,791-row full cohort exactly. Feature construction, development selection and scoring 344.5 s under concurrent load, bootstrap reporting additional; opt-in only, no production/CI step or dependency added. Four added causal-history, development-selection, chronological-fit and frozen-cache tests. Final full suite 26.91 s; focused tests 4.56 s including imports under concurrent load.
+- Checks: `uv run ruff format`, `uv run ruff check`, `uv run pytest -q` (752 passed, 2 skipped); report links/local command paths checked. Limits: professional play excludes practice/solo queue, correlated features assessed jointly, retrospective 2025–26 v2 selection and non-vintage production-call weights. No publication or tradable-edge claim.
+
 ## 2026-10-17 — Draft player-feature walk-forward research
 
 Branch `research/draft-player-feats`, based on `draft-v2` `5811254`. One fixed seven-feature block: career pool breadth/depth and top-three membership, heavily shrunk champion lane gold/XP above own mean, role-swap and previous-day role-incumbent flags. Earlier UTC days only; no variants or tuning. Research only. On 63,638 test games, candidate − v2 LL −0.00199 (series-bootstrap 95% −0.00252 to −0.00144); before 2025 −0.00220 (−0.00283 to −0.00158), majors −0.00000 (−0.00095 to +0.00097), LPL −0.00069 (−0.00215 to +0.00079), international −0.00075 (−0.00329 to +0.00190), other leagues −0.00245 (−0.00308 to −0.00180). Whole block qualifies for the fixed v3 synthesis gate, without claiming which component helps. Report [draft_player_feats.md](../research/draft_player_feats.md).
