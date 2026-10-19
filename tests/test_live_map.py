@@ -19,7 +19,7 @@ from deploy.execution import control, live_handler
 from prometheus import live_map
 from prometheus.execution.core import Config, fee_bound, run
 from prometheus.execution.kalshi import PublicKalshi
-from prometheus.execution.ledger import DynamoLedger, _decode
+from prometheus.execution.ledger import DynamoLedger, _decode, _item
 from prometheus.live.signals import Outbox
 
 QUEUE = "arn:aws:sqs:us-west-2:123456789012:signals"
@@ -35,6 +35,7 @@ def config(mode="demo", map_mode="live"):
             "kelly_fraction": ".25",
             "map_fraction": ".01",
             "series_fraction": ".02",
+            "budget_usd": "15",
         },
     )
 
@@ -239,7 +240,7 @@ def test_series_reservation_counts_existing_pregame_and_survives_race():
     _, api, ledger, execute = harness()
     cfg = Config.parse(config())
     # Existing pregame exposure is above the live strategy's 2% series cap.
-    from prometheus.execution.core import plan_order
+    from prometheus.execution.core import map_budget, plan_order
 
     routes = copy.deepcopy(api.routes)
     plan = plan_order(saved(), routes, cfg, Decimal(100), NOW)
@@ -249,7 +250,7 @@ def test_series_reservation_counts_existing_pregame_and_survives_race():
     assert not api.calls
     # Two planners see the same account. Actual transaction admits only one.
     _, api, ledger, _ = harness()
-    account = {"series_available": "1"}
+    account = {"series_available": "1", **map_budget(cfg, None)}
     first = plan_order(signal(), api.routes, cfg, Decimal(100), NOW, account)
     second = copy.deepcopy(first)
     second["alert"]["fixture_id"] = "second"
@@ -459,6 +460,55 @@ def test_separate_live_map_activation_requires_verified_runtime_and_explicit_lim
     bad["live_maps"]["kelly_fraction"] = "1"
     with pytest.raises(ValueError, match="risk_limit"):
         Config.parse(bad)
+    for budget in ("0", None):
+        bad = config()
+        bad["live_maps"]["budget_usd"] = budget
+        if budget is None:
+            del bad["live_maps"]["budget_usd"]
+        with pytest.raises((ValueError, KeyError)):
+            Config.parse(bad)
+
+
+def test_map_budget_caps_live_map_losses_and_orders():
+    client, api, ledger, execute = harness()
+
+    def maps(**values):
+        client.put_item(Item=_item({"pk": "ENV#demo", "sk": "LIVE_MAPS", **values}))
+
+    # $14.90 already lost on maps: the order shrinks to the $0.10 left.
+    maps(realized=Decimal("-14.90"))
+    assert execute([signal()])["submitted"] == 1
+    held = ledger.get("demo", "LIVE_MAPS")["held"]
+    assert Decimal(0) < held <= Decimal(".10")
+    assert ledger.get("demo", "ACCOUNT")["held"] == held
+    # The whole $15 lost: no further map order, whatever the shared bankroll.
+    client, api, ledger, execute = harness()
+    maps(realized=Decimal("-15"))
+    assert execute([signal()])["submitted"] == 0
+    assert not api.calls and ledger.get("demo", "ACCOUNT") is None
+    reasons = [_decode(v).get("reason") for v in client.data.values()]
+    assert "bankroll_or_spending_cap_exhausted" in reasons
+
+
+def test_map_budget_reservation_is_atomic():
+    from prometheus.execution.core import map_budget, plan_order
+
+    _, api, ledger, _ = harness()
+    cfg = Config.parse(config())
+    account = {"series_available": "1", **map_budget(cfg, None)}
+    first = plan_order(signal(), api.routes, cfg, Decimal(100), NOW, account)
+    second = copy.deepcopy(first)
+    second["alert"]["fixture_id"] = "second"
+    second["alert"]["event_ticker"] = "KXLOLMAP-G"
+    second["client_order_id"] = "second"
+    second["series_id"] = "KXLOLGAME-G"
+    # Both planned from the same LIVE_MAPS state; only the first may reserve.
+    assert ledger.reserve(first, cfg, Decimal(100))
+    assert ledger.reserve(second, cfg, Decimal(100)) is None
+    small = Config.parse({**config(), "live_maps": {**config()["live_maps"]}})
+    small.raw["live_maps"]["budget_usd"] = "0.01"
+    _, api, ledger, _ = harness()
+    assert ledger.reserve(first, small, Decimal(100)) is None
 
 
 def test_transport_template_is_disabled_and_has_no_credentials_or_public_writes():
@@ -505,6 +555,8 @@ def test_map_partial_fill_settlement_releases_shared_series_once():
     assert execute([])["reconciled"] == 1
     assert ledger.get("demo", "SERIES#KXLOLGAME-F")["held"] == 0
     assert ledger.get("demo", "ACCOUNT")["realized"] == Decimal(".24")
+    maps = ledger.get("demo", "LIVE_MAPS")
+    assert maps["held"] == 0 and maps["realized"] == Decimal(".24")
     execute([])
     assert ledger.get("demo", "ACCOUNT")["realized"] == Decimal(".24")
     execute([signal()])
@@ -588,26 +640,6 @@ def test_private_worker_observation_keeps_unshifted_model_and_exact_input_parity
     assert o["inputs"]["momentum"] == 0
     assert live_map.raw_probability(o) == pytest.approx(predict(model, **o["inputs"]))
     assert page["game"]["frames"][-1]["clock_estimate"] == 600
-
-    game.id = "riot-map-1"
-    game.forge["p_game"] = 0.65
-    game.draft_model = json.loads(live_map.DRAFT_MODEL.read_text())
-    game.draft_context = draft_observation()["draft"]["context"]
-    drafted = collect(game, page, NOW.isoformat())
-    assert "draft_shift" in drafted["inputs"]
-    assert live_map.raw_probability(drafted) == pytest.approx(
-        predict(game.draft_model, **drafted["inputs"])
-    )
-    # The context is copied into evidence; future invalidation cannot rewrite it.
-    game.draft_context["invalid_at"] = (NOW - dt.timedelta(seconds=1)).isoformat()
-    fallback = collect(game, page, NOW.isoformat())
-    assert "draft" not in fallback and fallback["inputs"] == o["inputs"]
-    assert "invalid_at" not in drafted["draft"]["context"]
-    # Metadata can be invalidated after the newest valid feed frame was received.
-    game.draft_context["invalid_at"] = (NOW + dt.timedelta(seconds=0.5)).isoformat()
-    fallback = collect(game, page, (NOW + dt.timedelta(seconds=1)).isoformat())
-    assert "draft" not in fallback and fallback["inputs"] == o["inputs"]
-
     # Many source frames share one receipt; receipt equality cannot identify
     # which frame the last successful model call used.
     bad = copy.deepcopy(page)
@@ -751,111 +783,3 @@ def test_emergency_off_controls_survive_malformed_live_map_configuration(broken)
     assert Config.parse(parameter.value).mode == "off"
     control.set_live_map_mode(parameter, "/config", "off", now=NOW)
     assert parameter.value["live_maps"]["mode"] == "off"
-
-
-def draft_observation():
-    from prometheus.live.draft import fingerprint, prior_shift
-
-    value = observation()
-    model = json.loads(live_map.DRAFT_MODEL.read_text())
-    values = {"exp": 0.7, "meta": 0.1, "matchup": -0.1, "synergy": 0.2}
-    shift = prior_shift(values, 0.65, model)
-    value["game_id"] = "riot-map-1"
-    value["inputs"]["draft_shift"] = shift
-    value["draft"] = {
-        "p_blue": 0.65,
-        "model_sha256": live_map.draft_artifact()["model_sha256"],
-        "context": {
-            "status": "ready",
-            "game_id": "riot-map-1",
-            "ready_at": (NOW - dt.timedelta(seconds=30)).isoformat(),
-            "model": fingerprint(model),
-            "features": values,
-            "shift": shift,
-            "history_as_of": "2026-10-15",
-            "history_through": "2026-10-14T12:00:00Z",
-        },
-    }
-    return value
-
-
-def test_draft_execution_recomputes_prior_and_routes_to_separate_blend():
-    from prometheus.live.timeline import predict
-
-    value = draft_observation()
-    raw = live_map.raw_probability(value)
-    assert raw == pytest.approx(
-        predict(json.loads(live_map.DRAFT_MODEL.read_text()), **value["inputs"])
-    )
-    result = live_map.evaluate(value, tape(), book(), NOW.isoformat(), fee)
-    expected, _ = live_map.blend(raw, 0.5, NOW.isoformat(), draft=True)
-    assert result["probability"] == pytest.approx(expected)
-    opposite = copy.deepcopy(value)
-    opposite["blue"] = 1
-    assert live_map.raw_probability(opposite) == pytest.approx(1 - raw)
-    candidate = live_map.proposal(value, tape(), book(), NOW.isoformat(), fee)
-    assert (
-        live_map.validate(candidate, Config.parse(config()), NOW.isoformat())
-        == candidate
-    )
-    candidate["live"]["observation"]["draft"]["context"]["features"]["exp"] += 1
-    with pytest.raises(ValueError, match="shift_mismatch"):
-        live_map.validate(candidate, Config.parse(config()), NOW.isoformat())
-
-
-@pytest.mark.parametrize(
-    "change",
-    [
-        lambda o: o["draft"]["context"].update(
-            ready_at=(NOW + dt.timedelta(seconds=1)).isoformat()
-        ),
-        lambda o: o["draft"]["context"].update(
-            invalid_at=(NOW - dt.timedelta(seconds=1)).isoformat()
-        ),
-        lambda o: o["draft"]["context"].update(game_id="another-map"),
-        lambda o: o["draft"]["context"].update(history_as_of="2026-10-14"),
-        lambda o: o["draft"]["context"].update(history_through="2026-10-15T00:00:00Z"),
-        lambda o: o["draft"].update(model_sha256="unreviewed"),
-        lambda o: o["draft"]["context"].update(model="unreviewed"),
-        lambda o: o["inputs"].update(draft_shift=100),
-        lambda o: o["draft"]["context"]["features"].update(exp=float("nan")),
-        lambda o: o["draft"].update(p_blue=0),
-    ],
-)
-def test_draft_signal_refuses_future_conflicting_stale_or_unpinned_context(change):
-    value = draft_observation()
-    change(value)
-    with pytest.raises(ValueError):
-        live_map.validate_observation(value, NOW.isoformat())
-
-
-def test_draft_artifact_requires_earlier_month_and_context_for_shift():
-    with pytest.raises(ValueError, match="no_earlier_only"):
-        live_map.blend(0.8, 0.6, "2026-11-01T00:00:00Z", draft=True)
-    value = observation()
-    value["inputs"]["draft_shift"] = 0.3
-    with pytest.raises(ValueError, match="context_missing"):
-        live_map.raw_probability(value)
-    for fit in live_map.draft_artifact()["snapshots"]:
-        at = fit["month"] + "-15T00:00:00Z"
-        assert sum(
-            (
-                live_map.blend(0.8, 0.6, at, draft=True)[0],
-                live_map.blend(0.2, 0.4, at, draft=True)[0],
-            )
-        ) == pytest.approx(1)
-
-
-def test_draft_invalidation_after_last_frame_stops_current_trading():
-    value = draft_observation()
-    invalid = NOW + dt.timedelta(seconds=1)
-    value["draft"]["context"]["invalid_at"] = invalid.isoformat()
-    # A previously valid frame cannot continue trading after a known conflict.
-    assert live_map.validate_observation(value, NOW.isoformat()) > 0
-    with pytest.raises(ValueError, match="invalidated"):
-        live_map.validate_observation(
-            value, (invalid + dt.timedelta(seconds=1)).isoformat()
-        )
-    value["calculated_at"] = (invalid + dt.timedelta(seconds=1)).isoformat()
-    with pytest.raises(ValueError, match="invalid_live_draft_context"):
-        live_map.raw_probability(value)

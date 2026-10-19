@@ -22,9 +22,11 @@ import live_trading as research
 from prometheus import live_map
 from prometheus.live import draft, timeline
 
+DRAFT_MODEL = live_map.MODEL.with_name("time_model_draft_v2.json")
+
 
 def candidate_rows(data, db, games):
-    model = json.loads(live_map.DRAFT_MODEL.read_text())
+    model = json.loads(DRAFT_MODEL.read_text())
     rows, _ = research.prepare(data, db)
     hist = research.el.team_history(
         sorted({n for m in data["maps"] for n in m["teams"]}), db
@@ -140,7 +142,7 @@ def main():
         raise ValueError("Unrecognized pinned cohort")
     if (
         digest(args.games)
-        != json.loads(live_map.DRAFT_MODEL.read_text())["input_sha256"]["games"]
+        != json.loads(DRAFT_MODEL.read_text())["input_sha256"]["games"]
     ):
         raise ValueError("Unrecognized frozen draft feature table")
     games = pd.read_pickle(args.games)
@@ -162,7 +164,7 @@ def main():
     )
     artifact = {
         "version": live_map.VERSION,
-        "model_sha256": digest(live_map.DRAFT_MODEL),
+        "model_sha256": digest(DRAFT_MODEL),
         "parent_blend_sha256": digest(live_map.ARTIFACT),
         "input_sha256": digest(args.data),
         "games_sha256": digest(args.games),

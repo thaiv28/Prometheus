@@ -92,6 +92,9 @@ class Config:
             ):
                 if not 0 < decimal(maps[field]) <= decimal(upper):
                     raise ValueError("invalid_live_map_risk_limit")
+            # The strategy's own money: it can never lose more than this.
+            if decimal(maps["budget_usd"]) <= 0:
+                raise ValueError("invalid_live_map_budget")
         return cls(mode, value)
 
     from_dict = parse
@@ -154,6 +157,19 @@ def validate_alert(alert, config, now):
             raise ValueError("invalid_probability_or_price")
 
 
+def map_budget(config, row):
+    """Live maps' remaining money: budget + their realized profit - their held."""
+    row = row or {}
+    held, realized = decimal(row.get("held", 0)), decimal(row.get("realized", 0))
+    return {
+        "map_held": held,
+        "map_realized": realized,
+        "map_budget_available": decimal(config.raw["live_maps"]["budget_usd"])
+        + realized
+        - held,
+    }
+
+
 def plan_order(
     alert, routes, config, balance, now, account=None, committed=ZERO, exposure=ZERO
 ):
@@ -193,6 +209,7 @@ def plan_order(
             budget,
             capital * decimal(config.raw["live_maps"]["map_fraction"]),
             decimal(account["series_available"]),
+            decimal(account["map_budget_available"]),
         )
     if effective <= 0 or budget <= 0:
         raise ValueError("bankroll_or_spending_cap_exhausted")
@@ -278,6 +295,14 @@ def plan_order(
             "bankroll_usd": str(capital),
             "effective_bankroll_usd": str(effective),
             "unit_cost_bound": str(price + unit_fee),
+            **(
+                {
+                    "map_held_before": str(account["map_held"]),
+                    "map_realized_before": str(account["map_realized"]),
+                }
+                if is_map
+                else {}
+            ),
             **sizing,
         },
         "request": {
@@ -504,6 +529,7 @@ def run(
                     **account,
                     "series_available": series_cap
                     - decimal((series or {}).get("held", 0)),
+                    **map_budget(config, ledger.get(config.mode, "LIVE_MAPS")),
                 }
                 reserve_config = Config.parse(
                     {**reserve_config.raw, "live_series_cap_usd": str(series_cap)}

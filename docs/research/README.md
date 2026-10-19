@@ -1,6 +1,6 @@
 # Research
 
-- [Draft v2 map trading](live_map_draft_trading.md): ready-draft execution and exact original fallback; fixed market-blend comparison fails improvement/no-regression gates. Prepared for review, unmerged and disabled.
+- [Draft v2 map trading](live_map_draft_trading.md): draft v2 as the map-trading model input; the fixed market-blend comparison fails the improvement and no-regression gates (FST worse). Not adopted; its runtime wiring was removed from the trading branch on 2026-10-19.
 
 - [Live map trading](live_trading.md): earlier-series-only market/model blend, fee-aware entries, freshness/stability proxies, execution-cost stress and Kelly paths; [fixed protocol](live_trading_protocol.md). Historical tape returns remain inconclusive; no trading change.
 

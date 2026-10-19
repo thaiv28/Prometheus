@@ -53,10 +53,3 @@ Scope: season stats cover the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to pres
 Draft v2 API integration is prepared for private live observation: the worker
 records candidate calls alongside the current model, with identity/timing gates.
 It does not change the published in-game metric. [Evidence](../research/live_draft_integration.md).
-
-### Draft map-trading review (2026-10-19)
-
-The private draft-v2 trading route is prepared with exact parent fallback;
-[its fixed market-blend test](../research/live_map_draft_trading.md) fails the
-improvement gate and regresses on FST. It is not adopted, merged or enabled.
-The public objectives/momentum model and published metric statuses are unchanged.

@@ -1,5 +1,32 @@
 # Work log
 
+## 2026-10-19 — Remove draft v2 from map trading; add a $15 live-map budget
+
+User asked to drop draft v2 (its trading benchmark showed no gain and FST got
+significantly worse) and to set aside at most $15 for live-map trading.
+
+- Draft route removed: `live_map.py`, `live/signals.py`, `pyproject.toml` and
+  the README back to their pre-draft versions; `live_map_draft_blend.json`
+  deleted; the executor zip, release hash and publish filter drop the draft model
+  and blend but keep `live/draft.py`, which `live/timeline.py` imports. Kept the
+  worker's check that its model is the pinned one. The research script now names
+  its own draft-model path, so the failed comparison stays reproducible.
+- New required `live_maps.budget_usd` for shadow/live map modes. The ledger's
+  `LIVE_MAPS` row tracks live maps' held cost and realized profit; a map order is
+  capped at budget + realized − held and reserved in the same transaction as
+  ACCOUNT, conditioned on the held/realized it was planned from. Fills, releases
+  and settlements update it. Live maps can never lose more than the budget;
+  profit extends it; pregame is unaffected. Shadow proposals apply it too.
+  Docs suggest `"budget_usd": "15"`; nothing configured in AWS.
+- Checks: `uv run pytest -q` 862 passed, 2 skipped. Two new tests: a partly
+  spent budget shrinks the order and a spent one skips it; two orders planned
+  from the same state can't both reserve. Each fails with its guard removed.
+  Ruff format/check pass. `package.sh` builds (190 files, 1.2 s) with no draft
+  model or blend inside. No CI step, DB read or dependency added.
+- Limit: sizing still uses the shared bankroll's 1%/2% caps (about $0.50 a map on
+  the $50 seed), so $15 covers roughly 30 straight losing maps. Not deployed or
+  activated; the PR's open rollout items stand.
+
 ## 2026-10-19 — Review draft v2 for the 30-second trading blend
 
 User requested PR #92's draft model, then merge and live activation only if

@@ -12,6 +12,7 @@ from prometheus.execution.core import (
     ZERO,
     Config,
     decimal,
+    map_budget,
     plan_order,
     run,
     validate_alert,
@@ -101,6 +102,7 @@ def handle(event, clients, aliases):
                 account = {
                     **account,
                     "series_available": cap - decimal(series.get("held", 0)),
+                    **map_budget(config, ledger.get(source_environment, "LIVE_MAPS")),
                 }
                 day = (
                     ledger.get(source_environment, f"DAY#{checked.date().isoformat()}")

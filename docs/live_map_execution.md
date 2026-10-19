@@ -5,16 +5,11 @@ No infrastructure, credentials, account settings or orders were changed during
 implementation. Existing pregame execution can remain enabled in production;
 this strategy is absent/off until explicitly configured and activated.
 
-## Draft upgrade under review (2026-10-19)
+## Draft v2 not adopted (2026-10-19)
 
-The branch now includes PR #92's frozen draft v2. A ready, map-bound context
-selects draft inference and separate earlier-only monthly blend coefficients;
-missing/conflicting draft retains the original model/blend exactly. Consumer
-recomputes the prior, checks readiness/history/model/parent hashes and rejects
-altered shifts. Public calls remain unchanged. The draft comparison fails:
-paired gain inconclusive and FST significantly worse. The user authorized merge
-and live activation conditional on improving benchmarks; keep this PR unmerged
-and maps disabled. [Full results](research/live_map_draft_trading.md).
+Draft v2 as the model input failed the paired trading benchmark (no significant
+gain; FST significantly worse), so its route was removed. The strategy uses the
+objective/momentum model only. [Evidence](research/live_map_draft_trading.md).
 
 ## Strategy contract
 
@@ -85,7 +80,7 @@ policy change if the account profile changes.
    concurrency and the ledger's independent concurrency protection.
 
 This does not mark the research feed as `live_state_verified=true`, establish a
-verified game clock, change public model probabilities. The review-only draft route is described above.
+verified game clock, change public model probabilities.
 
 ## Capital and modes
 
@@ -96,8 +91,16 @@ A deployment cannot enable this strategy.
 
 Limits are explicit: live-map Kelly fraction <=0.25, map outlay fraction <=0.01,
 series outlay fraction <=0.02. Smaller values are supported. Global cash,
-fee precision, order/fixture/day/exposure caps also apply. There is **one** seed
-and ACCOUNT record for pregame plus map execution; no extra strategy bankroll.
+fee precision, order/fixture/day/exposure caps also apply. Sizing uses the
+**one** seed and ACCOUNT record shared with pregame execution.
+
+Live maps also have their own required budget, `budget_usd` ($15 intended).
+The ledger's `LIVE_MAPS` row holds their open cost and realized profit; an order
+must fit in budget + realized − held, reserved atomically with ACCOUNT. Total
+live-map loss can never exceed the budget, and profit extends it. When it is
+spent, map orders skip (`bankroll_or_spending_cap_exhausted`); pregame is
+unaffected. To change it, turn global execution off and save a new `live_maps`
+object (the existing `LIVE_MAPS` row is kept, so past losses still count).
 Fraction caps use free capital (seed + verified realized profit - held), which
 is more conservative than the historical cost-valued-equity simulation.
 
@@ -154,7 +157,8 @@ commitments; it is observational validation rather than a simulated portfolio.
        "queue_arn": "arn:aws:sqs:us-west-2:ACCOUNT:QUEUE",
        "kelly_fraction": "0.25",
        "map_fraction": "0.01",
-       "series_fraction": "0.02"
+       "series_fraction": "0.02",
+       "budget_usd": "15"
      }
    }
    ```

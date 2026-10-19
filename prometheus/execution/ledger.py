@@ -142,6 +142,32 @@ class DynamoLedger:
                     {":amount": amount, ":available": cap_value - amount}
                 )
             transactions.append({"Update": update})
+        if "map_held_before" in sizing:
+            # Live maps' own budget; the observed held/realized must be unchanged.
+            held = decimal(sizing["map_held_before"])
+            realized = decimal(sizing["map_realized_before"])
+            budget = decimal(config.raw["live_maps"]["budget_usd"])
+            if amount > budget + realized - held:
+                return None
+            values = {":amount": amount}
+            matches = []
+            for name, expected in (("held", held), ("realized", realized)):
+                values[f":expected_{name}"] = expected
+                match = f"{name} = :expected_{name}"
+                if expected == 0:
+                    match = f"(attribute_not_exists({name}) OR {match})"
+                matches.append(match)
+            transactions.append(
+                {
+                    "Update": {
+                        "TableName": self.table,
+                        "Key": _item(self.key(env, "LIVE_MAPS")),
+                        "UpdateExpression": "ADD held :amount",
+                        "ConditionExpression": " AND ".join(matches),
+                        "ExpressionAttributeValues": _item(values),
+                    }
+                }
+            )
         for sk in (
             f"FIXTURE#{plan['alert']['fixture_id']}",
             f"EVENT#{plan['alert']['event_ticker']}",
@@ -262,6 +288,24 @@ class DynamoLedger:
                             ),
                             "UpdateExpression": "ADD held :delta",
                             "ExpressionAttributeValues": _item({":delta": delta}),
+                        }
+                    }
+                )
+        if "map_held_before" in (previous.get("sizing") or {}):
+            delta = decimal(row["held"]) - decimal(previous["held"])
+            profit_delta = decimal(row.get("realized_profit", 0)) - decimal(
+                previous.get("realized_profit", 0)
+            )
+            if delta or profit_delta:
+                changes.append(
+                    {
+                        "Update": {
+                            "TableName": self.table,
+                            "Key": _item(self.key(env, "LIVE_MAPS")),
+                            "UpdateExpression": "ADD held :delta, realized :profit",
+                            "ExpressionAttributeValues": _item(
+                                {":delta": delta, ":profit": profit_delta}
+                            ),
                         }
                     }
                 )

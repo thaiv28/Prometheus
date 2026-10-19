@@ -484,24 +484,17 @@ An aggregate/player kill mismatch retains a candidate with null totalKills
 and its field reason; missing counters invoke the existing v1 model fallback.
 Other invalid fields and freshness/identity validation still reject.
 
-### Draft-aware map execution (review 2026-10-19)
+### Live-map budget (2026-10-19)
 
-`live.signals.observation` reuses the worker's frozen draft context with exact
-model-parent equality; it does not read histories or resolve participants again.
-Unshifted timeline input includes draft shift only when available at receipt.
-`live_map.raw_probability` recomputes the prior from four finite features and
-blue-oriented FORGE, binds the context/model/map/history day and refuses altered
-shifts or late/invalid context. Exported naive-UTC history cutoffs are normalized
-explicitly; receipt/source/ready timestamps remain timezone-aware. Context is
-copied so later invalidation cannot rewrite persisted evidence. No draft uses
-the original model and original monthly blend exactly. Ready draft uses the
-separate pinned `live_map_draft_blend.json`; source/hash/consumer validation and
-package include all new inputs. Public calls are unchanged.
+Live maps have their own money on top of the shared bankroll's caps:
+`live_maps.budget_usd`. `core.map_budget` reads the ledger's `LIVE_MAPS` row
+(held, realized profit, live maps only); `plan_order` caps a map order at
+budget + realized − held, and `DynamoLedger.reserve` adds the order to that row
+in the same transaction, conditioned on the held/realized it planned from, so
+concurrent orders cannot overspend it. `replace` moves held and realized there
+on fills, releases and settlements, as for ACCOUNT. Total live-map loss can
+never exceed the budget; profit extends it.
 
-`research/live_map_draft.py` pairs the original fixed cohort using unambiguous
-blue/red/date OE joins, frozen earlier-day features and the merged candidate's
-prior. It refits the same monthly blend design and restores the original blend
-on absent joins. Equal-map/whole-series comparison and every named league/minute
-slice are saved, along with separate flat-dollar paper summaries. OE readiness
-is explicitly a research proxy; the artifact's failed improvement gate is kept.
-See [failed adoption evidence](../research/live_map_draft_trading.md).
+`scripts/research/live_map_draft.py` reproduces the failed draft-v2 trading
+comparison ([evidence](../research/live_map_draft_trading.md)); the runtime has
+no draft route.

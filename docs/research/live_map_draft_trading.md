@@ -3,7 +3,8 @@
 Prepared 2026-10-19 on `live-map-trading`, integrating main `bc02c4e` (PR #92).
 The original implementation is based on research `e35e5d0` / main `f522db3`.
 The user authorized merge and live activation **conditional on improving benchmarks**.
-That condition fails: keep this PR unmerged and live-map execution disabled.
+That condition fails. On 2026-10-19 the draft route was removed from the
+trading branch; the sections below describe the reviewed wiring as it was.
 No production configuration, infrastructure, credential or order was changed.
 
 ## Fixed comparison

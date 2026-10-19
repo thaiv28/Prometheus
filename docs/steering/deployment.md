@@ -247,13 +247,11 @@ retains it at shutdown, independent of the empty active index. Lifecycle derives
 from existing minute discovery calls; browsers read one additional small object
 per poll. Final untracking attempts one last settlement and snapshot.
 
-### Draft trading review (2026-10-19)
+### Live-map executor package (2026-10-19)
 
-The prepared executor zip now includes stdlib `live/draft.py`, frozen
-`time_model_draft_v2.json` and `live_map_draft_blend.json`. Release source hash
-and publish path filter cover all three; no new CI step, secret, permission or
-runtime dependency. Existing deploy-on-merge would preserve global mode and
-live maps still default off. The comparison fails the user's merge condition,
-so this work does not merge, deploy transport/runtime, change worker arguments,
-or activate any mode. Existing production trading settings were not changed.
-[Evidence and remaining gate](../research/live_map_draft_trading.md).
+The executor zip includes stdlib `live/draft.py` only because `live/timeline.py`
+imports it; draft v2's model and blend are not packaged (the trading benchmark
+failed, see [evidence](../research/live_map_draft_trading.md)). Live maps need an
+explicit `live_maps.budget_usd` before shadow or live mode; the ledger's
+`ENV#<mode> / LIVE_MAPS` row (held, realized) enforces it. No new table, IAM or
+CI step. Nothing was deployed or activated.
