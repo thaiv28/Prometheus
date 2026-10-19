@@ -193,3 +193,12 @@ runtime smoke PASS, active/running publisher and successful regular cycles.
 The nonblocking refresh correction is installed; the original deadlocked
 post-step was terminated. No match was tracked during verification; confirm
 new-map schema/prospective accuracy when matches start. No execution rollout.
+
+### Live lifecycle repair (2026-10-18)
+
+The ordinary worker refresh deploys timestamped side discovery and the persistent
+`current/live/lifecycle.json`; ordinary site publish delivers its reader. No new
+permissions/resources or systemd changes. The existing sync owns this JSON and
+retains it at shutdown, independent of the empty active index. Lifecycle derives
+from existing minute discovery calls; browsers read one additional small object
+per poll. Final untracking attempts one last settlement and snapshot.

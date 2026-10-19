@@ -374,3 +374,14 @@ The publisher has `After=prometheus-live-refresh.service`. Its refresh post-step
 must use `systemctl --no-block try-restart`: a synchronous restart waits on
 the publisher, which waits for the refresh post-step itself. The queued restart
 keeps the existing changed-code/data condition and lets systemd apply ordering.
+
+### Live lifecycle and incomplete counters (2026-10-18)
+
+The worker writes a seven-day `output/live/lifecycle.json` from existing Riot
+schedule/discovery responses and observed map scores. Completion is monotone;
+empty indexes and shutdown do not clear it. Recorded completed series link to
+Watch immediately, and the daily archive replaces those rows. Side discovery
+uses the delayed timestamped window, avoiding the default endpoint's late 204s.
+An aggregate/player kill mismatch retains a candidate with null totalKills
+and its field reason; missing counters invoke the existing v1 model fallback.
+Other invalid fields and freshness/identity validation still reject.
