@@ -8,9 +8,11 @@ from prometheus.elo import (
     expected_score,
 )
 
-# The rookie discount, faster early and after-break moves and the league-move bonus
-# off (and the linear rookie curve), so a test sees one mechanism.
+# Disable RD, slope overrides, discounts and league-move bonuses (and use the
+# linear rookie curve), so a test sees one mechanism.
 OFF = {
+    "player_rd": None,
+    "other_league_slope": None,
     "rookie_penalty": 0,
     "rookie_games": 0,
     "rookie_curve": "linear",
@@ -627,7 +629,7 @@ def test_veteran_discount_by_years():
     )
 
 
-def test_published_defaults_use_time_away_and_the_move_down_bonus():
+def test_published_defaults_use_rd_and_the_move_down_bonus():
     games, rosters = _two_games()
     published, _ = elo.compute_elo_records(
         games, calculate_game_length_elo_change, rosters=rosters
@@ -637,14 +639,251 @@ def test_published_defaults_use_time_away_and_the_move_down_bonus():
         calculate_game_length_elo_change,
         rosters=rosters,
         rookie_curve="log",
-        away_factor=elo.AWAY_FACTOR,
+        player_rd=elo.PLAYER_RD,
+        player_rd_information=elo.PLAYER_RD_INFORMATION,
+        other_league_slope=elo.OTHER_LEAGUE_SLOPE,
+        provisional_games=0,
+        away_factor=0,
         away_days=elo.AWAY_DAYS,
         move_down_bonus=elo.MOVE_DOWN_BONUS,
         move_up_penalty=elo.MOVE_UP_PENALTY,
     )
     pd.testing.assert_frame_equal(published, explicit)
     assert (elo.AWAY_FACTOR, elo.MOVE_DOWN_BONUS, elo.ROOKIE_CURVE) == (
-        2.0,
+        0.0,
         25.0,
         "log",
     )
+
+
+@pytest.mark.parametrize("gap", [-400, -100, 0, 100, 400])
+def test_expected_slope_default_preserves_original_arithmetic(gap):
+    original = 1 / (1 + 10 ** (-gap / 400))
+    assert expected_score(1500 + gap, 1500) == original
+    assert expected_score(1500 + gap, 1500, slope=elo.EXPECTED_SLOPE) == original
+    actual = elo.winner_score(1800)
+    assert calculate_game_length_elo_change(1500 + gap, 1500, 1800, 1) == 20 * (
+        actual - original
+    )
+
+
+def test_explicit_expected_slope_changes_updates_on_hand_made_game():
+    # A 100-point favourite, log-odds slope ln(3)/100: expected score is .75.
+    slope = np.log(3) / 100
+    assert expected_score(1600, 1500, slope=slope) == pytest.approx(0.75)
+    assert expected_score(1500, 1600, slope=slope) == pytest.approx(0.25)
+    assert expected_score(1500, 1500, slope=slope) == 0.5
+    change = calculate_game_length_elo_change(
+        1600, 1500, 1800, 1, K=16, expected_slope=slope
+    )
+    assert change == pytest.approx(16 * (0.825 - 0.75))
+    assert calculate_game_length_elo_change(
+        1500, 1600, 1800, 0, K=16, expected_slope=slope
+    ) == pytest.approx(-change)
+    assert change < calculate_game_length_elo_change(1600, 1500, 1800, 1, K=16)
+
+
+def _rd_games(dates=None):
+    games = pd.DataFrame(
+        {
+            "gameid": ["r1", "r2", "r3"],
+            "teamid": ["A"] * 3,
+            "opponent_teamid": ["B"] * 3,
+            "gamelength": [1800] * 3,
+            "result": [1] * 3,
+        }
+    )
+    if dates is not None:
+        games["date"] = dates
+    return games
+
+
+def test_legacy_elo_preserves_old_first_game_and_discount_decay():
+    games = _rd_games(["2020-01-01", "2020-01-01", "2021-01-01"]).iloc[:2]
+    default, offsets = elo.compute_elo_records(
+        games, calculate_game_length_elo_change, **elo.LEGACY_ELO
+    )
+    explicit, explicit_offsets = elo.compute_elo_records(
+        games,
+        calculate_game_length_elo_change,
+        **elo.LEGACY_ELO,
+        player_rd_information=0.25,
+    )
+    pd.testing.assert_frame_equal(default, explicit)
+    pd.testing.assert_frame_equal(offsets, explicit_offsets)
+    # Independent first-game arithmetic with the old published defaults.
+    first = default.iloc[0]
+    assert first.pre_match_elo == 1250
+    discount_after = 250 * (1 - np.log(2) / np.log(201))
+    assert first.post_match_elo == pytest.approx(1500 + 2 * 6.5 - discount_after)
+
+
+@pytest.mark.parametrize("information", [0.25, 0.5, 1.0])
+def test_rd_harmonic_shrink_matches_hand_calculation_without_dates(information):
+    records, _ = compute_elo_records(
+        _rd_games().iloc[:2],
+        lambda **kw: 10,
+        player_rd=(250, 100, 100, 0),
+        player_rd_information=information,
+    )
+    a = records[records.teamid == "A"]
+    b = records[records.teamid == "B"]
+    assert a.iloc[0].elo_change == pytest.approx(10 * (250 / 100) ** 2)
+    # First game's E=.5, so the first posterior variance gives the next K scale.
+    variance = 1 / (1 / 250**2 + information * (np.log(10) / 400) ** 2 * 0.25)
+    assert a.iloc[1].elo_change == pytest.approx(10 * variance / 100**2)
+    np.testing.assert_allclose(a.elo_change, -b.elo_change)
+
+
+def test_rd_floor_reference_reaches_published_k_after_hand_counted_games():
+    games = pd.concat([_rd_games().iloc[:1]] * 43, ignore_index=True)
+    games["gameid"] = range(len(games))
+
+    # Zero movement keeps E=.5, isolating shrinkage; only the final game moves.
+    def replay(multiplier, count):
+        calls = iter([0] * (count - 1) + [10])
+        records, _ = compute_elo_records(
+            games.iloc[:count],
+            lambda **kw: next(calls),
+            player_rd=(250, 100, 100, 0),
+            player_rd_information=multiplier,
+        )
+        return records.iloc[-2].elo_change
+
+    # ceil((1/100² - 1/250²)/(q²*.25*m)): 11 or 41 shrink updates.
+    assert replay(1, 11) > 10
+    assert replay(1, 12) == pytest.approx(10)
+    assert replay(0.25, 41) > 10
+    assert replay(0.25, 42) == pytest.approx(10)
+
+
+@pytest.mark.parametrize("information", [0, -0.25, np.inf, np.nan])
+def test_rd_rejects_invalid_information(information):
+    with pytest.raises(ValueError, match="player_rd_information"):
+        compute_elo_records(
+            _rd_games(),
+            lambda **kw: 10,
+            player_rd=(250, 100, 100, 0),
+            player_rd_information=information,
+        )
+
+
+def test_rd_inactivity_inflates_variance_and_caps_at_new():
+    games = _rd_games(["2020-01-01", "2020-01-01", "2021-01-01"])
+    records, _ = compute_elo_records(
+        games,
+        lambda **kw: 10,
+        player_rd=(250, 100, 250, 100),
+        player_rd_information=1.0,
+    )
+    a = records[records.teamid == "A"]
+    assert a.iloc[1].elo_change < 10
+    assert a.iloc[2].elo_change == pytest.approx(10)  # long break resets to cap
+    floor, _ = compute_elo_records(games, lambda **kw: 10, player_rd=(100, 100, 100, 0))
+    np.testing.assert_allclose(floor[floor.teamid == "A"].elo_change, 10)
+
+
+@pytest.mark.parametrize("on_top", [False, True])
+@pytest.mark.parametrize("normalize", [False, True])
+def test_rd_rookie_weight_and_optional_legacy_side_normalization(on_top, normalize):
+    games = _rd_games(["2020-01-01", "2020-01-02", "2021-01-01"]).iloc[:2]
+    rosters = {
+        ("r1", "A"): ("a", "b"),
+        ("r2", "A"): ("a", "rookie"),
+        ("r1", "B"): ("c", "d"),
+        ("r2", "B"): ("c", "d"),
+    }
+    kw = (
+        {"provisional_games": 1, "provisional_factor": 2, "away_factor": 2}
+        if on_top
+        else {}
+    )
+    _, _, players = compute_elo_records(
+        games,
+        lambda **kw: 10,
+        rosters=rosters,
+        player_records=True,
+        player_rd=(250, 100, 250, 0),
+        player_rd_information=1.0,
+        player_rd_normalize=normalize,
+        **kw,
+    )
+    current = players[players.gameid == "r2"].set_index("playerid")
+    moves = current.post_match_elo - current.pre_match_elo
+    assert moves["rookie"] > moves["a"]
+    # First posterior variance, then the common mean of both sides' mean scales.
+    v = 1 / (1 / 250**2 + (np.log(10) / 400) ** 2 * 0.25)
+    veteran_weight = v / 250**2 * (1 + 2 / 365 if on_top else 1)
+    rookie_weight = 2 if on_top else 1
+    shared = ((veteran_weight + rookie_weight) / 2 + veteran_weight) / 2
+    if normalize:
+        assert moves[["a", "rookie"]].mean() == pytest.approx(-moves[["c", "d"]].mean())
+        assert moves[["a", "rookie"]].mean() == pytest.approx(10 * shared)
+    else:
+        assert moves["a"] == pytest.approx(10 * veteran_weight)
+        assert moves["rookie"] == pytest.approx(10 * rookie_weight)
+        assert moves["c"] == pytest.approx(-10 * veteran_weight)
+
+
+def test_rd_settled_player_keeps_baseline_move_beside_uncertain_teammate():
+    games = pd.concat([_rd_games().iloc[:1]] * 14, ignore_index=True)
+    games["gameid"] = range(len(games))
+    rosters = {
+        (i, side): (side + "1", side + "2") for i in range(14) for side in ("A", "B")
+    }
+    rosters[(13, "A")] = ("A1", "rookie")
+    calls = iter([0] * 13 + [10])
+    _, _, players = compute_elo_records(
+        games,
+        lambda **kw: next(calls),
+        rosters=rosters,
+        player_records=True,
+        player_rd=(250, 100, 100, 0),
+        player_rd_information=1.0,
+    )
+    final = players[players.gameid == 13].set_index("playerid")
+    moves = final.post_match_elo - final.pre_match_elo
+    assert moves["A1"] == pytest.approx(10)
+    assert moves["B1"] == pytest.approx(-10)
+    assert moves["rookie"] == pytest.approx(62.5)
+
+
+@pytest.mark.parametrize(
+    "rd",
+    [
+        (100, 200, 100, 1),
+        (100, 0, 100, 1),
+        (100, 50, 0, 1),
+        (100, 50, 100, -1),
+        (np.inf, 50, 100, 1),
+    ],
+)
+def test_rd_rejects_invalid_configuration(rd):
+    with pytest.raises(ValueError, match="player_rd"):
+        compute_elo_records(_rd_games(), lambda **kw: 10, player_rd=rd)
+
+
+@pytest.mark.parametrize("league", ["LCKC", "LCK", "Worlds", None])
+def test_published_update_slope_follows_event_league(league):
+    games, _ = _two_games()
+    games = (
+        games.drop(columns="league") if league is None else games.assign(league=league)
+    )
+    calls = []
+
+    def change(**kwargs):
+        calls.append(kwargs.copy())
+        return calculate_game_length_elo_change(**kwargs)
+
+    records, _ = elo.compute_elo_records(games, change)
+    for call in calls:
+        if league == "LCKC":
+            assert call["expected_slope"] == 0.0065
+        else:
+            assert "expected_slope" not in call
+    # First game: equal ratings, RD 280 / floor 140 scales the 6.5 move by four.
+    discount_after = 250 * (1 - np.log(2) / np.log(201))
+    assert records.iloc[0].post_match_elo == pytest.approx(
+        1500 + 4 * 6.5 - discount_after
+    )
+    assert calls[1]["elo"] != calls[1]["opponent_elo"]

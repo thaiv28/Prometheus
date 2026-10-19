@@ -281,6 +281,8 @@ def load_team_elo():
     records, _ = compute_elo_records(
         load_elo_games(),
         calculate_game_length_elo_change,
+        player_rd=None,
+        other_league_slope=None,
         rookie_penalty=0,
         rookie_games=0,
         provisional_games=0,

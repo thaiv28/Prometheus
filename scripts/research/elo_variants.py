@@ -271,7 +271,14 @@ def winner_scores(inputs, margin_fn) -> np.ndarray:
     return s
 
 
-def margin_elo_change(elo, opponent_elo, game_length, result, K=K_DEFAULT):
+def margin_elo_change(
+    elo,
+    opponent_elo,
+    game_length,
+    result,
+    K=K_DEFAULT,
+    expected_slope=elo.EXPECTED_SLOPE,
+):
     """Elo change for `teamid` when the `game_length` slot carries the winner's score.
 
     `compute_elo_records` passes each row's gamelength to `elo_func`; `replay` puts the
@@ -280,7 +287,7 @@ def margin_elo_change(elo, opponent_elo, game_length, result, K=K_DEFAULT):
     and 1 - score for a loss.
     """
     actual = game_length if result else 1 - game_length
-    return K * (actual - expected_score(elo, opponent_elo))
+    return K * (actual - expected_score(elo, opponent_elo, slope=expected_slope))
 
 
 @contextlib.contextmanager
@@ -293,13 +300,24 @@ def _international(leagues):
             yield
 
 
-def replay(inputs, margin_fn, K=K_DEFAULT, international=None, records=False, **kw):
+def replay(
+    inputs,
+    margin_fn,
+    K=K_DEFAULT,
+    international=None,
+    records=False,
+    expected_slope=elo.EXPECTED_SLOPE,
+    league_slopes=None,
+    **kw,
+):
     """Replay player-built Elo over every game with `margin_fn` as the winner's score.
 
     Args:
         inputs: `load_inputs()` (or any object with `games` and `rosters`).
         margin_fn: `f(games) -> winner score per game` in (0.5, 1] (see module doc).
         K: Elo K factor (published: 20).
+        expected_slope: update log-odds per point; default preserves the 400-point curve.
+        league_slopes: optional event-league overrides of expected_slope (research only).
         international: replay with these international leagues instead of today's
             `INTERNATIONAL_LEAGUES` (for the DB reproduction check).
         records: return the full `compute_elo_records` frame instead.
@@ -310,10 +328,23 @@ def replay(inputs, margin_fn, K=K_DEFAULT, international=None, records=False, **
     games = inputs.games[ELO_COLUMNS].assign(
         gamelength=winner_scores(inputs, margin_fn)
     )
+    change = functools.partial(margin_elo_change, K=K, expected_slope=expected_slope)
+    if league_slopes is not None:
+        # compute_elo_records calls the callback exactly once per input row, in order.
+        # Consume the event's slope alongside that row, without changing its ratings,
+        # rosters, game-length evidence or cross-league offset rules.
+        slopes = iter(games["league"].map(league_slopes).fillna(expected_slope))
+
+        def change(**args):
+            args.pop("expected_slope", None)
+            return margin_elo_change(**args, K=K, expected_slope=next(slopes))
+
+    if league_slopes is not None:
+        kw["other_league_slope"] = None
     with _international(international):
         out, _ = compute_elo_records(
             games,
-            functools.partial(margin_elo_change, K=K),
+            change,
             rosters=inputs.rosters,
             **kw,
         )
