@@ -301,3 +301,8 @@ html { scrollbar-color: var(--hairline) var(--paper); }
   .nav-menu-panel a { padding: 10px 14px; }
   .index-search input { padding: 8px 0 4px; }
 }
+
+.sections > a.is-live { display: inline-flex; align-items: center; gap: 0.35em; }
+.nav-live { width: 0.45em; height: 0.45em; border-radius: 50%; background: var(--ink-lpl); animation: nav-live-pulse 3s ease-in-out infinite; }
+@keyframes nav-live-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .nav-live { animation: none; } }

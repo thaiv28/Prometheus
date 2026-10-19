@@ -337,7 +337,7 @@ HOME_FIXTURES = 10
 HOME_FIXTURE_DAYS = 4
 # The Predictions page lists results from this many days back; older ones are on
 # a page per month (results/YYYY-MM.html).
-RECENT_RESULT_DAYS = 3
+RECENT_RESULT_DAYS = 7
 # The day's Kalshi alert (title and body of a GitHub issue), written only when
 # there is one; the publish workflow posts it. Never published to the site.
 KALSHI_ALERT = os.environ.get(

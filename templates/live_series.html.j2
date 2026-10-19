@@ -112,7 +112,7 @@
     {% endif %}
   </aside>
 
-  <p class="month-index"><a href="{{ s.month }}.html">← Live results, {{ month_label }}</a></p>
+  <p class="month-index"><a href="../results/{{ s.month }}.html">← Live results, {{ month_label }}</a></p>
 {% endblock %}
 {% block scripts %}
   <script src="{{ root_path }}{{ asset('js/live_results.js') }}" defer></script>

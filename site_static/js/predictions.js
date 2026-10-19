@@ -175,7 +175,7 @@
       $$("tbody.fx-day", table).forEach((tb) => {
         let any = false;
         $$("tr.fx", tb).forEach((tr) => {
-          const ok = (!state.leagues.size || state.leagues.has(tr.dataset.league))
+          const ok = !tr.hasAttribute("data-on-live") && (!state.leagues.size || state.leagues.has(tr.dataset.league))
             && (!query || fold(tr.dataset.teams).includes(query));
           tr.hidden = !ok;
           if (ok) { any = true; shown += 1; }
@@ -223,5 +223,6 @@
     if (e.key === "Escape" && picker.open) { picker.open = false; $("summary", picker).focus(); }
   });
 
+  document.addEventListener("fixtures:refilter", apply);
   apply();
 })();

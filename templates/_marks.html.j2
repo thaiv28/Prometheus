@@ -27,12 +27,10 @@
 
 {#- The fixture register: matches grouped by day, each team's series chance either
     side of a duel bar. `days` from `predictions_view`; `results` adds the score
-    and the call; `root` prefixes team links; `compact` (home) drops the method
-    column. A match with a Kalshi price gets a caret on its duel bar at the
+    and the call; `root` prefixes team links; `compact` (home and recent results) drops head notes. A match with a Kalshi price gets a caret on its duel bar at the
     market's chance and a Kalshi column: the current price in upcoming registers, the closing line (last price before the start) in results. Rows carry data-start (UTC) so predictions.js can set local times and
     regroup the days, and data-league / data-teams for its filters. -#}
 {% macro fixtures(days, results=False, root='', compact=False, id='') -%}
-{%- set by = not compact and not results -%}
 <table class="register register--fixtures{% if results %} register--results{% endif %}"{% if id %} id="{{ id }}"{% endif %}>
   <thead>
     <tr>
@@ -43,15 +41,14 @@
       <th scope="col" class="fx-team fx-team--2"><span class="visually-hidden">Second team</span></th>
       {% if not results %}<th scope="col" class="phone-hide">Bo</th>{% endif %}
       {% if not results %}<th scope="col" class="num phone-hide fx-opt" title="Per-map odds, first team–second team">Game{% if not compact %}<sup class="th-note" aria-hidden="true">1</sup>{% endif %}</th>{% endif %}
-      {% if not results %}<th scope="col" class="num phone-hide" title="Kalshi series odds, updated hourly">Kalshi{% if not compact %}<sup class="th-note" aria-hidden="true">5</sup>{% endif %}</th>{% endif %}
+      {% if not results %}<th scope="col" class="num phone-hide" title="Kalshi series odds, updated hourly">Kalshi{% if not compact %}<sup class="th-note" aria-hidden="true">4</sup>{% endif %}</th>{% endif %}
       {% if not results and not compact %}<th scope="col" class="num phone-hide" title="FORGE/Elo + Kalshi; domestic/international only"><a href="{{ root }}market-blend.html">Blend</a></th>{% endif %}
-      {% if by %}<th scope="col" class="wide-only fx-opt">By{% if not compact %}<sup class="th-note" aria-hidden="true">2</sup>{% endif %}</th>{% endif %}
-      {% if results %}<th scope="col" class="num phone-hide fx-close" title="Last pre-match Kalshi odds">Close{% if not compact %}<sup class="th-note" aria-hidden="true">5</sup>{% endif %}</th><th scope="col" class="num">Result</th><th scope="col">Call</th>{% endif %}
+      {% if results %}<th scope="col" class="num phone-hide fx-close" title="Last pre-match Kalshi odds">Close{% if not compact %}<sup class="th-note" aria-hidden="true">4</sup>{% endif %}</th><th scope="col" class="num">Result</th><th scope="col">Call</th>{% endif %}
     </tr>
   </thead>
   {% for day in days %}
   <tbody class="fx-day" data-day="{{ day.day }}">
-    <tr class="fx-day-row"><th scope="rowgroup" colspan="{{ 10 + (1 if by else 0) + (1 if not results and not compact else 0) }}">{{ day.label }}</th></tr>
+    <tr class="fx-day-row"><th scope="rowgroup" colspan="{{ 10 + (1 if not results and not compact else 0) }}">{{ day.label }}</th></tr>
     {% for r in day.rows %}
     <tr class="fx{% if r.href %} fx--link{% endif %}"{% if r.href %} data-href="{{ r.href }}"{% endif %} data-match="{{ r.id }}" data-start="{{ r.start }}" data-league="{{ r.league }}" data-teams="{{ r.name1 }}|{{ r.name2 }}"{% if r.winner %} data-winner="{{ r.winner }}"{% endif %}>
       <td class="fx-time"><time datetime="{{ r.start | replace('Z', ':00Z') }}">{{ r.time }}</time><span class="fx-meta">{{ league(r.league, show_code=False) }}</span></td>
@@ -74,7 +71,6 @@
       {% if not results %}<td class="num phone-hide fx-opt fx-game">{% if r.best_of > 1 %}{{ r.game1 }}–{{ r.game2 }}{% else %}<span class="muted">same</span>{% endif %}</td>{% endif %}
       {% if not results %}<td class="num phone-hide fx-market"{% if r.mkt1 %} title="Kalshi · {{ r.mkt_at }}"{% endif %}>{% if r.mkt1 and r.mkt_url %}<a href="{{ r.mkt_url }}" aria-label="Kalshi’s market for {{ r.name1 }} against {{ r.name2 }}: {{ r.mkt1 }}–{{ r.mkt2 }}">{{ r.mkt1 }}–{{ r.mkt2 }}</a>{% elif r.mkt1 %}{{ r.mkt1 }}–{{ r.mkt2 }}{% else %}<span class="muted" title="No Kalshi market or usable quote">—</span>{% endif %}</td>{% endif %}
       {% if not results and not compact %}<td class="num phone-hide fx-trade"{% if r.trade1 %} title="{{ r.trade_at }} · Net {{ '%+.1f' | format(100 * r.trade_edge) }} points"{% endif %}>{% if r.trade1 %}{{ r.trade1 }}–{{ r.trade2 }}{% else %}<span class="muted" title="No trading estimate">—</span>{% endif %}</td>{% endif %}
-      {% if by %}<td class="wide-only fx-opt fx-by">{{ r.method }}{% if r.cross %}<span class="fx-cross" title="{{ 'Elo with regional calibration' if r.calibrated else 'Teams from different leagues: Elo alone' }}"> across</span>{% endif %}</td>{% endif %}
       {% if results %}
       <td class="num phone-hide fx-close fx-market"{% if r.mkt1 %} title="Kalshi close · {{ r.mkt_at }}"{% endif %}>{% if r.mkt1 and r.mkt_url %}<a href="{{ r.mkt_url }}" aria-label="Kalshi’s closing line for {{ r.name1 }} against {{ r.name2 }}: {{ r.mkt1 }}–{{ r.mkt2 }}">{{ r.mkt1 }}–{{ r.mkt2 }}</a>{% elif r.mkt1 %}{{ r.mkt1 }}–{{ r.mkt2 }}{% else %}<span class="muted" title="No Kalshi market or usable quote">—</span>{% endif %}</td>
       <td class="num fx-score" title="Best of {{ r.best_of }}">{% if r.href %}<a href="{{ r.href }}">{{ r.score or '—' }}</a>{% else %}{{ r.score or '—' }}{% endif %}</td>

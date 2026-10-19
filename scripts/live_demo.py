@@ -9,8 +9,8 @@ the page. See "Live page state" in docs/steering/tech.md for the format.
     uv run python scripts/live_demo.py --matches 1             # only one match
     uv run python scripts/live_demo.py --status idle           # no game on
 
-Then serve output/ (python -m http.server -d output 8000) and open live.html
-(every match) or watch.html. Every time is real wall-clock time: a game at
+Then serve output/ (python -m http.server -d output 8000) and open
+predictions.html (every match) or watch.html. Every time is real wall-clock time: a game at
 --minute 24 started 24 minutes ago (divided by --speed). The other matches run a
 few minutes ahead or behind the first.
 """

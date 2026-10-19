@@ -13,7 +13,7 @@ from prometheus.site.config import (
     PREDICTIONS,
     RECENT_RESULT_DAYS,
 )
-from prometheus.site.render import env, slugify, write
+from prometheus.site.render import env, render_redirect, slugify, write
 from prometheus.site.trading import groups as trading_groups
 from prometheus.types import INTERNATIONAL_LEAGUES
 
@@ -98,7 +98,18 @@ def _by_day(rows):
     return [{"day": d, "label": label, "rows": rs} for d, label, rs in days]
 
 
-def predictions_view(log, team_slugs, now):
+def _whole_days(rows, horizon, cap):
+    """Keep complete UTC days, including the first even when it exceeds the cap."""
+    out = []
+    for day in _by_day(rows):
+        group = day["rows"]
+        if group[0]["start"] > horizon or (out and len(out) + len(group) > cap):
+            break
+        out.extend(group)
+    return out
+
+
+def predictions_view(log, team_slugs, now, series_links=None):
     """Upcoming and past fixture rows, the scorecard, and the home page's fixtures.
 
     Only matches between two teams we rate are shown. Upcoming: not started,
@@ -124,22 +135,30 @@ def predictions_view(log, team_slugs, now):
     horizon = (now + datetime.timedelta(days=HOME_FIXTURE_DAYS)).strftime(
         "%Y-%m-%dT%H:%MZ"
     )
-    home = [
-        fixture_row(e, team_slugs)
-        for e in upcoming
-        if schedule.is_major(e) and e["start"] <= horizon
-    ][:HOME_FIXTURES]
+    home = _whole_days(
+        [fixture_row(e, team_slugs) for e in upcoming if schedule.is_major(e)],
+        horizon,
+        HOME_FIXTURES,
+    )
+    series_links = series_links or {}
+
+    def past_row(entry, root=""):
+        row = fixture_row(entry, team_slugs)
+        if entry["match_id"] in series_links:
+            row["href"] = f"{root}live-results/{series_links[entry['match_id']]}.html"
+        return row
+
     leagues = {e["league"] for e in entries}
     majors = env.globals["major_leagues"]
     edge_rows = grouped_edges(entries)
     return {
         "performance_edges": call_groups(edge_rows),
         "upcoming": _by_day(up_rows),
-        "past": _by_day([fixture_row(e, team_slugs) for e in recent]),
+        "past": _by_day([past_row(e) for e in recent]),
         "upcoming_count": len(up_rows),
         "past_count": len(past),
         "recent_days": RECENT_RESULT_DAYS,
-        "months": result_months(past, team_slugs),
+        "months": result_months(past, team_slugs, series_links),
         "scorecard": schedule.scorecard(entries),
         "vs_market": method_groups(schedule.market_scorecard(entries)),
         "edges": call_groups([row for row in edge_rows if row["edge"] == 0.05]),
@@ -163,10 +182,18 @@ def predictions_view(log, team_slugs, now):
     }
 
 
-def result_months(past, team_slugs):
+def result_months(past, team_slugs, series_links=None):
     """The results pages, newest month first: key ('2026-09'), label
     ('September 2026'), count and the fixture rows by day (team links from
     `results/`)."""
+    series_links = series_links or {}
+
+    def row(entry):
+        item = fixture_row(entry, team_slugs)
+        if entry["match_id"] in series_links:
+            item["href"] = f"../live-results/{series_links[entry['match_id']]}.html"
+        return item
+
     months = {}
     for e in past:  # newest first
         months.setdefault(e["start"][:7], []).append(e)
@@ -178,7 +205,7 @@ def result_months(past, team_slugs):
                 "key": key,
                 "label": f"{first.strftime('%B')} {first.year}",
                 "count": len(entries),
-                "days": _by_day([fixture_row(e, team_slugs) for e in entries]),
+                "days": _by_day([row(e) for e in entries]),
             }
         )
     return out
@@ -294,30 +321,19 @@ def alert_record(entries, key="alert"):
     }
 
 
-def render_live(fixtures, finished=None, live_months=()):
-    """live.html (every match in progress) and watch.html (one match, with its stream).
-
-    JS fills both from live/index.json and live/<match>.json, written by the live
-    collector, not by this build; `fixtures` (the next matches) show between games
-    and without JS; `finished` (the last week's followed series, None without
-    saved live maps) and `live_months` link to the live results pages.
-    """
-    for name, template in [
-        ("live.html", "live.html.j2"),
-        ("watch.html", "watch.html.j2"),
-    ]:
-        write(
-            os.path.join(site_config.OUTPUT_DIR, name),
-            env.get_template(template).render(
-                page_key="live",
-                root_path="",
-                metric=site_config.LIVE,
-                streams=site_config.LIVE_STREAMS,
-                fixtures=fixtures,
-                finished=finished,
-                live_months=live_months,
-            ),
-        )
+def render_live(fixtures):
+    """Redirect the former Live page and render the single-match watch page."""
+    render_redirect("live", "predictions.html", "Predictions")
+    write(
+        os.path.join(site_config.OUTPUT_DIR, "watch.html"),
+        env.get_template("watch.html.j2").render(
+            page_key="predictions",
+            root_path="",
+            metric=site_config.LIVE,
+            streams=site_config.LIVE_STREAMS,
+            fixtures=fixtures,
+        ),
+    )
 
 
 def render_predictions(view, coverage):

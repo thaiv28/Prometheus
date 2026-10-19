@@ -307,6 +307,11 @@ def result_rows(settled, player_slugs):
         start = pd.Timestamp(first["start"])
         cells = {}
         for r in grp.to_dict("records"):
+            # A line we made no pick on has NaN, not None, after the frame merge.
+            r = {
+                k: None if k in ("side", "p_side") and pd.isna(v) else v
+                for k, v in r.items()
+            }
             cells[r["source"]] = {
                 "line": f"{r['line']:g}",
                 "side": r.get("side"),
