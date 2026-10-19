@@ -4,7 +4,7 @@ name: Live benchmark data
 # Its own workflow keeps collection out of publish, PR checks and hourly jobs.
 # State: ~7.4 MB + 56 MB compressed, ~13 s to tar locally; ~100 new maps/week
 # at ~17 s/map sequential (four shards). Kalshi requests take ~0.2–0.3 s;
-# build time on CI is not measured yet.
+# first CI run: 10 min, of which --build-data 8 min (re-reads every map).
 on:
   schedule:
     - cron: "20 12 * * 1" # Monday, after publish and kalshi-cache
