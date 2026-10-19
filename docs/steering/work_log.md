@@ -52,7 +52,8 @@ requested a usable, merge-ready integration PR.
   Main advanced again during mergeability computation; the PR history was
   linearized without tree changes, then updated with `b0acbac`. The lifecycle
   runtime changes merge cleanly; only log entries needed reconciliation.
-  Combined-source checks run before final handoff.
+  Combined source: 822 passed, 2 skipped in 10.58 s; repository format/lint
+  pass. Final-head CI runs against the lifecycle base before handoff.
 - Recorded KC–C9 map 5: 5,743 frames, full draft resolved from the actual API
   collector with real receipt times, 26 candidate calls. Three-run median replay
   baseline 40.88 ms / candidate 44.82 ms; private parallel scoring adds about
