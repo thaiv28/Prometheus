@@ -1,5 +1,9 @@
 # Work log
 
+## 2026-10-19 — Future work: player win share and Elo rating model
+
+Branch `future-win-share`, based on `b0acbac` (main). Documentation only: added two Future work items to `docs/steering/current_state.md`: splitting Elo changes among starters by their share of an in-game lead (gold difference at 15/20 minutes or similar), and the Elo rating model (expected score on the fitted slope with K retuned; Glicko-2-style uncertainty; later TrueSkill Through Time or dynamic Bradley-Terry). No code changed; no checks beyond reading the rendered Markdown.
+
 ## 2026-10-18 — Prepare API draft v2 as a private live candidate
 
 Branch `live-draft-v2`, based on `f999333` (the v3 comparison), main base
