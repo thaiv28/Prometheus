@@ -1,5 +1,86 @@
 # Work log
 
+## 2026-10-19 — Player Elo RD v2: reference tied to floor
+
+Branch `elo-glicko`, based on `177004c` (future-work documentation on
+main `b0acbac`), in the pre-existing dedicated worktree. V1 was confounded:
+reference above floor reduced veteran K to about 9 or 5 instead of 20.
+All v1 numbers remain under **v1 (flawed: reference above floor)** in the
+[generated report](../research/elo_glicko.md) and [archive](../research/elo_glicko_v1.md).
+
+V2 fixes reference=floor. Fixed before tuning: floor 60/80/100, new/floor
+1.5/2/2.5, growth 10/20/35, information 0.25/0.5/1 (243 settings across
+replacement keep/drop rookie discount and on-top arms), with one predeclared
+local Cartesian boundary extension per arm (25 additional settings, 268 total).
+V1 side normalization also moved settled K when lineup uncertainty differed;
+v2 applies weights independently per player. An initial tuning attempt keeping
+normalization was aborted before any held-out scoring; its scores were discarded
+and the same grid restarted. `player_rd_normalize=True` retains v1 compatibility.
+`player_rd_information` slows shrinkage; default `player_rd=None` stays published.
+At E=.5 without inactivity, information .25 stretches RD 250→100 from 11 to 41 games.
+
+Tuned on 2014–2021 only, frozen before 2022–2026 scoring. Winner replaces
+provisional/away, keeps rookie discount: new=280, floor=reference=140,
+c=10, information=.125. Tuning loss 0.620024 vs published 0.621480.
+Initial winner (new=200, floor=100, c=10, information=.25) was on three
+boundaries. After the one extension, floor/information remain on expanded
+boundaries: explicitly unresolved, not a bracketed optimum. Floor and information
+trade off via information × floor²; a future grid can use dimensionless parameters.
+
+Held-out Δ log loss vs published, paired game bootstrap 95% interval:
+
+| Section | Games | Published loss | Δ log loss (95% CI) |
+|---|---:|---:|---|
+| Elo, domestic | 7,728 | 0.62229 | -0.00051 (-0.00132 to +0.00026) |
+| Elo, international | 589 | 0.61851 | +0.00039 (-0.00094 to +0.00176) |
+| FORGE, domestic | 7,728 | 0.62003 | +0.00014 (-0.00036 to +0.00061) |
+| FORGE, international | 589 | 0.61144 | -0.00013 (-0.00100 to +0.00076) |
+| Elo, other leagues | 37,272 | 0.60410 | -0.00283 (-0.00347 to -0.00220) |
+| FORGE, other leagues | 37,272 | 0.60121 | -0.00108 (-0.00155 to -0.00062) |
+| Elo, cross-league | 5,442 | 0.57353 | -0.00068 (-0.00222 to +0.00091) |
+
+Roster-change slice: domestic 703, international 9, other leagues 6,814,
+cross-league 682 games. Other-league Elo −0.00269 (−0.00421 to −0.00116)
+and FORGE −0.00169 (−0.00289 to −0.00051), both significant. All other
+slice intervals span zero; international has only nine games. On-top RD
+improves other-league Elo significantly (−0.00147) but FORGE is inside the
+noise; dropping the discount significantly harms other-league Elo/FORGE and
+cross-league Elo. Full tables and all tuning scores are in the report.
+
+**Verdict: passes the AGENTS.md significance gate** (two targeted gains,
+no significant guarded regression). **Recommendation: iterate on the remaining
+boundary optimum before choosing production constants; no published change here.**
+V1's negative conclusion about uncertainty is superseded. This is Glicko-style
+RD, not full Glicko-2: no g(RD), volatility estimation or league RD. Shared
+harness probability curves/blends fit out of year within partitions; the
+other-league helper's Form feature fits use all other major-league years,
+including tuning years. Not an expanding-window deployment simulation. Intervals
+are over games rather than series and are not multiplicity-adjusted.
+
+Checks actually run: all 205,858 DB team-games reproduce (max |Δ| 1.14e-12).
+The chronological tuning prefix (49,342 of 102,929 games) matches the full
+published replay exactly; all three selected RD prefixes also match full
+replays exactly. Focused suite 56 passed in 0.90 s; full suite **816 passed,
+2 skipped** in 16.67 s; final confirmation after report/timing helper edits:
+**816 passed, 2 skipped in 9.56 s** (existing sandbox core-detection warning).
+Earlier v1 full suite was 804 / 2 in 13.31 s; these concurrent-machine runs
+cannot isolate the extra test cost. Tiny examples cover information arithmetic,
+floor timing, mixed settled/rookie direct weights, v1 normalization, unchanged
+default, invalid options and cohort/grid/prefix/alignment guards.
+Repository-wide ruff format/check, script --help, local document links and
+whitespace checks pass.
+
+Main experiment: 772.8 s (12.9 min), 268 prefix replays median 1.84 s
+(1.78–4.25 s). Selected full RD replays 3.93–4.06 s; initial baseline 6.88 s
+faced different machine load. A paired AB/BA/AB check (three runs each) gives
+published median 3.54 s and selected RD 3.87 s (+0.33 s, +9.3%).
+This overhead applies only to an RD replay; production/CI keep the disabled path.
+No added CI step, dependency, production fit or DB read. The opt-in mechanism
+adds no per-game RD computation to published calls. No DB/schema, published
+metric/weights, site or build change; no rebuild/refit needed for this research.
+Used `.venv/bin/python` and `VECLIB_MAXIMUM_THREADS=1`; uv crashes in this sandbox.
+All edits remain uncommitted by request; no push or PR.
+
 ## 2026-10-19 — Future work: player win share and Elo rating model
 
 Branch `future-win-share`, based on `b0acbac` (main). Documentation only: added two Future work items to `docs/steering/current_state.md`: splitting Elo changes among starters by their share of an in-game lead (gold difference at 15/20 minutes or similar), and the Elo rating model (expected score on the fitted slope with K retuned; Glicko-2-style uncertainty; later TrueSkill Through Time or dynamic Bradley-Terry). No code changed; no checks beyond reading the rendered Markdown.

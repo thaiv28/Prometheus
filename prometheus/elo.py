@@ -162,6 +162,9 @@ def compute_elo_records(
     veteran_penalty: float = 0.0,
     veteran_games: int = 0,
     veteran_years: float = 0.0,
+    player_rd: tuple[float, float, float, float] | None = None,
+    player_rd_information: float = 1.0,
+    player_rd_normalize: bool = False,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
 
@@ -219,6 +222,24 @@ def compute_elo_records(
             games, like the rookie discount.
         rookie_curve: "linear" (above) or "log": the discount falls with
             log(1 + games) instead, D × (1 − log(1 + g) / log(1 + rookie_games)).
+        player_rd: Research-only (new, floor, reference, growth per sqrt(day)).
+            None preserves published Elo. Before a game, RD² grows by growth² ×
+            nonnegative days away, capped at new². Moves scale by RD²/reference²;
+            applied independently per player, on top of enabled provisional/away
+            factors. Afterward RD² becomes
+            max(floor², 1 / (1/RD² + player_rd_information ×
+            (ln(10)/400)² × E × (1−E))). Fix reference=floor to preserve K
+            for settled players; a separate reference is retained for v1 replay.
+            No g(RD)
+            attenuation, fitted volatility or league-offset uncertainty is used.
+            Discounts and transfer adjustments remain separate from uncertainty.
+        player_rd_information: Positive finite per-game information multiplier
+            for the research RD option. Smaller values slow shrinkage. Ignored
+            when player_rd is None; the published default path is unchanged.
+        player_rd_normalize: Research compatibility option for v1. Normalize
+            side weights to a shared mean, making mean stored updates zero-sum.
+            Default False keeps the literal per-player RD weight, so settled
+            players retain their baseline K even against uncertain opponents.
         veteran_penalty, veteran_games, veteran_years: a late-career discount,
             counted like the rookie one (never stored). Past `veteran_games` games it
             grows linearly to `veteran_penalty` at twice that many; past
@@ -235,6 +256,17 @@ def compute_elo_records(
         teamid, playerid, pre_match_elo, post_match_elo (offset included), home_league
         and league_offset.
     """
+    if player_rd is not None:
+        rd_new, rd_min, rd_ref, rd_growth = player_rd
+        if not all(math.isfinite(x) for x in player_rd) or not (
+            0 < rd_min <= rd_new and rd_ref > 0 and rd_growth >= 0
+        ):
+            raise ValueError(
+                "player_rd requires finite new >= min > 0, ref > 0, growth >= 0"
+            )
+        if not math.isfinite(player_rd_information) or player_rd_information <= 0:
+            raise ValueError("player_rd_information must be finite and positive")
+    rd_variance = {}  # player -> posterior RD squared, research option only
     has_league = "league" in games.columns
     leagues = games["league"] if has_league else [None] * len(games)
     dates = (
@@ -369,7 +401,49 @@ def compute_elo_records(
             result=row.result,
         )
         factor = league_factors.get(league, 1.0) if league_factors else 1.0
-        for (_, _, roster), change in zip(sides, (elo_change, -elo_change)):
+        if player_rd is not None:
+            weights = []
+            expectation = expected_score(pre[0], pre[1])
+            information = (
+                player_rd_information
+                * (math.log(10) / 400) ** 2
+                * expectation
+                * (1 - expectation)
+            )
+            for _, _, roster in sides:
+                side_weights = {}
+                for player in roster:
+                    variance = rd_variance.get(player, rd_new**2)
+                    days = 0
+                    if date is not None and player in last_seen:
+                        seen = last_seen[player][0]
+                        if seen is not None:
+                            days = max(0, (date - seen).days)
+                    variance = min(rd_new**2, variance + rd_growth**2 * days)
+                    weight = variance / rd_ref**2
+                    if played[player] < provisional_games:
+                        weight *= provisional_factor
+                    if away_factor:
+                        weight *= 1 + away_factor * min(days / away_days, 1.0)
+                    side_weights[player] = weight
+                    rd_variance[player] = max(
+                        rd_min**2, 1 / (1 / variance + information)
+                    )
+                weights.append(side_weights)
+            means = [sum(w.values()) / len(w) for w in weights]
+            shared = sum(means) / 2
+            for (_, _, roster), change, w, mean in zip(
+                sides, (elo_change, -elo_change), weights, means
+            ):
+                for player in roster:
+                    weight = (
+                        shared * w[player] / mean if player_rd_normalize else w[player]
+                    )
+                    own[player] += factor * change * weight
+                    played[player] += 1
+        for (_, _, roster), change in zip(
+            sides if player_rd is None else [], (elo_change, -elo_change)
+        ):
             for player in roster:
                 step = factor * change
                 if away_factor and date is not None and player in last_seen:

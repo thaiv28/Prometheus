@@ -1,5 +1,11 @@
 # Research
 
+- [Player Elo Glicko-style uncertainty](elo_glicko.md): v2 ties reference to floor
+  and tests information speed; 268 settings, selected through 2021. Held-out
+  2022+ other-league Elo/FORGE improve significantly, including starter changes,
+  with no significant guarded regression. Iterate on remaining boundary choices;
+  published Elo unchanged. Includes the [flawed v1 archive](elo_glicko_v1.md).
+
 - [Conditional objective gains](cand_followups.md) and [role leads phase A](cand_role_leads.md): original draft and momentum add to objectives; role gold/CS/XP add to gold+Elo on exact checkpoints. Retrospective, no runtime change.
 
 - [Live model candidate review](live_candidates.md): objectives, draft, per-map Elo, momentum and calibration; retrospective research, no model deployed.
