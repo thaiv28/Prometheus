@@ -373,3 +373,10 @@ Live and Watch refresh active data every two seconds. On Live, a fixture leaves 
 ### Alert fee definition (2026-10-17)
 
 Market Blend’s Signals paragraph names the execution fee bound for alerts, while the paper record keeps its estimated-fee definition. No new visual component; preserve the existing prose and register hierarchy.
+
+### Live completed series (2026-10-18)
+
+Coming up removes provider-confirmed started/completed series across reloads.
+Finished adds a compact Date / League / Match / Result register linking to
+Watch until the next daily archive provides its richer row. Reuse the existing
+booktabs register and phone-hidden league column; no new tokens or controls.

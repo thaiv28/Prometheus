@@ -158,6 +158,7 @@ class WindowSession:
                     and normalized["totalKills"]
                     != sum(p["kills"] for p in live_participants)
                 ):
+                    normalized["totalKills"] = None
                     field_reasons.append(
                         f"{side}.totalKills:participant_sum_disagreement"
                     )
@@ -172,7 +173,13 @@ class WindowSession:
                 ):
                     reasons.append(f"{side}_startup_placeholder_pattern")
                 teams[side] = normalized
-            if field_reasons:
+            # A conflicting aggregate kill counter must not erase the gold,
+            # clock and other objectives. Keep kills unknown; inference falls
+            # back to v1 rather than using an untrusted objective count.
+            if any(
+                not reason.endswith(":participant_sum_disagreement")
+                for reason in field_reasons
+            ):
                 reasons.append("incomplete_or_invalid_fields")
             rows.append(
                 {

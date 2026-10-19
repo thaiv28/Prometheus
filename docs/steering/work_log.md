@@ -4,7 +4,8 @@
 
 Branch `live-draft-v2`, based on `f999333` (the v3 comparison), main base
 `f522db3` (PR #85), updated with main `09679a5` (PR #90 refresh ordering)
-before publication; documentation conflicts preserve both entries. User
+before publication; final handoff also integrates main `b0acbac` (PR #93
+lifecycle fixes). Documentation conflicts preserve both entries. User
 requested a usable, merge-ready integration PR.
 
 - `live.draft` resolves all ten Riot participants by role, side, champion token
@@ -48,9 +49,10 @@ requested a usable, merge-ready integration PR.
   deployment jobs correctly skipped. The availability-bound follow-up passed
   all 819 tests locally in 8.86 s. Main-only history upload/reload remains a
   rollout measurement. This documentation follow-up changes no validated code.
-  GitHub briefly reported a conflicting merge despite main `09679a5` being an
-  ancestor of the tested head (verified locally and via its commit API); branch
-  state is refreshed before handoff.
+  Main advanced again during mergeability computation; the PR history was
+  linearized without tree changes, then updated with `b0acbac`. The lifecycle
+  runtime changes merge cleanly; only log entries needed reconciliation.
+  Combined-source checks run before final handoff.
 - Recorded KC–C9 map 5: 5,743 frames, full draft resolved from the actual API
   collector with real receipt times, 26 candidate calls. Three-run median replay
   baseline 40.88 ms / candidate 44.82 ms; private parallel scoring adds about
@@ -61,6 +63,64 @@ requested a usable, merge-ready integration PR.
   identity/accuracy evidence without worker DB access; one SQL pass and cached
   keys avoid repeated history construction. Production upload/reload timing is
   unmeasured. No new dependency, public UI/copy, DB schema or trading change.
+
+## 2026-10-18 — Repair Live discovery and series lifecycle
+
+Branch `fix-live-lifecycle`, based on `09679a5` (main, PR #90).
+KC–MVK Oct 18 evidence: worker already running before map 1; default window
+side probes returned 204 from 17:53 through 18:32 UTC, first 200 at 18:33.
+Map start was 18:10:06, first recorded frame 22:54 into play. Side discovery
+now uses the same delayed timestamped window as polling, retaining feed-side
+identity validation. This removes dependence on the delayed default window;
+prospective availability still depends on Riot. Earlier uncollected map-1
+observations and calls cannot be presented as calls made live.
+
+Map 2 also lost 5,975 frames to a red aggregate/player kill disagreement.
+Invalidate that kill counter alone, keep the valid gold/objectives and field
+reason, and use existing v1 objective-model fallback. Other invalid fields,
+identities and stale/future timestamps still reject. No model coefficients,
+probability method or benchmark inputs changed.
+
+Persist provider-confirmed started/completed series in `live/lifecycle.json`
+(seven days), kept through empty indexes and service shutdown. Coming up reads
+it after reload; Finished immediately links recorded completed series to Watch
+until the daily richer archive row exists. The worker performs a final map
+settlement/snapshot before untracking. No daily build is needed for these rows.
+One extra browser JSON read per existing poll; no extra worker request: side
+URL replaces its old request, lifecycle uses existing schedule/live responses.
+No new dependency, CI job, database read or fit. Checks and measured timings
+are recorded below after completion.
+
+Local validation: full suite 792 passed, 2 skipped in 9.39 s (baseline 789 /
+2 skipped in 9.10 s; the small difference is within startup/load noise).
+Focused Live+JS suite 97 passed in 1.16 s. Full fetch-disabled site build
+completed (2,087 team / 4,854 player pages); copied DB is old and lacks Props
+columns, so that unrelated page was skipped with its existing warning. No DB
+schema or published metric change; no rebuild/refit required. Live pinned replay
+scores 1,665 maps / 54,557 calls / 3,327 pre-maps in 1.7 s. All lints, format
+and whitespace checks pass. Final confirmation after the Watch fix: 792 passed, 2 skipped in 8.69 s;
+base/head pinned benchmark calls and metrics are exactly identical (1.8 s each).
+Changed-document relative links and the Watch design detector pass.
+
+Real-data migration reconciles KC–MVK to 3–0, closes map 3 with its known winner
+and preserves map links. It took 214 ms locally including parsing/rewriting the
+full retained page, once; subsequent minute checks parse retained recorded
+pages but do not rewrite unchanged scores. No publish/hourly work added.
+Already-idle retained pages are also reopened as final saved pages.
+Final series state survives shutdown and no longer counts as a stalled live
+match on Watch. Explicit saved-match links work even with an empty active index
+and do not switch to another live match.
+
+Copy review: PASS — Live and saved-match Watch at desktop 1440px and emulated
+phone 390px. Existing notes/definitions retained; final-state copy replaces
+“Between maps”/“Stalled”; compact finished rows show Date/Match/Result (League
+on desktop). Shortened date display and allowed team names to wrap so the result
+stays visible on phones. No new explanatory paragraph or duplicate methodology.
+Browser assertions cover empty active index, reload persistence, stale fixture
+removal, 3–0 result, Watch navigation and absence of JS errors/page overflow.
+Desktop/phone screenshots inspected. Initial browser pass caught the old Watch
+reader's dependence on active-index membership; corrected explicit saved links
+and confirmed both widths. Design detector returned no findings.
 
 
 ## 2026-10-18 — Fix refresh/publisher ordering during live rollout
