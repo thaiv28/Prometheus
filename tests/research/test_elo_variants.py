@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from prometheus.elo import (
+    LEGACY_ELO,
     calculate_game_length_elo_change,
     compute_elo_records,
     winner_score,
@@ -266,8 +267,7 @@ def test_replay_slope_and_event_overrides_match_manual_updates():
         league_slopes={"LFL": 0.01},
         records=True,
         rookie_penalty=0,
-        provisional_games=0,
-        away_factor=0,
+        **{**LEGACY_ELO, "provisional_games": 0, "away_factor": 0},
         move_down_bonus=0,
     ).set_index(["gameid", "teamid"])
     a, b = 1500.0, 1500.0
@@ -338,8 +338,7 @@ def test_nonmajor_combined_slope_k_keeps_major_and_international_updates_native(
         records=True,
         **fitted.other_config(inputs.games.league, 0.01, 28),
         rookie_penalty=0,
-        provisional_games=0,
-        away_factor=0,
+        **{**LEGACY_ELO, "provisional_games": 0, "away_factor": 0},
         move_down_bonus=0,
     ).set_index(["gameid", "teamid"])
     a, b = 1500.0, 1500.0

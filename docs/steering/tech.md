@@ -101,46 +101,28 @@ FORGE (Form + Elo) was called GlorELO+ until 2026-10-02; the module, weights fil
 
 ## Elo
 
-`prometheus/elo.py`, replayed in date order by `004_bootstrap_elo.py`. Ratings belong to players. A team's rating is the average of its five starters' ratings (`match_players`) plus its home league's offset. The home league is the non-international league the team has played most this calendar year, with last year's home counting as one game (a tie keeps the current home), so a cup, promotion series or EMEA Masters doesn't relabel it. Each game changes every starter's rating by the team's K=20 × (actual − expected), where the winner’s "actual" is `0.825 + 0.175 * tanh((1800 - gamelength) / 300)`: near 1.0 for very short games and 0.65 for very long ones, with a midpoint at 30 minutes and a five-minute transition. Explicit `steepness` arguments retain the historical power curve for research; Record calls `power_winner_score` directly. When teams from two leagues meet at an international event, each league's offset also moves by `LEAGUE_SHARE` (0.5) of the team's change. A new player starts at the average rating of the league's active players (last game in that league within `ACTIVE_DAYS`, 365), or 1500 plus the offset if there are none; a player who changes league keeps their rating. A rookie discount (`ROOKIE_PENALTY` 250, `ROOKIE_GAMES` 200, `ROOKIE_CURVE` "log") makes a player count 250 × (1 − log(1 + g) / log(201)) points lower after g games, nothing from 200 games on ("linear" falls linearly instead, the 2026-10-08 form); it is applied when the team's rating is formed (and in stored player and `main_elo` ratings) but never added to the player's own rating, so a league's average doesn't drift with turnover (starting new players lower instead made Elo worse for that reason). A player's first `PROVISIONAL_GAMES` (25) games move their rating `PROVISIONAL_FACTOR` (2) times the team's change. A team's `elo_change` includes the fading of its rookies' discount. A player's first game back after time away moves `1 + AWAY_FACTOR × min(days away / AWAY_DAYS, 1)` (2.0, 365) times the team's change (provisional factor on top). A player moving from a major (`MAJOR_LEAGUES`) down to another league gains `MOVE_DOWN_BONUS` (25) in their stored rating on top of the offset conversion (`MOVE_UP_PENALTY` 0; with `move_games` the change fades over that many games instead of being stored). Research options, off by default: `league_factors` (K by league, offsets unchanged; `elo_k_tier.py`) and a veteran discount (`veteran_penalty`, `veteran_games`, `veteran_years`; `elo_experience.py`). `evaluate_metrics.py`'s team-Elo reference (no rosters) runs without the rookie, provisional, time-away and league-move adjustments. A team with no roster for a game uses its last roster, and one that never had one plays as a single "player" (plain team Elo; this is what unit tests without rosters exercise). Each team row also stores `main_elo`: the team's rating with its main roster (the starters of its last game in its home league or at an international event) after the game, so an academy lineup fielded under the team's name at a cup doesn't stand in for the team. `get_latest_elos` and `get_season_elos` use `main_elo` (falling back to `post_match_elo`) and the stored `home_league`, and add each league's offset changes since the team's last game. `compute_elo_records(..., player_records=True)` also returns each starter's ratings, which `bootstrap_elo` stores; `get_player_history` reads them with names, roles and teams, and `get_player_elos` gives each player's current and calendar-year-end rating (offset moves included, as for teams). `get_season_elos` gives every team's rating at the end of each calendar year it played (last game that year plus offset changes through year end), labelled with its most-played domestic league that year. Calendar years, not Oracle's Elixir `year`, because some autumn games are filed under the next season.
+`prometheus/elo.py`, replayed in date order by `004_bootstrap_elo.py`. Ratings belong to players. A team's rating is the average of its five starters' ratings (`match_players`) plus its home league's offset. The home league is the non-international league the team has played most this calendar year, with last year's home counting as one game (a tie keeps the current home), so a cup, promotion series or EMEA Masters doesn't relabel it. Each game changes every starter's rating by RD²/floor² times the team's K=20 × (actual − expected), where the winner’s "actual" is `0.825 + 0.175 * tanh((1800 - gamelength) / 300)`: near 1.0 for very short games and 0.65 for very long ones, with a midpoint at 30 minutes and a five-minute transition. Explicit `steepness` arguments retain the historical power curve for research; Record calls `power_winner_score` directly. When teams from two leagues meet at an international event, each league's offset also moves by `LEAGUE_SHARE` (0.5) of the team's change. A new player starts at the average rating of the league's active players (last game in that league within `ACTIVE_DAYS`, 365), or 1500 plus the offset if there are none; a player who changes league keeps their rating. A rookie discount (`ROOKIE_PENALTY` 250, `ROOKIE_GAMES` 200, `ROOKIE_CURVE` "log") makes a player count 250 × (1 − log(1 + g) / log(201)) points lower after g games, nothing from 200 games on ("linear" falls linearly instead, the 2026-10-08 form); it is applied when the team's rating is formed (and in stored player and `main_elo` ratings) but never added to the player's own rating, so a league's average doesn't drift with turnover (starting new players lower instead made Elo worse for that reason). A team's `elo_change` includes the fading of its rookies' discount. A player moving from a major (`MAJOR_LEAGUES`) down to another league gains `MOVE_DOWN_BONUS` (25) in their stored rating on top of the offset conversion (`MOVE_UP_PENALTY` 0; with `move_games` the change fades over that many games instead of being stored). Research options, off by default: `league_factors` (K by league, offsets unchanged; `elo_k_tier.py`) and a veteran discount (`veteran_penalty`, `veteran_games`, `veteran_years`; `elo_experience.py`). `evaluate_metrics.py`'s team-Elo reference (no rosters) runs with RD and the non-major update slope disabled, without rookie or league-move adjustments. A team with no roster for a game uses its last roster, and one that never had one plays as a single "player" (the same defaults apply unless explicitly disabled). Each team row also stores `main_elo`: the team's rating with its main roster (the starters of its last game in its home league or at an international event) after the game, so an academy lineup fielded under the team's name at a cup doesn't stand in for the team. `get_latest_elos` and `get_season_elos` use `main_elo` (falling back to `post_match_elo`) and the stored `home_league`, and add each league's offset changes since the team's last game. `compute_elo_records(..., player_records=True)` also returns each starter's ratings, which `bootstrap_elo` stores; `get_player_history` reads them with names, roles and teams, and `get_player_elos` gives each player's current and calendar-year-end rating (offset moves included, as for teams). `get_season_elos` gives every team's rating at the end of each calendar year it played (last game that year plus offset changes through year end), labelled with its most-played domestic league that year. Calendar years, not Oracle's Elixir `year`, because some autumn games are filed under the next season.
 
-`expected_score(..., slope=EXPECTED_SLOPE)` and
-`calculate_game_length_elo_change(..., expected_slope=EXPECTED_SLOPE)` expose an
-opt-in update scale in log-odds per rating point. The default ln(10)/400 keeps
-the original base-10 arithmetic exactly. Research replay accepts `expected_slope`
-and event-keyed `league_slopes`; its callback consumes one slope per input game
-in replay order. No production caller changes its slope. The fixed-grid
-slope/K experiment is [`elo_fitted_scale.md`](../research/elo_fitted_scale.md).
-Its third design combines event-keyed slopes with `league_factors=K_other/20`
-only in non-major domestic leagues; major/international callbacks retain slope
-ln(10)/400 and K 20. Native international offset rules stay unchanged (their
-values can differ when previous domestic results change the incoming ratings).
-A predeclared single boundary extension uses tuning seasons only; held-out
-comparisons include 20/28 and tuned K-only controls and the existing recent
-roster-change context. Three small research tests cover grid/extension scope,
-exact default parity and a hand-calculated mixed-event slope/K replay. No
-production caller, fitted artifact, DB script, dependency or CI job changes.
+Published since 2026-10-19: Glicko-1-style per-player RD
+`PLAYER_RD=(280,140,140,10)` (new, floor, reference, growth per √day),
+`PLAYER_RD_INFORMATION=.125`. Before games, RD² grows by growth² × days away,
+capped at new²; afterward it shrinks harmonically with expected-score information,
+floored at 140². Each player's move scales independently by RD²/floor², preserving
+K 20 for settled players. No volatility or g(RD); league offsets keep their
+existing rule. RD replaces provisional and time-away multipliers; rookie
+discount and move-down bonus remain.
 
-Research-only `compute_elo_records(player_rd=(new, floor, reference, growth))`
-adds harmonic per-player rating-deviation shrinkage and capped daily variance
-inflation. `player_rd_information` (default 1) multiplies per-game information;
-smaller values slow shrinkage and are ignored when RD is disabled. V2 fixes
-reference=floor, so RD²/floor² is 1 at the floor; the separate reference remains
-for reproducing v1. V2 applies weights independently per player, preserving
-settled players' baseline moves even when lineup uncertainty differs. Applied
-team means can differ, as with published provisional/away factors. The
-`player_rd_normalize=True` compatibility option reproduces v1's shared side
-mean; default False avoids that confound. Default `None` leaves the published
-replay unchanged. The fixed-grid
-`elo_glicko.py` v2 experiment fixes 243 initial settings plus one predeclared
-local boundary extension per arm, tunes through 2021, refits evaluation curves
-and FORGE for 2022+ and reports starter-change slices. Tuning replays only the
-chronological prefix through the last tuning game; exact baseline and selected
-variant prefix/full agreement is checked. Protocol, incremental tuning scores
-and frozen selections are saved under `data/research/elo_glicko/v2/`; the v1
-report is archived at `docs/research/elo_glicko_v1.md`. No volatility estimation,
-league RD, production/CI step or new dependency. Tiny arithmetic examples live
-in `tests/test_elo.py`, research cohort/alignment guards in
-`tests/research/test_elo_glicko.py`. See [report](../research/elo_glicko.md).
+`OTHER_LEAGUE_SLOPE=.0065` sets update expected-score log-odds per point only
+in non-major domestic events. Majors and international events retain
+ln(10)/400 and exact base-10 arithmetic; K stays 20 everywhere. Forecast slopes
+are fitted separately. Constants were jointly tuned through 2021 by
+`scripts/research/elo_glicko_scale.py` ([report](../research/elo_glicko_scale.md)).
+
+`LEGACY_ELO` reproduces the Elo published until 2026-10-19: RD disabled,
+25 provisional games at 2×, time-away factor 2, no non-major slope override.
+Research retains separate RD reference, normalization and event-keyed
+`league_slopes` options; event overrides disable the engine's default slope.
+
 
 ## International forecast calibration
 

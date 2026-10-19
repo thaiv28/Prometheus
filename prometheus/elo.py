@@ -20,19 +20,17 @@ LEAGUE_SHARE = 0.5
 ACTIVE_DAYS = 365
 # A player counts ROOKIE_PENALTY lower in their first game, the discount fading
 # to nothing over ROOKIE_GAMES games (not stored in their rating, so a league's
-# average doesn't drift with turnover), and for their first PROVISIONAL_GAMES
-# games their rating moves PROVISIONAL_FACTOR times the team's change. Tuned on
+# average doesn't drift with turnover). Tuned on
 # 2014–2021 by scripts/research/elo_new_players.py.
 ROOKIE_PENALTY = 250
 ROOKIE_GAMES = 200
 # "log": the discount falls with log(1 + games) (scripts/research/elo_experience.py).
 ROOKIE_CURVE = "log"
-PROVISIONAL_GAMES = 25
+# Replaced by RD on 2026-10-19; parameters kept for research.
+PROVISIONAL_GAMES = 0
 PROVISIONAL_FACTOR = 2.0
-# A player back after time away moves 1 + AWAY_FACTOR × min(days away / AWAY_DAYS, 1)
-# times the team's change in their first game back (a Glicko-style uncertainty).
-# Tuned on 2014–2021 by scripts/research/elo_k_tier.py.
-AWAY_FACTOR = 2.0
+# Replaced by RD on 2026-10-19; parameters kept for research.
+AWAY_FACTOR = 0.0
 AWAY_DAYS = 365
 # A player moving from a major down to another league gains MOVE_DOWN_BONUS points
 # on top of the offset conversion (stored in their rating); moving up costs
@@ -40,6 +38,23 @@ AWAY_DAYS = 365
 MOVE_UP_PENALTY = 0.0
 MOVE_DOWN_BONUS = 25.0
 MAJOR_LEAGUES = frozenset(league.value for league in ALL_MAJOR_LEAGUES)
+
+# New, floor, reference and growth per sqrt(day); tuned 2014–2021 by
+# scripts/research/elo_glicko_scale.py.
+PLAYER_RD = (280.0, 140.0, 140.0, 10.0)
+# Per-game RD information; tuned 2014–2021 by scripts/research/elo_glicko_scale.py.
+PLAYER_RD_INFORMATION = 0.125
+# Non-major domestic expected-score log-odds per point; K stays 20 everywhere.
+# Tuned 2014–2021 by scripts/research/elo_glicko_scale.py.
+OTHER_LEAGUE_SLOPE = 0.0065
+# Elo published until 2026-10-19, retained for research comparisons.
+LEGACY_ELO = {
+    "player_rd": None,
+    "provisional_games": 25,
+    "provisional_factor": 2.0,
+    "away_factor": 2.0,
+    "other_league_slope": None,
+}
 
 
 def _elo_table(method: str) -> str:
@@ -69,7 +84,7 @@ EXPECTED_SLOPE = math.log(10) / 400
 def expected_score(
     elo: float, opponent_elo: float, slope: float = EXPECTED_SLOPE
 ) -> float:
-    """Expected score; slope is log-odds per point (opt-in research scale).
+    """Expected score; slope is log-odds per point.
 
     Keep the original arithmetic on the default path for exact replay parity.
     """
@@ -173,15 +188,18 @@ def compute_elo_records(
     veteran_penalty: float = 0.0,
     veteran_games: int = 0,
     veteran_years: float = 0.0,
-    player_rd: tuple[float, float, float, float] | None = None,
-    player_rd_information: float = 1.0,
+    player_rd: tuple[float, float, float, float] | None = PLAYER_RD,
+    player_rd_information: float = PLAYER_RD_INFORMATION,
     player_rd_normalize: bool = False,
+    other_league_slope: float | None = OTHER_LEAGUE_SLOPE,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
 
     Every player has a rating. A team's rating is the average of its five starters'
     ratings plus its home league's offset, so a roster move carries ratings with the
-    players. After a game every starter moves by the team's Elo change. Domestic games
+    players. Glicko-1-style RD scales each player's move by RD²/floor². RD² grows
+    by growth² × days away (capped at new²) and shrinks with each game's expected-score
+    information to a floor; there is no volatility or g(RD). Domestic games
     only move players. Leagues are linked only by international events, so when teams
     from two leagues meet there, each league's offset also moves by `league_share` of
     the team's change: an upset at Worlds lifts the whole region, not only the team
@@ -198,13 +216,13 @@ def compute_elo_records(
     Args:
         games: One row per game with columns gameid, teamid, opponent_teamid,
             gamelength, result (from `teamid`'s perspective) and, optionally, league
-            and date. Without a league column there are no offsets (plain Elo).
+            and date. Without a league column there are no offsets or slope overrides.
         elo_func: Function returning the Elo change for `teamid`.
         starting_elo: Rating of a player entering a league with no active players.
         league_share: Share of an international change applied to league offsets.
         rosters: Maps (gameid, teamid) to that team's starters (player ids). A team
             with no roster for a game uses its last roster; one that never had a
-            roster plays as a single "player", which is plain team Elo.
+            roster plays as a single "player" with the same update settings.
         active_days: How recent a player's last game must be to count toward the
             league average a new player starts at.
         player_records: Also return each rostered player's rating before and after
@@ -233,20 +251,16 @@ def compute_elo_records(
             games, like the rookie discount.
         rookie_curve: "linear" (above) or "log": the discount falls with
             log(1 + games) instead, D × (1 − log(1 + g) / log(1 + rookie_games)).
-        player_rd: Research-only (new, floor, reference, growth per sqrt(day)).
-            None preserves published Elo. Before a game, RD² grows by growth² ×
-            nonnegative days away, capped at new². Moves scale by RD²/reference²;
-            applied independently per player, on top of enabled provisional/away
-            factors. Afterward RD² becomes
-            max(floor², 1 / (1/RD² + player_rd_information ×
-            (ln(10)/400)² × E × (1−E))). Fix reference=floor to preserve K
-            for settled players; a separate reference is retained for v1 replay.
-            No g(RD)
-            attenuation, fitted volatility or league-offset uncertainty is used.
+        player_rd: (new, floor, reference, growth per sqrt(day)); None disables RD.
+            Published reference equals floor, preserving K for settled players.
+            After a game RD² becomes max(floor², 1 / (1/RD² +
+            player_rd_information × (ln(10)/400)² × E × (1−E))).
             Discounts and transfer adjustments remain separate from uncertainty.
-        player_rd_information: Positive finite per-game information multiplier
-            for the research RD option. Smaller values slow shrinkage. Ignored
-            when player_rd is None; the published default path is unchanged.
+        player_rd_information: Positive finite per-game information multiplier;
+            smaller values slow shrinkage. Ignored when player_rd is None.
+        other_league_slope: Expected-score log-odds per point for non-major
+            domestic events. Majors, international events and input without a
+            league use the callback's default; None disables the override.
         player_rd_normalize: Research compatibility option for v1. Normalize
             side weights to a shared mean, making mean stored updates zero-sum.
             Default False keeps the literal per-player RD weight, so settled
@@ -277,7 +291,7 @@ def compute_elo_records(
             )
         if not math.isfinite(player_rd_information) or player_rd_information <= 0:
             raise ValueError("player_rd_information must be finite and positive")
-    rd_variance = {}  # player -> posterior RD squared, research option only
+    rd_variance = {}  # player -> posterior RD squared
     has_league = "league" in games.columns
     leagues = games["league"] if has_league else [None] * len(games)
     dates = (
@@ -405,11 +419,19 @@ def compute_elo_records(
                 for _, team_league, roster in sides
                 for p in roster
             }
+        slope_args = (
+            {"expected_slope": other_league_slope}
+            if domestic
+            and league not in MAJOR_LEAGUES
+            and other_league_slope is not None
+            else {}
+        )
         elo_change = elo_func(
             elo=pre[0],
             opponent_elo=pre[1],
             game_length=row.gamelength,
             result=row.result,
+            **slope_args,
         )
         factor = league_factors.get(league, 1.0) if league_factors else 1.0
         if player_rd is not None:

@@ -1,5 +1,76 @@
 # Work log
 
+## 2026-10-19 — Ship Glicko-1-style player RD and non-major update slope in Elo
+
+Branch `elo-glicko-scale`, based on `bc02c4e` (main) with `future-win-share`, `elo-glicko` and `elo-fitted-scale` merged.
+Published jointly tuned constants: player RD (new/floor/reference/growth per
+√day) `(280,140,140,10)`, information .125, non-major domestic expected-score
+slope .0065; majors/international retain ln(10)/400, K 20 everywhere.
+Glicko-1-style RD scales each player's move independently by RD²/floor²,
+grows while inactive and shrinks with games. It replaces provisional and
+time-away factors (defaults now 0/0); rookie discount and move-down bonus stay.
+No volatility or g(RD). `LEGACY_ELO` preserves the previous defaults for
+research; team-Elo comparison disables RD and the non-major slope.
+Research event-slope callbacks discard engine overrides and disable its slope.
+
+Held-out 2022+ evidence from [joint tuning](../research/elo_glicko_scale.md),
+combined vs previous published: other-league Elo −0.0033, FORGE −0.0014,
+cross-league Elo −0.0028; domestic/international within noise. Main guarded
+sections pass. The manager decision adopts the combination despite the
+nine-game international roster-change regression versus RD alone
+(Elo +0.0078, FORGE +0.0050); historical holdouts were repeatedly viewed,
+intervals are individual-game bootstraps, not series-clustered.
+
+Paired native check (manager): `evaluate_metrics.py --dump` with the previous Elo (base) and this branch (head), same games, `compare_benchmarks.py`: no guarded value significantly worse. Domestic Elo −0.0009 (−0.0014 to −0.0003), domestic FORGE −0.0000 (−0.0003 to +0.0003), international FORGE/Elo +0.0002 (−0.0005 to +0.0008), cross-league Elo −0.0015 (−0.0026 to −0.0004), other-league per-league Elo −0.0024 (−0.0029 to −0.0019), other-league FORGE −0.0009 (−0.0013 to −0.0005). The table below compares the old report with the new one and is unpaired (the old report has 33 fewer international games), which is why international FORGE looks worse there.
+
+Full headline log losses, git HEAD report → regenerated 2026-10-19 report:
+
+| Section | Before | After |
+|---|---:|---:|
+| Domestic FORGE | 0.6285 | 0.6284 |
+| International FORGE | 0.6222 | 0.6252 |
+| Cross-league Elo | 0.5906 | 0.5894 |
+| Other-league Elo, per league | 0.6094 | 0.6070 |
+| Other-league FORGE | 0.6076 | 0.6066 |
+
+Domestic games remain 16,810; international 1,024 → 1,057, cross-league
+10,184 → 10,241, other-league 69,736 → 69,760. These full-report differences
+include newer games and are not paired causal estimates; the fixed-cohort
+research above supports adoption. Domestic Elo 0.6312 → 0.6303; plain team
+Elo stays 0.6346. FORGE vs per-league Elo in other leagues is now within
+noise (−0.0003, −0.0009 to +0.0002).
+
+Refit `forge_weights.json`, `form_weights.json`, `league_curves.json`:
+
+`elo_weight` 0.005259 → 0.005458; `form_weight` 0.453359 → 0.410363; `cross_region_elo_weight` 0.008587 → 0.008466; `other_league_elo_weight` 0.010123 → 0.010009; `other_league_forge_elo_weight` 0.007842 → 0.008263; `other_league_form_weight` 0.377375 → 0.281251.
+Form stat weights: gpm 0.005216 → 0.005230; kills_per_10 -0.002481 → -0.002698; turrets_per_10 0.731225 → 0.729604; baron_per_10 -1.276508 → -1.289016; dragon_per_10 0.634214 → 0.635374; atakhans 0.628078 → 0.607944; heralds_per_10 0.359372 → 0.361201; firstherald -0.438688 → -0.434983; firstdragon -0.403949 → -0.407468; firstbaron -0.100573 → -0.088851; firsttower 0.140000 → 0.139796; visionscore_per_10 0.013992 → 0.013743. Half-life/carry/prior/roster settings unchanged.
+League curves: 95 slopes changed; range 0.006785–0.013859 → 0.007151–0.012827.
+
+Timing (VECLIB_MAXIMUM_THREADS=1): DB rebuild 32.15 s; standalone
+`004_bootstrap_elo.py` 11.38 s. Load + compute replay (no DB writes, sequential one-liners): legacy 5.53 s,
+new 6.48 s (+0.95 s, 17%).
+RD adds per-player state work to the existing bootstrap for the significant
+forecast gains above; no dependency, job or CI step added. Actions timings
+remain to be observed in CI.
+
+Checks actually run:
+
+- `PATH="$PWD/.venv/bin:$PATH" bash scripts/setup_db.sh`: PASS, 205,871 team-game rows.
+- `VECLIB_MAXIMUM_THREADS=1 .venv/bin/python scripts/evaluate_metrics.py --write-weights --out docs/metric_backtest.md`: PASS.
+- `VECLIB_MAXIMUM_THREADS=1 .venv/bin/python scripts/evaluate_season_stats.py --out docs/season_stats_report.md`: PASS.
+- `.venv/bin/python -m pytest -q` (VECLIB_MAXIMUM_THREADS=1): PASS, 861 passed, 2 skipped; existing CPU-count warning.
+- `.venv/bin/ruff format && .venv/bin/ruff check`: PASS.
+- Arithmetic tests cover default RD, event slope dispatch (canonical international
+  label `Worlds`; `WLDs` is not in this repo's enum), and legacy first-game discount.
+  Two research arithmetic tests explicitly retain legacy settings.
+- `VECLIB_MAXIMUM_THREADS=1 PREDICTIONS_FETCH=0 .venv/bin/python scripts/build_site.py`: PASS; home, FORGE, team Elo and player Elo output spot-checked for complete HTML and finite numeric JSON values.
+- Final document links and diff checked.
+
+Frozen artifacts (regional calibration, market blend, props weights, live
+time models) were not refit; inputs unavailable here, left to CI benchmarks.
+No UI source changes or commit. Site output was checked structurally, not visually;
+CI benchmark results and Actions timings remain unverified locally.
+
 ## 2026-10-19 — Joint tune: Glicko RD + non-major update scale (research)
 
 Research in the supplied `Prometheus-elo-glicko-scale` worktree, with its own DB;

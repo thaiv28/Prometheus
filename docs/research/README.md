@@ -1,6 +1,6 @@
 # Research
 
-- [Joint Glicko RD + non-major update scale](elo_glicko_scale.md): fixed two-stage tuning through 2021; the combination improves held-out 2022+ forecasts but regresses on nine international roster-change games versus Glicko alone. Verdict: ship G* only; research only.
+- [Joint Glicko RD + non-major update scale](elo_glicko_scale.md): fixed two-stage tuning through 2021; the combination improves held-out 2022+ forecasts but regresses on nine international roster-change games versus Glicko alone. Manager decision: combined RD + non-major slope shipped 2026-10-19; main guarded sections pass, with the nine-game roster-slice limit recorded.
 
 - [Player Elo Glicko-style uncertainty](elo_glicko.md): v2 ties reference to floor
   and tests information speed; 268 settings, selected through 2021. Held-out

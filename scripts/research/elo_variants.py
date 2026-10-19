@@ -336,8 +336,11 @@ def replay(
         slopes = iter(games["league"].map(league_slopes).fillna(expected_slope))
 
         def change(**args):
+            args.pop("expected_slope", None)
             return margin_elo_change(**args, K=K, expected_slope=next(slopes))
 
+    if league_slopes is not None:
+        kw["other_league_slope"] = None
     with _international(international):
         out, _ = compute_elo_records(
             games,
