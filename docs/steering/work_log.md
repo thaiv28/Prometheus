@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — Live-map trading switched on with a $15 budget
+
+At the user's request (shadow skipped), merged #94 (executor released by publish `39300099249`) and infrastructure PR #20 (signal queue in `ThaivPrometheusExecution`, worker grants and `LIVE_MAP_SIGNAL_ARGS` in `ThaivPrometheusLive`). Deployed both stacks through their workflows after diffs (no existing resource replaced except the worker instance; no match was live). Updated `LIVE_WORKER_INSTANCE_ID`. Paused global execution about 1.5 minutes to save `live_maps` (queue ARN, quarter Kelly, 1%/2% caps, `budget_usd` 15), restored live, then set live-map mode live; activation validated the config and runtime. Unverified: the new worker's env and first signal delivery (local AWS session expired), real fills and latency. Infra cost estimate: about $0–0.30 a month (SQS polling inside the free tier).
+
 ## 2026-10-19 — RD information on the game's slope; Elo follow-up results
 
 RD's information term now uses the game's update slope (.0065 in non-major domestic games), matching the update. Reproduces the research variant exactly; FORGE, Form and league-curve weights refit, `metric_backtest.md` regenerated (season stats unchanged). Paired vs main: other-league FORGE −0.0001 (−0.0002 to −0.0000); every other guarded row, including markets, within noise.
