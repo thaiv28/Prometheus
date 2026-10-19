@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — Test Glicko g(RD) attenuation of Elo forecasts
+
+Research only: opt-in `record_rd` on `compute_elo_records` (and `**overrides` on `bootstrap_elo`) records pre-game RMS starter RD; `scripts/research/elo_grd.py` shrinks each Elo gap by g(RD), 10 settings tuned through 2021 (edge extended to λ=.125, independent). Held-out 2022+ changes are about 1e-5 log loss: cross-league Elo −0.00004 (CI excludes 0), FORGE within other leagues +0.00003 (significantly worse), the rest within noise. Verdict: not worth it; nothing shipped. Native `evaluate_metrics.py` has no g(RD) path and markets would need production edits, so neither was run. Replay 5.34s vs 5.69s with recording. Checks: new unit test, `pytest`, `ruff`. Report: `docs/research/elo_grd.md`.
+
 ## 2026-10-19 — Remove draft v2 from map trading; add a $15 live-map budget
 
 User asked to drop draft v2 (no trading gain; FST significantly worse) and cap live-map trading at $15. The draft route is gone from `live_map.py`, `live/signals.py`, `pyproject.toml` and the README; `live_map_draft_blend.json` deleted; the executor zip, release hash and publish filter drop the draft model and blend but keep `live/draft.py` (imported by `live/timeline.py`). New required `live_maps.budget_usd` for shadow and live map modes: the ledger's `LIVE_MAPS` row tracks held cost and realized profit, and a map order is capped at budget + realized − held, reserved in the same transaction as ACCOUNT. Loss can't exceed the budget; profit extends it; pregame unaffected. Docs suggest `"budget_usd": "15"`; nothing configured in AWS. Checks: 862 passed, 2 skipped; two budget tests fail with their guards removed; ruff; `package.sh` builds without draft files. Limit: the shared 1%/2% caps (about $0.50 a map) still apply; not deployed.

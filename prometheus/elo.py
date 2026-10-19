@@ -192,6 +192,7 @@ def compute_elo_records(
     player_rd_information: float = PLAYER_RD_INFORMATION,
     player_rd_normalize: bool = False,
     other_league_slope: float | None = OTHER_LEAGUE_SLOPE,
+    record_rd: bool = False,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
 
@@ -258,6 +259,8 @@ def compute_elo_records(
             Discounts and transfer adjustments remain separate from uncertainty.
         player_rd_information: Positive finite per-game information multiplier;
             smaller values slow shrinkage. Ignored when player_rd is None.
+        record_rd: Add pre_match_rd (RMS starter RD after inactivity growth,
+            before game information); None when RD is disabled. Off by default.
         other_league_slope: Expected-score log-odds per point for non-major
             domestic events. Majors, international events and input without a
             league use the callback's default; None disables the override.
@@ -434,6 +437,7 @@ def compute_elo_records(
             **slope_args,
         )
         factor = league_factors.get(league, 1.0) if league_factors else 1.0
+        pre_rd = {}
         if player_rd is not None:
             weights = []
             expectation = expected_score(pre[0], pre[1])
@@ -443,8 +447,9 @@ def compute_elo_records(
                 * expectation
                 * (1 - expectation)
             )
-            for _, _, roster in sides:
+            for team, _, roster in sides:
                 side_weights = {}
+                variances = [] if record_rd else None
                 for player in roster:
                     variance = rd_variance.get(player, rd_new**2)
                     days = 0
@@ -453,6 +458,8 @@ def compute_elo_records(
                         if seen is not None:
                             days = max(0, (date - seen).days)
                     variance = min(rd_new**2, variance + rd_growth**2 * days)
+                    if record_rd:
+                        variances.append(variance)
                     weight = variance / rd_ref**2
                     if played[player] < provisional_games:
                         weight *= provisional_factor
@@ -462,6 +469,8 @@ def compute_elo_records(
                     rd_variance[player] = max(
                         rd_min**2, 1 / (1 / variance + information)
                     )
+                if record_rd:
+                    pre_rd[team] = math.sqrt(sum(variances) / len(variances))
                 weights.append(side_weights)
             means = [sum(w.values()) / len(w) for w in weights]
             shared = sum(means) / 2
@@ -552,6 +561,7 @@ def compute_elo_records(
             ) / len(main)
             elo_records.append(
                 {
+                    **({"pre_match_rd": pre_rd.get(team)} if record_rd else {}),
                     "gameid": row.gameid,
                     "teamid": team,
                     "pre_match_elo": before,
@@ -576,7 +586,8 @@ def compute_elo_records(
             "home_league",
             "league_offset",
             "main_elo",
-        ],
+        ]
+        + (["pre_match_rd"] if record_rd else []),
     )
     offsets = pd.DataFrame(
         offset_records, columns=["gameid", "date", "league", "league_offset"]
@@ -634,7 +645,7 @@ def load_rosters() -> dict:
     return {key: tuple(ids) for key, ids in rosters.items()}
 
 
-def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO) -> None:
+def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO, **overrides) -> None:
     """Recompute Elo ratings for all teams and overwrite the method's Elo tables.
 
     Args:
@@ -654,6 +665,7 @@ def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO) -> None:
         starting_elo=starting_elo,
         rosters=load_rosters(),
         player_records=True,
+        **overrides,
     )
 
     # Clear rather than drop so the schema from 001_create_tables.sql is preserved.
@@ -661,7 +673,7 @@ def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO) -> None:
         conn.execute(text(f"DELETE FROM {table}"))
         conn.execute(text(f"DELETE FROM {offsets_table}"))
         conn.execute(text(f"DELETE FROM {_players_table(method)}"))
-        insert_rows(conn, table, elo_df)
+        insert_rows(conn, table, elo_df.drop(columns=["pre_match_rd"], errors="ignore"))
         insert_rows(conn, offsets_table, offsets_df)
         insert_rows(conn, _players_table(method), players_df)
 

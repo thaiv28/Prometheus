@@ -887,3 +887,17 @@ def test_published_update_slope_follows_event_league(league):
         1500 + 4 * 6.5 - discount_after
     )
     assert calls[1]["elo"] != calls[1]["opponent_elo"]
+
+
+def test_record_rd_is_opt_in_and_matches_hand_rms():
+    games = _rd_games().iloc[:2]
+    kw = {"player_rd": (250, 100, 100, 0), "player_rd_information": 1.0}
+    default, _ = compute_elo_records(games, lambda **k: 10, **kw)
+    recorded, _ = compute_elo_records(games, lambda **k: 10, record_rd=True, **kw)
+    assert "pre_match_rd" not in default.columns
+    pd.testing.assert_frame_equal(default, recorded.drop(columns="pre_match_rd"))
+    # Unseen players start at the new-player RD (250); the next game's RD is the
+    # harmonic posterior after the first game's information (E = .5).
+    assert recorded.pre_match_rd.iloc[0] == pytest.approx(250)
+    variance = 1 / (1 / 250**2 + (np.log(10) / 400) ** 2 * 0.25)
+    assert recorded.pre_match_rd.iloc[2] == pytest.approx(np.sqrt(variance))
