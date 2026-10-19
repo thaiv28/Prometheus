@@ -1,0 +1,134 @@
+name: Live benchmark data
+
+# Refresh feed timelines and Kalshi tapes; build the PR check's cached live data.
+# Its own workflow keeps collection out of publish, PR checks and hourly jobs.
+# State: ~7.4 MB + 56 MB compressed, ~13 s to tar locally; ~100 new maps/week
+# at ~17 s/map sequential (four shards). Kalshi requests take ~0.2–0.3 s;
+# build time on CI is not measured yet.
+on:
+  schedule:
+    - cron: "20 12 * * 1" # Monday, after publish and kalshi-cache
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: live-bench
+  cancel-in-progress: false
+
+jobs:
+  live-bench:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      STATE: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/live-bench
+      DATA_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/oracles-elixir/
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+      - name: Restore cached CSVs
+        uses: actions/cache/restore@v6
+        with:
+          path: data/raw
+          key: oracles-elixir-${{ github.run_id }}
+          restore-keys: oracles-elixir-
+      - name: Restore CSVs from backup when the cache is empty
+        run: |
+          if compgen -G "data/raw/*.csv" > /dev/null; then exit 0; fi
+          mkdir -p data/raw
+          aws s3 cp "$DATA_BACKUP" data/raw/ --recursive --only-show-errors
+          gunzip -f data/raw/*.csv.gz
+      - name: Restore the cached database
+        id: db
+        uses: actions/cache/restore@v6
+        with:
+          path: db/prometheus.db
+          key: prometheus-db-${{ hashFiles('data/raw/*.csv', 'scripts/setup_db.sh', 'scripts/0*', 'prometheus/**', '!prometheus/site/**', 'uv.lock') }}
+      - name: Build the database
+        if: steps.db.outputs.cache-hit != 'true'
+        run: REFRESH_DATA=0 uv run bash scripts/setup_db.sh
+      - name: Restore state
+        id: state
+        run: |
+          mkdir -p data
+          for archive in feed_timelines trade_tapes; do
+            if ! aws s3 cp "$STATE/$archive.tar.gz" - --only-show-errors | tar -xz -C data; then
+              echo "::error::Cannot restore $archive.tar.gz; seed both state objects by hand (docs/steering/deployment.md)."
+              exit 1
+            fi
+          done
+          echo "FEED_COUNT=$(find data/feed_timelines/games -type f | wc -l)" >> "$GITHUB_ENV"
+          echo "TRADE_COUNT=$(find data/live_bench/trades -type f | wc -l)" >> "$GITHUB_ENV"
+          echo "PRE_TRADE_COUNT=$(find data/live_bench/pre_trades -type f | wc -l)" >> "$GITHUB_ENV"
+      - name: Collect new feed timelines
+        id: collect
+        continue-on-error: true
+        timeout-minutes: 45
+        run: |
+          uv run python scripts/research/feed_timelines.py schedule
+          pids=()
+          for i in 0 1 2 3; do
+            uv run python scripts/research/feed_timelines.py collect --shard "$i/4" &
+            pids+=($!)
+          done
+          status=0
+          for pid in "${pids[@]}"; do wait "$pid" || status=1; done
+          uv run python scripts/research/feed_timelines.py status
+          exit "$status"
+      # Never from an empty state: that would cache a benchmark with no maps.
+      - name: Build the benchmark data
+        if: ${{ !cancelled() && steps.state.outcome == 'success' }}
+        run: uv run python scripts/evaluate_live.py --build-data --refresh-markets
+      - name: Save the state to S3
+        if: ${{ !cancelled() }}
+        run: |
+          if [ "${{ steps.state.outcome }}" = success ]; then
+            if [ "$(find data/feed_timelines/games -type f | wc -l)" -gt "$FEED_COUNT" ]; then
+              tar -czf - -C data feed_timelines/games feed_timelines/schedule.json | aws s3 cp - "$STATE/feed_timelines.tar.gz" --only-show-errors
+            fi
+            if [ "$(find data/live_bench/trades -type f | wc -l)" -gt "$TRADE_COUNT" ] \
+                || [ "$(find data/live_bench/pre_trades -type f | wc -l)" -gt "$PRE_TRADE_COUNT" ]; then
+              tar -czf - -C data live_bench/trades live_bench/pre_trades | aws s3 cp - "$STATE/trade_tapes.tar.gz" --only-show-errors
+            fi
+          fi
+          if [ -f data/live_bench/live_maps.json.gz ]; then
+            digest=$(sha256sum data/live_bench/live_maps.json.gz | cut -c1-12)
+            version="$STATE/data/live_maps-$digest.json.gz"
+            if ! aws s3 ls "$version" > /dev/null; then
+              aws s3 cp data/live_bench/live_maps.json.gz "$version" --only-show-errors
+            fi
+          fi
+      - name: Cache key
+        id: key
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f data/live_bench/live_maps.json.gz ]; then
+            echo "key=live-bench-data-$(sha256sum data/live_bench/live_maps.json.gz | cut -c1-40)" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Find the previous live benchmark data
+        id: restore
+        if: ${{ !cancelled() && steps.key.outputs.key != '' }}
+        uses: actions/cache/restore@v6
+        with:
+          path: data/live_bench/live_maps.json.gz
+          key: ${{ steps.key.outputs.key }}
+          restore-keys: live-bench-data-
+          lookup-only: true
+      - name: Save the live benchmark data
+        if: ${{ !cancelled() && steps.key.outputs.key != '' && steps.key.outputs.key != steps.restore.outputs.cache-matched-key }}
+        uses: actions/cache/save@v6
+        with:
+          path: data/live_bench/live_maps.json.gz
+          key: ${{ steps.key.outputs.key }}
+      - name: Fail if the collection failed
+        if: steps.collect.outcome == 'failure'
+        run: exit 1

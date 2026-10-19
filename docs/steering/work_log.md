@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — Weekly live benchmark data refresh in CI
+
+New `live-bench.yml` (Mondays, main only, read-only contents; commits nothing): restores the feed timelines and Kalshi tapes from `s3://…/prometheus/live-bench/`, collects new feed maps in four shards, runs `--build-data --refresh-markets`, syncs grown state back and saves `live-bench-data-<hash>` to the Actions cache. `benchmarks.yml` restores that one entry for both sides (in the markets dump key); the release pin stays as fallback. `feed_timelines.py schedule` stops paging at saved matches. Cost: state 7.4 MB + 56 MB compressed (13 s to tar locally); ~17 s a map, ~100 maps a week; no time added to publish, PR checks or hourly jobs. Checks: full suite 894 passed, 2 skipped; ruff; YAML parses. Limits: not yet run in CI (needs merge, S3 seed, a dispatch); Riot may refuse GitHub runners; CI build time unmeasured.
+
 ## 2026-10-19 — Merge Live into Predictions; props page fix
 
 Base `fd8120c`; Codex via delegate. Predictions now holds Live now, Coming up and 7 days of results, linked to live series pages when recorded. `live.html` and `live-results/<month>` redirect. Record and Kalshi tables moved to Call performance. Home and watch fixtures keep whole UTC days (`_whole_days`). The header marks Predictions with a red dot while a match is live (not if the index is 10+ minutes old). Dropped the fixtures "By" column (in the tooltip) and live towers/dragons/barons. Props: NaN `p_side` crashed the page silently; page failures now fail the build.

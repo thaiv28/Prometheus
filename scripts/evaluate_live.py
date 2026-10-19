@@ -27,24 +27,26 @@ The report, each interval over whole series resampled together:
    quarter Kelly, after Kalshi's taker fee, with the price two minutes later;
 4. the gap between our call and Kalshi's price, trading and implied spread.
 
-Data. `--build-data` (local: needs the feed timelines, the Kalshi market list in
+Data. `--build-data` (needs the feed timelines, the Kalshi market list in
 `data/markets/`, Kalshi's trade API and the DB) reduces each map to what the
 benchmark reads: the feed samples in team order, who played blue (the feed's
 `blue_id`, else Oracle's Elixir; lolesports' own side labels are often
 swapped), Kalshi's result, Oracle's Elixir team names, and Kalshi's state at
 each sample (price at the sample time and at +LAG, seconds since the last
 trade, last cost to back each side, price two minutes later, trades in the
-minute before, implied spread). `--publish-data` uploads it as a GitHub release
-asset and pins it in `scripts/live_bench_data.json`; `--fetch-data` downloads the
-pinned file (CI). Elo comes from the DB at run time, so a change to Elo moves
-this benchmark too.
+minute before, implied spread). CI rebuilds weekly in `.github/workflows/live-bench.yml`:
+inputs live in S3 under `prometheus/live-bench/`; the result is an Actions cache
+entry the PR check restores. For local runs and the PR check's fallback,
+`--publish-data` uploads a release asset and pins `scripts/live_bench_data.json`;
+`--fetch-data` downloads that pin. Elo comes from the DB at run time, so a change
+to Elo moves this benchmark too.
 
 Usage:
     uv run python scripts/evaluate_live.py --out docs/live_report.md
-    uv run python scripts/evaluate_live.py --dump DIR        # the PR benchmark check
+    uv run python scripts/evaluate_live.py --dump DIR        # PR check: weekly cached data
     uv run python scripts/evaluate_live.py --build-data [--refresh-markets]
-    uv run python scripts/evaluate_live.py --publish-data    # upload and pin (gh CLI)
-    uv run python scripts/evaluate_live.py --fetch-data      # download the pinned data
+    uv run python scripts/evaluate_live.py --publish-data    # local upload and pin (gh CLI)
+    uv run python scripts/evaluate_live.py --fetch-data      # local / PR fallback: pinned data
 
 Limits: Kalshi's price is the last trade, not the book (a held price is one the
 trades show; the book may have moved between them);
