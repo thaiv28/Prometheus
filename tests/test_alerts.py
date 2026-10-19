@@ -143,13 +143,22 @@ def test_update_an_hour_later_edits_quietly_and_marks_a_gone_edge():
 
 def test_prices_file_lists_recent_priced_matches():
     log = {
-        "m": _entry("m"),
+        "m": _entry("m", p_game=0.65),
+        "plain": _entry(
+            "plain",
+            p_series=0.546,
+            p_game=0.274,
+            results_through="2026-10-06T09:30Z",
+            market=None,
+        ),
+        "started": _entry("started", start="2026-10-06T09:59Z", p_game=0.65),
         "old": _entry("old", start="2026-10-01T10:00Z"),
         "nope": {**_entry("nope"), "matched": False},
     }
     out = markets.prices_file(log, NOW)
-    assert out["at"] == AT and list(out["matches"]) == ["m"]
+    assert out["at"] == AT and list(out["matches"]) == ["m", "plain", "started"]
     assert out["matches"]["m"] == {
+        "ours": {"s1": 65, "g1": 65},
         "p1": 54,
         "p2": 46,
         "at": AT,
@@ -161,6 +170,11 @@ def test_prices_file_lists_recent_priced_matches():
             "at": AT,
         },
     }
+    assert out["matches"]["plain"] == {
+        "ours": {"s1": 55, "g1": 27, "through": "2026-10-06T09:30Z"}
+    }
+    assert "ours" not in out["matches"]["started"]
+    assert out["matches"]["started"]["p1"] == 54
 
 
 def test_buy_costs_take_the_cheaper_route_and_skip_wide_books():

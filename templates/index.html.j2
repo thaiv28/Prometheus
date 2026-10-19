@@ -44,7 +44,7 @@
         <figure class="register-figure" aria-labelledby="t1-cap">
           <figcaption id="t1-cap" class="table-caption">FORGE, the top {{ forge_top | length }} major-league teams playing now. <a href="forge.html">See every team, and past seasons</a></figcaption>
           <div class="table-scroll">
-            <table class="register">
+            <table class="register" data-through="{{ forge_config.dataThrough }}" data-domain='{{ forge_top[0].domain | tojson if forge_top else "[]" }}'>
               <thead>
                 <tr>
                   <th scope="col" class="num rank">Rk</th>
@@ -58,14 +58,14 @@
               </thead>
               <tbody>
                 {% for r in forge_top %}
-                <tr>
+                <tr data-team="{{ r.teamname }}">
                   <td class="num rank">{{ loop.index }}</td>
                   <td class="team"><a href="teams/{{ r.slug }}.html">{{ r.teamname }}</a><span class="team-meta team-meta--league">{{ league(r.league) }}</span></td>
                   <td class="wide-only">{{ league(r.league) }}</td>
                   <td class="bar-col" aria-hidden="true"><span class="bar" style="--v: {{ r.bar }}"></span></td>
-                  <td class="num value">{{ r.forge | round | int }}</td>
+                  <td class="num value" data-value="{{ r.raw_forge }}">{{ r.forge | round | int }}</td>
                   <td class="num phone-hide">{{ signed(r.form, 0) }}</td>
-                  <td class="num wide-only">{{ r.elo | round | int }}</td>
+                  <td class="num wide-only" data-value="{{ r.raw_elo }}">{{ r.elo | round | int }}</td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -77,7 +77,7 @@
       <figure class="register-figure" aria-labelledby="t2-cap">
         <figcaption id="t2-cap" class="table-caption">Team Elo, the top {{ team_elo_top | length }} teams playing now, every region. <a href="game_length_elo.html">See every team</a></figcaption>
         <div class="table-scroll">
-          <table class="register">
+          <table class="register" data-through="{{ forge_config.dataThrough }}" data-domain='{{ team_elo_top[0].domain | tojson if team_elo_top else "[]" }}'>
             <thead>
               <tr>
                 <th scope="col" class="num rank">Rk</th>
@@ -90,12 +90,12 @@
             </thead>
             <tbody>
               {% for r in team_elo_top %}
-              <tr>
+              <tr data-team="{{ r.teamname }}">
                 <td class="num rank">{{ loop.index }}</td>
                 <td class="team"><a href="teams/{{ r.slug }}.html">{{ r.teamname }}</a><span class="team-meta team-meta--league">{{ league(r.league) }}</span></td>
                 <td class="wide-only">{{ league(r.league) }}</td>
                 <td class="bar-col" aria-hidden="true"><span class="bar" style="--v: {{ r.bar }}"></span></td>
-                <td class="num value">{{ r.elo | round | int }}</td>
+                <td class="num value" data-value="{{ r.raw_elo }}">{{ r.elo | round | int }}</td>
                 <td class="num phone-hide muted">{{ r.latest_date | longdate }}</td>
               </tr>
               {% endfor %}
@@ -107,7 +107,7 @@
       <figure class="register-figure" aria-labelledby="t3-cap">
         <figcaption id="t3-cap" class="table-caption">Player Elo, the top {{ player_elo_top | length }} players playing now, every region. <a href="player_elo.html">See every player</a></figcaption>
         <div class="table-scroll">
-          <table class="register">
+          <table class="register" data-through="{{ forge_config.dataThrough }}" data-domain='{{ player_elo_top[0].domain | tojson if player_elo_top else "[]" }}'>
             <thead>
               <tr>
                 <th scope="col" class="num rank">Rk</th>
@@ -121,14 +121,14 @@
             </thead>
             <tbody>
               {% for r in player_elo_top %}
-              <tr>
+              <tr data-player="{{ r.slug }}">
                 <td class="num rank">{{ loop.index }}</td>
                 <td class="team">{% if r.slug %}<a href="players/{{ r.slug }}.html">{{ r.playername }}</a>{% else %}{{ r.playername }}{% endif %}<span class="team-meta">{{ league(r.league, show_code=False) }}{{ r.teamname }}</span></td>
                 <td class="phone-hide muted">{{ r.position }}</td>
                 <td class="teamref wide-only"><a href="teams/{{ r.teamname | slugify }}.html" title="{{ r.teamname }}">{{ r.teamname }}</a></td>
                 <td class="wide-only">{{ league(r.league) }}</td>
                 <td class="bar-col" aria-hidden="true"><span class="bar" style="--v: {{ r.bar }}"></span></td>
-                <td class="num value">{{ r.elo | round | int }}</td>
+                <td class="num value" data-value="{{ r.raw_elo }}">{{ r.elo | round | int }}</td>
               </tr>
               {% endfor %}
             </tbody>
@@ -159,6 +159,7 @@
 {% block scripts %}
   <script type="application/json" id="rows-data">{{ forge_rows | tojson }}</script>
   <script type="application/json" id="page-config">{{ forge_config | tojson }}</script>
+  <script src="{{ asset('js/fresh.js') }}" defer></script>
   <script src="{{ asset('js/forecast.js') }}" defer></script>
   {% if fixtures %}<script src="{{ asset('js/predictions.js') }}" defer></script>{% endif %}
 {% endblock %}

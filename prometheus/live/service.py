@@ -12,15 +12,18 @@ retries); 401/403/429 from Riot stops the service, from Kalshi only its quotes.
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sqlite3
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.parse import urlencode
 
 from .. import DB_PATH
@@ -36,6 +39,7 @@ from .kalshi import (
     contract,
     quote,
 )
+from .notify import dispatch_prices, upload_maps
 from .page import build_page, summary, write_atomic
 from .requests import SITE_API_HOST, probe, utc_now
 from .series import map_prior, map_shift, series_chance
@@ -69,6 +73,8 @@ REFUSED = 3
 IDLE = 4
 QUOTE_INTERVAL = 2  # seconds; independent of the Riot feed cadence
 SERIES_SHOWN = 30  # minutes a decided series stays on the live pages
+# A recorded map length outside this range (seconds) is dropped as implausible.
+MAP_SECONDS = (15 * 60, 75 * 60)
 
 
 class Stop(Exception):
@@ -293,6 +299,99 @@ def settle_map(ticker, number, results_path, out):
     return True
 
 
+def record_map(game):
+    """Save a settled map from normalized collector evidence, including on restart."""
+    try:
+        path = game.dir.parent / "maps.json"
+        maps = json.loads(path.read_text()) if path.exists() else {}
+        key = str(game.number)
+        if key in maps:
+            return
+        result = json.loads((game.dir.parent / "results.json").read_text()).get(key)
+        if not result or result.get("winner") not in (0, 1):
+            return
+        rows = []
+        db_path = game.collector_dir / "collector.sqlite3"
+        with tempfile.TemporaryDirectory() as temporary:
+            archive_path = game.dir / "archive.tar.gz"
+            if not db_path.exists() and archive_path.exists():
+                with tarfile.open(archive_path) as archive:
+                    member = archive.extractfile("collector/collector.sqlite3")
+                    db_path = Path(temporary) / "collector.sqlite3"
+                    db_path.write_bytes(member.read())
+            if db_path.exists():
+                with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as db:
+                    for (body,) in db.execute(
+                        "SELECT result FROM journal ORDER BY sequence"
+                    ):
+                        rows.extend(json.loads(body).get("rows", []))
+        rows = sorted(
+            (r for r in rows if r.get("source_timestamp")),
+            key=lambda r: timestamp(r["source_timestamp"]),
+        )
+        start_path = game.dir / "start.json"
+        start = json.loads(start_path.read_text()) if start_path.exists() else {}
+        # Only find_start's search back to the first frame dates the game's start;
+        # the first frame we saw is later when the worker joined mid-map.
+        found = start.get("source_at") if not start.get("error") else None
+        started = found or (rows[0]["source_timestamp"] if rows else None)
+        ended = rows[-1]["source_timestamp"] if rows else result.get("at")
+        duration = (
+            (timestamp(ended) - timestamp(found)).total_seconds()
+            if found and ended
+            else None
+        )
+        if duration is not None and not MAP_SECONDS[0] <= duration <= MAP_SECONDS[1]:
+            duration = None
+        players = []
+        sides = (rows[-1].get("teams") or {}).values() if rows else []
+        for team in game.mapping["teams"]:
+            side = next(
+                (
+                    s
+                    for s in sides
+                    if str(s.get("team_id")) == str(team["riot_team_id"])
+                ),
+                {},
+            )
+            names = []
+            for participant in side.get("participant_metadata") or []:
+                name = participant.get("summonerName", "").strip()
+                code = team.get("code") or ""
+                if " " in name:
+                    name = name.split(" ", 1)[1]
+                elif (
+                    code
+                    and name.lower().startswith(code.lower())
+                    and len(name) > len(code)
+                ):
+                    name = name[len(code) :]
+                if name:
+                    names.append(name)
+            players.append(names if len(names) == 5 else None)
+        mapping = game.mapping
+        maps[key] = {
+            "match_id": mapping["match_id"],
+            "league": mapping["league"],
+            "event": mapping.get("event"),
+            "best_of": mapping.get("best_of"),
+            "number": game.number,
+            "game_id": game.id,
+            "teams": [t["name"] for t in mapping["teams"]],
+            "winner": result["winner"],
+            "started_at": started,
+            "ended_at": ended,
+            "duration_seconds": round(duration) if duration is not None else None,
+            "players": players if any(players) else None,
+            "recorded_at": utc_now(),
+        }
+        write_atomic(path, maps)
+        upload_maps(game.dir.parent, mapping["match_id"])
+        dispatch_prices(datetime.now(UTC))
+    except Exception as error:
+        log("record_map_failed", game=game.id, reason=str(error))
+
+
 def patch_snapshot(path, results_path, names):
     """Add a settled winner to a finished map's saved page."""
     if not path.exists() or not results_path.exists():
@@ -326,6 +425,49 @@ class Ratings:
         self.inputs, self.db = inputs, db
         self.teams, self.stamp = None, None
         self.draft = None
+
+    def refresh_fresh(self, bucket):
+        """Adopt a newer refresh only when it belongs to the current publish."""
+        if not self.inputs or not bucket:
+            return
+        candidate = self.inputs.parent / "live_inputs_fresh.json.new"
+        try:
+            candidate.unlink(missing_ok=True)
+            result = subprocess.run(
+                [
+                    "aws",
+                    "s3",
+                    "cp",
+                    f"s3://{bucket}/prometheus/live-inputs/live_inputs_fresh.json",
+                    str(candidate),
+                    "--only-show-errors",
+                ],
+                timeout=30,
+                check=False,
+                capture_output=True,
+            )
+            if result.returncode:
+                return
+            payload = json.loads(candidate.read_text())
+            current = json.loads(self.inputs.read_text())
+            if (
+                not isinstance(payload["teams"], dict)
+                or not payload["data_through"]
+                or payload["data_through"] != current["data_through"]
+                or datetime.fromisoformat(payload["generated_at"])
+                <= datetime.fromisoformat(current["generated_at"])
+            ):
+                return
+            candidate.replace(self.inputs)
+            self.stamp = None
+            log("ratings_refreshed", results_through=payload.get("results_through"))
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+            pass
+        finally:
+            try:
+                candidate.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def _load(self):
         if self.inputs and self.inputs.exists():
@@ -601,9 +743,14 @@ class Game:
         ticker = self.ticker
         if not ticker and self.number == self.mapping.get("best_of"):
             ticker = self.series_ticker  # the deciding map is the series
-        if self.state != "finished" or not ticker or self.number in self.results():
+        if self.state != "finished":
             return
-        settle_map(ticker, self.number, self.results_path, self.request_dir("settle"))
+        if self.number in self.results():
+            record_map(self)
+        elif ticker and settle_map(
+            ticker, self.number, self.results_path, self.request_dir("settle")
+        ):
+            record_map(self)
 
     def save_tickers(self):
         write_atomic(
@@ -1104,9 +1251,14 @@ def run(args):
     waiting_ids = set()
     feed_polled = {}
     kalshi = True
+    last_ratings_refresh = float("-inf")
     try:
         while True:
             cycle = time.monotonic()
+            if cycle - last_ratings_refresh >= 300:
+                last_ratings_refresh = cycle
+                if os.environ.get("ARTIFACTS_BUCKET") and args.ratings.inputs:
+                    args.ratings.refresh_fresh(os.environ["ARTIFACTS_BUCKET"])
             lifecycle_changed = False
             if cycle - last_discovery >= args.discover_interval:
                 last_discovery = cycle
@@ -1147,7 +1299,7 @@ def run(args):
                         if done.mapping["match_id"] in completed:
                             done.state = "finished"
                         if done.state == "finished":
-                            if kalshi:
+                            if kalshi or done.number in done.results():
                                 try:
                                     done.settle()
                                 except Stop as error:
@@ -1260,9 +1412,20 @@ def run(args):
                     for game in event["match"]["games"]:
                         tickers = match_dir / game["id"] / "kalshi.json"
                         snap = args.page_out / event["id"] / f"map{game['number']}.json"
-                        if game["id"] in games or not tickers.exists() or not kalshi:
+                        results_path = match_dir / "results.json"
+                        results = (
+                            json.loads(results_path.read_text())
+                            if results_path.exists()
+                            else {}
+                        )
+                        known = str(game["number"]) in results
+                        if game["id"] in games or (
+                            not known and (not tickers.exists() or not kalshi)
+                        ):
                             continue
-                        saved = json.loads(tickers.read_text())
+                        saved = (
+                            json.loads(tickers.read_text()) if tickers.exists() else {}
+                        )
                         ticker = saved.get("map")
                         if not ticker and game["number"] == event["match"].get(
                             "strategy", {}
@@ -1272,15 +1435,29 @@ def run(args):
                             stamp_dir = (
                                 match_dir / "settlements" / f"{stamp}_{game['number']}"
                             )
-                            if ticker and settle_map(
-                                ticker,
-                                game["number"],
-                                match_dir / "results.json",
-                                stamp_dir,
+                            if known or (
+                                ticker
+                                and settle_map(
+                                    ticker,
+                                    game["number"],
+                                    match_dir / "results.json",
+                                    stamp_dir,
+                                )
                             ):
                                 try:
                                     mapping = mapping_for(event, catalog, aliases)
                                     names = [t["name"] for t in mapping["teams"]]
+                                    record_map(
+                                        SimpleNamespace(
+                                            dir=match_dir / game["id"],
+                                            collector_dir=match_dir
+                                            / game["id"]
+                                            / "collector",
+                                            mapping=mapping,
+                                            number=game["number"],
+                                            id=game["id"],
+                                        )
+                                    )
                                 except ValueError:
                                     pass
                                 patch_snapshot(snap, match_dir / "results.json", names)
@@ -1362,7 +1539,7 @@ def run(args):
                     except (ValueError, OSError) as error:
                         log("quote_failed", game=gid, reason=str(error))
                 feed_due = cycle - feed_polled.get(gid, -float("inf")) >= args.interval
-                if kalshi and feed_due:
+                if feed_due and (kalshi or game.number in game.results()):
                     try:
                         game.settle()
                     except Stop as error:

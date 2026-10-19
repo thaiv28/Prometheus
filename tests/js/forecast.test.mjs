@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { createRequire } from "node:module";
+const { apply } = createRequire(import.meta.url)("../../site_static/js/fresh.js");
 
-function render(a, b, calibration) {
+function render(a, b, calibration, overlay = null) {
   const rows = [a, b].map((r) => ({ ...r, now: true }));
   const elements = {
     "#rows-data": { textContent: JSON.stringify(rows) },
@@ -15,6 +17,7 @@ function render(a, b, calibration) {
   };
   vm.runInNewContext(fs.readFileSync(new URL("../../site_static/js/forecast.js", import.meta.url), "utf8"), {
     document: { querySelector: (selector) => elements[selector] },
+    PrometheusFresh: { load: async () => overlay, apply },
   });
   return elements;
 }
@@ -29,4 +32,16 @@ test("international head-to-head uses artifact coefficients and reverses with te
   assert.match(forward["#matchup-note"].textContent, /International matchup/);
   assert.equal(render(a, { ...b, league: "LCK" }, model)["#matchup-result"].textContent, "62 times in 100");
   assert.equal(render(a, b, null)["#matchup-result"].textContent, "69 times in 100");
+});
+
+
+test("a results overlay recomputes the displayed matchup", async () => {
+  const out = render(
+    { teamname: "A", league: "LCK", elo: 1500, forge: 1500 },
+    { teamname: "B", league: "LCK", elo: 1500, forge: 1500 },
+    null, { teams: { A: 100 }, players: {} },
+  );
+  assert.equal(out["#matchup-result"].textContent, "50 times in 100");
+  await Promise.resolve();
+  assert.equal(out["#matchup-result"].textContent, "62 times in 100");
 });

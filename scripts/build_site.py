@@ -189,6 +189,9 @@ def forecasts(majors) -> Forecasts:
     cfg = ELO_METRICS["game_length_elo"]
     latest_elos = get_latest_elos(cfg["method"])
     season_elos = get_season_elos(cfg["method"])
+    env.globals["elo_data_through"] = (
+        pd.to_datetime(latest_elos["latest_date"]).max().isoformat()
+    )
     # Every team's current rating is a "now" row, so search finds retired teams;
     # the default view shows only the active ones.
     team_elo_rows = forecast_records(
@@ -246,6 +249,7 @@ def forecasts(majors) -> Forecasts:
     forge, forge_seasons, forge_rows, forge_config, forge_filters = forge_register(
         forms_now, forms_seasons, latest_elos, season_elos, majors
     )
+    forge_config["dataThrough"] = env.globals["elo_data_through"]
     render_rankings_page(FORECASTS["forge"], forge_rows, forge_config, forge_filters)
     return Forecasts(
         latest_elos=latest_elos,
@@ -269,6 +273,7 @@ def players(majors) -> Players:
     latest, seasons = get_player_elos(method, history)
     rows, pages, listed = player_pages_and_rows(history, latest, seasons)
     slugs = listed.set_index("playerid")["slug"]
+    write_json("player-slugs.json", slugs.to_dict(), ensure_ascii=False)
     render_rankings_page(
         PLAYER_METRICS["player_elo"],
         rows,
@@ -347,6 +352,7 @@ def predictions_pages(fc: Forecasts, teams) -> dict:
     archive = live_results.load_archive()
     series = live_results.series_view(log, archive, teams)
     series_links = {s["match_id"]: s["id"] for s in series if s["match_id"] is not None}
+    write_json("series-links.json", series_links, ensure_ascii=False)
     predictions = predictions_view(backtest_log, teams, now, series_links=series_links)
     render_predictions(predictions, fc.coverage)
     render_results(predictions)

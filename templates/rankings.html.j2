@@ -153,6 +153,7 @@
   <script type="application/json" id="page-config">{{ config | tojson }}</script>
 {% endblock %}
 {% block scripts %}
+  <script src="{{ asset('js/fresh.js') }}" defer></script>
   <script src="{{ asset('js/rankings.js') }}" defer></script>
   {% if metric.matchup %}<script src="{{ asset('js/forecast.js') }}" defer></script>{% endif %}
 {% endblock %}

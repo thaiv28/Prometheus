@@ -2,6 +2,22 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — Fresh calls, part 4: browser rating overlays
+
+Added effective `player_rating`, build-matched `fresh.json` deltas (including idle players' league-offset moves), listed-player slug export and hourly upload with 30-second caching. Registers, head-to-head and home top tens apply current Elo/FORGE deltas; season rows and Form stay frozen. No new style; only added text is the results timestamp. Checks: pytest 950 passed, 2 skipped; 26 Node tests; ruff format/check; offline site build; built slug index, timestamps and script references; home DOM values/order/ranks/bars/captions; diff whitespace. Tech: 9,416 words. Reviewer: headless Chrome with a test overlay on Team/Player Elo, FORGE and home at 1440 and 390 px (re-rank, bars, head to head); moved the home captions' note before their trailing link. Copy review: PASS (registers, home captions; only "Results through …"). Limits: HTTP/S3 and Actions time unmeasured; team and player pages' fact lines and Elo history update only at builds.
+
+## 2026-10-19 — Fresh calls, part 3: hourly pages and live ratings
+
+Hourly/dispatched prices renders Predictions, monthly results and call performance after a successful log save, using published backtest/team/series artifacts; failed fetches publish nothing. Builds add `series-links.json`. Refresh exports shifted live inputs without overwriting the base; the worker checks every five minutes and adopts only newer inputs from the same publish. JSON prices cache for 30 seconds, rendered HTML for 60; alerts/props keep five minutes. Checks: pytest 941 passed, 2 skipped; ruff format/check; 23 JS tests; live shell syntax; doc word budgets and diff whitespace. Offline fixture render: 0.037 s; added HTTP/S3 and CI wall time unmeasured. Limits: not run in CI; Elo pages still update only at builds until the overlay lands. No templates, CSS, JS or page copy changed.
+
+## 2026-10-19 — Fresh calls, part 2: finished maps from the live worker; refreshed calls on the page
+
+Worker records each settled map in `maps.json` (winner, players from the collector's last frame, length only when `find_start` found the start and it is 15–75 minutes), uploads it, and dispatches `prices.yml` (5-minute debounce; token from SSM). The refresh adds worker maps (precedence: scoreboard, worker, schedule); worker league labels map to ours (`WLDs` → Worlds). `kalshi.json` carries each unstarted call, which `predictions.js` applies. Checks: pytest 926 passed, 2 skipped; JS tests 23 passed; ruff; `record_map` on the backed-up KC v MVK match (players exact; map 1 length dropped because the worker joined late); headless Chrome at 1440 and 390 px. Copy review: PASS (Predictions, home fixtures; only new text is the tooltip's "results through …"). Limits: dispatch needs the token, SSM grant and live-stack deploy; no live match run yet.
+
+## 2026-10-19 — Fresh calls, part 1: resume Elo with Leaguepedia results hourly
+
+`EloState` makes the replay resumable (rebuilt Elo tables identical row for row). Publish saves the state (3.1 MB, ~11 s); the hourly job's new step replays Leaguepedia games Oracle's Elixir lacks (each matched to an OE game of the same pair within 3 hours, or applied) and refreshes unstarted calls; Form stays frozen, `data_through` stays the OE date. Real run: 31 games applied, 37 known, 6 calls changed, 13 s. Justified by measured lag (+0.0039 series log loss a day); same-day games alone are within noise (−0.0010, −0.0024 to +0.0003) after fixing a leak in the first research run (own games dated before the start). Checks: pytest, ruff. Limits: not yet run in CI.
+
 ## 2026-10-19 — Call staleness measured
 
 `scripts/research/call_staleness.py` on the published prediction log: of 74 settled calls frozen at the start (since Oct 4), 40 used data one day old and 34 two to four days old (Oracle's Elixir lag). Rebuilding 4,201 settled logged series with older ratings than the backtest's day-before: one more day +0.0039 series log loss (+0.0007 to +0.0074), two +0.0053, seven +0.0134; international (155) within noise. So the backtest and market report flatter published calls, and fresher results (Leaguepedia before Oracle's Elixir) are worth about .004 a day of lag. Same-day results are not measured. Research only; no published change.
@@ -13,6 +29,7 @@ Forecast report/dumps and PR comparisons now resample whole series; dumps carry 
 ## 2026-10-19 — Elo/forecast review added to Future work
 
 Docs only, base `1057307`. Reviewed every Elo and forecast assumption against the code, the research reports and the literature (Glicko, TrueSkill 2, Elo++, dynamic Bradley-Terry, forecast combination). Added one ordered Future work item to `current_state.md`: evaluation rules (series-clustered bootstrap, non-inferiority for removals, minimum gain, forward holdout), call staleness, one rating scale with league offsets fixed at the source, fast/slow Elo in place of Form, and a dynamic Bradley-Terry ceiling. Checks: `pytest tests/test_steering.py`.
+
 ## 2026-10-19 — Live benchmark refresh: first CI runs, seed fix
 
 First dispatch of `live-bench.yml` failed: the hand seed was made with macOS `tar`, whose AppleDouble `._*.json` files broke JSON reads on Linux. Reseeded with `COPYFILE_DISABLE=1 tar --no-xattrs` (checked with Python `tarfile`: no metadata entries) and fixed the seed commands in `deployment.md`. Second run (39327787116) passed in 10 min: Riot's feed served the GitHub runner without refusals (14 new maps, 81 s), `--build-data` took 7.9 min (CPU-bound; it re-reduces every map, so it grows with the data), state synced to S3, and `live-bench-data-63ee7c2a…` (2.2 MB) cached: 1,772 maps / 823 series, up from 1,666 / 813. Limit: no PR has read the cached entry yet.
@@ -50,6 +67,4 @@ Also tested, not adopted (reports in `docs/research/`; scripts on their branches
 
 Checks: DB rebuilt, pytest, ruff, `evaluate_metrics.py --write-weights`, `evaluate_markets.py --offline --dump`, `compare_benchmarks.py`.
 
-## 2026-10-19 — Simplify the Elo engine
 
-Removed inactive and rejected options, legacy constants and their tests; kept the log rookie discount, stored move-down bonus, RD and non-major slope. RD now takes (new, floor, growth); bootstrap accepts research overrides. Eight historical research scripts frozen at 00237c0. Added the existing win-share report and its not-adopted index entry. Checks: DB rebuilt; the three Elo tables match main row for row (max |Δ| 0.0); pytest 886 passed, 2 skipped; ruff clean.

@@ -141,118 +141,126 @@ def calculate_game_length_elo_change(
     return K * (actual - expected_score(elo, opponent_elo, slope=expected_slope))
 
 
-def compute_elo_records(
-    games: pd.DataFrame,
-    elo_func,
-    starting_elo: float = STARTING_ELO,
-    league_share: float = LEAGUE_SHARE,
-    rosters: dict | None = None,
-    active_days: int = ACTIVE_DAYS,
-    player_records: bool = False,
-    rookie_penalty: float = ROOKIE_PENALTY,
-    rookie_games: int = ROOKIE_GAMES,
-    move_down_bonus: float = MOVE_DOWN_BONUS,
-    player_rd: tuple[float, float, float] | None = PLAYER_RD,
-    player_rd_information: float = PLAYER_RD_INFORMATION,
-    other_league_slope: float | None = OTHER_LEAGUE_SLOPE,
-) -> tuple[pd.DataFrame, ...]:
-    """Replay ordered games into team and league-offset frames, plus optional players.
+class EloState:
+    """Mutable Elo replay state, resumable without changing replay arithmetic."""
 
-    Team ratings average their starters plus the home-league offset. Home is the
-    most-played domestic league this calendar year, with last year's home counting
-    as one game and ties keeping the current home. Missing rosters reuse the last
-    lineup or treat the team as one player. Main-roster ratings use the last lineup
-    in the home league or an international event.
+    def __init__(
+        self,
+        elo_func,
+        starting_elo=STARTING_ELO,
+        league_share=LEAGUE_SHARE,
+        rosters=None,
+        active_days=ACTIVE_DAYS,
+        player_records=False,
+        rookie_penalty=ROOKIE_PENALTY,
+        rookie_games=ROOKIE_GAMES,
+        move_down_bonus=MOVE_DOWN_BONUS,
+        player_rd=PLAYER_RD,
+        player_rd_information=PLAYER_RD_INFORMATION,
+        other_league_slope=OTHER_LEAGUE_SLOPE,
+        has_league=True,
+    ):
+        if player_rd is not None:
+            rd_new, rd_min, rd_growth = player_rd
+            if not all(math.isfinite(x) for x in player_rd) or not (
+                0 < rd_min <= rd_new and rd_growth >= 0
+            ):
+                raise ValueError(
+                    "player_rd requires finite new >= floor > 0, growth >= 0"
+                )
+            if not math.isfinite(player_rd_information) or player_rd_information <= 0:
+                raise ValueError("player_rd_information must be finite and positive")
+        self.elo_func = elo_func
+        self.rosters = rosters or {}
+        self.team_last = {}
+        self.starting_elo = starting_elo
+        self.league_share = league_share
+        self.active_days = active_days
+        self.rookie_penalty = rookie_penalty
+        self.rookie_games = rookie_games
+        self.move_down_bonus = move_down_bonus
+        self.player_rd = player_rd
+        self.player_rd_information = player_rd_information
+        self.other_league_slope = other_league_slope
+        self.has_league = has_league
+        self.own = {}
+        self.player_league = {}
+        self.last_seen = {}
+        self.members = defaultdict(set)
+        self.home = {}
+        self.season_counts = {}
+        self.last_roster = {}
+        self.main_roster = {}
+        self.league_offset = defaultdict(float)
+        self.played = defaultdict(int)
+        self.rd_variance = {}
 
-    New players start at the league's active-player average (last seen within
-    active_days), or starting_elo when empty. Transfers preserve ratings through
-    offset conversion; moving down from a major adds a stored move_down_bonus.
-    The rookie_penalty counts only toward effective ratings, fading with
-    log(1 + games) to zero at rookie_games; it never lowers the stored rating.
+    def play(self, row, league, date, player_records=False):
+        """Apply one game and return team, offset and optional player records."""
+        starting_elo = self.starting_elo
+        league_share = self.league_share
+        active_days = self.active_days
+        rookie_penalty = self.rookie_penalty
+        rookie_games = self.rookie_games
+        move_down_bonus = self.move_down_bonus
+        player_rd = self.player_rd
+        player_rd_information = self.player_rd_information
+        other_league_slope = self.other_league_slope
+        has_league = self.has_league
+        own = self.own
+        player_league = self.player_league
+        last_seen = self.last_seen
+        members = self.members
+        home = self.home
+        season_counts = self.season_counts
+        last_roster = self.last_roster
+        main_roster = self.main_roster
+        league_offset = self.league_offset
+        played = self.played
+        rd_variance = self.rd_variance
+        elo_func = self.elo_func
+        rosters = self.rosters
+        window = pd.Timedelta(days=active_days)
+        if player_rd is not None:
+            rd_new, rd_min, rd_growth = player_rd
 
-    player_rd is (new, floor, growth per sqrt(day)), or None to disable RD.
-    Moves scale by RD²/floor². Variance grows by growth² × days away, capped at
-    new², then shrinks to max(floor², 1/(1/RD² + player_rd_information ×
-    s² × E × (1−E))), with s and E on the game's update slope. Information must be
-    finite and positive.
-    other_league_slope overrides the callback's expected-score slope only in
-    non-major domestic events; None disables it. Cross-home international games
-    also move both league offsets by league_share of the unscaled team change.
+        def league_average(league, date):
+            recent = [
+                own[p]
+                for p in members[league]
+                if date is None
+                or last_seen[p][0] is None
+                or last_seen[p][0] >= date - window
+            ]
+            return sum(recent) / len(recent) if recent else starting_elo
 
-    games contains gameid, teamid, opponent_teamid, gamelength (seconds), result,
-    and optional league/date. rosters maps (gameid, teamid) to starter IDs.
-    Team records contain pre/post ratings, elo_change, home_league, league_offset
-    and main_elo. Offset records contain gameid, date, league and league_offset.
-    player_records adds starter pre/post ratings with home_league and offset;
-    teams with no roster are omitted from that frame.
-    """
-    if player_rd is not None:
-        rd_new, rd_min, rd_growth = player_rd
-        if not all(math.isfinite(x) for x in player_rd) or not (
-            0 < rd_min <= rd_new and rd_growth >= 0
-        ):
-            raise ValueError("player_rd requires finite new >= floor > 0, growth >= 0")
-        if not math.isfinite(player_rd_information) or player_rd_information <= 0:
-            raise ValueError("player_rd_information must be finite and positive")
-    rd_variance = {}  # player -> posterior RD squared
-    has_league = "league" in games.columns
-    leagues = games["league"] if has_league else [None] * len(games)
-    dates = (
-        pd.to_datetime(games["date"])
-        if "date" in games.columns
-        else [None] * len(games)
-    )
-    rosters = rosters or {}
-    window = pd.Timedelta(days=active_days)
-    own = {}  # player -> rating, relative to the offset of the league in `player_league`
-    player_league = {}
-    last_seen = {}  # player -> (date, league) of the last game
-    members = defaultdict(set)  # league -> players whose last game was there
-    home = {}
-    season_counts = {}  # (team, year) -> {league: games}
-    last_roster = {}
-    main_roster = {}
-    league_offset = defaultdict(float)
-    played = defaultdict(int)  # player -> games played
-
-    def league_average(league, date):
-        recent = [
-            own[p]
-            for p in members[league]
-            if date is None
-            or last_seen[p][0] is None
-            or last_seen[p][0] >= date - window
-        ]
-        return sum(recent) / len(recent) if recent else starting_elo
-
-    def eff(player):
-        """Rating counted toward the team, after the logarithmic rookie discount."""
-        games = played[player]
-        discount = (
-            rookie_penalty * (1 - math.log1p(games) / math.log1p(rookie_games))
-            if rookie_games and games < rookie_games
-            else 0.0
-        )
-        return own[player] - discount
-
-    def seat(player, league, date):
-        if player not in own:
-            own[player] = (
-                league_average(league, date) if league is not None else starting_elo
+        def eff(player):
+            """Rating counted toward the team, after the logarithmic rookie discount."""
+            games = played[player]
+            discount = (
+                rookie_penalty * (1 - math.log1p(games) / math.log1p(rookie_games))
+                if rookie_games and games < rookie_games
+                else 0.0
             )
-            player_league[player] = league
-        elif player_league[player] != league:
-            # Moving league (a transfer, promotion, a cup) keeps the player's rating.
-            own[player] += league_offset[player_league[player]] - league_offset[league]
-            own[player] += _move_adjustment(
-                player_league[player], league, move_down_bonus
-            )
-            player_league[player] = league
+            return own[player] - discount
 
-    elo_records = []
-    offset_records = []
-    player_rows = []
-    for row, league, date in zip(games.itertuples(index=False), leagues, dates):
+        def seat(player, league, date):
+            if player not in own:
+                own[player] = (
+                    league_average(league, date) if league is not None else starting_elo
+                )
+                player_league[player] = league
+            elif player_league[player] != league:
+                # Moving league (a transfer, promotion, a cup) keeps the player's rating.
+                own[player] += (
+                    league_offset[player_league[player]] - league_offset[league]
+                )
+                own[player] += _move_adjustment(
+                    player_league[player], league, move_down_bonus
+                )
+                player_league[player] = league
+
+        elo_records, offset_records, player_rows = [], [], []
         domestic = has_league and league not in INTERNATIONAL_LEAGUES
         sides = []
         for team in (row.teamid, row.opponent_teamid):
@@ -416,6 +424,200 @@ def compute_elo_records(
                 }
             )
 
+        for team in (row.teamid, row.opponent_teamid):
+            self.team_last[team] = date
+        return elo_records, offset_records, player_rows
+
+    def player_rating(self, player):
+        """Effective player rating with the offset of their current league."""
+        if player not in self.own:
+            return None
+        games = self.played[player]
+        discount = (
+            self.rookie_penalty
+            * (1 - math.log1p(games) / math.log1p(self.rookie_games))
+            if self.rookie_games and games < self.rookie_games
+            else 0.0
+        )
+        league = self.player_league[player]
+        return (
+            self.own[player]
+            - discount
+            + (self.league_offset[league] if league is not None else 0.0)
+        )
+
+    def team_rating(self, team):
+        """Current effective main-roster rating, including current league offsets."""
+        roster = self.main_roster.get(team)
+        if roster is None:
+            return None
+
+        def eff(p):
+            games = self.played[p]
+            discount = (
+                self.rookie_penalty
+                * (1 - math.log1p(games) / math.log1p(self.rookie_games))
+                if self.rookie_games and games < self.rookie_games
+                else 0.0
+            )
+            return self.own[p] - discount
+
+        return sum(
+            eff(p)
+            + (
+                self.league_offset[self.player_league[p]]
+                if self.player_league[p] is not None
+                else 0.0
+            )
+            for p in roster
+        ) / len(roster)
+
+    def to_dict(self):
+        """JSON-safe snapshot. Caller-supplied per-game rosters are excluded."""
+
+        def encode(value):
+            if isinstance(value, pd.Timestamp):
+                return {"timestamp": value.isoformat()}
+            if isinstance(value, (datetime.datetime, datetime.date)):
+                return {"timestamp": value.isoformat()}
+            if isinstance(value, tuple):
+                return {"tuple": [encode(v) for v in value]}
+            if isinstance(value, set):
+                return {"set": [encode(v) for v in value]}
+            if isinstance(value, dict):
+                return {"dict": [[encode(k), encode(v)] for k, v in value.items()]}
+            return value
+
+        names = (
+            "starting_elo",
+            "league_share",
+            "active_days",
+            "rookie_penalty",
+            "rookie_games",
+            "move_down_bonus",
+            "player_rd",
+            "player_rd_information",
+            "other_league_slope",
+            "has_league",
+        )
+        mutable = (
+            "own",
+            "player_league",
+            "last_seen",
+            "members",
+            "home",
+            "season_counts",
+            "last_roster",
+            "main_roster",
+            "league_offset",
+            "played",
+            "rd_variance",
+            "team_last",
+        )
+        return {
+            "schema": 1,
+            "parameters": {k: encode(getattr(self, k)) for k in names},
+            "state": {k: encode(getattr(self, k)) for k in mutable},
+        }
+
+    @classmethod
+    def from_dict(cls, d, elo_func):
+        """Restore a snapshot; attach input rosters separately before continuing."""
+        if d["schema"] != 1:
+            raise ValueError("Unsupported Elo state schema")
+
+        def decode(value):
+            if not isinstance(value, dict):
+                return value
+            if "timestamp" in value:
+                return pd.Timestamp(value["timestamp"])
+            if "tuple" in value:
+                return tuple(decode(v) for v in value["tuple"])
+            if "set" in value:
+                return {decode(v) for v in value["set"]}
+            return {decode(k): decode(v) for k, v in value["dict"]}
+
+        obj = cls(elo_func, **{k: decode(v) for k, v in d["parameters"].items()})
+        for k, v in d["state"].items():
+            setattr(obj, k, decode(v))
+        obj.members = defaultdict(set, obj.members)
+        obj.league_offset = defaultdict(float, obj.league_offset)
+        obj.played = defaultdict(int, obj.played)
+        return obj
+
+
+def compute_elo_records(
+    games: pd.DataFrame,
+    elo_func,
+    starting_elo: float = STARTING_ELO,
+    league_share: float = LEAGUE_SHARE,
+    rosters: dict | None = None,
+    active_days: int = ACTIVE_DAYS,
+    player_records: bool = False,
+    rookie_penalty: float = ROOKIE_PENALTY,
+    rookie_games: int = ROOKIE_GAMES,
+    move_down_bonus: float = MOVE_DOWN_BONUS,
+    player_rd: tuple[float, float, float] | None = PLAYER_RD,
+    player_rd_information: float = PLAYER_RD_INFORMATION,
+    other_league_slope: float | None = OTHER_LEAGUE_SLOPE,
+) -> tuple[pd.DataFrame, ...]:
+    """Replay ordered games into team and league-offset frames, plus optional players.
+
+    Team ratings average their starters plus the home-league offset. Home is the
+    most-played domestic league this calendar year, with last year's home counting
+    as one game and ties keeping the current home. Missing rosters reuse the last
+    lineup or treat the team as one player. Main-roster ratings use the last lineup
+    in the home league or an international event.
+
+    New players start at the league's active-player average (last seen within
+    active_days), or starting_elo when empty. Transfers preserve ratings through
+    offset conversion; moving down from a major adds a stored move_down_bonus.
+    The rookie_penalty counts only toward effective ratings, fading with
+    log(1 + games) to zero at rookie_games; it never lowers the stored rating.
+
+    player_rd is (new, floor, growth per sqrt(day)), or None to disable RD.
+    Moves scale by RD²/floor². Variance grows by growth² × days away, capped at
+    new², then shrinks to max(floor², 1/(1/RD² + player_rd_information ×
+    s² × E × (1−E))), with s and E on the game's update slope. Information must be
+    finite and positive.
+    other_league_slope overrides the callback's expected-score slope only in
+    non-major domestic events; None disables it. Cross-home international games
+    also move both league offsets by league_share of the unscaled team change.
+
+    games contains gameid, teamid, opponent_teamid, gamelength (seconds), result,
+    and optional league/date. rosters maps (gameid, teamid) to starter IDs.
+    Team records contain pre/post ratings, elo_change, home_league, league_offset
+    and main_elo. Offset records contain gameid, date, league and league_offset.
+    player_records adds starter pre/post ratings with home_league and offset;
+    teams with no roster are omitted from that frame.
+    """
+    state = EloState(
+        elo_func,
+        starting_elo=starting_elo,
+        league_share=league_share,
+        rosters=rosters,
+        active_days=active_days,
+        rookie_penalty=rookie_penalty,
+        rookie_games=rookie_games,
+        move_down_bonus=move_down_bonus,
+        player_rd=player_rd,
+        player_rd_information=player_rd_information,
+        other_league_slope=other_league_slope,
+        has_league="league" in games.columns,
+    )
+    leagues = games["league"] if state.has_league else [None] * len(games)
+    dates = (
+        pd.to_datetime(games["date"])
+        if "date" in games.columns
+        else [None] * len(games)
+    )
+    elo_records, offset_records, player_rows = [], [], []
+    for row, league, date in zip(games.itertuples(index=False), leagues, dates):
+        teams, offsets, players = state.play(row, league, date, player_records)
+        elo_records.extend(teams)
+        offset_records.extend(offsets)
+        player_rows.extend(players)
+
     records = pd.DataFrame(
         elo_records,
         columns=[
@@ -478,6 +680,24 @@ def load_rosters() -> dict:
     for key in zip(players["gameid"], players["teamid"], players["playerid"]):
         rosters.setdefault(key[:2], []).append(key[2])
     return {key: tuple(ids) for key, ids in rosters.items()}
+
+
+def replay_state(
+    games=None, rosters=None, elo_func=calculate_game_length_elo_change, **kwargs
+):
+    """Replay ordered inputs and retain their final resumable state."""
+    games = load_elo_games() if games is None else games
+    rosters = load_rosters() if rosters is None else rosters
+    state = EloState(
+        elo_func, rosters=rosters, has_league="league" in games.columns, **kwargs
+    )
+    for row in games.itertuples(index=False):
+        state.play(
+            row,
+            getattr(row, "league", None),
+            pd.Timestamp(row.date) if hasattr(row, "date") else None,
+        )
+    return state
 
 
 def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO, **overrides) -> None:

@@ -14,7 +14,7 @@ dest="s3://$ARTIFACTS_BUCKET/prometheus/live"
 
 if [ -d data/live ]; then
   aws s3 sync data/live "$dest/" --only-show-errors \
-    --exclude '*' --include '*/archive.tar.gz' --include '*/results.json' \
+    --exclude '*' --include '*/archive.tar.gz' --include '*/results.json' --include '*/maps.json' \
     --include '*/calls.jsonl' --include '*/forge.json' --include '*/series_quotes.jsonl' \
     --include '*/pre_quotes.jsonl' --include '*/draft_context.json' --include '*/trading/*'
 fi
