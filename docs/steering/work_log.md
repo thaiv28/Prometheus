@@ -1,5 +1,66 @@
 # Work log
 
+## 2026-10-19 — Player Elo win-share experiment
+
+Branch `elo-win-share`, based on `177004c` (the existing future-work entry).
+Research only: fixed gold/XP/CS/gold+XP at 15/20 minutes and earlier-year-fit
+AURA, λ 0/.025/.05/.10, role scaling from earlier years, ≤2021 selection using
+the existing games-weighted domestic/other-league objective. Added opt-in
+`compute_elo_records(win_share=...)`; default arithmetic is unchanged. Complete
+ten-player signal coverage is required; other games use equal shares. The share
+path preserves each update's total after published provisional/away factors,
+which otherwise break the simple fixed-roster invariance argument.
+
+Selected 20-minute lane gold, λ .05 (training objective .6209837 vs .6214805).
+Held out 2022–2026, variant minus published log loss (95% paired game bootstrap):
+
+| Section | Δ log loss (95% CI) |
+|---|---|
+| Elo domestic | +.0001 (−.0006 to +.0009) |
+| Elo international | +.0004 (−.0011 to +.0019) |
+| FORGE domestic | −.0001 (−.0005 to +.0004) |
+| FORGE international | +.0001 (−.0010 to +.0012) |
+| Elo within other leagues | −.0001 (−.0005 to +.0004) |
+| FORGE within other leagues | −.0001 (−.0004 to +.0003) |
+| Elo cross-league | −.0014 (−.0024 to −.0004) |
+
+All seven primary roster-change/experienced-new-team intervals include zero
+(domestic Elo +.0011, other-league Elo −.0003, cross-league −.0020).
+The player-transfer check is significantly worse: first 10 games +.0008
+(+.0003 to +.0012), first 20 +.0007 (+.0002 to +.0011), bootstrap over
+14,484 move-average losses. Median season-end teammate range 166.52→183.14 Elo;
+90th percentile 310.19→336.58. Mean role deviations remain small (−2.50 to +3.24),
+so there is no large systematic jungle/role penalty after role scaling. Coverage
+by year and league is in the generated report (LPL only 41% across all years).
+
+Verdict: the standard forecast significant-gain/no-significant-harm gate passes
+through cross-league Elo, but the main roster slice remains inside noise and
+individual transfer evidence goes the wrong way. **Iterate offline, do not ship**:
+attribute the persistent cross-league gain before calling this individual credit.
+No alternative configuration was scored on held-out years. Per-game intervals
+ignore series dependence; the move check has overlapping team outcomes and is
+associational. Held-out seasons have been viewed in prior research. Existing
+harness out-of-year win curves/Form/FORGE weights are refit within the requested
+split; contribution scaling and AURA alone are strictly earlier-year fits.
+
+Checks: full default historical reproduction max difference 1.14e-12 across
+205,858 team-games; six focused tests passed (1.57 s); full suite 798 passed,
+2 skipped (16.28 s, concurrent research load); comparison without the six new
+tests 792 passed, 2 skipped (13.05 s, separate run under changing load). These
+wall times do not isolate test overhead. Final suite after reporting edits: 798
+passed, 2 skipped in 9.49 s. CLI `--help`, new document links/referenced files,
+repository ruff format/check and whitespace checks pass. Published replay 4.35 s; 27 share replays median 5.30 s
+(range 4.07–6.75 s) over 102,929 games. Research path only; no new CI job,
+build-time fit, dependency or pipeline work. No remote Actions timing (no push/PR),
+DB rebuild or site build; published defaults and weights stay unchanged.
+
+Commit delivery: the sandbox denies writing the original worktree metadata at
+`/Users/tvillalu/repos/Prometheus/.git/worktrees/Prometheus-elo-win-share`.
+The eight changed files are committed on `elo-win-share` in a writable temporary
+Git mirror and exported as `/private/tmp/elo_win_share.bundle`; the original
+worktree branch pointer cannot be updated here. No push or PR.
+
+
 ## 2026-10-19 — Future work: player win share and Elo rating model
 
 Branch `future-win-share`, based on `b0acbac` (main). Documentation only: added two Future work items to `docs/steering/current_state.md`: splitting Elo changes among starters by their share of an in-game lead (gold difference at 15/20 minutes or similar), and the Elo rating model (expected score on the fitted slope with K retuned; Glicko-2-style uncertainty; later TrueSkill Through Time or dynamic Bradley-Terry). No code changed; no checks beyond reading the rendered Markdown.

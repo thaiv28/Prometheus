@@ -162,6 +162,7 @@ def compute_elo_records(
     veteran_penalty: float = 0.0,
     veteran_games: int = 0,
     veteran_years: float = 0.0,
+    win_share: dict | None = None,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
 
@@ -224,6 +225,10 @@ def compute_elo_records(
             grows linearly to `veteran_penalty` at twice that many; past
             `veteran_years` years since the player's first game it grows to
             `veteran_penalty` over three more years. Zero turns either off.
+        win_share: Research-only mapping (gameid, teamid) to {playerid: weight}.
+            Nonnegative weights redistribute the existing player moves, preserving
+            their total after provisional/away factors. Missing/incomplete sides
+            use equal shares. None preserves the published arithmetic exactly.
     Returns:
         (records, offsets). `records` has two rows per game (one per team): gameid,
         teamid, pre_match_elo, post_match_elo, elo_change, home_league (see above;
@@ -369,7 +374,9 @@ def compute_elo_records(
             result=row.result,
         )
         factor = league_factors.get(league, 1.0) if league_factors else 1.0
-        for (_, _, roster), change in zip(sides, (elo_change, -elo_change)):
+        for (team, _, roster), change in zip(sides, (elo_change, -elo_change)):
+            weights = win_share.get((row.gameid, team)) if win_share else None
+            steps = [] if weights is not None else None
             for player in roster:
                 step = factor * change
                 if away_factor and date is not None and player in last_seen:
@@ -377,11 +384,35 @@ def compute_elo_records(
                     if seen is not None:
                         away = min((date - seen).days / away_days, 1.0)
                         step *= 1 + away_factor * away
-                if played[player] < provisional_games:
+                if steps is not None:
+                    steps.append(
+                        step
+                        * (
+                            provisional_factor
+                            if played[player] < provisional_games
+                            else 1
+                        )
+                    )
+                elif played[player] < provisional_games:
                     own[player] += provisional_factor * step
                 else:
                     own[player] += step
                 played[player] += 1
+            if steps is not None:
+                valid = all(
+                    p in weights and math.isfinite(weights[p]) and weights[p] >= 0
+                    for p in roster
+                )
+                weighted = (
+                    [s * weights[p] for p, s in zip(roster, steps)] if valid else steps
+                )
+                total = sum(weighted)
+                if not valid or total == 0 or len(set(weights.values())) == 1:
+                    adjusted = steps
+                else:
+                    adjusted = [s * sum(steps) / total for s in weighted]
+                for player, step in zip(roster, adjusted):
+                    own[player] += step
 
         team_league, opponent_league = sides[0][1], sides[1][1]
         if (
