@@ -18,6 +18,10 @@ def handler(event, context, *, clients=None):
             name: boto3.client(name)
             for name in ("ssm", "s3", "secretsmanager", "dynamodb")
         }
+    if "Records" in event:
+        from deploy.execution.live_handler import handle
+
+        return handle(event, clients, json.loads(ALIASES_PATH.read_text()))
     from prometheus.execution.core import Config, run
     from prometheus.execution.kalshi import Kalshi
     from prometheus.execution.ledger import DynamoLedger

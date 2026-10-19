@@ -123,6 +123,51 @@ class DynamoLedger:
                     }
                 }
             )
+        if plan.get("series_id"):
+            cap_value = config.raw.get("live_series_cap_usd")
+            update = {
+                "TableName": self.table,
+                "Key": _item(self.key(env, f"SERIES#{plan['series_id']}")),
+                "UpdateExpression": "ADD held :amount",
+                "ExpressionAttributeValues": _item({":amount": amount}),
+            }
+            if cap_value is not None:
+                cap_value = decimal(cap_value)
+                if amount > cap_value:
+                    return None
+                update["ConditionExpression"] = (
+                    "attribute_not_exists(held) OR held <= :available"
+                )
+                update["ExpressionAttributeValues"] = _item(
+                    {":amount": amount, ":available": cap_value - amount}
+                )
+            transactions.append({"Update": update})
+        if "map_held_before" in sizing:
+            # Live maps' own budget; the observed held/realized must be unchanged.
+            held = decimal(sizing["map_held_before"])
+            realized = decimal(sizing["map_realized_before"])
+            budget = decimal(config.raw["live_maps"]["budget_usd"])
+            if amount > budget + realized - held:
+                return None
+            values = {":amount": amount}
+            matches = []
+            for name, expected in (("held", held), ("realized", realized)):
+                values[f":expected_{name}"] = expected
+                match = f"{name} = :expected_{name}"
+                if expected == 0:
+                    match = f"(attribute_not_exists({name}) OR {match})"
+                matches.append(match)
+            transactions.append(
+                {
+                    "Update": {
+                        "TableName": self.table,
+                        "Key": _item(self.key(env, "LIVE_MAPS")),
+                        "UpdateExpression": "ADD held :amount",
+                        "ConditionExpression": " AND ".join(matches),
+                        "ExpressionAttributeValues": _item(values),
+                    }
+                }
+            )
         for sk in (
             f"FIXTURE#{plan['alert']['fixture_id']}",
             f"EVENT#{plan['alert']['event_ticker']}",
@@ -231,6 +276,39 @@ class DynamoLedger:
                         }
                     }
                 )
+        if previous.get("series_id"):
+            delta = decimal(row["held"]) - decimal(previous["held"])
+            if delta:
+                changes.append(
+                    {
+                        "Update": {
+                            "TableName": self.table,
+                            "Key": _item(
+                                self.key(env, f"SERIES#{previous['series_id']}")
+                            ),
+                            "UpdateExpression": "ADD held :delta",
+                            "ExpressionAttributeValues": _item({":delta": delta}),
+                        }
+                    }
+                )
+        if "map_held_before" in (previous.get("sizing") or {}):
+            delta = decimal(row["held"]) - decimal(previous["held"])
+            profit_delta = decimal(row.get("realized_profit", 0)) - decimal(
+                previous.get("realized_profit", 0)
+            )
+            if delta or profit_delta:
+                changes.append(
+                    {
+                        "Update": {
+                            "TableName": self.table,
+                            "Key": _item(self.key(env, "LIVE_MAPS")),
+                            "UpdateExpression": "ADD held :delta, realized :profit",
+                            "ExpressionAttributeValues": _item(
+                                {":delta": delta, ":profit": profit_delta}
+                            ),
+                        }
+                    }
+                )
         if row["status"] in {"settled", "unfilled", "aborted"}:
             changes.append(
                 {
@@ -332,3 +410,20 @@ class DynamoLedger:
                 }
             ),
         )
+
+    def shadow(self, alert, payload, now):
+        try:
+            self.client.put_item(
+                TableName=self.table,
+                Item=_item(
+                    {
+                        **self.key("shadow", f"MAP#{alert['event_ticker']}"),
+                        "payload": json.dumps(payload, separators=(",", ":")),
+                        "at": now.isoformat(),
+                    }
+                ),
+                ConditionExpression="attribute_not_exists(pk)",
+            )
+        except Exception as error:
+            if not _conditional(error):
+                raise

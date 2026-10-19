@@ -1,5 +1,80 @@
 # Work log
 
+## 2026-10-19 — Remove draft v2 from map trading; add a $15 live-map budget
+
+User asked to drop draft v2 (its trading benchmark showed no gain and FST got
+significantly worse) and to set aside at most $15 for live-map trading.
+
+- Draft route removed: `live_map.py`, `live/signals.py`, `pyproject.toml` and
+  the README back to their pre-draft versions; `live_map_draft_blend.json`
+  deleted; the executor zip, release hash and publish filter drop the draft model
+  and blend but keep `live/draft.py`, which `live/timeline.py` imports. Kept the
+  worker's check that its model is the pinned one. The research script now names
+  its own draft-model path, so the failed comparison stays reproducible.
+- New required `live_maps.budget_usd` for shadow/live map modes. The ledger's
+  `LIVE_MAPS` row tracks live maps' held cost and realized profit; a map order is
+  capped at budget + realized − held and reserved in the same transaction as
+  ACCOUNT, conditioned on the held/realized it was planned from. Fills, releases
+  and settlements update it. Live maps can never lose more than the budget;
+  profit extends it; pregame is unaffected. Shadow proposals apply it too.
+  Docs suggest `"budget_usd": "15"`; nothing configured in AWS.
+- Checks: `uv run pytest -q` 862 passed, 2 skipped. Two new tests: a partly
+  spent budget shrinks the order and a spent one skips it; two orders planned
+  from the same state can't both reserve. Each fails with its guard removed.
+  Ruff format/check pass. `package.sh` builds (190 files, 1.2 s) with no draft
+  model or blend inside. No CI step, DB read or dependency added.
+- Limit: sizing still uses the shared bankroll's 1%/2% caps (about $0.50 a map on
+  the $50 seed), so $15 covers roughly 30 straight losing maps. Not deployed or
+  activated; the PR's open rollout items stand.
+
+## 2026-10-19 — Review draft v2 for the 30-second trading blend
+
+User requested PR #92's draft model, then merge and live activation only if
+benchmarks improve. Integrated main `bc02c4e` into the separate `live-map-trading`
+worktree (original implementation `c6cb26e`, research `e35e5d0` / main `f522db3`).
+Preserved both chronological logs, lifecycle fixes, draft observation and private
+trading backups. Trading signals now use the frozen ready draft when available,
+recompute its prior/model on the consumer and route to separate earlier-only
+monthly fits; absent/conflicting draft retains exact original inference/blend.
+Known draft conflicts after the latest valid feed receipt also stop current
+use; they cannot borrow an older valid frame. Checks bind model/parent/artifact, map, receipt availability and earlier-day
+history. Package, release fingerprint and deploy path filter include new inputs.
+No public prediction/UI/copy, fit schedule, DB schema or published metric change.
+
+Fixed, untuned same-cohort comparison: 1,352 maps / 655 series / 32,158 calls;
+1,663/1,666 research draft joins. Equal-map paired LL change −0.00133 (95%
+−0.00437 to +0.00174); FST 24-map slice significantly worse +0.02692 (+0.01188
+to +0.04563). Historical ordinary-fee flat-dollar ROI +18.74% (219 entries,
+−0.76% to +38.18%) versus original +21.05% (189, +1.83% to +41.61%).
+This uses OE draft availability proxies, not measured API coverage/receipts,
+asks/depth/fills or independent confirmation. Gate FAIL; no merge, deploy,
+activation or production/account change. No tuning or benchmark override.
+Full evidence/reproduction: `docs/research/live_map_draft_trading.md`.
+
+Focused combined trading/draft suite: 64 passed in 0.20s. Final full suite:
+873 passed, 2 optional signing tests skipped in 11.01s; those two pass separately
+with pinned cryptography in 0.16s. Repository ruff check/format (337 files), shell
+syntax, whitespace and 110 relative documentation links pass. Native API-enriched
+replay: 1,665 maps / 54,557 calls / 3,327 pre-maps, every existing Live comparator
+guard passes; only 17 maps have API drafts, so this is functional evidence and
+not the trading improvement claim. Parent/draft replay takes 1.60s / 1.55s,
+startup/load variation; unchanged public default path performs no draft work.
+All 32,158 shared runtime blend values match the review replay within 1.12e-16.
+
+Review zip: 5,038,625 bytes / 192 files, source-content parity/private-input
+exclusion and isolated scheduled/SQS OFF/public-only shadow smoke pass.
+Package SHA256 `ac8c5a027af42fb0c3c710772428060faf7892e73e096280183185b3dc27ac6b`;
+source `3fcf0ffa2936d6fe379101c43bc28d12391024b4a0416c6246d5a25cbfe5661c`.
+Offline comparison takes 10.49s, no CI job/dependency added. Compared with the
+pre-upgrade 827-test run (8.66s), integration includes merged main's additional
+cases; the final 11.01s cannot attribute startup/load differences to this change.
+Automatic main publish would reuse its existing package step; no extra job/step.
+Initial PR #94 Actions timings: check 43s, head core benchmarks 2m46s; build
+and market jobs were still running at the invalidation follow-up. This adds no
+CI job; model/transport validation stays in existing checks. Final-head status
+is retained in the PR. Rollout remains unperformed.
+Copy review: not applicable; public UI/copy is unchanged from merged main.
+
 ## 2026-10-18 — Prepare API draft v2 as a private live candidate
 
 Branch `live-draft-v2`, based on `f999333` (the v3 comparison), main base
@@ -207,6 +282,110 @@ no tuning or subset selection. [Report](../research/live_draft_v3.md).
   six affected documents resolve. No CI training step or new dependency;
   Actions timings remain unmeasured until a PR runs.
 
+
+## 2026-10-18 — Wire the selected 30-second live-map blend for review
+
+Branch `live-map-trading`, base research `e35e5d0` / main `f522db3`. User chose
+30-second trade stability after reviewing historical sensitivities and requested
+a complete reviewable implementation. Frozen monthly earlier-series-only blend,
+last-trade market input, unshifted pinned objective/momentum inference, net
+5-cent edge and private worker observation/outbox feed the existing executor via
+SQS. Off/shadow/live map controls are explicit and independent of pregame mode.
+No deployment, config/credential write, order or activation was performed.
+
+Shared numerical kernel reproduces all 189 historical 30s entries/side/cost,
+max monthly probability error 5.6e-16: ROI +21.05% (95% +1.83% to +41.61%).
+Applying the existing fragmentation-aware fee reserve to tape costs alone gives
+130 entries, +25.70% (+1.48% to +51.28%); this is another retrospective
+sensitivity, not executable return evidence. Production additionally requires
+actual asks/depth and receipt/book ages not recorded historically. Same observed
+history has been reused; this is not independent strategy confirmation.
+
+Executor adds exact map/parent-series rules, current trade/book rechecks,
+quarter-or-smaller Kelly, <=1% free-capital map / <=2% series caps, shared
+ACCOUNT/DAY/series reservations and revision-checked releases. Old untracked
+pregame series fail closed. Existing personal vetoes, immutable map/event fences,
+uncertain-response holds, IOC, partial fills and settlement remain enforced.
+Shadow records proposed IOC/depth only, without credentials/portfolio/orders or
+fictional compounding. Deployment includes disabled transport template, isolated
+package/source fingerprint, control workflow and opt-in worker service flags.
+No public UI/copy changes, production DB reads, online fitting or dependency.
+
+Verification: 31 focused live-map cases pass in 0.13s; two optional real signing
+cases pass in 0.13s with the isolated pinned cryptography dependency. Full suite
+before final boundary checks: 821 passed, 2 skipped in 8.45s; final result below.
+CloudFormation `cfn-lint`, shell syntax, repository-wide ruff format/check pass.
+Forecast and season-stat scripts completed (22.10s / 3.76s) using a strictly
+read-only SQLAlchemy connection to the existing DB, with temporary reports and
+no core weight change/rebuild. Real 7,768-frame recording: default predictions
+identical; default timeline median 53.19ms, additional private observation 55.02ms
+per feed update (five warm runs), entry policy median 0.059ms (100 warm runs).
+Source-frame identity and naive-UTC exported Elo dates have explicit checks.
+Implementation validation and full rollout in `docs/live_map_execution.md` and
+`docs/research/live_map_implementation_validation.md`. Final package/checksum,
+source-content inspection, isolated smoke, links and suite follow below. Existing research
+baseline: 793 passed, 2 skipped in 9.11s. Additional worker load is two bounded
+public trade GETs per eligible two-second quote cycle until its first candidate;
+no extra request when disabled, stale or outside 5–30 minutes. No CI job/step
+added. Actual provider/queue latency and IAM remain unverified until deployment.
+
+Final: 827 passed, 2 optional signing cases skipped in 8.66s (those two pass
+separately with pinned cryptography); 34 new cases, no additional CI step.
+Repository ruff check/format, shell syntax, cfn-lint, whitespace and 71 relative
+document links pass. The 5,031,248-byte / 189-file Linux Lambda zip matches all
+packaged sources and excludes private/local inputs. Isolated scheduled and SQS
+OFF paths plus public-only shadow transport pass without importing pandas,
+numpy, sklearn or cryptography. Package SHA256:
+`8bbe0120b01b21a7bf7d2d57abc671f2e9c2c7af087a670250ff07838051b9e8`.
+Source SHA256:
+`313a9553af741966810d3d7de00ca4b5853b6c9ca6f2132199acf7c7fb9f775a`.
+Offline explicit November refit exports nine earlier-only snapshots to a
+review-only temporary file; the installed artifact remains the tested eight
+March–October snapshots and fails closed for absent months. No DB/site rebuild
+was needed: public default predictions match exactly and no UI/metric algorithm
+changed. Copy review: not applicable (no public UI/copy edits). Actual Actions
+cost awaits a submitted PR; local full-suite timing varies (baseline 9.11s).
+
+## 2026-10-18 — Historical live-map trading and Kelly research
+
+Branch `research/live-trading`, base main `f522db3` (merged objective/momentum
+release). User authorized research into map-only trading, earlier-only blending,
+fee-aware edge and freshness filters, plus Kelly sizing. Protocol recorded as
+a research file before scoring this run; no published model, account setting,
+order, runtime or deployment change. Source pinned 1,666 maps / 813 series;
+local stale 406-map asset was detected and not used. Reused verified pinned
+asset from `/private/tmp`, DB read-only via explicit argument; shared state
+was not linked or rebuilt. All-in return denominator includes modeled fees.
+
+Earlier-only monthly fits, equal-map training weight, series-end+24h availability
+and same-series exclusion yield 1,352 maps / 655 series from March–October 2026.
+Primary: first map entry in estimated minutes 5–30, net edge >=5 cents after
+7% quadratic taker fee rounded to $0.0001 per contract; valid objectives,
+non-flat source, last trade <=10s, >=2 trades within 21s/range <=1 cent.
+273 entries: +8.86% ROI (95% whole-series bootstrap −4.76% to +23.94%), CLV
++1.25 cents. Blend LL 0.45782 versus raw market 0.46425; delta −0.00643
+(−0.01331 to +0.00020), versus current model −0.00835
+(−0.01238 to −0.00438). Current-model-only entry ROI +7.42%; legacy v1 −6.59%.
+Thirty-second sensitivity +21.05% (+1.83% to +41.61%) is exploratory across
+multiple comparisons on reused history, not a selected strategy. Frozen-entry
+cost stress +2 cents reduces primary ROI to +3.85%, +5 cents to −2.58%.
+Full cash-reserved Kelly $100→$151.43 with 94.88% drawdown; quarter $370.91
+with 42.96%; quarter capped at 1% map/2% series $124.91 with 9.74%.
+Sequential log-growth intervals for every Kelly fraction include zero.
+Historical books/depth/fills, actual feed receipt ages and exchange settlement
+times are absent; cost and end+5min settlement are explicit proxies.
+
+Checks so far: baseline `uv run pytest -q`: 789 passed, 2 skipped in 8.40s;
+four meaningful research tests pass in 0.81s including startup. Complete analysis
+(including current/v1 replay, offline fits, intervals and stress/Kelly paths)
+5.57s. No build/hourly/benchmark step, dependency or production DB read added.
+Final suite: 793 passed, 2 skipped in 9.11s (baseline 8.40s; separate
+environments/system load, not a stable CI cost estimate). Repository-wide ruff
+check/format pass. Four tests cost 0.81s including startup; no CI job added.
+Final reproduction takes 6.30s; 84 relative document links resolve.
+Final whitespace/diff check passes. No remote Actions timing is available until
+submission; no workflow was changed. No UI changes, site
+build, DB rebuild or metric refit required for isolated offline research.
 
 ## 2026-10-18 — Release objective and gold-momentum in-game calls
 

@@ -1,5 +1,9 @@
 # Research
 
+- [Draft v2 map trading](live_map_draft_trading.md): draft v2 as the map-trading model input; the fixed market-blend comparison fails the improvement and no-regression gates (FST worse). Not adopted; its runtime wiring was removed from the trading branch on 2026-10-19.
+
+- [Live map trading](live_trading.md): earlier-series-only market/model blend, fee-aware entries, freshness/stability proxies, execution-cost stress and Kelly paths; [fixed protocol](live_trading_protocol.md). Historical tape returns remain inconclusive; no trading change.
+
 - [API draft v2 integration](live_draft_integration.md): prepared private live candidate, exact identity/fallback/timing gates, real API and collector validation; no displayed probability change.
 
 - **Draft v3 beyond the current live model (2026-10-18).** [Protocol/results](live_draft_v3.md): v3 fails the improvement gate against frozen objectives/momentum and regresses significantly versus the v2 prior. Existing CI comparator reused for feed-only research dumps; no runtime/default/data-pin change. V2 remains the stronger live research candidate.

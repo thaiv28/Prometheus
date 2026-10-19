@@ -515,6 +515,7 @@ class Game:
     ):
         self.mapping, self.id = mapping, game["id"]
         self.number, self.start_time = game["number"], start_time
+        self.latest_signal_book = None
         self.ticker = self.series_ticker = self.forge = self.page_out = None
         self.dir = root / mapping["match_id"] / self.id
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -686,8 +687,18 @@ class Game:
     def poll_quote(self, ticker, path):
         """One orderbook read for YES on team 0, appended to `path` when two-sided."""
         out = self.request_dir("book")
-        _, book = fetch_json(f"{KALSHI}/markets/{ticker}/orderbook", out)
+        record, book = fetch_json(f"{KALSHI}/markets/{ticker}/orderbook", out)
         q = quote(book or {}, utc_now())
+        if ticker == self.ticker:
+            self.latest_signal_book = None
+            headers = record.get("headers") or {}
+            # Trading also needs a current, uncached exchange response.
+            if q and headers.get("Date") and float(headers.get("Age") or 0) == 0:
+                import email.utils
+
+                server = email.utils.parsedate_to_datetime(headers["Date"])
+                if 0 <= (timestamp(q["at"]) - server).total_seconds() <= 3:
+                    self.latest_signal_book = q
         if q:
             with path.open("a") as f:
                 row = dict(q, ticker=ticker, **book_levels(book))
@@ -1079,6 +1090,15 @@ def run(args):
         adopt[gid] = (Path(path), session)
     games, failed, last_discovery = {}, {}, 0.0
     pre = PreMaps(args.root)
+    signals = None
+    if getattr(args, "live_map_signals", False):
+        from .signals import Cli, Outbox, Signals
+
+        outbox = None
+        if args.signal_bucket:
+            bridge = Cli(args.root / "signal-outbox")
+            outbox = Outbox(bridge, bridge, args.signal_bucket, args.signal_queue)
+        signals = Signals(fetch_json, outbox)
     events, last_active = None, time.monotonic()
     scheduled = []
     waiting_ids = set()
@@ -1312,6 +1332,9 @@ def run(args):
                                         game=g.id,
                                         ticker=g.series_ticker,
                                     )
+                        if signals:
+                            for g in games.values():
+                                signals.discover(g, markets)
                     except Stop as error:
                         kalshi = False
                         log("kalshi_stopped", reason=str(error))
@@ -1363,6 +1386,14 @@ def run(args):
                     )
                     if game.state == "finished" and feed_due:
                         game.write_snapshot(catalog)
+                    if signals and kalshi and game.state == "live":
+                        try:
+                            signals.poll(game, page, fresh_model=feed_due)
+                        except Stop as error:
+                            kalshi = False
+                            log("kalshi_stopped", reason=str(error))
+                        except (ValueError, OSError, subprocess.SubprocessError):
+                            log("live_signal_unavailable", game=gid)
                 except (
                     ValueError,
                     KeyError,
@@ -1478,12 +1509,29 @@ def main():
         default=[],
         help="GAME_ID:COLLECTOR_DIR:SESSION — continue another run's collector",
     )
+    parser.add_argument(
+        "--live-map-signals",
+        action="store_true",
+        help="Record private 30s live-map candidates",
+    )
+    parser.add_argument(
+        "--signal-bucket", help="Private signal bucket; requires --signal-queue"
+    )
+    parser.add_argument(
+        "--signal-queue", help="Private SQS URL; requires --signal-bucket"
+    )
     parser.add_argument("--fetch", action="store_true")
     args = parser.parse_args()
     if not args.fetch:
         parser.error("network requires --fetch")
     if not 10 <= args.interval <= 30 or args.discover_interval < 30:
         parser.error("interval 10..30 s; discovery at least every 30 s")
+    if bool(args.signal_bucket) != bool(args.signal_queue) or (
+        args.signal_bucket and not args.live_map_signals
+    ):
+        parser.error(
+            "Signal delivery requires --live-map-signals, --signal-bucket and --signal-queue together"
+        )
     if args.no_model:
         args.model = None
     args.ratings = Ratings(args.inputs, args.db)

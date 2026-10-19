@@ -368,6 +368,51 @@ runtime fit/DB read/network dependency or cadence change. Counts intentionally
 match training; the dragon threshold is not a verified elemental soul and
 inhibitors are raw counters rather than an active-buff state.
 
+### Historical live trading research (2026-10-18)
+
+`scripts/research/live_trading.py` reuses the pinned live benchmark and runtime
+objective/momentum model without writes to either. Monthly logistic market/model
+blends and a market-only control fit equal-map-weight rows only from series whose
+last observed end +24h precedes the month; current-month series are excluded.
+First fee-aware map entries, tape stability/freshness proxies, purchase-price
+stresses, whole-series bootstrap intervals and event-time cash-reserved Kelly
+paths are written under gitignored `data/research/live_trading/`. Read-only DB
+and benchmark paths are explicit arguments. The fixed [protocol](../research/live_trading_protocol.md)
+and [report](../research/live_trading.md) document assumptions. Four focused tests
+cover outcome-availability chronology, after-fee selection, side orientation and
+settlement/cash/exposure accounting. No production pipeline, dependency or CI job
+is added.
+
+### Selected 30-second live-map execution (prepared 2026-10-18)
+
+`live_map.py` is a stdlib-only pinned model/blend/entry contract;
+`live_map_blend.json` exports the tested earlier-only monthly fits.
+`live.signals` separately reconstructs unshifted inputs through opt-in
+`timeline_calls(include_inputs=True)`; the default page/benchmark path is
+unchanged. Both trade contracts supply a 30-second normalized/deduplicated tape.
+Private immutable S3 candidate bytes precede an SQS pointer to the existing
+Lambda (`deploy.execution.live_handler`); the consumer revalidates originals and
+current exact rules/trades/books. No added site DB read, online fit or dependency.
+
+`execution.ledger` adds one SERIES held update to each new pregame/map reserve
+and transactional partial-fill/settlement releases. Shared ACCOUNT/DAY records
+and account-snapshot conditions prevent double funding. Legacy intents reconcile
+without new metadata; an old series fence without series tracking blocks map
+entry. Separate nested controls default off, and shadow proposes without live
+reservations or credential/order access. Tests cover causality/parity, freshness,
+worker restart/outbox, SQS isolation, identity, sizing, shared exposure/races,
+expiry after claim, and exactly-once settlement.
+
+Offline fitting: `scripts/fit_live_map_blend.py` (optional explicit `--as-of`);
+full historical numerical parity: `scripts/research/replay_live_map_policy.py`.
+[Contract and rollout](../live_map_execution.md).
+
+Live trading normalizes the existing naive-UTC SQLite/exported rating dates to
+explicit UTC, while feed/receipt/book timestamps stay strictly timezone-aware.
+Private `include_inputs` output pins the exact modeled source frame; public
+call records remain unchanged. Physical map identity is canonical teams + UTC
+scheduled start + map number, separate from the additional exchange-event fence.
+
 ### Draft v3 live-prior comparison (2026-10-18)
 
 `scripts/research/live_draft_v3.py` reuses the feed partitions, objective and causal
@@ -438,3 +483,18 @@ uses the delayed timestamped window, avoiding the default endpoint's late 204s.
 An aggregate/player kill mismatch retains a candidate with null totalKills
 and its field reason; missing counters invoke the existing v1 model fallback.
 Other invalid fields and freshness/identity validation still reject.
+
+### Live-map budget (2026-10-19)
+
+Live maps have their own money on top of the shared bankroll's caps:
+`live_maps.budget_usd`. `core.map_budget` reads the ledger's `LIVE_MAPS` row
+(held, realized profit, live maps only); `plan_order` caps a map order at
+budget + realized − held, and `DynamoLedger.reserve` adds the order to that row
+in the same transaction, conditioned on the held/realized it planned from, so
+concurrent orders cannot overspend it. `replace` moves held and realized there
+on fills, releases and settlements, as for ACCOUNT. Total live-map loss can
+never exceed the budget; profit extends it.
+
+`scripts/research/live_map_draft.py` reproduces the failed draft-v2 trading
+comparison ([evidence](../research/live_map_draft_trading.md)); the runtime has
+no draft route.

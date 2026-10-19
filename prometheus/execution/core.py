@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 
-from prometheus import market_blend
+from prometheus import live_map, market_blend
 from prometheus.alert_contract import TRADE_GROUPS, trade_veto
 from prometheus.execution.sizing import QUANTITY_STEP, kelly_order
 
@@ -75,6 +75,26 @@ class Config:
                 raise ValueError("max_contracts must be an integer")
             if not 0 < decimal(value["kelly_fraction"]) <= 1:
                 raise ValueError("kelly_fraction must be inside (0, 1]")
+        # Emergency global OFF must remain writable even with malformed map settings.
+        if mode == "off":
+            return cls(mode, value)
+        maps = value.get("live_maps") or {}
+        if maps.get("mode", "off") not in {"off", "shadow", "live"}:
+            raise ValueError("invalid_live_map_mode")
+        if mode != "off" and maps.get("mode", "off") != "off":
+            timestamp(maps["activation_at"])
+            if not str(maps["queue_arn"]).startswith("arn:aws:sqs:"):
+                raise ValueError("invalid_live_queue")
+            for field, upper in (
+                ("kelly_fraction", ".25"),
+                ("map_fraction", ".01"),
+                ("series_fraction", ".02"),
+            ):
+                if not 0 < decimal(maps[field]) <= decimal(upper):
+                    raise ValueError("invalid_live_map_risk_limit")
+            # The strategy's own money: it can never lose more than this.
+            if decimal(maps["budget_usd"]) <= 0:
+                raise ValueError("invalid_live_map_budget")
         return cls(mode, value)
 
     from_dict = parse
@@ -102,6 +122,13 @@ def fee_bound(price, count, rate, precision):
 
 
 def validate_alert(alert, config, now):
+    if alert.get("kind") == live_map.VERSION:
+        if alert.get("schema_version") != 1 or alert.get("group") != "live-map":
+            raise ValueError("unsupported_live_alert")
+        live_map.validate(alert, config, now.isoformat())
+        if reason := trade_veto(alert):
+            raise ValueError(reason)
+        return
     if alert.get("schema_version") != 1 or alert.get("group") not in GROUPS:
         raise ValueError("unsupported_alert")
     for name in ("alert_id", "fixture_id", "event_ticker", "backed_team"):
@@ -130,6 +157,19 @@ def validate_alert(alert, config, now):
             raise ValueError("invalid_probability_or_price")
 
 
+def map_budget(config, row):
+    """Live maps' remaining money: budget + their realized profit - their held."""
+    row = row or {}
+    held, realized = decimal(row.get("held", 0)), decimal(row.get("realized", 0))
+    return {
+        "map_held": held,
+        "map_realized": realized,
+        "map_budget_available": decimal(config.raw["live_maps"]["budget_usd"])
+        + realized
+        - held,
+    }
+
+
 def plan_order(
     alert, routes, config, balance, now, account=None, committed=ZERO, exposure=ZERO
 ):
@@ -148,7 +188,13 @@ def plan_order(
     if held < 0 or committed < 0 or exposure < 0:
         raise ValueError("invalid_bankroll_state")
     capital = config.number("starting_bankroll_usd") + realized - held
-    effective = capital * config.number("kelly_fraction")
+    is_map = alert.get("kind") == live_map.VERSION
+    fraction = (
+        decimal(config.raw["live_maps"]["kelly_fraction"])
+        if is_map
+        else config.number("kelly_fraction")
+    )
+    effective = capital * fraction
     budget = min(
         config.number("order_budget_usd"),
         config.number("fixture_budget_usd"),
@@ -157,12 +203,25 @@ def plan_order(
         config.number("daily_budget_usd") - committed,
         effective,
     )
+    if is_map:
+        # Free capital is conservative: existing commitments reduce the cap base.
+        budget = min(
+            budget,
+            capital * decimal(config.raw["live_maps"]["map_fraction"]),
+            decimal(account["series_available"]),
+            decimal(account["map_budget_available"]),
+        )
     if effective <= 0 or budget <= 0:
         raise ValueError("bankroll_or_spending_cap_exhausted")
     candidates = []
     for route in routes:
         age = (now - timestamp(route["at"])).total_seconds()
-        if not 0 <= age <= config.number("max_quote_age_seconds"):
+        age_limit = (
+            min(config.number("max_quote_age_seconds"), Decimal(3))
+            if is_map
+            else config.number("max_quote_age_seconds")
+        )
+        if not 0 <= age <= age_limit:
             continue
         price = decimal(route["price"])
         if (
@@ -178,12 +237,26 @@ def plan_order(
             config.number("balance_precision_usd"),
         )
         p = decimal(alert["probability"])
+        if is_map:
+            if (
+                route.get("live_probability") is None
+                or not 0
+                <= (now - timestamp(route["live_checked_at"])).total_seconds()
+                <= 3
+            ):
+                continue
+            p = decimal(route["live_probability"])
         if alert.get("trading"):
             if route.get("market_mid") is None:
                 continue
             p = decimal(market_blend.refresh(alert["trading"], route["market_mid"]))
         net_edge = p - price - unit_fee
-        if net_edge <= ZERO or net_edge < config.number("min_after_fee_edge"):
+        required_edge = (
+            max(config.number("min_after_fee_edge"), Decimal(".05"))
+            if is_map
+            else config.number("min_after_fee_edge")
+        )
+        if net_edge <= ZERO or net_edge < required_edge:
             continue
         cap = min(
             config.number("max_contracts"),
@@ -208,6 +281,7 @@ def plan_order(
     return {
         "alert": copy.deepcopy(alert),
         "environment": config.mode,
+        "series_id": alert["series_id"] if is_map else alert["event_ticker"],
         "client_order_id": client_id,
         "route": copy.deepcopy(route),
         "execution_probability": str(probability),
@@ -215,12 +289,20 @@ def plan_order(
         "sizing": {
             "method": "kelly-v1",
             "starting_bankroll_usd": str(config.number("starting_bankroll_usd")),
-            "kelly_fraction": str(config.number("kelly_fraction")),
+            "kelly_fraction": str(fraction),
             "held_before": str(held),
             "realized_before": str(realized),
             "bankroll_usd": str(capital),
             "effective_bankroll_usd": str(effective),
             "unit_cost_bound": str(price + unit_fee),
+            **(
+                {
+                    "map_held_before": str(account["map_held"]),
+                    "map_realized_before": str(account["map_realized"]),
+                }
+                if is_map
+                else {}
+            ),
             **sizing,
         },
         "request": {
@@ -367,7 +449,9 @@ def reconcile(row, api, ledger, pause=False):
     return True
 
 
-def run(alerts, config_provider, ledger, api_factory, now=None):
+def run(
+    alerts, config_provider, ledger, api_factory, now=None, *, reconcile_existing=True
+):
     """Run privately; return counters only, never credentials/account contents.
 
     `api_factory(environment)` loads that environment's own Secrets Manager key.
@@ -384,7 +468,7 @@ def run(alerts, config_provider, ledger, api_factory, now=None):
             apis[environment] = api_factory(environment)
         return apis[environment]
 
-    for row in ledger.pending():
+    for row in ledger.pending() if reconcile_existing else ():
         try:
             api = api_for(row["environment"])
             result["reconciled"] += int(
@@ -401,6 +485,11 @@ def run(alerts, config_provider, ledger, api_factory, now=None):
         reserved = None
         try:
             validate_alert(alert, config, now)
+            if (
+                alert.get("kind") == live_map.VERSION
+                and config.raw["live_maps"]["mode"] != "live"
+            ):
+                raise ValueError("live_maps_not_activated")
             if ledger.seen(alert, config.mode):
                 raise ValueError("duplicate_fixture_or_event")
             api = api_for(config.mode)
@@ -422,6 +511,29 @@ def run(alerts, config_provider, ledger, api_factory, now=None):
             validate_alert(alert, config, checked)
             account = ledger.get(config.mode, "ACCOUNT") or {}
             day = ledger.get(config.mode, f"DAY#{checked.date().isoformat()}") or {}
+            if alert.get("kind") == live_map.VERSION:
+                series = ledger.get(config.mode, f"SERIES#{alert['series_id']}")
+                if (
+                    series is None
+                    and ledger.get(config.mode, f"EVENT#{alert['series_id']}")
+                    is not None
+                ):
+                    raise ValueError("legacy_series_reservation_untracked")
+                series_cap = max(
+                    ZERO,
+                    config.number("starting_bankroll_usd")
+                    + decimal(account.get("realized", 0))
+                    - decimal(account.get("held", 0)),
+                ) * decimal(config.raw["live_maps"]["series_fraction"])
+                account = {
+                    **account,
+                    "series_available": series_cap
+                    - decimal((series or {}).get("held", 0)),
+                    **map_budget(config, ledger.get(config.mode, "LIVE_MAPS")),
+                }
+                reserve_config = Config.parse(
+                    {**reserve_config.raw, "live_series_cap_usd": str(series_cap)}
+                )
             plan = plan_order(
                 alert,
                 routes,

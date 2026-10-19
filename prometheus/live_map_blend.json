@@ -1,0 +1,82 @@
+{
+  "version": "live-map-30s-v1",
+  "market_input": "last_trade",
+  "series_shift": false,
+  "model_sha256": "1e6832a9d1a6a40287fe66199adc903d23b1f2f0aadb83deac478dfec875a1bc",
+  "input_sha256": "0705f02b1edf6df391809ba59a34ea4857fe2224757d7c509225e3875692422c",
+  "db_sha256": "ebb0e4628789ebc42ae982e4b370bc72c841416d6f891dace77102db3826f0d6",
+  "snapshots": [
+    {
+      "month": "2026-03",
+      "train_maps": 293,
+      "train_series": 151,
+      "latest_training_available": "2026-02-28T23:28:02.764000+00:00",
+      "market_weight": 0.1986837795949336,
+      "model_weight": 0.7220786322077143,
+      "market_only_weight": 0.96843560780857
+    },
+    {
+      "month": "2026-04",
+      "train_maps": 372,
+      "train_series": 185,
+      "latest_training_available": "2026-03-31T19:53:20.530000+00:00",
+      "market_weight": 0.213955496469426,
+      "model_weight": 0.7204553849558281,
+      "market_only_weight": 0.9716609678268775
+    },
+    {
+      "month": "2026-05",
+      "train_maps": 631,
+      "train_series": 330,
+      "latest_training_available": "2026-04-30T13:19:36.331000+00:00",
+      "market_weight": 0.31383767830951825,
+      "model_weight": 0.6982043696240835,
+      "market_only_weight": 1.0540058402466985
+    },
+    {
+      "month": "2026-06",
+      "train_maps": 879,
+      "train_series": 459,
+      "latest_training_available": "2026-05-31T22:33:27.200000+00:00",
+      "market_weight": 0.34295160547995207,
+      "model_weight": 0.6185866487306225,
+      "market_only_weight": 1.0069405159595934
+    },
+    {
+      "month": "2026-07",
+      "train_maps": 980,
+      "train_series": 500,
+      "latest_training_available": "2026-06-30T08:01:20.760000+00:00",
+      "market_weight": 0.3440878172805889,
+      "model_weight": 0.6223563934426284,
+      "market_only_weight": 1.0094602695524437
+    },
+    {
+      "month": "2026-08",
+      "train_maps": 1110,
+      "train_series": 565,
+      "latest_training_available": "2026-07-31T14:12:49.912000+00:00",
+      "market_weight": 0.34622996020632796,
+      "model_weight": 0.6148785094982484,
+      "market_only_weight": 1.001591173235064
+    },
+    {
+      "month": "2026-09",
+      "train_maps": 1459,
+      "train_series": 744,
+      "latest_training_available": "2026-08-31T23:25:25.468000+00:00",
+      "market_weight": 0.41252748675868217,
+      "model_weight": 0.5423792976373809,
+      "market_only_weight": 1.0
+    },
+    {
+      "month": "2026-10",
+      "train_maps": 1642,
+      "train_series": 806,
+      "latest_training_available": "2026-09-28T23:17:10.135000+00:00",
+      "market_weight": 0.4195301032454841,
+      "model_weight": 0.5261891005277941,
+      "market_only_weight": 0.9923845641304444
+    }
+  ]
+}
