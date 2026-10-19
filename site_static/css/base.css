@@ -275,7 +275,8 @@ html { scrollbar-color: var(--hairline) var(--paper); }
 .colophon a { color: var(--ink); }
 
 /* ---- Responsive ----------------------------------------------------- */
-/* Pages whose registers need the full measure set their notes below until 1280px. */
+/* Pages whose registers need the full measure (stats, teams, players, predictions)
+   set their notes below until 1280px. */
 @media (max-width: 1279px) {
   .spread--wide { grid-template-columns: minmax(0, 1fr); }
   .spread--wide .margin { position: static; max-height: none; overflow: visible; margin-top: 40px; max-width: 40rem; }
