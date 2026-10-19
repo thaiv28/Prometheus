@@ -441,7 +441,7 @@
 .register--fixtures tbody tr.fx:hover .fx-bar::before { background: var(--spot); }
 .register--fixtures tbody tr.fx--link { cursor: pointer; }
 .register--fixtures tbody tr.fx--link:hover td { background: var(--paper-wash); }
-.fx-bo, .fx-by { font-variant-caps: all-small-caps; letter-spacing: 0.05em; color: var(--ink-3); }
+.fx-bo { font-variant-caps: all-small-caps; letter-spacing: 0.05em; color: var(--ink-3); }
 .fx-game, .fx-market { color: var(--ink-2); }
 /* The market's chance for the first team: a small printed caret over the duel bar. */
 .fx-mkt {
@@ -449,7 +449,6 @@
   width: 7px; height: 5px; margin-left: -3.5px;
   background: var(--ink-2); clip-path: polygon(0 0, 100% 0, 50% 100%);
 }
-.fx-cross { font-style: italic; font-variant-caps: normal; letter-spacing: 0; }
 /* Results: the winner's name carries the weight; the figures still mark the favourite. */
 .register--results .fx-team.fx-fav { font-weight: 400; }
 .register--results .fx-team.fx-won { font-weight: 600; }
@@ -496,6 +495,7 @@
 .record-note { margin-top: 14px; }
 .register--edges tbody th { vertical-align: top; }
 .register--edges .edges-source { color: var(--ink-2); font-style: italic; }
+.register--edges tbody .edges-calls { white-space: normal; min-width: 7rem; max-width: 9rem; }
 .register--edges .edges-method { display: none; }
 .register.register--edges tbody tr:nth-child(5n):not(:last-child) td { border-bottom: 0; }
 .register--edges tr.edges-backtest:first-of-type > *, .register--edges tr:not(.edges-backtest) + tr.edges-backtest > td,

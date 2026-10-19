@@ -500,7 +500,7 @@ def test_fixture_row_and_register_carry_the_market_price():
         and 'href="https://kalshi.com/markets/kxlolgame/league-of-legends-game/kxlolgame-26oct041600t1gen"'
         in html
     )
-    assert ">Kalshi<" in html and ">Blend<" in html and 'colspan="12"' in html
+    assert ">Kalshi<" in html and ">Blend<" in html and 'colspan="11"' in html
     plain = predictions.fixture_row(_log()["soon"], set())
     assert "mkt1" not in plain
 
@@ -516,7 +516,12 @@ def test_predictions_and_home_render_fixtures(tmp_path, monkeypatch):
     assert 'data-start="2026-10-04T08:00Z"' in html and "Sunday 4 October" in html
     assert 'href="results/2026-09.html">September 2026' in html
     assert "3/4 fixtures rated." in html
-    assert 'href="alerts.html">Alert history</a>' in html
+    assert 'href="call-performance.html">Record</a>' in html
+    assert 'id="record-heading"' not in html
+    from prometheus.site.call_performance import render_call_performance
+
+    render_call_performance(_log(), view)
+    assert 'id="record-heading"' in (tmp_path / "call-performance.html").read_text()
     assert "Intervals from" not in html
     predictions.render_results(view)
     month = (tmp_path / "results" / "2026-09.html").read_text()
@@ -732,12 +737,15 @@ def test_live_pages_render_streams_and_fixtures(tmp_path, monkeypatch):
     predictions.render_live(view["home"])
     overview = (tmp_path / "live.html").read_text()
     html = (tmp_path / "watch.html").read_text()
-    for page in (overview, html):
-        assert 'aria-current="page">Live' in page
-        assert 'data-index="live/index.json"' in page
-        assert "register--fixtures" in page
-    assert 'id="matches"' in overview and "js/live_overview.js?v=" in overview
-    assert 'id="match-strip"' in html and 'href="live.html">All matches' in html
+    assert "url=predictions.html" in overview
+    assert 'aria-current="page">Predictions' in html
+    assert 'data-index="live/index.json"' in html
+    assert 'id="match-strip"' in html and 'href="predictions.html">All matches' in html
+    predictions.render_predictions(view, None)
+    merged = (tmp_path / "predictions.html").read_text()
+    assert 'id="live-overview"' in merged and "js/live_overview.js?v=" in merged
+    assert 'id="record-heading"' not in merged
+    assert 'id="upcoming-section"' in merged
     # Official streams first, then co-streams, each a choice in the picker.
     assert html.index('label="Official"') < html.index('label="Co-streams"')
     for s in site_config.LIVE_STREAMS:
@@ -749,7 +757,7 @@ def test_live_pages_render_streams_and_fixtures(tmp_path, monkeypatch):
     assert "WLDs" in next(s for s in streams if s["key"] == "riot-tw")["leagues"]
     predictions.render_live([])
     empty = (tmp_path / "live.html").read_text()
-    assert "None in the next four days." in empty
+    assert "url=predictions.html" in empty
     assert "js/predictions.js" not in empty
 
 
@@ -778,3 +786,32 @@ def test_live_demo_feed_matches_the_pages(tmp_path):
     assert first["game"]["teams"] == game["frames"][-1]["teams"]
     idle = demo.feed(SimpleNamespace(status="idle"), 1_800_000_000.0)
     assert idle == {"index.json": {**idle["index.json"], "matches": []}}
+
+
+def test_home_keeps_whole_utc_day_across_horizon_and_cap():
+    rows = [
+        {"day": "2026-10-07", "start": f"2026-10-07T{hour:02}:00Z"}
+        for hour in range(8, 16)
+    ] + [{"day": "2026-10-08", "start": "2026-10-08T08:00Z"}]
+    assert predictions._whole_days(rows, "2026-10-07T12:00Z", 6) == rows[:8]
+    assert predictions._whole_days(rows, "2026-10-08T12:00Z", 8) == rows[:8]
+
+
+def test_past_fixture_links_only_when_archive_matches():
+    now = datetime.datetime(2026, 10, 3, 12, tzinfo=datetime.UTC)
+    log = _log()
+    past_id = next(e["match_id"] for e in log.values() if e["start"] < "2026-10-01")
+    plain = predictions.predictions_view(log, set(), now)
+    linked = predictions.predictions_view(log, set(), now, {past_id: "series-id"})
+    assert "href" not in plain["months"][0]["days"][0]["rows"][0]
+    assert (
+        linked["months"][0]["days"][0]["rows"][0]["href"]
+        == "../live-results/series-id.html"
+    )
+    recent = predictions.predictions_view(
+        log,
+        set(),
+        datetime.datetime(2026, 9, 22, tzinfo=datetime.UTC),
+        {past_id: "series-id"},
+    )
+    assert recent["past"][0]["rows"][0]["href"] == "live-results/series-id.html"
