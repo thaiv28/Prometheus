@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — Live benchmark refresh: first CI runs, seed fix
+
+First dispatch of `live-bench.yml` failed: the hand seed was made with macOS `tar`, whose AppleDouble `._*.json` files broke JSON reads on Linux. Reseeded with `COPYFILE_DISABLE=1 tar --no-xattrs` (checked with Python `tarfile`: no metadata entries) and fixed the seed commands in `deployment.md`. Second run (39327787116) passed in 10 min: Riot's feed served the GitHub runner without refusals (14 new maps, 81 s), `--build-data` took 7.9 min (CPU-bound; it re-reduces every map, so it grows with the data), state synced to S3, and `live-bench-data-63ee7c2a…` (2.2 MB) cached: 1,772 maps / 823 series, up from 1,666 / 813. Limit: no PR has read the cached entry yet.
+
 ## 2026-10-19 — Weekly live benchmark data refresh in CI
 
 New `live-bench.yml` (Mondays, main only, read-only contents; commits nothing): restores the feed timelines and Kalshi tapes from `s3://…/prometheus/live-bench/`, collects new feed maps in four shards, runs `--build-data --refresh-markets`, syncs grown state back and saves `live-bench-data-<hash>` to the Actions cache. `benchmarks.yml` restores that one entry for both sides (in the markets dump key); the release pin stays as fallback. `feed_timelines.py schedule` stops paging at saved matches. Cost: state 7.4 MB + 56 MB compressed (13 s to tar locally); ~17 s a map, ~100 maps a week; no time added to publish, PR checks or hourly jobs. Checks: full suite 894 passed, 2 skipped; ruff; YAML parses. Limits: not yet run in CI (needs merge, S3 seed, a dispatch); Riot may refuse GitHub runners; CI build time unmeasured.
