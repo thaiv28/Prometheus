@@ -13,6 +13,9 @@ Forecast report/dumps and PR comparisons now resample whole series; dumps carry 
 ## 2026-10-19 — Elo/forecast review added to Future work
 
 Docs only, base `1057307`. Reviewed every Elo and forecast assumption against the code, the research reports and the literature (Glicko, TrueSkill 2, Elo++, dynamic Bradley-Terry, forecast combination). Added one ordered Future work item to `current_state.md`: evaluation rules (series-clustered bootstrap, non-inferiority for removals, minimum gain, forward holdout), call staleness, one rating scale with league offsets fixed at the source, fast/slow Elo in place of Form, and a dynamic Bradley-Terry ceiling. Checks: `pytest tests/test_steering.py`.
+## 2026-10-19 — Live benchmark refresh: first CI runs, seed fix
+
+First dispatch of `live-bench.yml` failed: the hand seed was made with macOS `tar`, whose AppleDouble `._*.json` files broke JSON reads on Linux. Reseeded with `COPYFILE_DISABLE=1 tar --no-xattrs` (checked with Python `tarfile`: no metadata entries) and fixed the seed commands in `deployment.md`. Second run (39327787116) passed in 10 min: Riot's feed served the GitHub runner without refusals (14 new maps, 81 s), `--build-data` took 7.9 min (CPU-bound; it re-reduces every map, so it grows with the data), state synced to S3, and `live-bench-data-63ee7c2a…` (2.2 MB) cached: 1,772 maps / 823 series, up from 1,666 / 813. Limit: no PR has read the cached entry yet.
 
 ## 2026-10-19 — Weekly live benchmark data refresh in CI
 
@@ -25,6 +28,9 @@ Branch `live-anchor`, base `b6e0b62`. Series pages showed the pre-series map cha
 ## 2026-10-19 — Live model: FORGE pregame, FORGE anchor, raw calibration tested
 
 `scripts/research/live_anchor.py` ([report](../research/live_anchor.md)); rule fixed before scoring; viewed test split. Pregame: displayed FORGE + series shift beats the benchmark's v1 t=0 call by −0.0111 (−0.0209 to −0.0019) on 1,271 priced maps; shift −0.0044, FORGE over shifted v1 −0.0066 (n.s.). Anchoring in-game calls on FORGE: +0.0023 (−0.0014 to +0.0060), 30+ min significantly worse: rejected. Dropping calibration: feed −0.0015 (−0.0030 to −0.0002) but live-benchmark 30 min +0.0030 (+0.0002 to +0.0055): rejected. No runtime, model or CI change; 37 s, local only. Limit: FORGE p is the backtest's (month-start ratings, out-of-year curves), covering 38% of pre-maps.
+## 2026-10-19 — Wide-register pages drop the margin below 1280px
+
+Base `20d6708` (main). Between 1001 and 1279px the margin narrowed the main column (629px at 1024), so registers scrolled: Predictions by up to 228px, Call performance 145, GLORY 133, players 151, FORGE/Elo/teams about 75. `spread--wide` (stat registers, team, player, Predictions, Call performance, results months) puts the notes under the main column below 1280px; entry pages switch to their inline contents there, and the game log's 1001–1280px squeeze is gone. Home, Props and the rest keep the margin. Checks: pytest; ruff; full build; no overflow at 1024/1152/1279/1440 on 13 pages; screenshots at 1152. Copy review: PASS (no copy change). Limit: at those widths a register's notes sit after it (GLORY: after 602 rows).
 
 ## 2026-10-19 — Merge Live into Predictions; props page fix
 
