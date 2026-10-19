@@ -247,6 +247,10 @@ retains it at shutdown, independent of the empty active index. Lifecycle derives
 from existing minute discovery calls; browsers read one additional small object
 per poll. Final untracking attempts one last settlement and snapshot.
 
+### Live-map rollout (2026-10-19)
+
+The signal queue lives in `ThaivPrometheusExecution` (infrastructure PR #20, deployed run `39302995292`): `LiveMapSignals` with `LiveMapSignalFailures` after 3 receives, triggering the runner. `ThaivPrometheusLive` (run `39303871780`) gives the worker SendMessage and PutObject on `prometheus/live-trading/signals/` and puts `LIVE_MAP_SIGNAL_ARGS` in its env file; it replaced the instance, so `LIVE_WORKER_INSTANCE_ID` is now `i-0fa62c744138f6b99`. `deploy/execution/live-map-transport.json` is superseded. Settings: global execution off (`39304284929`), `live_maps` saved with the queue ARN and `budget_usd` 15 (`39304408847`), global live again (`39304507815`, about 1.5 minutes off), live-map mode live (`39304611381`).
+
 ### Live-map executor package (2026-10-19)
 
 The executor zip includes stdlib `live/draft.py` only because `live/timeline.py`
