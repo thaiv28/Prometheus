@@ -2,6 +2,22 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — Fresh calls, part 4: browser rating overlays
+
+Added effective `player_rating`, build-matched `fresh.json` deltas (including idle players' league-offset moves), listed-player slug export and hourly upload with 30-second caching. Registers, head-to-head and home top tens apply current Elo/FORGE deltas; season rows and Form stay frozen. No new style; only added text is the results timestamp. Checks: pytest 950 passed, 2 skipped; 26 Node tests; ruff format/check; offline site build; built slug index, timestamps and script references; home DOM values/order/ranks/bars/captions; diff whitespace. Tech: 9,416 words. Reviewer: headless Chrome with a test overlay on Team/Player Elo, FORGE and home at 1440 and 390 px (re-rank, bars, head to head); moved the home captions' note before their trailing link. Copy review: PASS (registers, home captions; only "Results through …"). Limits: HTTP/S3 and Actions time unmeasured; team and player pages' fact lines and Elo history update only at builds.
+
+## 2026-10-19 — Fresh calls, part 3: hourly pages and live ratings
+
+Hourly/dispatched prices renders Predictions, monthly results and call performance after a successful log save, using published backtest/team/series artifacts; failed fetches publish nothing. Builds add `series-links.json`. Refresh exports shifted live inputs without overwriting the base; the worker checks every five minutes and adopts only newer inputs from the same publish. JSON prices cache for 30 seconds, rendered HTML for 60; alerts/props keep five minutes. Checks: pytest 941 passed, 2 skipped; ruff format/check; 23 JS tests; live shell syntax; doc word budgets and diff whitespace. Offline fixture render: 0.037 s; added HTTP/S3 and CI wall time unmeasured. Limits: not run in CI; Elo pages still update only at builds until the overlay lands. No templates, CSS, JS or page copy changed.
+
+## 2026-10-19 — Fresh calls, part 2: finished maps from the live worker; refreshed calls on the page
+
+Worker records each settled map in `maps.json` (winner, players from the collector's last frame, length only when `find_start` found the start and it is 15–75 minutes), uploads it, and dispatches `prices.yml` (5-minute debounce; token from SSM). The refresh adds worker maps (precedence: scoreboard, worker, schedule); worker league labels map to ours (`WLDs` → Worlds). `kalshi.json` carries each unstarted call, which `predictions.js` applies. Checks: pytest 926 passed, 2 skipped; JS tests 23 passed; ruff; `record_map` on the backed-up KC v MVK match (players exact; map 1 length dropped because the worker joined late); headless Chrome at 1440 and 390 px. Copy review: PASS (Predictions, home fixtures; only new text is the tooltip's "results through …"). Limits: dispatch needs the token, SSM grant and live-stack deploy; no live match run yet.
+
+## 2026-10-19 — Fresh calls, part 1: resume Elo with Leaguepedia results hourly
+
+`EloState` makes the replay resumable (rebuilt Elo tables identical row for row). Publish saves the state (3.1 MB, ~11 s); the hourly job's new step replays Leaguepedia games Oracle's Elixir lacks (each matched to an OE game of the same pair within 3 hours, or applied) and refreshes unstarted calls; Form stays frozen, `data_through` stays the OE date. Real run: 31 games applied, 37 known, 6 calls changed, 13 s. Justified by measured lag (+0.0039 series log loss a day); same-day games alone are within noise (−0.0010, −0.0024 to +0.0003) after fixing a leak in the first research run (own games dated before the start). Checks: pytest, ruff. Limits: not yet run in CI.
+
 ## 2026-10-19 — Weekly live benchmark data refresh in CI
 
 New `live-bench.yml` (Mondays, main only, read-only contents; commits nothing): restores the feed timelines and Kalshi tapes from `s3://…/prometheus/live-bench/`, collects new feed maps in four shards, runs `--build-data --refresh-markets`, syncs grown state back and saves `live-bench-data-<hash>` to the Actions cache. `benchmarks.yml` restores that one entry for both sides (in the markets dump key); the release pin stays as fallback. `feed_timelines.py schedule` stops paging at saved matches. Cost: state 7.4 MB + 56 MB compressed (13 s to tar locally); ~17 s a map, ~100 maps a week; no time added to publish, PR checks or hourly jobs. Checks: full suite 894 passed, 2 skipped; ruff; YAML parses. Limits: not yet run in CI (needs merge, S3 seed, a dispatch); Riot may refuse GitHub runners; CI build time unmeasured.
@@ -13,6 +29,7 @@ Branch `live-anchor`, base `b6e0b62`. Series pages showed the pre-series map cha
 ## 2026-10-19 — Live model: FORGE pregame, FORGE anchor, raw calibration tested
 
 `scripts/research/live_anchor.py` ([report](../research/live_anchor.md)); rule fixed before scoring; viewed test split. Pregame: displayed FORGE + series shift beats the benchmark's v1 t=0 call by −0.0111 (−0.0209 to −0.0019) on 1,271 priced maps; shift −0.0044, FORGE over shifted v1 −0.0066 (n.s.). Anchoring in-game calls on FORGE: +0.0023 (−0.0014 to +0.0060), 30+ min significantly worse: rejected. Dropping calibration: feed −0.0015 (−0.0030 to −0.0002) but live-benchmark 30 min +0.0030 (+0.0002 to +0.0055): rejected. No runtime, model or CI change; 37 s, local only. Limit: FORGE p is the backtest's (month-start ratings, out-of-year curves), covering 38% of pre-maps.
+
 ## 2026-10-19 — Merge Live into Predictions; props page fix
 
 Base `fd8120c`; Codex via delegate. Predictions now holds Live now, Coming up and 7 days of results, linked to live series pages when recorded. `live.html` and `live-results/<month>` redirect. Record and Kalshi tables moved to Call performance. Home and watch fixtures keep whole UTC days (`_whole_days`). The header marks Predictions with a red dot while a match is live (not if the index is 10+ minutes old). Dropped the fixtures "By" column (in the tooltip) and live towers/dragons/barons. Props: NaN `p_side` crashed the page silently; page failures now fail the build.
@@ -30,46 +47,3 @@ RD's information term now uses the game's update slope (.0065 in non-major domes
 Also tested, not adopted (reports in `docs/research/`; scripts on their branches): Glicko-2 volatility (τ has no effect; reduces to the shipped RD, +46% replay), g(RD) in forecasts (≈1e-5), league-offset RD (cross-league −0.0002, other leagues +0.00002), no move-down bonus (cross-league +0.0052), no regional calibration (cross-league +0.0015).
 
 Checks: DB rebuilt, pytest, ruff, `evaluate_metrics.py --write-weights`, `evaluate_markets.py --offline --dump`, `compare_benchmarks.py`.
-
-## 2026-10-19 — Simplify the Elo engine
-
-Removed inactive and rejected options, legacy constants and their tests; kept the log rookie discount, stored move-down bonus, RD and non-major slope. RD now takes (new, floor, growth); bootstrap accepts research overrides. Eight historical research scripts frozen at 00237c0. Added the existing win-share report and its not-adopted index entry. Checks: DB rebuilt; the three Elo tables match main row for row (max |Δ| 0.0); pytest 886 passed, 2 skipped; ruff clean.
-
-## 2026-10-19 — Remove draft v2 from map trading; add a $15 live-map budget
-
-User asked to drop draft v2 (no trading gain; FST significantly worse) and cap live-map trading at $15. The draft route is gone from `live_map.py`, `live/signals.py`, `pyproject.toml` and the README; `live_map_draft_blend.json` deleted; the executor zip, release hash and publish filter drop the draft model and blend but keep `live/draft.py` (imported by `live/timeline.py`). New required `live_maps.budget_usd` for shadow and live map modes: the ledger's `LIVE_MAPS` row tracks held cost and realized profit, and a map order is capped at budget + realized − held, reserved in the same transaction as ACCOUNT. Loss can't exceed the budget; profit extends it; pregame unaffected. Docs suggest `"budget_usd": "15"`; nothing configured in AWS. Checks: 862 passed, 2 skipped; two budget tests fail with their guards removed; ruff; `package.sh` builds without draft files. Limit: the shared 1%/2% caps (about $0.50 a map) still apply; not deployed.
-
-## 2026-10-19 — Review draft v2 for the 30-second trading blend
-
-User asked to merge and activate PR #92's draft model only if benchmarks improved. Integrated main `bc02c4e` into `live-map-trading`; signals used the frozen ready draft with separate earlier-only monthly fits, and absent or conflicting drafts kept the original inference. Fixed, untuned comparison (1,352 maps, 655 series): log loss −0.00133 (−0.00437 to +0.00174); FST significantly worse, +0.02692 (+0.01188 to +0.04563); flat ROI +18.74% vs original +21.05%. Gate FAIL: no merge, deploy or activation; evidence in `docs/research/live_map_draft_trading.md`. Checks: 873 passed, 2 skipped (signing tests pass with pinned cryptography); ruff; 110 links; runtime blend matches the replay within 1.12e-16; package SHA256 `ac8c5a02…`. No UI or CI change.
-
-## 2026-10-19 — Cut agents' token use: lean AGENTS.md, rotating log, doc budgets
-
-Branch `token-diet`, base `b0acbac` (main). Docs and tooling only; no metric, build or CI change.
-- `AGENTS.md` 4.1k → 2.3k words: read only the docs a change touches and the newest 5 log entries (`scripts/work_log.py recent 5`). Layout, metric change rules and benchmark commands moved to `tech.md`.
-- `tech.md` 17.1k → 8.9k words (Codex, via the delegate skill): history and research cut to pointers.
-- `.githooks/pre-commit` runs `work_log.py rotate`: past 15 entries, the newest 10 stay. Moved 68; no heading or line lost.
-- Kept entries shortened to 150 words (originals at `b0acbac`); main's six from PR #94 too.
-- `test_steering.py`: word budgets for changed steering docs and new entries.
-
-Checks: pytest 794 passed, 2 skipped; ruff; `git diff --check`. Hook not yet run on a real commit.
-
-## 2026-10-19 — Ship Glicko-1-style player RD and non-major update slope in Elo
-
-Branch `elo-glicko-scale` (PR #96). Each player's move scales by RD²/floor² (`PLAYER_RD=(280,140,140,10)`, information .125), replacing the provisional and time-away factors; non-major domestic games update on slope .0065 (majors, international unchanged; K 20). `LEGACY_ELO` keeps the old Elo for research. Refit FORGE, Form and league-curve weights; reports regenerated.
-
-Paired `evaluate_metrics.py` (CI and local agree): domestic Elo −0.0009, cross-league −0.0015, other-league Elo −0.0024 and FORGE −0.0009, all significant; domestic and international FORGE within noise. Markets: series log loss vs Kalshi −0.0030 (−0.0053 to −0.0007). Elo replay 5.5 → 6.5 s (DB build, cache misses only).
-
-Checks: pytest, ruff, DB rebuild, site build, CI benchmarks pass. Not refit: regional calibration, market blend, props weights, live models (CI benchmarks within noise).
-
-## 2026-10-19 — Elo research: rating uncertainty, update slope, joint tune
-
-Reports: `elo_glicko.md`, `elo_fitted_scale.md`, `elo_glicko_scale.md`. Player RD v1 tied settled players to K ≈ 9 (flawed grid, kept as `elo_glicko_v1.md`); v2 (reference = floor) gained in other leagues. A uniform update slope hurt domestic FORGE; non-major-only passed. Jointly tuned through 2021, held out 2022+: combined vs published other-league Elo −0.0033, FORGE −0.0014, cross-league −0.0028. The joint script's verdict flagged a nine-game international roster-change slice; overruled as too few games (main sections pass). Player win share: not adopted (archive entry).
-
-## 2026-10-19 — Future work: player win share and Elo rating model
-
-Branch `future-win-share`, based on `b0acbac` (main). Documentation only: added two Future work items to `docs/steering/current_state.md`: splitting Elo changes among starters by their share of an in-game lead (gold difference at 15/20 minutes or similar), and the Elo rating model (expected score on the fitted slope with K retuned; Glicko-2-style uncertainty; later TrueSkill Through Time or dynamic Bradley-Terry). No code changed; no checks beyond reading the rendered Markdown.
-
-## 2026-10-18 — Prepare API draft v2 as a private live candidate
-
-Branch `live-draft-v2` (PR #92), base `f999333`, updated with main `b0acbac`. `live.draft` resolves all ten Riot participants to OE players by role, side, champion and exact names (team-scoped first; no fuzzy matching); failures fall back to the current model. The first valid receipt freezes the draft shift, later conflicts stop its use, and the context persists across restarts. One read-only SQL pass exports the v2 histories (earlier UTC days) in the daily ratings artifact (about 12 s more on main's export, 18 MB); the worker reads no DB. `time_model_draft_v2.json` runs as a private shadow (`calls.jsonl`); public calls unchanged. `evaluate_live.py --model` and `prepare_draft_benchmark.py` replay it. Checks: 20-map API sample, 17 resolved; features reproduce within 4.4e-14; 822 passed, 2 skipped; ruff; CI passed on PR #92; replay +4 ms per map. Limit: availability timing is a proxy; upload and reload timing unmeasured.

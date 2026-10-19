@@ -40,7 +40,8 @@ HOURLY_FILES = ("kalshi.json", "predictions.json", "props-lines.json", "alerts.h
 # Written every few seconds by the live worker (prometheus/live/service.py), never
 # by the build: deploys leave it alone, even when output/ holds a local copy.
 LIVE_DIR = "live"
-HOURLY_CACHE_CONTROL = "max-age=300"
+HOURLY_CACHE_CONTROL = "max-age=30"
+OTHER_HOURLY_CACHE_CONTROL = "max-age=300"
 LONG_CACHE = {
     ".css": "public, max-age=31536000, immutable",
     ".js": "public, max-age=31536000, immutable",
@@ -155,7 +156,9 @@ def upload_hourly_files(output, bucket, dry_run):
                 if name.endswith(".html")
                 else "application/json",
                 "--cache-control",
-                HOURLY_CACHE_CONTROL,
+                HOURLY_CACHE_CONTROL
+                if name in ("kalshi.json", "predictions.json")
+                else OTHER_HOURLY_CACHE_CONTROL,
                 dry_run=dry_run,
             )
 

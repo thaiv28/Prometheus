@@ -96,6 +96,7 @@ def player_pages_and_rows(history, latest, seasons):
         df = df.assign(
             slug=df["playerid"].map(slugs),
             elo=df["elo"].round(),
+            raw_elo=df["elo"],
             now=is_now,
             active=True,
         )
@@ -103,6 +104,7 @@ def player_pages_and_rows(history, latest, seasons):
             df["active"] = pd.to_datetime(df["latest_date"]) >= newest - ACTIVE_WINDOW
             df["year"] = pd.to_datetime(df["latest_date"]).dt.year
         cols = [
+            "raw_elo",
             "slug",
             "playername",
             "position",

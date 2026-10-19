@@ -59,6 +59,8 @@ def forecast_records(now, seasons, rating_cols):
             r["active"] = bool(r.get("active", True))
             r["latest_date"] = str(r["latest_date"])[:10]
             for col in rating_cols:
+                if is_now and col in {"elo", "forge"}:
+                    r["raw_" + col] = float(r[col])
                 r[col] = round(float(r[col]), 1)
             rows.append(r)
     return rows
@@ -76,7 +78,12 @@ def _rating_bar(values):
     of Elo points around every value in its register."""
     lo = np.floor(values.min() / 100) * 100
     hi = np.ceil(values.max() / 100) * 100
-    return lambda v: round(float((v - lo) / (hi - lo) * 100), 1)
+
+    def bar(v):
+        return round(float((v - lo) / (hi - lo) * 100), 1)
+
+    bar.domain = [float(lo), float(hi)]
+    return bar
 
 
 def render_index(
@@ -98,7 +105,10 @@ def render_index(
         df = pd.DataFrame(rows)
         bar = _rating_bar(df[value_key])
         df = df[df["active"]].sort_values(value_key, ascending=False).head(HOME_TOP)
-        return [{**r, "bar": bar(r[value_key])} for r in df.to_dict(orient="records")]
+        return [
+            {**r, "bar": bar(r[value_key]), "domain": bar.domain}
+            for r in df.to_dict(orient="records")
+        ]
 
     forge_now = [r for r in forge_rows if r["now"]]
     write(
@@ -123,6 +133,8 @@ def render_index(
 
 
 def render_rankings_page(metric, rows, config, filters):
+    if config.get("valueKey") in {"elo", "forge"}:
+        config = {**config, "dataThrough": env.globals.get("elo_data_through")}
     write(
         os.path.join(site_config.OUTPUT_DIR, f"{metric['key']}.html"),
         env.get_template("rankings.html.j2").render(

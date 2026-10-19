@@ -52,6 +52,20 @@ jobs:
       - name: Restore the prediction log
         if: steps.busy.outputs.busy == 'false'
         run: bash scripts/prediction_log.sh restore
+      - name: Refresh calls with the newest results
+        if: steps.busy.outputs.busy == 'false'
+        continue-on-error: true
+        env:
+          LEAGUEPEDIA_USER: ${{ secrets.LEAGUEPEDIA_USER }}
+          LEAGUEPEDIA_PASSWORD: ${{ secrets.LEAGUEPEDIA_PASSWORD }}
+        run: |
+          aws s3 cp "s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/live-inputs/live_inputs.json" "$RUNNER_TEMP/live_inputs.json" --only-show-errors
+          aws s3 cp "s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/live-inputs/elo_state.json.gz" "$RUNNER_TEMP/elo_state.json.gz" --only-show-errors
+          aws s3 sync "s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/live/" "$RUNNER_TEMP/live_maps" --exclude '*' --include '*/maps.json' --only-show-errors || true
+          uv run python scripts/refresh_calls.py --log data/predictions.json --inputs "$RUNNER_TEMP/live_inputs.json" --state "$RUNNER_TEMP/elo_state.json.gz" --worker-maps "$RUNNER_TEMP/live_maps" --live-out "$RUNNER_TEMP/live_inputs_fresh.json" --summary "$RUNNER_TEMP/refresh_summary.json" --site-out "$RUNNER_TEMP/fresh.json"
+          if [[ -f "$RUNNER_TEMP/live_inputs_fresh.json" ]]; then
+            aws s3 cp "$RUNNER_TEMP/live_inputs_fresh.json" "s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/live-inputs/live_inputs_fresh.json" --only-show-errors
+          fi
       # The live worker powers off between match days; start it ahead of any
       # match the live feed carries (scripts/live_wake.py). Never blocks prices.
       - name: Wake the live worker
@@ -69,16 +83,28 @@ jobs:
         id: save_prediction_log
         if: steps.busy.outputs.busy == 'false'
         run: bash scripts/prediction_log.sh save --if-unchanged
-      # No CloudFront invalidation (an hourly one would pass the free 1,000 paths a
-      # month): max-age=300 lets the edge serve the new files within 5 minutes.
+      - name: Render Predictions pages
+        if: steps.busy.outputs.busy == 'false' && steps.save_prediction_log.outputs.saved == 'true' && env.BUCKET != ''
+        run: uv run python scripts/render_predictions.py --log data/predictions.json --out output-prices/site --summary "$RUNNER_TEMP/refresh_summary.json"
+      - name: Publish Predictions pages
+        if: steps.busy.outputs.busy == 'false' && steps.save_prediction_log.outputs.saved == 'true' && env.BUCKET != ''
+        run: |
+          if [[ -d output-prices/site ]]; then
+            aws s3 cp --recursive output-prices/site "s3://$BUCKET/current/" --cache-control "max-age=60" --content-type "text/html; charset=utf-8" --only-show-errors
+          fi
+      # No CloudFront invalidation: JSON prices expire after 30 seconds.
       - name: Publish prices to the site
         if: steps.busy.outputs.busy == 'false' && steps.save_prediction_log.outputs.saved == 'true' && env.BUCKET != ''
         run: |
+          if [[ -f "$RUNNER_TEMP/fresh.json" ]]; then
+            aws s3 cp "$RUNNER_TEMP/fresh.json" "s3://$BUCKET/current/fresh.json" --only-show-errors --content-type application/json --cache-control "max-age=30"
+          fi
           for f in kalshi.json predictions.json alerts.html; do
             content_type=application/json
-            if [[ "$f" == *.html ]]; then content_type="text/html; charset=utf-8"; fi
+            cache_control=max-age=30
+            if [[ "$f" == *.html ]]; then content_type="text/html; charset=utf-8"; cache_control=max-age=300; fi
             aws s3 cp "output-prices/$f" "s3://$BUCKET/current/$f" --only-show-errors \
-              --content-type "$content_type" --cache-control "max-age=300"
+              --content-type "$content_type" --cache-control "$cache_control"
           done
       - name: Post the Kalshi alert
         if: steps.busy.outputs.busy == 'false' && steps.save_prediction_log.outputs.saved == 'true' && hashFiles('data/kalshi_alert.json') != ''
@@ -127,7 +153,7 @@ jobs:
           uv run --no-dev python scripts/update_props.py --dist data/props-dist.json --out output-props
       - name: Save the props calls
         run: bash scripts/prop_data.sh save data/prop_calls.json "$PROP_CALLS_BACKUP"
-      # Same 5-minute edge cache as kalshi.json (no invalidation).
+      # Five-minute edge cache (no invalidation).
       - name: Publish the lines to the site
         if: env.BUCKET != '' && hashFiles('output-props/props-lines.json') != ''
         run: |

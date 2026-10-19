@@ -82,6 +82,36 @@
       $$("tr.fx[data-match]").forEach((tr) => {
         const m = data.matches[tr.dataset.match];
         if (!m) return;
+        if (m.ours && !tr.classList.contains("fx-started")) {
+          const s1 = m.ours.s1;
+          const s2 = 100 - s1;
+          const g2 = 100 - m.ours.g1;
+          const bar = $(".fx-bar", tr);
+          if (bar) bar.style.setProperty("--p", s1);
+          const pct = $$(".fx-pct", tr);
+          if (pct.length === 2) {
+            pct[0].textContent = s1;
+            pct[1].textContent = s2;
+          }
+          const teams = $$(".fx-team", tr);
+          [teams[0], teams[1], pct[0], pct[1]].forEach((el, i) => {
+            if (!el) return;
+            el.classList.remove("fx-fav", "fx-dog");
+            if (s1 > 50) el.classList.add(i % 2 === 0 ? "fx-fav" : "fx-dog");
+            else if (s1 < 50) el.classList.add(i % 2 === 0 ? "fx-dog" : "fx-fav");
+          });
+          const game = $(".fx-game", tr);
+          if (game && !$(".muted", game)) game.textContent = `${m.ours.g1}–${g2}`;
+          if (m.ours.through && bar) {
+            const col = bar.parentElement;
+            const kalshi = col.title.indexOf("; Kalshi");
+            const base = kalshi === -1 ? col.title : col.title.slice(0, kalshi);
+            const suffix = `; results through ${stamp(m.ours.through)}`;
+            col.title = `${base.replace(/; results through .*$/, "")}${suffix}${kalshi === -1 ? "" : col.title.slice(kalshi)}`;
+          }
+        }
+        // A match with only a refreshed call has no market to show.
+        if (m.p1 == null) return;
         const trade = $(".fx-trade", tr);
         if (trade) {
           trade.textContent = m.trading ? `${m.trading.p1}–${m.trading.p2}` : "—";
