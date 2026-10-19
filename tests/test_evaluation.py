@@ -257,3 +257,39 @@ def test_ece_weights_each_bin_by_its_share_of_rows():
 def test_interval_is_the_middle_95_percent():
     lo, hi = evaluation.interval(np.arange(1001))
     assert (lo, hi) == (25.0, 975.0)
+
+
+def test_series_ids_pair_gaps_symmetry_and_input_order():
+    dates = [
+        "2026-01-02 02:01",
+        "2026-01-01 00:00",
+        "2026-01-01 01:00",
+        "2026-01-01 12:00",
+        "2026-01-01 14:00",
+        "2026-01-01 02:00",
+    ]
+    teams = ["b", "a", "c", "b", "a", "d"]
+    opponents = ["a", "b", "d", "a", "b", "c"]
+    expected = ["a|b|1", "a|b|0", "c|d|0", "a|b|0", "a|b|0", "c|d|0"]
+    assert evaluation.series_ids(dates, teams, opponents).tolist() == expected
+    assert evaluation.series_ids(dates, opponents, teams).tolist() == expected
+
+
+def test_cluster_bootstrap_unique_labels_preserve_draws():
+    a = np.random.default_rng(1).normal(size=20)
+    assert paired_bootstrap(a, np.zeros(20)) == paired_bootstrap(
+        a, np.zeros(20), clusters=[f"s{i}" for i in range(20)]
+    )
+
+
+def test_cluster_bootstrap_draws_whole_unequal_clusters():
+    diff = np.array([-1.0, -1.0, 2.0])
+    # Check deterministic cluster-weighted means without depending on CI width.
+    actual = paired_bootstrap(
+        diff, np.zeros(3), n_resamples=200, clusters=["a", "a", "b"]
+    )
+    means = [
+        np.array([-2.0, 2.0])[pick].sum() / np.array([2, 1])[pick].sum()
+        for pick in evaluation.resamples(2, 200)
+    ]
+    assert actual == (diff.mean(), *evaluation.interval(means))

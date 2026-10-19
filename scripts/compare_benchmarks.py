@@ -7,7 +7,7 @@ team-seasons, player-seasons) and reports each headline difference with a 95%
 paired-bootstrap interval:
 
 - Forecasts: log loss per section and forecast, head minus base
-  (`evaluation.paired_bootstrap` over games).
+  (`evaluation.paired_bootstrap` over series).
 - Season stats: split-half reliability and r with the other half's win %, head
   minus base (resampling team-seasons).
 - AURA (held-out check): split-half r, new-team r and roster r, head minus base,
@@ -41,7 +41,7 @@ import traceback
 import numpy as np
 import pandas as pd
 
-from prometheus import schedule
+from prometheus import evaluation, schedule
 from prometheus.evaluation import (
     ece,
     game_losses,
@@ -177,19 +177,47 @@ def compare_forecasts(base, head, n_resamples=N_RESAMPLES):
         if both.empty:
             rows.append(_missing(section, forecast, guarded, only))
             continue
-        b, h = both["log_loss_base"].to_numpy(), both["log_loss_head"].to_numpy()
-        rows.append(
-            _row(
-                section,
-                f"{forecast} log loss ({len(both):,} games)",
-                b.mean(),
-                h.mean(),
-                paired_bootstrap(h, b, n_resamples=n_resamples),
-                True,
-                guarded,
-                only,
+
+        def column(name, both=both):
+            return next(
+                (both[c] for c in (f"{name}_head", name, f"{name}_base") if c in both),
+                None,
             )
-        )
+
+        clusters = column("series")
+        dates = column("date")
+        slices = [(np.ones(len(both), dtype=bool), "", guarded, only)]
+        if dates is not None:
+            forward = dates.astype(str).str[:10] >= evaluation.FORWARD_START
+            if forward.any():
+                slices.append(
+                    (
+                        forward,
+                        f", forward from {evaluation.FORWARD_START}",
+                        False,
+                        (0, 0),
+                    )
+                )
+        for mask, suffix, guard, unmatched in slices:
+            b = both.loc[mask, "log_loss_base"].to_numpy()
+            h = both.loc[mask, "log_loss_head"].to_numpy()
+            rows.append(
+                _row(
+                    section,
+                    f"{forecast} log loss{suffix} ({len(b):,} games)",
+                    b.mean(),
+                    h.mean(),
+                    paired_bootstrap(
+                        h,
+                        b,
+                        n_resamples=n_resamples,
+                        clusters=None if clusters is None else clusters[mask],
+                    ),
+                    True,
+                    guard,
+                    unmatched,
+                )
+            )
     return rows
 
 
