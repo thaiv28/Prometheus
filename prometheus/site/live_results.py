@@ -16,12 +16,11 @@ from prometheus.live.series import map_prior, series_chance
 from prometheus.schedule import series_rho
 from prometheus.site import config as site_config
 from prometheus.site.predictions import _by_day, fixture_row
-from prometheus.site.render import env, write
+from prometheus.site.render import env, render_redirect, write
 
 # How far a live match's first map may be from the logged start (Leaguepedia's
 # and Kalshi's times can be hours off when a day runs early or late).
 MATCH_WINDOW = datetime.timedelta(hours=12)
-RECENT_DAYS = 7  # Live's Table III
 
 # The figure, in SVG units (scaled to the column's width).
 W, PAD_L, PAD_R = 480, 26, 8
@@ -295,6 +294,7 @@ def series_view(log, archive, team_slugs, now=None):
         out.append(
             {
                 "id": match_id,
+                "match_id": entry["match_id"] if entry else None,
                 "row": row,
                 "names": names,
                 "maps": map_rows,
@@ -327,17 +327,6 @@ def month_views(series):
     return out
 
 
-def recent(series, now):
-    """Live's Table III: the last week's series, linked to their pages."""
-    since = (now - datetime.timedelta(days=RECENT_DAYS)).strftime("%Y-%m-%dT%H:%MZ")
-    rows = []
-    for s in series:
-        if s["row"]["start"] < since:
-            break
-        rows.append(dict(s["row"], href=f"live-results/{s['id']}.html"))
-    return _by_day(rows)
-
-
 def render_live_results(months):
     """live-results/<month>.html (the month's series, each row opening its
     page, with links to the months either side) and live-results/<match>.html
@@ -346,18 +335,9 @@ def render_live_results(months):
         return
     folder = os.path.join(site_config.OUTPUT_DIR, "live-results")
     os.makedirs(folder, exist_ok=True)
-    template = env.get_template("live_results.html.j2")
-    for i, month in enumerate(months):
-        write(
-            os.path.join(folder, f"{month['key']}.html"),
-            template.render(
-                page_key="live",
-                root_path="../",
-                metric=site_config.LIVE,
-                month=month,
-                newer=months[i - 1] if i > 0 else None,
-                older=months[i + 1] if i + 1 < len(months) else None,
-            ),
+    for month in months:
+        render_redirect(
+            f"live-results/{month['key']}", f"../results/{month['key']}.html", "Results"
         )
     series_template = env.get_template("live_series.html.j2")
     labels = {m["key"]: m["label"] for m in months}
@@ -366,7 +346,7 @@ def render_live_results(months):
             write(
                 os.path.join(folder, f"{s['id']}.html"),
                 series_template.render(
-                    page_key="live",
+                    page_key="predictions",
                     root_path="../",
                     metric=site_config.LIVE,
                     s=s,

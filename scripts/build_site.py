@@ -344,20 +344,17 @@ def predictions_pages(fc: Forecasts, teams) -> dict:
         },
         ensure_ascii=False,
     )
-    predictions = predictions_view(backtest_log, teams, now)
+    archive = live_results.load_archive()
+    series = live_results.series_view(log, archive, teams)
+    series_links = {s["match_id"]: s["id"] for s in series if s["match_id"] is not None}
+    predictions = predictions_view(backtest_log, teams, now, series_links=series_links)
     render_predictions(predictions, fc.coverage)
     render_results(predictions)
     render_call_performance(backtest_log, predictions)
     render_alert_history(log, now)
-    archive = live_results.load_archive()
-    series = live_results.series_view(log, archive, teams)
     live_months = live_results.month_views(series)
     live_results.render_live_results(live_months)
-    render_live(
-        predictions["home"],
-        live_results.recent(series, now) if archive else None,
-        live_months,
-    )
+    render_live(predictions["home"])
     write_json("predictions.json", markets.published_log(log), ensure_ascii=False)
     # The hourly price job (scripts/update_prices.py) replaces this between builds.
     write_json("kalshi.json", markets.prices_file(log, now))
@@ -367,18 +364,14 @@ def predictions_pages(fc: Forecasts, teams) -> dict:
 def props_page(fc: Forecasts, teams, pl) -> None:
     """The Props page: projections for the coming matches against the pick'em
     lines read by scripts/collect_props.py, from the player tables the build has
-    already read. A failure leaves the page out rather than stopping the build."""
-    try:
-        view = build_props(
-            props.games_from_tables(pl.tables),
-            fc.prediction_log,
-            fc.latest_elos,
-            teams,
-            pl.slugs,
-        )
-    except Exception as err:
-        print(f"::warning::Props page skipped: {err}")
-        return
+    already read. A failure stops the build, so a broken page never ships."""
+    view = build_props(
+        props.games_from_tables(pl.tables),
+        fc.prediction_log,
+        fc.latest_elos,
+        teams,
+        pl.slugs,
+    )
     render_props(view)
     print(
         f"Props: {len(view['matches'])} matches, {view['lines_total']} lines, {view['settled']} settled"

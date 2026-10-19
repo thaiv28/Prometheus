@@ -320,6 +320,7 @@ class SeriesTest(unittest.TestCase):
         (s,) = live_results.series_view(far, archive, set())
         self.assertEqual(s["names"], ["Karmine Corp", "MVK Esports"])
         self.assertNotIn("score", s["row"])
+        self.assertIsNone(s["match_id"])
         # Without a logged call the figure starts from the map file's.
         self.assertAlmostEqual(s["maps"][1]["figure"]["trace"]["calls"][0][1], 0.7)
 
@@ -327,20 +328,19 @@ class SeriesTest(unittest.TestCase):
         archive = self.archive()
         series = live_results.series_view({"a": entry()}, archive, set())
         months = live_results.month_views(series)
-        now = datetime.datetime(2026, 10, 17, tzinfo=datetime.UTC)
-        recent = live_results.recent(series, now)
-        self.assertEqual(recent[0]["rows"][0]["href"], "live-results/m1.html")
+        self.assertEqual(series[0]["match_id"], entry()["match_id"])
         with tempfile.TemporaryDirectory() as d:
             with mock.patch.object(site_config, "OUTPUT_DIR", d):
                 live_results.render_live_results(months)
             month = (Path(d) / "live-results" / "2026-10.html").read_text()
             page = (Path(d) / "live-results" / "m1.html").read_text()
-        # The month lists the series, each row opening its own page.
-        self.assertIn('data-href="m1.html"', month)
+        # The former monthly index redirects; the series retains its maps.
+        self.assertIn("url=../results/2026-10.html", month)
+        self.assertIn("/results/2026-10.html", month)
         self.assertNotIn('class="ours"', month)
         self.assertIn('class="ours"', page)
         self.assertIn("Not recorded: maps 1, 3.", page)
-        self.assertIn('href="2026-10.html"', page)
+        self.assertIn('href="../results/2026-10.html"', page)
         self.assertIn("data-trace=", page)
         self.assertIn("live_results.js", page)
 

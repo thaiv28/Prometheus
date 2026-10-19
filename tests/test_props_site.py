@@ -227,3 +227,11 @@ def test_lines_payload_keeps_the_standard_line_first():
         "PrizePicks",
         True,
     )
+
+
+def test_result_rows_line_without_a_pick():
+    # A settled line we made no pick on carries NaN after the frame merge.
+    df = _settled()
+    df.loc[0, ["side", "p_side"]] = [float("nan"), float("nan")]
+    cells = site_props.result_rows(df, {})[0]["cells"]
+    assert cells["underdog"]["p_side"] is None and cells["underdog"]["call"] is None

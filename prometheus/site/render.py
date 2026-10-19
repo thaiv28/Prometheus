@@ -4,6 +4,7 @@ import datetime
 import functools
 import hashlib
 import os
+import posixpath
 import re
 import shutil
 from pathlib import Path
@@ -116,10 +117,20 @@ def render_market_blend():
 
 def render_redirect(key, target, title):
     """A retired page that sends visitors (and search engines) to its replacement."""
+    os.makedirs(
+        os.path.dirname(os.path.join(site_config.OUTPUT_DIR, f"{key}.html")),
+        exist_ok=True,
+    )
     write(
         os.path.join(site_config.OUTPUT_DIR, f"{key}.html"),
         env.get_template("redirect.html.j2").render(
-            page_key=key, root_path="", target=target, title=title
+            page_key=key,
+            root_path="../" * key.count("/"),
+            target=target,
+            title=title,
+            canonical_target=posixpath.normpath(
+                posixpath.join(posixpath.dirname(key), target)
+            ),
         ),
     )
 

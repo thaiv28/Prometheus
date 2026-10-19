@@ -145,18 +145,17 @@
 .lm-p { width: 2.5rem; color: var(--ink-3); }
 .lm-p.fav { color: var(--ink); font-weight: 600; }
 .lm-p--2 { text-align: left; }
-.lm-bar-col { width: 7rem; min-width: 7rem; padding-left: 2px; padding-right: 2px; }
+.lm-bar-col { width: 5.5rem; min-width: 5.5rem; padding-left: 2px; padding-right: 2px; }
 .lm-kalshi { color: var(--ink-2); }
 .lm-stat { color: var(--ink-2); }
 .register--matches th.lm-chance-head { text-align: center; }
-.live-idle .block-head { justify-content: flex-start; gap: 8px 28px; }
 .register--matches .lm-line { display: none; }
+.live-idle .block-head { justify-content: flex-start; gap: 8px 28px; }
 .lm-k { font-variant-caps: all-small-caps; letter-spacing: 0.05em; color: var(--ink-3); }
 .register--matches .th-short { display: none; text-decoration: none; }
-/* With less room: drop towers, dragons and barons, then fold the figures under the match. */
-@media (max-width: 1100px) {
-  .register--matches .lm-wide { display: none; }
-}
+/* The Predictions column has no room for towers, dragons and barons (the watch
+   page has them); phones fold the figures under the match. */
+.register--matches .lm-wide { display: none; }
 @media (max-width: 720px) {
   .register--matches .lm-stat, .register--matches .lm-opt, .register--matches .lm-go { display: none; }
   .register--matches .lm-line { display: table-row; }
