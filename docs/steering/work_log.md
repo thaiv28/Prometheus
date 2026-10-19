@@ -18,6 +18,10 @@ Worker records each settled map in `maps.json` (winner, players from the collect
 
 `EloState` makes the replay resumable (rebuilt Elo tables identical row for row). Publish saves the state (3.1 MB, ~11 s); the hourly job's new step replays Leaguepedia games Oracle's Elixir lacks (each matched to an OE game of the same pair within 3 hours, or applied) and refreshes unstarted calls; Form stays frozen, `data_through` stays the OE date. Real run: 31 games applied, 37 known, 6 calls changed, 13 s. Justified by measured lag (+0.0039 series log loss a day); same-day games alone are within noise (−0.0010, −0.0024 to +0.0003) after fixing a leak in the first research run (own games dated before the start). Checks: pytest, ruff. Limits: not yet run in CI.
 
+## 2026-10-19 — Live benchmark refresh: first CI runs, seed fix
+
+First dispatch of `live-bench.yml` failed: the hand seed was made with macOS `tar`, whose AppleDouble `._*.json` files broke JSON reads on Linux. Reseeded with `COPYFILE_DISABLE=1 tar --no-xattrs` (checked with Python `tarfile`: no metadata entries) and fixed the seed commands in `deployment.md`. Second run (39327787116) passed in 10 min: Riot's feed served the GitHub runner without refusals (14 new maps, 81 s), `--build-data` took 7.9 min (CPU-bound; it re-reduces every map, so it grows with the data), state synced to S3, and `live-bench-data-63ee7c2a…` (2.2 MB) cached: 1,772 maps / 823 series, up from 1,666 / 813. Limit: no PR has read the cached entry yet.
+
 ## 2026-10-19 — Weekly live benchmark data refresh in CI
 
 New `live-bench.yml` (Mondays, main only, read-only contents; commits nothing): restores the feed timelines and Kalshi tapes from `s3://…/prometheus/live-bench/`, collects new feed maps in four shards, runs `--build-data --refresh-markets`, syncs grown state back and saves `live-bench-data-<hash>` to the Actions cache. `benchmarks.yml` restores that one entry for both sides (in the markets dump key); the release pin stays as fallback. `feed_timelines.py schedule` stops paging at saved matches. Cost: state 7.4 MB + 56 MB compressed (13 s to tar locally); ~17 s a map, ~100 maps a week; no time added to publish, PR checks or hourly jobs. Checks: full suite 894 passed, 2 skipped; ruff; YAML parses. Limits: not yet run in CI (needs merge, S3 seed, a dispatch); Riot may refuse GitHub runners; CI build time unmeasured.
@@ -29,6 +33,9 @@ Branch `live-anchor`, base `b6e0b62`. Series pages showed the pre-series map cha
 ## 2026-10-19 — Live model: FORGE pregame, FORGE anchor, raw calibration tested
 
 `scripts/research/live_anchor.py` ([report](../research/live_anchor.md)); rule fixed before scoring; viewed test split. Pregame: displayed FORGE + series shift beats the benchmark's v1 t=0 call by −0.0111 (−0.0209 to −0.0019) on 1,271 priced maps; shift −0.0044, FORGE over shifted v1 −0.0066 (n.s.). Anchoring in-game calls on FORGE: +0.0023 (−0.0014 to +0.0060), 30+ min significantly worse: rejected. Dropping calibration: feed −0.0015 (−0.0030 to −0.0002) but live-benchmark 30 min +0.0030 (+0.0002 to +0.0055): rejected. No runtime, model or CI change; 37 s, local only. Limit: FORGE p is the backtest's (month-start ratings, out-of-year curves), covering 38% of pre-maps.
+## 2026-10-19 — Wide-register pages drop the margin below 1280px
+
+Base `20d6708` (main). Between 1001 and 1279px the margin narrowed the main column (629px at 1024), so registers scrolled: Predictions by up to 228px, Call performance 145, GLORY 133, players 151, FORGE/Elo/teams about 75. `spread--wide` (stat registers, team, player, Predictions, Call performance, results months) puts the notes under the main column below 1280px; entry pages switch to their inline contents there, and the game log's 1001–1280px squeeze is gone. Home, Props and the rest keep the margin. Checks: pytest; ruff; full build; no overflow at 1024/1152/1279/1440 on 13 pages; screenshots at 1152. Copy review: PASS (no copy change). Limit: at those widths a register's notes sit after it (GLORY: after 602 rows).
 
 ## 2026-10-19 — Merge Live into Predictions; props page fix
 

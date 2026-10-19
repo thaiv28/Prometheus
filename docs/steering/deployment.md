@@ -62,8 +62,8 @@ Required repository settings:
 **Live benchmark data (`.github/workflows/live-bench.yml`).** Mondays at 12:20 UTC and on dispatch, main only, separate concurrency group. Restores CSVs/DB without saving them, collects feed timelines in four shards, rebuilds with `--build-data --refresh-markets`, and saves `live-bench-data-<sha256 first 40>` for PRs. Refused collection preserves progress but fails the job. The deploy role has bucket read-write access. S3 prefix `prometheus/live-bench/` holds `feed_timelines.tar.gz` (~7 MB), `trade_tapes.tar.gz` (~56 MB), and hash-named built versions under `data/`. Seed once by hand:
 
 ```bash
-tar -czf - -C data feed_timelines/games feed_timelines/schedule.json | aws s3 cp - s3://$DATA_BACKUP_BUCKET/prometheus/live-bench/feed_timelines.tar.gz
-tar -czf - -C data live_bench/trades live_bench/pre_trades | aws s3 cp - s3://$DATA_BACKUP_BUCKET/prometheus/live-bench/trade_tapes.tar.gz
+COPYFILE_DISABLE=1 tar --no-xattrs -czf - -C data feed_timelines/games feed_timelines/schedule.json | aws s3 cp - s3://$DATA_BACKUP_BUCKET/prometheus/live-bench/feed_timelines.tar.gz
+COPYFILE_DISABLE=1 tar --no-xattrs -czf - -C data live_bench/trades live_bench/pre_trades | aws s3 cp - s3://$DATA_BACKUP_BUCKET/prometheus/live-bench/trade_tapes.tar.gz
 ```
 
 ## Data backup
