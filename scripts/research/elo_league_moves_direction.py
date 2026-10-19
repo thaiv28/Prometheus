@@ -1,4 +1,6 @@
-"""
+"""Frozen: runs against `prometheus/elo.py` at commit 00237c0 (options since removed).
+
+
 elo_league_moves_direction.py: should a player who moves between a major and another
 league count less (moving up) or more (moving down) than the offsets say?
 

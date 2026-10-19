@@ -1,4 +1,6 @@
-"""elo_fitted_scale.py: Elo's update curve on the fitted forecast scale, with K retuned.
+"""Frozen: runs against `prometheus/elo.py` at commit 00237c0 (options since removed).
+
+elo_fitted_scale.py: Elo's update curve on the fitted forecast scale, with K retuned.
 
 Fixed before scoring: update slope in {ln(10)/400, .0070, .0085, .0100}
 by K in {12, 16, 20, 24, 28}; additionally one tier design (.0085 in

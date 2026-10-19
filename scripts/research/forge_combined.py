@@ -1,4 +1,6 @@
-"""
+"""Frozen: runs against `prometheus/elo.py` at commit 00237c0 (options since removed).
+
+
 forge_combined.py: the 2026-10-12 FORGE changes together, and each one's share.
 
 Three changes passed alone: roster-aware Form (`form_roster.py`), faster moves after

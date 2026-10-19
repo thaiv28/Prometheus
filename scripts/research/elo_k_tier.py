@@ -1,4 +1,6 @@
-"""
+"""Frozen: runs against `prometheus/elo.py` at commit 00237c0 (options since removed).
+
+
 elo_k_tier.py: should Elo react faster, and by how much in each tier?
 
 A team's Elo change over its last 10 games predicts its next result beyond Elo

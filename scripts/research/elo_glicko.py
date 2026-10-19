@@ -1,4 +1,6 @@
-"""elo_glicko.py: Glicko-style player uncertainty versus published player Elo.
+"""Frozen: runs against `prometheus/elo.py` at commit 00237c0 (options since removed).
+
+elo_glicko.py: Glicko-style player uncertainty versus published player Elo.
 
 V2 protocol fixed before tuning: floor RD {60,80,100}, new/floor ratio
 {1.5,2,2.5}, inactivity growth {10,20,35} points/sqrt(day), per-game information

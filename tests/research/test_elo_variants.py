@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 
 from prometheus.elo import (
-    LEGACY_ELO,
     calculate_game_length_elo_change,
     compute_elo_records,
     winner_score,
@@ -88,7 +87,7 @@ def test_bigger_margin_moves_ratings_more():
 def test_replay_passes_k_and_compute_kwargs():
     inputs = _inputs()
     # Without the rookie discount, whose fading also shows in a team's change.
-    off = {"rookie_penalty": 0, "rookie_games": 0, "provisional_games": 0}
+    off = {"rookie_penalty": 0, "rookie_games": 0}
     k20 = ev.replay(inputs, ev.game_length_margin(), records=True, **off)
     k40 = ev.replay(inputs, ev.game_length_margin(), K=40, records=True, **off)
     assert k40["elo_change"].iloc[0] == pytest.approx(2 * k20["elo_change"].iloc[0])
@@ -267,7 +266,8 @@ def test_replay_slope_and_event_overrides_match_manual_updates():
         league_slopes={"LFL": 0.01},
         records=True,
         rookie_penalty=0,
-        **{**LEGACY_ELO, "provisional_games": 0, "away_factor": 0},
+        player_rd=None,
+        other_league_slope=None,
         move_down_bonus=0,
     ).set_index(["gameid", "teamid"])
     a, b = 1500.0, 1500.0
@@ -277,76 +277,3 @@ def test_replay_slope_and_event_overrides_match_manual_updates():
         a, b = a + change, b - change
         assert records.loc[(gameid, "a"), "post_match_elo"] == pytest.approx(a)
         assert records.loc[(gameid, "b"), "post_match_elo"] == pytest.approx(b)
-
-
-def test_nonmajor_grid_and_one_boundary_extension():
-    import elo_fitted_scale as fitted
-
-    from prometheus.elo import EXPECTED_SLOPE
-
-    leagues = ["LCK", "LEC", "LFL", "LCKC", "MSI", "WSCI"]
-    grid = fitted.designs(leagues)["Non-major only"]
-    assert len(grid) == 16
-    for _, kw in grid:
-        assert set(kw["league_slopes"]) == {"LFL", "LCKC"}
-        assert set(kw["league_factors"]) == {"LFL", "LCKC"}
-        assert "K" not in kw and "expected_slope" not in kw
-    interior = (0, "", fitted.other_config(leagues, 0.007, 28))
-    assert fitted.extension_grid(leagues, interior) == []
-    edge = (0, "", fitted.other_config(leagues, EXPECTED_SLOPE, 32))
-    extra = fitted.extension_grid(leagues, edge)
-    assert len(extra) == 9  # new slope x five K + new K x four old slopes
-    assert all(label not in {x[0] for x in grid} for label, _ in extra)
-    assert any(
-        kw["league_slopes"]["LFL"] == 0.0045 and kw["league_factors"]["LFL"] == 36 / 20
-        for _, kw in extra
-    )
-
-
-def test_nonmajor_native_configuration_reproduces_default():
-    import elo_fitted_scale as fitted
-
-    from prometheus.elo import EXPECTED_SLOPE
-
-    inputs = _inputs()
-    inputs.games.loc[inputs.games.league == "LEC", "league"] = "LFL"
-    actual = ev.replay(
-        inputs,
-        ev.game_length_margin(),
-        **fitted.other_config(inputs.games.league, EXPECTED_SLOPE, 20),
-    )
-    expected = ev.replay(inputs, ev.game_length_margin())
-    pd.testing.assert_series_equal(actual, expected, check_exact=True)
-
-
-def test_nonmajor_combined_slope_k_keeps_major_and_international_updates_native():
-    import elo_fitted_scale as fitted
-
-    from prometheus.elo import EXPECTED_SLOPE, expected_score
-
-    inputs = _inputs()
-    inputs.games = pd.concat(
-        [
-            inputs.games.iloc[[0]].assign(gameid=f"g{i}", league=l)
-            for i, l in enumerate(["LFL", "LFL", "LCK", "MSI"])
-        ],
-        ignore_index=True,
-    )
-    records = ev.replay(
-        inputs,
-        lambda g: np.full(len(g), 0.9),
-        records=True,
-        **fitted.other_config(inputs.games.league, 0.01, 28),
-        rookie_penalty=0,
-        **{**LEGACY_ELO, "provisional_games": 0, "away_factor": 0},
-        move_down_bonus=0,
-    ).set_index(["gameid", "teamid"])
-    a, b = 1500.0, 1500.0
-    for i, (slope, k) in enumerate(
-        [(0.01, 28), (0.01, 28), (EXPECTED_SLOPE, 20), (EXPECTED_SLOPE, 20)]
-    ):
-        assert records.loc[(f"g{i}", "a"), "pre_match_elo"] == pytest.approx(a)
-        change = k * (0.9 - expected_score(a, b, slope=slope))
-        a, b = a + change, b - change
-        assert records.loc[(f"g{i}", "a"), "post_match_elo"] == pytest.approx(a)
-        assert records.loc[(f"g{i}", "b"), "post_match_elo"] == pytest.approx(b)

@@ -1,4 +1,6 @@
-"""
+"""Frozen: runs against `prometheus/elo.py` at commit 00237c0 (options since removed).
+
+
 elo_experience.py: does experience matter after the rookie window?
 
 The published rookie discount (a player counts 200 points lower in their first
