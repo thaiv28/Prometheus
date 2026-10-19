@@ -887,3 +887,41 @@ def test_published_update_slope_follows_event_league(league):
         1500 + 4 * 6.5 - discount_after
     )
     assert calls[1]["elo"] != calls[1]["opponent_elo"]
+
+
+def test_rd_game_slope_default_is_explicit_false():
+    games = _rd_games().assign(league="NACL")
+    default = elo.compute_elo_records(games, calculate_game_length_elo_change)
+    explicit = elo.compute_elo_records(
+        games, calculate_game_length_elo_change, player_rd_game_slope=False
+    )
+    for actual, expected in zip(default, explicit):
+        pd.testing.assert_frame_equal(actual, expected)
+
+
+@pytest.mark.parametrize("league", ["NACL", "LCS", "MSI", None])
+@pytest.mark.parametrize("enabled", [False, True])
+def test_rd_game_slope_information_matches_hand_calculation(league, enabled):
+    games = _rd_games()
+    if league is not None:
+        games["league"] = league
+    records, _ = elo.compute_elo_records(
+        games,
+        lambda **kw: 10,
+        rookie_penalty=0,
+        player_rd=(250, 100, 100, 0),
+        player_rd_game_slope=enabled,
+    )
+    # Constant update isolates information shrinkage. The second information
+    # calculation has unequal ratings, testing E as well as slope squared.
+    slope = 0.0065 if enabled and league == "NACL" else np.log(10) / 400
+    variance, difference = 250**2, 0.0
+    for row in records[records.teamid == "A"].itertuples():
+        step = 10 * variance / 100**2
+        assert row.elo_change == pytest.approx(step)
+        expectation = 1 / (1 + np.exp(-slope * difference))
+        variance = max(
+            100**2,
+            1 / (1 / variance + 0.125 * slope**2 * expectation * (1 - expectation)),
+        )
+        difference += 2 * step

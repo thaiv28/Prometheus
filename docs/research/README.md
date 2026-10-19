@@ -4,6 +4,8 @@
 
 - [Live map trading](live_trading.md): earlier-series-only market/model blend, fee-aware entries, freshness/stability proxies, execution-cost stress and Kelly paths; [fixed protocol](live_trading_protocol.md). Historical tape returns remain inconclusive; no trading change.
 
+- [Elo RD slope and move-down simplifications](elo_rd_simplify.md): fixed three arms vs published Elo. Dropping the move-down bonus fails (other-league and cross-league Elo significantly worse); using the game's update slope in the RD information term passes held-out and [native](elo_rd_simplify_native.md) (no significant change). Nothing promoted.
+
 - [Joint Glicko RD + non-major update scale](elo_glicko_scale.md): fixed two-stage tuning through 2021; the combination improves held-out 2022+ forecasts but regresses on nine international roster-change games versus Glicko alone. Manager decision: combined RD + non-major slope shipped 2026-10-19; main guarded sections pass, with the nine-game roster-slice limit recorded.
 
 - [Player Elo Glicko-style uncertainty](elo_glicko.md): v2 ties reference to floor

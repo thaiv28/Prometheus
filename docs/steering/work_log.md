@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — Test RD game slope and dropping the move-down bonus
+
+Tested three fixed simplifications of published Elo (`scripts/research/elo_rd_simplify.py`, [report](../research/elo_rd_simplify.md)): RD information on the game's own update slope (new opt-in `player_rd_game_slope`, default off), `move_down_bonus=0`, both. Held-out 2022+: game slope changes no section significantly (domestic Elo -.00010, other-league Elo +.00012, both CIs touch 0); no move-down worsens other-league Elo/FORGE and cross-league Elo (+.0052, significant); both fails likewise. Game slope native check passes ([native](../research/elo_rd_simplify_native.md)): no guarded row or markets series row significantly worse. Replay 5.2 s vs 5.7 s. Nothing promoted. `bootstrap_elo` takes `**overrides`. Checks: pytest, ruff, published-default reproduction asserted in the script.
+
 ## 2026-10-19 — Remove draft v2 from map trading; add a $15 live-map budget
 
 User asked to drop draft v2 (no trading gain; FST significantly worse) and cap live-map trading at $15. The draft route is gone from `live_map.py`, `live/signals.py`, `pyproject.toml` and the README; `live_map_draft_blend.json` deleted; the executor zip, release hash and publish filter drop the draft model and blend but keep `live/draft.py` (imported by `live/timeline.py`). New required `live_maps.budget_usd` for shadow and live map modes: the ledger's `LIVE_MAPS` row tracks held cost and realized profit, and a map order is capped at budget + realized − held, reserved in the same transaction as ACCOUNT. Loss can't exceed the budget; profit extends it; pregame unaffected. Docs suggest `"budget_usd": "15"`; nothing configured in AWS. Checks: 862 passed, 2 skipped; two budget tests fail with their guards removed; ruff; `package.sh` builds without draft files. Limit: the shared 1%/2% caps (about $0.50 a map) still apply; not deployed.

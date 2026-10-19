@@ -191,6 +191,7 @@ def compute_elo_records(
     player_rd: tuple[float, float, float, float] | None = PLAYER_RD,
     player_rd_information: float = PLAYER_RD_INFORMATION,
     player_rd_normalize: bool = False,
+    player_rd_game_slope: bool = False,
     other_league_slope: float | None = OTHER_LEAGUE_SLOPE,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
@@ -261,6 +262,8 @@ def compute_elo_records(
         other_league_slope: Expected-score log-odds per point for non-major
             domestic events. Majors, international events and input without a
             league use the callback's default; None disables the override.
+        player_rd_game_slope: Use the game update slope in both RD information
+            terms (slope squared and expectation); otherwise use ln(10)/400.
         player_rd_normalize: Research compatibility option for v1. Normalize
             side weights to a shared mean, making mean stored updates zero-sum.
             Default False keeps the literal per-player RD weight, so settled
@@ -436,10 +439,15 @@ def compute_elo_records(
         factor = league_factors.get(league, 1.0) if league_factors else 1.0
         if player_rd is not None:
             weights = []
-            expectation = expected_score(pre[0], pre[1])
+            information_slope = (
+                slope_args.get("expected_slope", EXPECTED_SLOPE)
+                if player_rd_game_slope
+                else EXPECTED_SLOPE
+            )
+            expectation = expected_score(pre[0], pre[1], slope=information_slope)
             information = (
                 player_rd_information
-                * (math.log(10) / 400) ** 2
+                * information_slope**2
                 * expectation
                 * (1 - expectation)
             )
@@ -634,7 +642,7 @@ def load_rosters() -> dict:
     return {key: tuple(ids) for key, ids in rosters.items()}
 
 
-def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO) -> None:
+def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO, **overrides) -> None:
     """Recompute Elo ratings for all teams and overwrite the method's Elo tables.
 
     Args:
@@ -654,6 +662,7 @@ def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO) -> None:
         starting_elo=starting_elo,
         rosters=load_rosters(),
         player_records=True,
+        **overrides,
     )
 
     # Clear rather than drop so the schema from 001_create_tables.sql is preserved.
