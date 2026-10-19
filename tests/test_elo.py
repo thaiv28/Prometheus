@@ -648,3 +648,30 @@ def test_published_defaults_use_time_away_and_the_move_down_bonus():
         25.0,
         "log",
     )
+
+
+@pytest.mark.parametrize("gap", [-400, -100, 0, 100, 400])
+def test_expected_slope_default_preserves_original_arithmetic(gap):
+    original = 1 / (1 + 10 ** (-gap / 400))
+    assert expected_score(1500 + gap, 1500) == original
+    assert expected_score(1500 + gap, 1500, slope=elo.EXPECTED_SLOPE) == original
+    actual = elo.winner_score(1800)
+    assert calculate_game_length_elo_change(1500 + gap, 1500, 1800, 1) == 20 * (
+        actual - original
+    )
+
+
+def test_explicit_expected_slope_changes_updates_on_hand_made_game():
+    # A 100-point favourite, log-odds slope ln(3)/100: expected score is .75.
+    slope = np.log(3) / 100
+    assert expected_score(1600, 1500, slope=slope) == pytest.approx(0.75)
+    assert expected_score(1500, 1600, slope=slope) == pytest.approx(0.25)
+    assert expected_score(1500, 1500, slope=slope) == 0.5
+    change = calculate_game_length_elo_change(
+        1600, 1500, 1800, 1, K=16, expected_slope=slope
+    )
+    assert change == pytest.approx(16 * (0.825 - 0.75))
+    assert calculate_game_length_elo_change(
+        1500, 1600, 1800, 0, K=16, expected_slope=slope
+    ) == pytest.approx(-change)
+    assert change < calculate_game_length_elo_change(1600, 1500, 1800, 1, K=16)

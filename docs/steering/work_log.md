@@ -1,5 +1,57 @@
 # Work log
 
+## 2026-10-19 — Elo expected-score scale with K retuned (research)
+
+Branch `elo-fitted-scale`, based on `177004c` (future-work documentation).
+Fixed grid: update slope {ln(10)/400, .0070, .0085, .0100} × K {12,16,20,24,28};
+plus .0085 major/international and .0103 other-domestic slopes with the same K grid.
+Tune through 2021 with the existing games-weighted domestic + other-league Elo
+objective; shared harness refits the forecast curves and FORGE blends.
+Published behavior, DB and fitted weight artifacts unchanged. Report:
+[`elo_fitted_scale.md`](../research/elo_fitted_scale.md). Best uniform .0070 / K 24
+(train LL .620959 vs published .621480); tier .0085/.0103 selects K 20.
+
+Held out 2022–2026, uniform Δ LL (paired game bootstrap, 95% CI): Elo domestic
++.000599 (−.000373, +.001650), international +.002774 (−.000835, +.006651);
+FORGE domestic +.000975 (+.000361, +.001647), international +.002774
+(−.000835, +.006651); other-league Elo −.001959 (−.002417, −.001479),
+FORGE −.000842 (−.001200, −.000477); cross-league Elo −.004108
+(−.005615, −.002553). Tier also fails: domestic FORGE +.001015
+(+.000287, +.001807), despite significant other-league/cross-league gains.
+Verdict: drop the proposed change; both violate the no-regression significance
+rule. No significant major-league Elo/international gain. Held-out descriptive
+refit slopes for the uniform winner: majors/international .00939438, other
+pooled .01060021, still steeper than update .0070. Duration-weighted update
+scores are not binary outcomes, so equality is not required.
+
+Evaluation issue found: the newer international calibration artifact replaces
+refitted FORGE probabilities with its frozen old-scale slope. Disable it locally
+for both baseline and variants; no published setting or shared scorer changed.
+This baseline means published ratings with refitted curves, not today's
+calibrated international calls. Keep prior harness limits explicit: out-of-year
+fits can use later held-out seasons, other-league FORGE Form weights use all
+other years, intervals resample games rather than series, repeated historical
+research is not an untouched holdout. One pandas cast warning during input load.
+
+Default reproduction max error 1.14e−12 over 205,858 team-games. Replay median
+4.85 s (4.69–6.07 s), 102,929 games; experiment 195.1 s with
+VECLIB_MAXIMUM_THREADS=1. No build/CI job, dependency, DB read or runtime fitting
+added to production. Unit checks cover exact default arithmetic, a hand-made
+slope/K update and event-slope override order. Full suite: 799 passed, 2 skipped,
+1 warning in 13.64 s; focused Elo/harness: 64 passed in 4.74 s. Repository-wide
+ruff format/check and git diff whitespace pass. Final full-suite confirmation: 799 passed, 2 skipped, 1 existing loky CPU-count
+warning in 10.28 s. Same suite excluding the seven added cases: 792 passed,
+2 skipped in 8.96 s (separate runs under shared load; not an isolated cost
+estimate). All seven added case durations are individually <5 ms; selected
+run 0.68 s including startup. That small test cost buys default-parity and
+scale/row-order guards; the research grid is never run by CI. Changed-document
+relative file links (all five documents), ruff format/check and whitespace pass.
+No Actions timing is available because this branch is not pushed, as requested.
+The sandbox rejects index.lock writes in the main repo's external worktree metadata;
+the reviewed change is committed on `elo-fitted-scale` in a temporary Git repository
+and exported as `/tmp/elo-fitted-scale.bundle`. The actual worktree branch ref
+remains at the base until that bundle is applied.
+
 ## 2026-10-19 — Future work: player win share and Elo rating model
 
 Branch `future-win-share`, based on `b0acbac` (main). Documentation only: added two Future work items to `docs/steering/current_state.md`: splitting Elo changes among starters by their share of an in-game lead (gold difference at 15/20 minutes or similar), and the Elo rating model (expected score on the fitted slope with K retuned; Glicko-2-style uncertainty; later TrueSkill Through Time or dynamic Bradley-Terry). No code changed; no checks beyond reading the rendered Markdown.

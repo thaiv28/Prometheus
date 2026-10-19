@@ -249,3 +249,31 @@ def test_compare_row_shows_variant_minus_baseline():
     row = ev.compare(None, base, better, "better")
     assert row.startswith("| better | 0.5000 (-0.1000, -0.1000 to -0.1000)")
     assert row.count("|") == ev.COMPARE_HEADER.splitlines()[0].count("|")
+
+
+def test_replay_slope_and_event_overrides_match_manual_updates():
+    from prometheus.elo import expected_score
+
+    inputs = _inputs()
+    # Two games in one league, then the same opponents in a different event.
+    inputs.games = inputs.games.iloc[:2].copy()
+    third = inputs.games.iloc[[1]].assign(gameid="g3", league="LFL")
+    inputs.games = pd.concat([inputs.games, third], ignore_index=True)
+    records = ev.replay(
+        inputs,
+        lambda g: np.full(len(g), 0.9),
+        expected_slope=0.007,
+        league_slopes={"LFL": 0.01},
+        records=True,
+        rookie_penalty=0,
+        provisional_games=0,
+        away_factor=0,
+        move_down_bonus=0,
+    ).set_index(["gameid", "teamid"])
+    a, b = 1500.0, 1500.0
+    for gameid, result, slope in (("g1", 1, 0.007), ("g2", 0, 0.007), ("g3", 0, 0.01)):
+        assert records.loc[(gameid, "a"), "pre_match_elo"] == pytest.approx(a)
+        change = 20 * ((0.9 if result else 0.1) - expected_score(a, b, slope=slope))
+        a, b = a + change, b - change
+        assert records.loc[(gameid, "a"), "post_match_elo"] == pytest.approx(a)
+        assert records.loc[(gameid, "b"), "post_match_elo"] == pytest.approx(b)
