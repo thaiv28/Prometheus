@@ -374,7 +374,7 @@ With tracked Kalshi games, quotes/publication target 2s; `Game.add_quotes` updat
 
 ### Local live-candidate research
 
-See [candidate review](../research/live_candidates.md) and [research index](../research/README.md) for `cand_objectives.py`, `cand_draft.py`, `cand_map_elo.py`, `cand_temporal.py`, `cand_followups.py`; outputs stay local in `data/research/live_followups/`, without participant collection/production inference. Live-map trading and Kelly research (`scripts/research/live_trading.py`, [protocol](../research/live_trading_protocol.md), [report](../research/live_trading.md)), draft v3 (`scripts/research/live_draft_v3.py`, [report](../research/live_draft_v3.md)) and the failed draft-v2 trading comparison (`scripts/research/live_map_draft.py`, [evidence](../research/live_map_draft_trading.md)) write only under gitignored `data/research/`.
+See [candidate review](../research/live_candidates.md) and [research index](../research/README.md) for `cand_objectives.py`, `cand_draft.py`, `cand_map_elo.py`, `cand_temporal.py`, `cand_followups.py`; outputs stay local in `data/research/live_followups/`, without participant collection/production inference. Live-map trading and Kelly research (`scripts/research/live_trading.py`, [protocol](../research/live_trading_protocol.md), [report](../research/live_trading.md)), FORGE anchor/calibration (`scripts/research/live_anchor.py`, [report](../research/live_anchor.md)), draft v3 (`scripts/research/live_draft_v3.py`, [report](../research/live_draft_v3.md)) and the failed draft-v2 trading comparison (`scripts/research/live_map_draft.py`, [evidence](../research/live_map_draft_trading.md)) write only under gitignored `data/research/`.
 
 ### Objective/momentum inference
 

@@ -293,13 +293,26 @@ class SeriesTest(unittest.TestCase):
         (s,) = live_results.series_view({"a": entry()}, archive, set())
         before = [m["before"] for m in s["maps"]]
         self.assertEqual([b["score"] for b in before], ["0–0", "0–1", "0–2"])
-        self.assertEqual({b["map_ours"] for b in before}, {20})
+        # The map chance follows the score (MVK down 0–1, then 0–2).
+        self.assertEqual([b["map_ours"] for b in before], [20, 17, 15])
         self.assertEqual(before[0]["series_ours"], 11)  # the logged 0.107
         self.assertEqual([b["map_kalshi"] for b in before], [25, 20, None])
         self.assertEqual([b["series_kalshi"] for b in before], [15, 5, 3])
         self.assertEqual(s["missing"], [1, 3])
-        # The figure starts from the logged call too.
-        self.assertAlmostEqual(s["maps"][1]["figure"]["trace"]["calls"][0][1], 0.2)
+        # The figure starts from the logged call, shifted by the score too.
+        kappa = 1 / 0.127 - 1
+        pre = 1 - (0.8 * kappa + 1) / (kappa + 1)
+        self.assertAlmostEqual(s["maps"][1]["figure"]["trace"]["calls"][0][1], pre)
+
+    def test_the_log_homes_give_rho_without_forge_json(self):
+        archive = self.archive(results={"1": {"winner": 0}, "2": {"winner": 0}})
+        log = {"a": entry(home1="LEC", home2="LEC")}  # both majors: rho 0.054
+        (s,) = live_results.series_view(log, archive, set())
+        kappa = 1 / 0.054 - 1
+        self.assertEqual(
+            s["maps"][1]["before"]["map_ours"],
+            round(100 * (1 - (0.8 * kappa + 1) / (kappa + 1))),
+        )
 
     def test_a_match_the_log_lacks_still_shows(self):
         archive = self.archive()
