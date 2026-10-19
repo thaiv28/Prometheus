@@ -361,7 +361,8 @@ def test_intent_precedes_submission_and_v2_body():
 
     api.place = submit
     assert execute([saved()])["submitted"] == 1
-    assert len(client.requests[0]) == 6
+    assert len(client.requests[0]) == 7
+    assert ledger.get("demo", "SERIES#KXLOLGAME-F")["held"] == held(ledger)
 
 
 def test_timeout_unknown_keeps_reservation_across_process_restart_and_id_change():

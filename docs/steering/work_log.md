@@ -1,5 +1,68 @@
 # Work log
 
+## 2026-10-18 — Wire the selected 30-second live-map blend for review
+
+Branch `live-map-trading`, base research `e35e5d0` / main `f522db3`. User chose
+30-second trade stability after reviewing historical sensitivities and requested
+a complete reviewable implementation. Frozen monthly earlier-series-only blend,
+last-trade market input, unshifted pinned objective/momentum inference, net
+5-cent edge and private worker observation/outbox feed the existing executor via
+SQS. Off/shadow/live map controls are explicit and independent of pregame mode.
+No deployment, config/credential write, order or activation was performed.
+
+Shared numerical kernel reproduces all 189 historical 30s entries/side/cost,
+max monthly probability error 5.6e-16: ROI +21.05% (95% +1.83% to +41.61%).
+Applying the existing fragmentation-aware fee reserve to tape costs alone gives
+130 entries, +25.70% (+1.48% to +51.28%); this is another retrospective
+sensitivity, not executable return evidence. Production additionally requires
+actual asks/depth and receipt/book ages not recorded historically. Same observed
+history has been reused; this is not independent strategy confirmation.
+
+Executor adds exact map/parent-series rules, current trade/book rechecks,
+quarter-or-smaller Kelly, <=1% free-capital map / <=2% series caps, shared
+ACCOUNT/DAY/series reservations and revision-checked releases. Old untracked
+pregame series fail closed. Existing personal vetoes, immutable map/event fences,
+uncertain-response holds, IOC, partial fills and settlement remain enforced.
+Shadow records proposed IOC/depth only, without credentials/portfolio/orders or
+fictional compounding. Deployment includes disabled transport template, isolated
+package/source fingerprint, control workflow and opt-in worker service flags.
+No public UI/copy changes, production DB reads, online fitting or dependency.
+
+Verification: 31 focused live-map cases pass in 0.13s; two optional real signing
+cases pass in 0.13s with the isolated pinned cryptography dependency. Full suite
+before final boundary checks: 821 passed, 2 skipped in 8.45s; final result below.
+CloudFormation `cfn-lint`, shell syntax, repository-wide ruff format/check pass.
+Forecast and season-stat scripts completed (22.10s / 3.76s) using a strictly
+read-only SQLAlchemy connection to the existing DB, with temporary reports and
+no core weight change/rebuild. Real 7,768-frame recording: default predictions
+identical; default timeline median 53.19ms, additional private observation 55.02ms
+per feed update (five warm runs), entry policy median 0.059ms (100 warm runs).
+Source-frame identity and naive-UTC exported Elo dates have explicit checks.
+Implementation validation and full rollout in `docs/live_map_execution.md` and
+`docs/research/live_map_implementation_validation.md`. Final package/checksum,
+source-content inspection, isolated smoke, links and suite follow below. Existing research
+baseline: 793 passed, 2 skipped in 9.11s. Additional worker load is two bounded
+public trade GETs per eligible two-second quote cycle until its first candidate;
+no extra request when disabled, stale or outside 5–30 minutes. No CI job/step
+added. Actual provider/queue latency and IAM remain unverified until deployment.
+
+Final: 827 passed, 2 optional signing cases skipped in 8.66s (those two pass
+separately with pinned cryptography); 34 new cases, no additional CI step.
+Repository ruff check/format, shell syntax, cfn-lint, whitespace and 71 relative
+document links pass. The 5,031,248-byte / 189-file Linux Lambda zip matches all
+packaged sources and excludes private/local inputs. Isolated scheduled and SQS
+OFF paths plus public-only shadow transport pass without importing pandas,
+numpy, sklearn or cryptography. Package SHA256:
+`8bbe0120b01b21a7bf7d2d57abc671f2e9c2c7af087a670250ff07838051b9e8`.
+Source SHA256:
+`313a9553af741966810d3d7de00ca4b5853b6c9ca6f2132199acf7c7fb9f775a`.
+Offline explicit November refit exports nine earlier-only snapshots to a
+review-only temporary file; the installed artifact remains the tested eight
+March–October snapshots and fails closed for absent months. No DB/site rebuild
+was needed: public default predictions match exactly and no UI/metric algorithm
+changed. Copy review: not applicable (no public UI/copy edits). Actual Actions
+cost awaits a submitted PR; local full-suite timing varies (baseline 9.11s).
+
 ## 2026-10-18 — Historical live-map trading and Kelly research
 
 Branch `research/live-trading`, base main `f522db3` (merged objective/momentum

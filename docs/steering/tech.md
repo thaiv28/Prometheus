@@ -382,3 +382,33 @@ and [report](../research/live_trading.md) document assumptions. Four focused tes
 cover outcome-availability chronology, after-fee selection, side orientation and
 settlement/cash/exposure accounting. No production pipeline, dependency or CI job
 is added.
+
+### Selected 30-second live-map execution (prepared 2026-10-18)
+
+`live_map.py` is a stdlib-only pinned model/blend/entry contract;
+`live_map_blend.json` exports the tested earlier-only monthly fits.
+`live.signals` separately reconstructs unshifted inputs through opt-in
+`timeline_calls(include_inputs=True)`; the default page/benchmark path is
+unchanged. Both trade contracts supply a 30-second normalized/deduplicated tape.
+Private immutable S3 candidate bytes precede an SQS pointer to the existing
+Lambda (`deploy.execution.live_handler`); the consumer revalidates originals and
+current exact rules/trades/books. No added site DB read, online fit or dependency.
+
+`execution.ledger` adds one SERIES held update to each new pregame/map reserve
+and transactional partial-fill/settlement releases. Shared ACCOUNT/DAY records
+and account-snapshot conditions prevent double funding. Legacy intents reconcile
+without new metadata; an old series fence without series tracking blocks map
+entry. Separate nested controls default off, and shadow proposes without live
+reservations or credential/order access. Tests cover causality/parity, freshness,
+worker restart/outbox, SQS isolation, identity, sizing, shared exposure/races,
+expiry after claim, and exactly-once settlement.
+
+Offline fitting: `scripts/fit_live_map_blend.py` (optional explicit `--as-of`);
+full historical numerical parity: `scripts/research/replay_live_map_policy.py`.
+[Contract and rollout](../live_map_execution.md).
+
+Live trading normalizes the existing naive-UTC SQLite/exported rating dates to
+explicit UTC, while feed/receipt/book timestamps stay strictly timezone-aware.
+Private `include_inputs` output pins the exact modeled source frame; public
+call records remain unchanged. Physical map identity is canonical teams + UTC
+scheduled start + map number, separate from the additional exchange-event fence.

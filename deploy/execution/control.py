@@ -7,6 +7,7 @@ from pathlib import Path
 
 FIELDS = frozenset(
     (
+        "live_maps",
         "starting_bankroll_usd",
         "kelly_fraction",
         "order_budget_usd",
@@ -33,6 +34,8 @@ def configure(client, parameter, settings):
     current = json.loads(client.get_parameter(Name=parameter)["Parameter"]["Value"])
     if current.get("mode", "off") != "off":
         raise ValueError("Turn execution off before changing limits")
+    if "live_maps" in settings and settings["live_maps"].get("mode", "off") != "off":
+        raise ValueError("Configure live-map limits while off; activate separately")
     current.update(settings)
     # Validate the whole active configuration, but persist OFF with its original epoch.
     Config.parse(
@@ -77,6 +80,40 @@ def set_mode(client, parameter, mode, now=None, functions=None, function=None):
     return {"mode": mode, "activation_at": current["activation_at"]}
 
 
+def set_live_map_mode(client, parameter, mode, now=None, functions=None, function=None):
+    from prometheus.execution.core import Config
+
+    if mode not in {"off", "shadow", "live"}:
+        raise ValueError("Invalid live-map mode")
+    current = json.loads(client.get_parameter(Name=parameter)["Parameter"]["Value"])
+    if mode != "off":
+        from deploy.execution.release import verify_runtime
+
+        if functions is None or not function:
+            raise ValueError("A verified executor is required")
+        verify_runtime(functions, function)
+        if mode == "live" and current.get("mode", "off") == "off":
+            raise ValueError("Global execution must be demo/live before map activation")
+    prior = current.get("live_maps")
+    maps = {
+        **(prior if isinstance(prior, dict) else {}),
+        "mode": mode,
+        "activation_at": (now or datetime.datetime.now(datetime.UTC)).isoformat(),
+    }
+    updated = {**current, "live_maps": maps}
+    if mode != "off":
+        Config.parse(
+            {**updated, "mode": "demo", "activation_at": maps["activation_at"]}
+        )
+    client.put_parameter(
+        Name=parameter,
+        Type="String",
+        Value=json.dumps(updated, separators=(",", ":")),
+        Overwrite=True,
+    )
+    return {"live_map_mode": mode, "activation_at": maps["activation_at"]}
+
+
 def main():
     import boto3
 
@@ -84,6 +121,7 @@ def main():
     parser.add_argument("--parameter", required=True)
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--mode", choices=("off", "demo", "live"))
+    action.add_argument("--live-map-mode", choices=("off", "shadow", "live"))
     action.add_argument(
         "--settings", help="JSON object containing explicit limits; requires OFF"
     )
@@ -100,6 +138,14 @@ def main():
                 "settings"
             ]
         result = configure(client, args.parameter, json.loads(settings))
+    elif args.live_map_mode is not None:
+        result = set_live_map_mode(
+            client,
+            args.parameter,
+            args.live_map_mode,
+            functions=boto3.client("lambda") if args.live_map_mode != "off" else None,
+            function=args.function,
+        )
     else:
         result = set_mode(
             client,

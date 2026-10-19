@@ -190,7 +190,9 @@ def latest_elo(db_path, team_name, before):
     return {"elo": row[1], "as_of": row[0]}
 
 
-def timeline_calls(page, model, ratings, start=None, shift=0.0):
+def timeline_calls(
+    page, model, ratings, start=None, shift=0.0, *, include_inputs=False
+):
     """Pregame and per-minute calls for teams[0]; ratings in match-team order.
 
     `shift` (log-odds for teams[0], `series.map_shift`) carries the maps already
@@ -244,6 +246,16 @@ def timeline_calls(page, model, ratings, start=None, shift=0.0):
             "at": frame["at"],
             "model": active_model.get("schema"),
         }
+        if include_inputs:
+            call["source_at"] = frame["source_at"]
+            call["inputs"] = {
+                "clock_seconds": seconds,
+                "blue_gold": gold[0],
+                "red_gold": gold[1],
+                "blue_elo": elo[0],
+                "red_elo": elo[1],
+                **options,
+            }
         # One call per estimated minute keeps the chart readable; the newest wins.
         if calls and int(calls[-1]["minute"]) == int(call["minute"]):
             calls[-1] = call

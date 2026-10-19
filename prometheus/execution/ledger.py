@@ -123,6 +123,25 @@ class DynamoLedger:
                     }
                 }
             )
+        if plan.get("series_id"):
+            cap_value = config.raw.get("live_series_cap_usd")
+            update = {
+                "TableName": self.table,
+                "Key": _item(self.key(env, f"SERIES#{plan['series_id']}")),
+                "UpdateExpression": "ADD held :amount",
+                "ExpressionAttributeValues": _item({":amount": amount}),
+            }
+            if cap_value is not None:
+                cap_value = decimal(cap_value)
+                if amount > cap_value:
+                    return None
+                update["ConditionExpression"] = (
+                    "attribute_not_exists(held) OR held <= :available"
+                )
+                update["ExpressionAttributeValues"] = _item(
+                    {":amount": amount, ":available": cap_value - amount}
+                )
+            transactions.append({"Update": update})
         for sk in (
             f"FIXTURE#{plan['alert']['fixture_id']}",
             f"EVENT#{plan['alert']['event_ticker']}",
@@ -231,6 +250,21 @@ class DynamoLedger:
                         }
                     }
                 )
+        if previous.get("series_id"):
+            delta = decimal(row["held"]) - decimal(previous["held"])
+            if delta:
+                changes.append(
+                    {
+                        "Update": {
+                            "TableName": self.table,
+                            "Key": _item(
+                                self.key(env, f"SERIES#{previous['series_id']}")
+                            ),
+                            "UpdateExpression": "ADD held :delta",
+                            "ExpressionAttributeValues": _item({":delta": delta}),
+                        }
+                    }
+                )
         if row["status"] in {"settled", "unfilled", "aborted"}:
             changes.append(
                 {
@@ -332,3 +366,20 @@ class DynamoLedger:
                 }
             ),
         )
+
+    def shadow(self, alert, payload, now):
+        try:
+            self.client.put_item(
+                TableName=self.table,
+                Item=_item(
+                    {
+                        **self.key("shadow", f"MAP#{alert['event_ticker']}"),
+                        "payload": json.dumps(payload, separators=(",", ":")),
+                        "at": now.isoformat(),
+                    }
+                ),
+                ConditionExpression="attribute_not_exists(pk)",
+            )
+        except Exception as error:
+            if not _conditional(error):
+                raise

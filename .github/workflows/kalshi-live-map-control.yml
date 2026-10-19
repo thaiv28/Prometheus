@@ -1,0 +1,44 @@
+name: Kalshi live-map mode
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Live-map strategy mode (separate from pregame execution)
+        required: true
+        default: "off"
+        type: choice
+        options:
+          - "off"
+          - "shadow"
+          - "live"
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: kalshi-execution-control
+  cancel-in-progress: false
+jobs:
+  control:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.KALSHI_EXECUTION_CONTROL_ROLE_ARN }}
+          aws-region: us-west-2
+          role-session-name: live-map-control-${{ github.run_id }}
+          mask-aws-account-id: true
+          unset-current-credentials: true
+      - name: Set live-map mode
+        env:
+          MAP_MODE: ${{ inputs.mode }}
+          EXECUTION_PARAMETER: ${{ vars.KALSHI_EXECUTION_CONFIG_PARAMETER }}
+          EXECUTION_FUNCTION: ${{ vars.KALSHI_EXECUTION_FUNCTION_NAME }}
+        run: |
+          set -euo pipefail
+          : "${EXECUTION_PARAMETER:?Set the execution config variable}"
+          uv run --no-project --with boto3 python -m deploy.execution.control \
+            --parameter "$EXECUTION_PARAMETER" --live-map-mode "$MAP_MODE" --function "$EXECUTION_FUNCTION"
