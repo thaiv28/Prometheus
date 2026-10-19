@@ -1,5 +1,70 @@
 # Work log
 
+## 2026-10-19 — Joint tune: Glicko RD + non-major update scale (research)
+
+Research in the supplied `Prometheus-elo-glicko-scale` worktree, with its own DB;
+no commit or published default changes. `elo_glicko_scale.py` imports the v2
+Glicko scoring/prefix/roster helpers and fitted-scale non-major config/grid.
+Protocol fixed before scoring: six RD settings (floor 140/180/220, new twice
+floor, reference=floor, growth 10, information .125/.0625), then 16 non-major
+slope {ln(10)/400,.0065,.0070,.0080} × K {20,22,24,28} settings on G*.
+One upper-edge extension only (.0090 and/or K 32, new Cartesian cells).
+Published rookie discount retained; provisional/away multipliers disabled;
+major/international slope and base K remain native. Tune through 2021 on
+weighted domestic + other-league Elo loss; freeze choices before 2022+ scoring.
+Reuses v2 curve/Form/FORGE refits and paired-game 95% bootstrap comparisons,
+including known-five-starter-change slices. Every replay's wall time is recorded.
+
+G* remains the v2 winner: RD `(280,140,140,10)`, information .125;
+training objective .62002411. S*: non-major slope .0065, K 20; combined
+objective .61999453. No upper-edge extension triggered (22 tuning cells).
+The RD floor remains on the lower boundary. Report:
+[`elo_glicko_scale.md`](../research/elo_glicko_scale.md).
+
+Held out 2022–2026, Δ log loss (95% paired-game CI): (a) G* versus
+published; (b) G*+S* versus published; (c) G*+S* versus G*.
+
+| Section | (a) | (b) | (c) |
+|---|---|---|---|
+| Elo, domestic | -0.00051 (-0.00132, +0.00026) | -0.00072 (-0.00158, +0.00007) | -0.00022 (-0.00037, -0.00007) |
+| Elo, international | +0.00039 (-0.00094, +0.00176) | +0.00027 (-0.00093, +0.00150) | -0.00013 (-0.00066, +0.00045) |
+| FORGE, domestic | +0.00014 (-0.00036, +0.00061) | +0.00007 (-0.00045, +0.00056) | -0.00007 (-0.00017, +0.00002) |
+| FORGE, international | -0.00013 (-0.00100, +0.00076) | +0.00010 (-0.00077, +0.00096) | +0.00023 (-0.00007, +0.00058) |
+| Elo, other leagues | -0.00283 (-0.00347, -0.00220) | -0.00329 (-0.00403, -0.00257) | -0.00047 (-0.00064, -0.00030) |
+| FORGE, other leagues | -0.00108 (-0.00155, -0.00062) | -0.00142 (-0.00199, -0.00088) | -0.00034 (-0.00049, -0.00020) |
+| Elo, cross-league | -0.00068 (-0.00222, +0.00091) | -0.00283 (-0.00471, -0.00104) | -0.00215 (-0.00279, -0.00154) |
+
+**Ship G* only**, computed by the script. The combined design beats G*
+significantly on Elo cross-league and Elo/FORGE within other leagues, and
+no full-section regression is significant. However, the all-reported-section
+guard also includes the roster-change slices: versus G*, international
+roster-change Elo is +.00777 (+.00140, +.01433), FORGE +.00502
+(+.00050, +.00979), on only nine games. Thus (c) fails the no-regression
+guard; (a) passes, including all roster slices. Roster-change other-league
+gains for (a): Elo −.00269 (−.00421, −.00116), FORGE −.00169
+(−.00289, −.00051). Report contains all three complete roster tables.
+
+Timing: median 1.89 s across all 27 replays (prefix and full mixed);
+full published/G*/combined replays 3.92/4.17/4.30 s; total run 134.9 s.
+Only an opt-in research script and one small config test were added;
+no publish/hourly/benchmark job, dependency or production build work added.
+
+Checks actually run (all PASS):
+
+- `VECLIB_MAXIMUM_THREADS=1 .venv/bin/python scripts/research/elo_glicko_scale.py --out docs/research/elo_glicko_scale.md`.
+- `.venv/bin/python -m pytest -q tests/research/test_elo_glicko_scale.py`: 1 passed.
+- `.venv/bin/python -m pytest -q`: 857 passed, 2 skipped, 1 environment CPU-count warning; 9.44 s.
+- `.venv/bin/ruff format && .venv/bin/ruff check`: clean (final run: 332 files unchanged).
+- Exact selected prefix/full parity; final diff and new-document links checked.
+
+Limits: individual-game intervals, no series clustering or multiplicity
+adjustment; the nine-game international roster slice is small. Inherited
+leave-one-year-out calibration is not an earlier-only deployment simulation;
+historical holdouts have been repeatedly viewed. No production adoption,
+existing-report edits, DB rebuild, site build or commit performed.
+
+Manager decision (same day): ship G*+S*. The script's verdict counted the roster-change slices as guarded sections; the predeclared rule (and CI's guard) covers the main sections, where (b) and (c) have no significantly worse section and (c) gains significantly in cross-league Elo (−0.0022), within-other-league Elo and FORGE, and domestic Elo. The only significant regression is the international roster-change slice, nine games (Elo +0.0078, FORGE +0.0050), too few to support a guard. Recorded here so the override is explicit.
+
 ## 2026-10-19 — Non-major-only Elo update scale / K (research follow-up)
 
 Branch `elo-fitted-scale`, builds on committed first run `313d9de`; changes left
