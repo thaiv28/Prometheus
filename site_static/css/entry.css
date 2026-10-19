@@ -95,7 +95,8 @@
 
 .log-more { margin: 0 0 44px; }
 
-@media (max-width: 1000px) {
+/* Entry pages are spread--wide: the margin goes under the main column below 1280px. */
+@media (max-width: 1279px) {
   .entry-contents--margin { display: none; }
   .entry-contents--inline { display: block; margin: -12px 0 32px; }
   .entry-contents--inline .margin-head { display: none; }
@@ -103,12 +104,6 @@
   .entry-contents--inline li + li { margin-top: 0; }
   .entry-contents--inline a::after { content: none; }
   .entry-contents--inline .toc-figure { order: 0; }
-}
-/* Beside the margin on a laptop the main column is narrow: give the five the room
-   that Length (still in each game's tooltip) and long opponent names would take. */
-@media (min-width: 1001px) and (max-width: 1280px) {
-  .register--log .log-len { display: none; }
-  .register.register--log td.team { max-width: 10rem; }
 }
 @media (max-width: 720px) {
   .register.register--log td.log-roster { min-width: 18rem; }

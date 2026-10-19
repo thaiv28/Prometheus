@@ -10,7 +10,7 @@
 {% set value_word = metric.value_word or ('rating' if rating else 'score') %}
 {% set value_plural = metric.value_plural or (value_word ~ 's') %}
 {% block content %}
-  <div class="spread">
+  <div class="spread spread--wide">
     <div class="spread-main">
       <header class="section-head">
         <h1>{{ metric.title or metric.name }} <span class="full-name">{{ metric.full_name }}</span></h1>
