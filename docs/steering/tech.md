@@ -110,6 +110,15 @@ the original base-10 arithmetic exactly. Research replay accepts `expected_slope
 and event-keyed `league_slopes`; its callback consumes one slope per input game
 in replay order. No production caller changes its slope. The fixed-grid
 slope/K experiment is [`elo_fitted_scale.md`](../research/elo_fitted_scale.md).
+Its third design combines event-keyed slopes with `league_factors=K_other/20`
+only in non-major domestic leagues; major/international callbacks retain slope
+ln(10)/400 and K 20. Native international offset rules stay unchanged (their
+values can differ when previous domestic results change the incoming ratings).
+A predeclared single boundary extension uses tuning seasons only; held-out
+comparisons include 20/28 and tuned K-only controls and the existing recent
+roster-change context. Three small research tests cover grid/extension scope,
+exact default parity and a hand-calculated mixed-event slope/K replay. No
+production caller, fitted artifact, DB script, dependency or CI job changes.
 
 ## International forecast calibration
 

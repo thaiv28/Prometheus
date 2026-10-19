@@ -5,7 +5,12 @@ by K in {12, 16, 20, 24, 28}; additionally one tier design (.0085 in
 majors/international events, .0103 in other domestic leagues), with the same K grid.
 All published rookie, duration, league-offset and time-away rules stay on.
 Tune on <=2021, minimizing games-weighted domestic + other-league Elo log loss,
-then compare the chosen uniform and tier configurations on 2022+ only.
+then compare the chosen configurations on 2022+ only. Third design: only
+non-major domestic updates change, slope {ln(10)/400, .0070, .0085, .0103}
+x K {20,24,28,32}. Majors/international retain published slope and K; offset
+rules are unchanged. One extension, selected using training only: add .0045 or
+.0121 if the slope optimum is at its lower/upper edge, and K 16 or 36 if K is
+at its lower/upper edge; score the expanded Cartesian grid's new cells once.
 
 Uses elo_variants.load_inputs/replay/pregame_elos through the shared scoring
 helpers. Forecast curves, Form opponent adjustment/weights and FORGE blends are
@@ -45,7 +50,46 @@ from prometheus.types import INTERNATIONAL_LEAGUES
 
 SLOPES = (elo.EXPECTED_SLOPE, 0.0070, 0.0085, 0.0100)
 KS = (12, 16, 20, 24, 28)
+OTHER_SLOPES = (elo.EXPECTED_SLOPE, 0.0070, 0.0085, 0.0103)
+OTHER_KS = (20, 24, 28, 32)
 TRAIN_LAST = 2021
+
+
+def other_config(leagues, slope, k):
+    """Keep major/international updates native; scale only domestic player moves."""
+    other = set(leagues) - set(INTERNATIONAL_LEAGUES) - set(em.MAJORS)
+    return {
+        "league_slopes": dict.fromkeys(other, slope),
+        "league_factors": dict.fromkeys(other, k / 20),
+    }
+
+
+def other_grid(leagues, slopes=OTHER_SLOPES, ks=OTHER_KS):
+    return [
+        (f"other slope {s:.8f}, K {k}", other_config(leagues, s, k))
+        for s in slopes
+        for k in ks
+    ]
+
+
+def extension_grid(leagues, best):
+    """One predeclared boundary extension; no held-out losses enter this choice."""
+    slope = next(iter(best[2]["league_slopes"].values()))
+    k = 20 * next(iter(best[2]["league_factors"].values()))
+    slopes, ks = list(OTHER_SLOPES), list(OTHER_KS)
+    if slope == slopes[0]:
+        slopes.insert(0, 0.0045)
+    elif slope == slopes[-1]:
+        slopes.append(0.0121)
+    if k == ks[0]:
+        ks.insert(0, 16)
+    elif k == ks[-1]:
+        ks.append(36)
+    return [
+        (label, kw)
+        for label, kw in other_grid(leagues, slopes, ks)
+        if label not in {label for label, _ in other_grid(leagues)}
+    ]
 
 
 def designs(leagues):
@@ -55,6 +99,7 @@ def designs(leagues):
         if league not in INTERNATIONAL_LEAGUES and league not in em.MAJORS
     }
     return {
+        "Non-major only": other_grid(leagues),
         "Uniform": [
             (f"slope {s:.8f}, K {k}", {"expected_slope": s, "K": k})
             for s in SLOPES
@@ -75,12 +120,18 @@ def losses(inputs, pairs, pre, years):
         scores = ev.score(inputs, pre, years=years)
     out = {}
     for metric in ("elo_live", "forge"):
-        for section in ("Domestic", "International"):
+        for section in ("Domestic", "International", "Roster change (<5 games)"):
+            mask = (
+                scores.mask(section)
+                if section != "Roster change (<5 games)"
+                else inputs.frame[inputs.frame.year.isin(years)]
+                .reset_index(drop=True)
+                .since_change.lt(5)
+                .to_numpy()
+            )
             out[(metric, section)] = (
-                scores.games.loc[scores.mask(section), ["gameid"]].reset_index(
-                    drop=True
-                ),
-                scores.log_loss(metric, section),
+                scores.games.loc[mask, ["gameid"]].reset_index(drop=True),
+                scores.losses[metric]["log_loss"].to_numpy()[mask],
             )
     for key, fn in (
         (("elo_live", "Other leagues"), enp.other_losses),
@@ -144,6 +195,12 @@ def main():
         f"Tune {train[0]}–{train[-1]}; report {test[0]}–{test[-1]}. Fixed grid: "
         "slope {ln(10)/400, .0070, .0085, .0100} × K {12,16,20,24,28}; "
         "tier {.0085 majors/international, .0103 other domestic} × the same K grid. "
+        "Third design: non-major domestic slope {ln(10)/400,.0070,.0085,.0103} "
+        "× K {20,24,28,32}; major/international slope ln(10)/400 and K 20. "
+        "One training-only edge extension: slope .0045/.0121, K 16/36 on the "
+        "selected lower/upper edge, scoring all new Cartesian cells once. "
+        "league_factors = K_other/20 scales only players; international callbacks "
+        "and offset rules stay native (offset values can differ through prior ratings). "
         "The published slope is exactly ln(10)/400, not the rounded .00576. "
         "Tuning minimizes games-weighted domestic + within-other-league Elo log loss.\n",
         "All forecast curves are refit per replay: out-of-year Elo, shrunk "
@@ -177,17 +234,51 @@ def main():
             candidates.append((obj, label, kw, pre))
             print(f"{design}: {label}: {obj:.6f}; replay {elapsed:.2f}s", flush=True)
             lines.append(f"| {design} | {label} | {obj:.6f} | {elapsed:.2f} |")
+        if design == "Non-major only":
+            best = min(candidates, key=lambda x: x[0])
+            extension = extension_grid(inputs.games.league.unique(), best)
+            lines.append(
+                f"| Extension trigger | {best[1]}; {len(extension)} new cells | — | — |"
+            )
+            for label, kw in extension:
+                tick = time.perf_counter()
+                pre = ev.replay(inputs, margin, **kw)
+                elapsed = time.perf_counter() - tick
+                runtimes.append(elapsed)
+                obj = enp.objective(inputs, pairs, pre, train)
+                candidates.append((obj, label, kw, pre))
+                print(
+                    f"{design} extension: {label}: {obj:.6f}; replay {elapsed:.2f}s",
+                    flush=True,
+                )
+                lines.append(
+                    f"| {design} extension | {label} | {obj:.6f} | {elapsed:.2f} |"
+                )
+            # Predeclared K-only comparison: earlier report's k_major=20/k_other=28.
+            # Reuse its replay when it was in the initial grid.
+            k28_label = other_grid(
+                inputs.games.league.unique(), [elo.EXPECTED_SLOPE], [28]
+            )[0][0]
+            k28 = next(c for c in candidates if c[1] == k28_label)
+            k_only = min(
+                (
+                    c
+                    for c in candidates
+                    if next(iter(c[2]["league_slopes"].values())) == elo.EXPECTED_SLOPE
+                ),
+                key=lambda x: x[0],
+            )
         chosen[design] = min(candidates, key=lambda x: x[0])
     winner = min(chosen, key=lambda d: chosen[d][0])
     lines += [
         f"\nOverall training winner: **{winner}: {chosen[winner][1]}**. "
-        "Both design winners below were selected without held-out scores.\n",
+        "All three design winners below were selected without held-out scores.\n",
         "## Held out\n",
         "Δ log loss = variant − published; negative is better. Paired game "
         "bootstrap, 95% intervals (shared helper, fixed seed, 2,000 replicates). "
         "Game IDs and ordering are asserted equal before comparison.\n",
-        "| Section | Games | Published LL | Uniform Δ (95% CI) | Tier Δ (95% CI) |",
-        "|---|---:|---:|---|---|",
+        "| Section | Games | Published LL | Non-major only Δ (95% CI) | Uniform Δ (95% CI) | Tier Δ (95% CI) |",
+        "|---|---:|---:|---|---|---|",
     ]
     baseline = losses(inputs, pairs, base, test)
     variants = {
@@ -202,12 +293,49 @@ def main():
                 games.reset_index(drop=True), vg.reset_index(drop=True)
             )
             delta = paired_bootstrap(vl, loss)
-            guards[design].append(delta)
+            guards[design].append((key, delta))
             cells.append(f"{delta[0]:+.6f} ({delta[1]:+.6f} to {delta[2]:+.6f})")
         lines.append(
             f"| {'Elo' if key[0] == 'elo_live' else 'FORGE'}, {key[1]} "
             f"| {len(loss):,} | {loss.mean():.6f} | " + " | ".join(cells) + " |"
         )
+    lines += [
+        "\n## Does slope add to K alone?\n",
+        "Earlier [K by tier](elo_k_tier.md) includes k_major 20 / k_other 28 in "
+        "its tuning grid, but its held-out table reports the selected 28/28 arm, "
+        "not 20/28. Re-evaluate 20/28 here on identical games/current defaults "
+        "rather than comparing losses across baseline versions. Also compare "
+        "the best training-selected K-only arm from this grid.\n",
+        f"K-only training winner: **{k_only[1]}**, objective {k_only[0]:.6f}; "
+        f"20/28 control objective {k28[0]:.6f}.\n",
+        "| Section | K20/28 − published (95% CI) | Non-major winner − K20/28 (95% CI) | Non-major winner − tuned K-only (95% CI) |",
+        "|---|---|---|---|",
+    ]
+    k28_losses = losses(inputs, pairs, k28[3], test)
+    konly_losses = (
+        k28_losses if k_only[1] == k28[1] else losses(inputs, pairs, k_only[3], test)
+    )
+    for key, (games, loss) in baseline.items():
+        cg, cl = k28_losses[key]
+        kg, kl = konly_losses[key]
+        pd.testing.assert_frame_equal(
+            games.reset_index(drop=True), cg.reset_index(drop=True)
+        )
+        pd.testing.assert_frame_equal(
+            games.reset_index(drop=True), kg.reset_index(drop=True)
+        )
+        nl = variants["Non-major only"][key][1]
+        cells = [paired_bootstrap(a, b) for a, b in ((cl, loss), (nl, cl), (nl, kl))]
+        lines.append(
+            f"| {'Elo' if key[0] == 'elo_live' else 'FORGE'}, {key[1]} | "
+            + " | ".join(f"{d:+.6f} ({lo:+.6f} to {hi:+.6f})" for d, lo, hi in cells)
+            + " |"
+        )
+    lines.append(
+        "\nRoster-change slice: either team's lineup changed fewer than five games ago, "
+        "using existing backtest context, pooled domestic/international games. "
+        "It reuses each section's refitted predictions; no extra replay or DB read.\n"
+    )
     lines += [
         "\n## Refit scale diagnostics\n",
         "Descriptive pooled refits, not scoring curves: majors plus international "
@@ -229,20 +357,22 @@ def main():
     passes = [
         d
         for d, ds in guards.items()
-        if any(hi < 0 for _, _, hi in ds) and all(lo <= 0 for _, lo, _ in ds)
+        if all(
+            any(key == target and delta[2] < 0 for key, delta in ds)
+            for target in (("elo_live", "Other leagues"), ("elo_live", "Cross-league"))
+        )
+        and all(delta[1] <= 0 for _, delta in ds)
     ]
     lines += [
         "\n## Interpretation and limits\n",
-        "Significance gate (some significant gain, no significant regression in "
-        f"any reported section): {', '.join(passes) if passes else 'neither design passes'}. "
+        "Significance gate (significant Elo gains within other leagues AND cross-league, no significant regression in "
+        f"any reported section): {', '.join(passes) if passes else 'no design passes'}. "
         "No shipping in this research change. Intervals spanning zero are inside "
         "the noise; individual game resampling does not account for series clusters "
         "or repeated historical research.\n",
         (
-            "Recommendation: **drop the proposed uniform/tier update-scale change**. "
-            "Neither tuned design passes the no-regression significance rule. "
-            "A separate other-tier-only design would be a new experiment, not a "
-            "release justified by these results.\n"
+            "Recommendation: **drop these proposed update-scale changes**. "
+            "No tuned design passes the significance rule.\n"
             if not passes
             else "Recommendation: **iterate** with earlier-only calibration and native "
             "release guards before considering a production change.\n"
