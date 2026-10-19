@@ -62,6 +62,8 @@ selected non-major arm 3.90 s; whole experiment 400.6 s, all with
 VECLIB_MAXIMUM_THREADS=1. No production/CI/publish/hourly work, new dependency,
 DB change, or fitted artifact change. No Actions timing: branch not pushed.
 
+Native check (manager, same day): `bootstrap_elo` patched in a throwaway worktree (`elo-nonmajor-native`, not merged) to use slope .0070 and K 24 in non-major domestic games, `004_bootstrap_elo.py` rerun, then `evaluate_metrics.py --dump` on base and candidate and `compare_benchmarks.py`. No guarded value significantly worse. Cross-league Elo −0.0022 (−0.0030 to −0.0014), within other leagues per-league Elo −0.0012 (−0.0016 to −0.0009), within other leagues FORGE −0.0004 (−0.0006 to −0.0002); domestic FORGE +0.0001 (−0.0000 to +0.0002), international FORGE/Elo +0.0003 (−0.0000 to +0.0005). Unguarded: international Form +0.0004 (worse; not a published forecast) and other-league Elo on the 400-point curve +0.0011 (expected, the ratings spread more). These rolling sections include the tuning years. Still to check before shipping: `evaluate_markets.py` (our calls vs Kalshi), the published `league_curves.json`/FORGE refit, and the international calibration fitted on the old scale.
+
 ## 2026-10-19 — Elo expected-score scale with K retuned (research)
 
 Branch `elo-fitted-scale`, based on `177004c` (future-work documentation).
