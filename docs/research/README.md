@@ -1,5 +1,7 @@
 # Research
 
+- **Elo follow-ups (2026-10-19), none adopted except RD information on the game's slope.** [RD slope / move-down bonus](elo_rd_simplify.md) ([native](elo_rd_simplify_native.md)); [Glicko-2 volatility](elo_glicko2.md) ([native](elo_glicko2_native.md)); [g(RD) in forecasts](elo_grd.md); [league-offset RD and dropping the regional calibration](elo_offset_rd.md) ([native](elo_offset_rd_native.md)). Scripts and engine options on branches `elo-rd-slope-movedown`, `elo-glicko2`, `elo-grd`, `elo-offset-rd` (not merged).
+
 - [Draft v2 map trading](live_map_draft_trading.md): draft v2 as the map-trading model input; the fixed market-blend comparison fails the improvement and no-regression gates (FST worse). Not adopted; its runtime wiring was removed from the trading branch on 2026-10-19.
 
 - [Live map trading](live_trading.md): earlier-series-only market/model blend, fee-aware entries, freshness/stability proxies, execution-cost stress and Kelly paths; [fixed protocol](live_trading_protocol.md). Historical tape returns remain inconclusive; no trading change.

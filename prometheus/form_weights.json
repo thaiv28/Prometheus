@@ -5,17 +5,17 @@
   "roster_power": 0.5,
   "roster_at": "change",
   "weights": {
-    "gpm": 0.00523,
-    "kills_per_10": -0.002698,
-    "turrets_per_10": 0.729604,
-    "baron_per_10": -1.289016,
-    "dragon_per_10": 0.635374,
-    "atakhans": 0.607944,
-    "heralds_per_10": 0.361201,
-    "firstherald": -0.434983,
-    "firstdragon": -0.407468,
-    "firstbaron": -0.088851,
-    "firsttower": 0.139796,
-    "visionscore_per_10": 0.013743
+    "gpm": 0.005226,
+    "kills_per_10": -0.003292,
+    "turrets_per_10": 0.728256,
+    "baron_per_10": -1.284423,
+    "dragon_per_10": 0.636051,
+    "atakhans": 0.612327,
+    "heralds_per_10": 0.359409,
+    "firstherald": -0.434898,
+    "firstdragon": -0.406457,
+    "firstbaron": -0.090101,
+    "firsttower": 0.139661,
+    "visionscore_per_10": 0.013822
   }
 }

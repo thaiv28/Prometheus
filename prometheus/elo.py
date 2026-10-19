@@ -173,7 +173,8 @@ def compute_elo_records(
     player_rd is (new, floor, growth per sqrt(day)), or None to disable RD.
     Moves scale by RD²/floor². Variance grows by growth² × days away, capped at
     new², then shrinks to max(floor², 1/(1/RD² + player_rd_information ×
-    (ln(10)/400)² × E × (1−E))). Information must be finite and positive.
+    s² × E × (1−E))), with s and E on the game's update slope. Information must be
+    finite and positive.
     other_league_slope overrides the callback's expected-score slope only in
     non-major domestic events; None disables it. Cross-home international games
     also move both league offsets by league_share of the unscaled team change.
@@ -306,12 +307,11 @@ def compute_elo_records(
         )
         if player_rd is not None:
             weights = []
-            expectation = expected_score(pre[0], pre[1])
+            # Information on the same expected-score slope the update used.
+            slope = slope_args.get("expected_slope", EXPECTED_SLOPE)
+            expectation = expected_score(pre[0], pre[1], slope=slope)
             information = (
-                player_rd_information
-                * (math.log(10) / 400) ** 2
-                * expectation
-                * (1 - expectation)
+                player_rd_information * slope**2 * expectation * (1 - expectation)
             )
             for _, _, roster in sides:
                 side_weights = {}

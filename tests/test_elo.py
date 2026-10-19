@@ -696,3 +696,26 @@ def test_published_update_slope_follows_event_league(league):
         1500 + 4 * 6.5 - discount_after
     )
     assert calls[1]["elo"] != calls[1]["opponent_elo"]
+
+
+@pytest.mark.parametrize("league", ["NACL", "LCS", "MSI", None])
+def test_rd_information_uses_the_game_update_slope(league):
+    games = _rd_games()
+    if league is not None:
+        games["league"] = league
+    records, _ = elo.compute_elo_records(
+        games, lambda **kw: 10, rookie_penalty=0, player_rd=(250, 100, 0)
+    )
+    # A constant update isolates RD shrinkage; later games have unequal ratings,
+    # so E as well as the slope enters the information.
+    slope = 0.0065 if league == "NACL" else np.log(10) / 400
+    variance, difference = 250**2, 0.0
+    for row in records[records.teamid == "A"].itertuples():
+        step = 10 * variance / 100**2
+        assert row.elo_change == pytest.approx(step)
+        expectation = 1 / (1 + np.exp(-slope * difference))
+        variance = max(
+            100**2,
+            1 / (1 / variance + 0.125 * slope**2 * expectation * (1 - expectation)),
+        )
+        difference += 2 * step
