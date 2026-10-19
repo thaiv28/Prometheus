@@ -172,6 +172,8 @@ def build_state(state, rows, mapping, at, preview=False):
     blue_index = ids.index(selection["blue_id"])
     frames = []
     seen = set()
+    draft_observations = []
+    previous_draft = None
     for row in rows:
         if (
             row["session"] != selection["session"]
@@ -199,6 +201,20 @@ def build_state(state, rows, mapping, at, preview=False):
             or sides["red"]["team_id"] != selection["red_id"]
         ):
             raise ValueError("candidate side identities differ from selection")
+        participants = [sides[s].get("participant_metadata") for s in ("blue", "red")]
+        if participants != previous_draft:
+            draft_observations.append(
+                {
+                    "at": receipt,
+                    "source_at": row["source_timestamp"],
+                    "teams": participants,
+                    "team_codes": [
+                        mapping["teams"][i].get("code")
+                        for i in (blue_index, 1 - blue_index)
+                    ],
+                }
+            )
+            previous_draft = participants
         totals = []
         for team_id in ids:
             side = sides["blue"] if team_id == selection["blue_id"] else sides["red"]
@@ -278,6 +294,7 @@ def build_state(state, rows, mapping, at, preview=False):
             "pregame": {"p": None, "by": None, "market": None},
             "calls": [],
             "frames": frames,
+            "draft_observations": draft_observations,
             "market": [],
             "market_url": None,
             "winner": None,

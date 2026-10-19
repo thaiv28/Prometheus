@@ -47,6 +47,7 @@ Required repository settings:
 
 - Runs on `pull_request` only (opened, synchronize, reopened, labeled, unlabeled); never on `main` pushes, schedules or dispatch. Concurrency group `benchmarks-<PR number>`, cancelling the PR's older run. Permissions: `contents: read`, `pull-requests: write` (the comment).
 - Three jobs. `prepare` reads any stored verdict to reuse (label changes), the base commit (the merge commit's first parent) and whether its scripts have `--dump`, and looks up the newest `oracles-elixir-*` cache entry. `bench` runs as a matrix, `head` (the merge commit) and `base` × `core` and `markets`, in parallel, each on its own runner: `uv sync`, that exact CSV entry (so both read the same data; no `REFRESH_DATA`, so Drive only if the cache is empty), the cached DB under the same `prometheus-db-<hash>` key as `publish.yml` (usually a hit for the base, and for the head when the PR leaves the DB build alone), else `setup_db.sh`, then (`core`) the benchmark scripts at once (`--dump`; they only read the DB): forecasts, season stats and AURA, plus the prop projections on the fourth core when the side's `evaluate_props.py` can dump (a base from before it skips it and the comparison notes it) or (`markets`) `evaluate_markets.py --offline --dump` on the Kalshi cache entry `prepare` picked and then `evaluate_live.py --fetch-data --dump` (the in-game benchmark: downloads the data file pinned in that side's `scripts/live_bench_data.json` from the `live-bench-data` release, under 1 MB, public, no secret; about 2 s to replay; a side without the pin file skips it), uploading `dumps/` as an artifact. `markets` runs only when a `kalshi-markets-*` cache exists and the base's `evaluate_markets.py` has `--dump`. The base's dumps are cached as `benchmark-dumps-<group>-<base sha>-<CSV entry>[-<Kalshi entry>]`, so later pushes to a PR with the same base skip the whole base side. `compare` downloads each side's artifacts into one directory, compares, comments and gives the verdict.
+- **Local candidate selection:** `evaluate_live.py --model <supported-runtime-artifact.json> --dump <dir>` uses that artifact for live/pre-map replay and its fit cutoff for the comparison. CI omits the option and continues to test the production default. Research draft dumps can use the same comparator locally; they are not the pinned market cohort and add no CI training job.
 - **Live benchmark data.** The release `live-bench-data` holds one asset per data version (`live_maps-<sha256 prefix>.json.gz`); `scripts/live_bench_data.json` pins the one each commit uses, so base and head each read their own pin and the comparison pairs the maps both scored. Refresh it locally (it needs the feed timelines on this machine): `uv run python scripts/evaluate_live.py --build-data --refresh-markets`, then `--publish-data` (gh CLI, uploads and rewrites the pin), and commit the pin in a PR. Old assets stay so old commits still fetch.
 - If the base's scripts have no `--dump` (until this check merged), nothing runs: "no baseline yet", pass.
 - `scripts/compare_benchmarks.py` compares the dumps (see `tech.md`, *Benchmark comparison*). `scripts/benchmark_comment.sh` keeps one sticky PR comment (a `<!-- benchmark-report -->` marker; edited in place) with the verdict, the override state and the report (including the report-only betting table); the report also goes to the run summary. Fork PRs get a read-only token, so their comment step fails softly (`continue-on-error`).
@@ -174,6 +175,26 @@ Automatic per-frame fallback covers unavailable objective counters only; it is
 not an online accuracy monitor. Preserve archived calls as made. See
 [release validation](../research/live_model_release.md) for checked evidence and
 actual rollout status.
+
+### Draft v2 private observation (prepared 2026-10-18)
+
+The existing main-only `Publish ratings for the live worker` step also exports
+prior-day draft histories inside `live_inputs.json` (about 18.3 MB locally,
+~11.6 s extra CPU wall time). The refresh timer fetches it as before; no new
+S3 key, dependency, secret, provider request, CI step or service flag is needed.
+The worker starts collecting private candidate calls automatically when it has
+compatible histories and the packaged candidate's exact production parent.
+This does not change displayed predictions or execution/trading behavior.
+
+`calls.jsonl` contains `draft_shadow` (context and latest candidate/fallback
+call). Each map's `draft_context.json` is included by the existing backup sync
+and packed with its finished collector evidence. Keep raw observations/receipt
+times for prospective scoring. A stale day or unknown identity means fallback;
+UTC-midnight rollover may await the next daily input export/worker refresh.
+Actions timings for checks are recorded in the PR; main-only export/upload and
+production reload timings remain unverified until rollout. There is no manual
+AWS deployment in this change. Merging main lets the existing publish/refresh
+path install this private observation mode.
 
 ### Refresh unit ordering (2026-10-18)
 
