@@ -17,7 +17,7 @@ after two minutes (a pause). Team stats: gold, kills, towers, inhibitors,
 barons, dragons. Results and Elo come later, from Oracle's Elixir
 (`train_time_model_v2.py` joins by teams and start time).
 
-    uv run python scripts/research/feed_timelines.py schedule   # matches since 2024
+    uv run python scripts/research/feed_timelines.py schedule   # matches since 2024; later runs page only back to the newest saved
     uv run python scripts/research/feed_timelines.py collect    # resumable
     uv run python scripts/research/feed_timelines.py status
 
@@ -220,9 +220,23 @@ def schedule(out):
             page = get(f"{API}/getSchedule?{urlencode(query)}", key=True)["data"][
                 "schedule"
             ]
+            matches_on_page = [
+                e
+                for e in page["events"]
+                if e.get("type") == "match" and e.get("match", {}).get("id")
+            ]
+            reached_saved = any(e["match"]["id"] in saved for e in matches_on_page)
+            has_new = any(
+                e.get("state") == "completed" and e["match"]["id"] not in saved
+                for e in matches_on_page
+            )
             events += page["events"]
             token = page["pages"].get("older")
-            if not token or min(e["startTime"] for e in page["events"]) < SINCE:
+            if (
+                not token
+                or min(e["startTime"] for e in page["events"]) < SINCE
+                or (reached_saved and not has_new)
+            ):
                 break
         matches = [
             e

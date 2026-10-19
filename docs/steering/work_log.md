@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — Weekly live benchmark data refresh in CI
+
+New `live-bench.yml` (Mondays, main only, read-only contents; commits nothing): restores the feed timelines and Kalshi tapes from `s3://…/prometheus/live-bench/`, collects new feed maps in four shards, runs `--build-data --refresh-markets`, syncs grown state back and saves `live-bench-data-<hash>` to the Actions cache. `benchmarks.yml` restores that one entry for both sides (in the markets dump key); the release pin stays as fallback. `feed_timelines.py schedule` stops paging at saved matches. Cost: state 7.4 MB + 56 MB compressed (13 s to tar locally); ~17 s a map, ~100 maps a week; no time added to publish, PR checks or hourly jobs. Checks: full suite 894 passed, 2 skipped; ruff; YAML parses. Limits: not yet run in CI (needs merge, S3 seed, a dispatch); Riot may refuse GitHub runners; CI build time unmeasured.
+
 ## 2026-10-19 — Live results' map odds follow the series score; current_state trimmed
 
 Branch `live-anchor`, base `b6e0b62`. Series pages showed the pre-series map chance on every row; "Map: ours" and the map chart's opening call now take `series.map_prior` (rho from `forge.json`, else the log's home leagues), as the live page and series column already did. The shift alone beats the unshifted pregame call on 732 priced maps 2+ (−0.0077, −0.0135 to −0.0025; `live_anchor.md`). `current_state.md` condensed 9,561 → ~2,900 words (Codex). Checks: archive tests (one new), full pytest, ruff; site built from a read-only S3 sync of compact live maps; four series tables checked, one page screenshotted at desktop and phone widths. Copy review: PASS (Table I, note and figure; no copy changed, the note already says "FORGE and the score"). Headless phone render clips the table's right edge, unverified on a device.

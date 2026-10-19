@@ -11,6 +11,7 @@ name: Benchmarks
 # and inputs, so later pushes to a PR rerun only the head. Posts one sticky comment and fails when a
 # guarded value is significantly worse, unless the PR has the `benchmark-override`
 # label. A label change reuses the verdict for the same commit instead of rerunning.
+# Live data: newest cached build from live-bench.yml; fallback: pinned release asset.
 # Never runs on main pushes or schedules.
 on:
   pull_request:
@@ -43,6 +44,7 @@ jobs:
       relevant: ${{ steps.base.outputs.relevant }}
       raw_key: ${{ steps.raw.outputs.cache-matched-key }}
       kalshi_key: ${{ steps.kalshi.outputs.cache-matched-key }}
+      live_key: ${{ steps.live.outputs.cache-matched-key }}
       jobs: ${{ steps.matrix.outputs.jobs }}
     steps:
       - uses: actions/checkout@v7
@@ -76,7 +78,7 @@ jobs:
           # Docs, templates, static files, tests and other workflows can't move a
           # benchmark, so a PR touching only those skips the run.
           if git diff --name-only HEAD^1 HEAD \
-              | grep -qvE '^(docs/|templates/|site_static/|tests/|[^/]+\.md$|\.github/workflows/(publish|prices|kalshi-cache)\.yml$)'; then
+              | grep -qvE '^(docs/|templates/|site_static/|tests/|[^/]+\.md$|\.github/workflows/(publish|prices|kalshi-cache|live-bench)\.yml$)'; then
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else
             echo "Only docs, templates, static files, tests or other workflows changed."
@@ -100,6 +102,14 @@ jobs:
           path: data/markets
           key: kalshi-markets-${{ github.run_id }}
           restore-keys: kalshi-markets-
+          lookup-only: true
+      - name: Find the cached live benchmark data
+        id: live
+        uses: actions/cache/restore@v6
+        with:
+          path: data/live_bench/live_maps.json.gz
+          key: live-bench-data-${{ github.run_id }}
+          restore-keys: live-bench-data-
           lookup-only: true
       # Core benchmarks on both sides; the market benchmark too when there is a
       # Kalshi cache and the base can dump it.
@@ -134,8 +144,9 @@ jobs:
       BASE_SHA: ${{ needs.prepare.outputs.base_sha }}
       RAW_KEY: ${{ needs.prepare.outputs.raw_key }}
       KALSHI_KEY: ${{ needs.prepare.outputs.kalshi_key }}
+      LIVE_KEY: ${{ needs.prepare.outputs.live_key }}
       # The base's dumps depend only on its commit and its inputs.
-      DUMP_KEY: benchmark-dumps-${{ matrix.group }}-${{ needs.prepare.outputs.base_sha }}-${{ needs.prepare.outputs.raw_key }}${{ matrix.group == 'markets' && format('-{0}', needs.prepare.outputs.kalshi_key) || '' }}
+      DUMP_KEY: benchmark-dumps-${{ matrix.group }}-${{ needs.prepare.outputs.base_sha }}-${{ needs.prepare.outputs.raw_key }}${{ matrix.group == 'markets' && format('-{0}-{1}', needs.prepare.outputs.kalshi_key, needs.prepare.outputs.live_key) || '' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -170,6 +181,12 @@ jobs:
         with:
           path: data/markets
           key: ${{ env.KALSHI_KEY }}
+      - name: Restore the cached live benchmark data
+        if: steps.dumps.outputs.cache-hit != 'true' && matrix.group == 'markets' && env.LIVE_KEY != ''
+        uses: actions/cache/restore@v6
+        with:
+          path: data/live_bench/live_maps.json.gz
+          key: ${{ env.LIVE_KEY }}
       # Main's cached DB when this side's CSVs and DB build code match an entry
       # (same key as publish.yml): usually the base, and the head too when the PR
       # leaves the DB build alone. Restore only; PR builds save nothing.
@@ -215,14 +232,17 @@ jobs:
           uv run python scripts/evaluate_markets.py --offline --dump dumps/markets > dumps/markets.log 2>&1 \
             || { cat dumps/markets.log; exit 1; }
           tail -n 20 dumps/markets.log
-      # In-game calls on past maps against Kalshi's trades: the data file pinned in
-      # scripts/live_bench_data.json (a release asset, under 1 MB), replayed with
-      # this side's model and DB. A few seconds; sides from before it have none.
+      # Both sides replay the same cached maps; the pin is a fallback for an
+      # empty cache. Sides from before evaluate_live.py skip this benchmark.
       - name: Live benchmark
         if: steps.dumps.outputs.cache-hit != 'true' && matrix.group == 'markets'
         run: |
-          [ -f scripts/live_bench_data.json ] || { echo "No live benchmark on this side."; exit 0; }
-          uv run python scripts/evaluate_live.py --fetch-data --dump dumps/live
+          [ -f scripts/evaluate_live.py ] || { echo "No live benchmark on this side."; exit 0; }
+          if [ -f data/live_bench/live_maps.json.gz ]; then
+            uv run python scripts/evaluate_live.py --dump dumps/live
+          elif [ -f scripts/live_bench_data.json ]; then
+            uv run python scripts/evaluate_live.py --fetch-data --dump dumps/live
+          fi
       - name: Cache the base's dumps
         if: matrix.side == 'base' && env.RAW_KEY != '' && steps.dumps.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6

@@ -82,3 +82,42 @@ def test_team_names_match_loosely():
     assert v2.same_team({"name": "KT Rolster", "code": "KT"}, "KT Rolster")
     assert v2.same_team({"name": "T1", "code": "T1"}, "T1")
     assert not v2.same_team({"name": "Gen.G", "code": "GEN"}, "T1")
+
+
+def test_schedule_second_run_stops_at_saved_page(monkeypatch, tmp_path):
+    requests = []
+
+    def get(url, key=False):
+        requests.append(url)
+        assert key
+        if "/getLeagues?" in url:
+            return {"data": {"leagues": [{"slug": "lck", "id": "league"}]}}
+        if "/getSchedule?" in url:
+            older = "pageToken=older" in url
+            return {
+                "data": {
+                    "schedule": {
+                        "events": [
+                            {
+                                "type": "match",
+                                "state": "completed",
+                                "startTime": "2025-01-01" if older else "2026-01-01",
+                                "match": {"id": "old" if older else "new"},
+                            }
+                        ],
+                        "pages": {"older": None if older else "older"},
+                    }
+                }
+            }
+        assert "/getEventDetails?" in url
+        return {"data": {"event": {"match": {"teams": [], "games": []}}}}
+
+    monkeypatch.setattr(ft, "get", get)
+    monkeypatch.setattr(ft, "LEAGUES", {"lck": "LCK"})
+    saved = ft.schedule(tmp_path)
+    assert set(saved) == {"new", "old"}
+    assert sum("/getSchedule?" in url for url in requests) == 2
+    requests.clear()
+    assert ft.schedule(tmp_path) == saved
+    assert sum("/getSchedule?" in url for url in requests) == 1
+    assert not any("/getEventDetails?" in url for url in requests)
