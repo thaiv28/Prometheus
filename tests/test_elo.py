@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -887,3 +889,56 @@ def test_published_update_slope_follows_event_league(league):
         1500 + 4 * 6.5 - discount_after
     )
     assert calls[1]["elo"] != calls[1]["opponent_elo"]
+
+
+def test_league_rd_default_and_floor_preserve_published_offsets():
+    games = _league_games()
+    baseline = elo.compute_elo_records(games, calculate_game_length_elo_change)
+    for option in (None, (40, 40, 0, 1)):
+        actual = elo.compute_elo_records(
+            games, calculate_game_length_elo_change, league_rd=option
+        )
+        for a, b in zip(actual, baseline):
+            pd.testing.assert_frame_equal(a, b)
+
+
+def test_league_rd_hand_updates_shrink_grow_and_cap():
+    games = _league_games().iloc[:3].copy()
+    more = pd.concat([games.iloc[2:]] * 3, ignore_index=True)
+    more["gameid"] = ["g5", "g6", "g7"]
+    more["date"] = ["2024-10-01", "2024-10-02", "2025-10-01"]
+    games = pd.concat([games, more], ignore_index=True)
+    _, offsets = compute_elo_records(games, lambda **kw: 10, league_rd=(80, 40, 6, 1))
+    variance, previous, offset = 80**2, None, 0
+    # Constant player moves: own A-C gap before first international is zero,
+    # and then rises by 20 plus the two league-offset moves each game.
+    own_gap = 0
+    for game in games.iloc[2:].itertuples():
+        when = pd.Timestamp(game.date)
+        if previous is not None:
+            variance = min(80**2, variance + 6**2 * (when - previous).days)
+        expected = elo.expected_score(1500 + own_gap + offset, 1500 - offset)
+        offset += 5 * variance / 40**2
+        actual = offsets[(offsets.gameid == game.gameid) & (offsets.league == "LCK")]
+        assert actual.iloc[0].league_offset == pytest.approx(offset)
+        variance = max(
+            40**2,
+            1 / (1 / variance + (math.log(10) / 400) ** 2 * expected * (1 - expected)),
+        )
+        own_gap += 20
+        previous = when
+
+
+@pytest.mark.parametrize(
+    "rd",
+    [
+        (20, 40, 1, 1),
+        (40, 0, 1, 1),
+        (40, 20, -1, 1),
+        (40, 20, 1, 0),
+        (float("nan"), 20, 1, 1),
+    ],
+)
+def test_league_rd_rejects_invalid_configuration(rd):
+    with pytest.raises(ValueError, match="league_rd"):
+        compute_elo_records(_league_games(), lambda **kw: 10, league_rd=rd)

@@ -192,6 +192,7 @@ def compute_elo_records(
     player_rd_information: float = PLAYER_RD_INFORMATION,
     player_rd_normalize: bool = False,
     other_league_slope: float | None = OTHER_LEAGUE_SLOPE,
+    league_rd: tuple[float, float, float, float] | None = None,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
 
@@ -220,6 +221,10 @@ def compute_elo_records(
         elo_func: Function returning the Elo change for `teamid`.
         starting_elo: Rating of a player entering a league with no active players.
         league_share: Share of an international change applied to league offsets.
+        league_rd: Optional (new, floor, growth per sqrt(day), information).
+            Cross-league international offset moves scale by pre-game RD²/floor²;
+            RD grows since the last such game, then shrinks by expected-score
+            information. None preserves published offset updates exactly.
         rosters: Maps (gameid, teamid) to that team's starters (player ids). A team
             with no roster for a game uses its last roster; one that never had a
             roster plays as a single "player" with the same update settings.
@@ -291,6 +296,18 @@ def compute_elo_records(
             )
         if not math.isfinite(player_rd_information) or player_rd_information <= 0:
             raise ValueError("player_rd_information must be finite and positive")
+    if league_rd is not None:
+        league_new, league_floor, league_growth, league_info = league_rd
+        if (
+            not all(math.isfinite(x) for x in league_rd)
+            or not league_new >= league_floor > 0
+            or league_growth < 0
+            or league_info <= 0
+        ):
+            raise ValueError(
+                "league_rd requires finite new >= floor > 0, growth >= 0, info > 0"
+            )
+    league_variance, league_seen = {}, {}
     rd_variance = {}  # player -> posterior RD squared
     has_league = "league" in games.columns
     leagues = games["league"] if has_league else [None] * len(games)
@@ -498,9 +515,30 @@ def compute_elo_records(
             and opponent_league is not None
             and team_league != opponent_league
         ):
-            league_offset[team_league] += league_share * elo_change
-            league_offset[opponent_league] -= league_share * elo_change
-            for moved in (team_league, opponent_league):
+            for moved, sign in ((team_league, 1), (opponent_league, -1)):
+                weight = 1.0
+                if league_rd is not None:
+                    variance = league_variance.get(moved, league_new**2)
+                    seen = league_seen.get(moved)
+                    days = (
+                        max(0, (date - seen).days)
+                        if date is not None and seen is not None
+                        else 0
+                    )
+                    variance = min(league_new**2, variance + league_growth**2 * days)
+                    weight = variance / league_floor**2
+                    expectation = expected_score(pre[0], pre[1])
+                    information = (
+                        league_info
+                        * (math.log(10) / 400) ** 2
+                        * expectation
+                        * (1 - expectation)
+                    )
+                    league_variance[moved] = max(
+                        league_floor**2, 1 / (1 / variance + information)
+                    )
+                    league_seen[moved] = date
+                league_offset[moved] += sign * league_share * elo_change * weight
                 offset_records.append(
                     {
                         "gameid": row.gameid,
@@ -634,7 +672,7 @@ def load_rosters() -> dict:
     return {key: tuple(ids) for key, ids in rosters.items()}
 
 
-def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO) -> None:
+def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO, **overrides) -> None:
     """Recompute Elo ratings for all teams and overwrite the method's Elo tables.
 
     Args:
@@ -654,6 +692,7 @@ def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO) -> None:
         starting_elo=starting_elo,
         rosters=load_rosters(),
         player_records=True,
+        **overrides,
     )
 
     # Clear rather than drop so the schema from 001_create_tables.sql is preserved.

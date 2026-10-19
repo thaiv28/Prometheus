@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — League-offset uncertainty and calibration research
+
+Added opt-in `league_rd` (offset moves scaled by RD²/floor²) and `bootstrap_elo(**overrides)`; defaults unchanged. Fixed 54-cell grid plus one edge extension, tuned through 2021 on four Elo sections: selected (new 120, floor 80, growth 1, info 1). Held out 2022+: cross-league −0.00033 (−0.00049 to −0.00016), international −0.00007 (within noise), nothing worse. Native (all years): RD gains cross-league −0.00022 but within-other-league elo_per_league/FORGE +0.00002 (significantly worse): fails. Calibration off: cross-league +0.0015 (RD) and +0.0018 (published), significantly worse: calibration stays. Nothing shipped. Checks: pytest, ruff. Copy review: not applicable (no UI).
+
 ## 2026-10-19 — Remove draft v2 from map trading; add a $15 live-map budget
 
 User asked to drop draft v2 (no trading gain; FST significantly worse) and cap live-map trading at $15. The draft route is gone from `live_map.py`, `live/signals.py`, `pyproject.toml` and the README; `live_map_draft_blend.json` deleted; the executor zip, release hash and publish filter drop the draft model and blend but keep `live/draft.py` (imported by `live/timeline.py`). New required `live_maps.budget_usd` for shadow and live map modes: the ledger's `LIVE_MAPS` row tracks held cost and realized profit, and a map order is capped at budget + realized − held, reserved in the same transaction as ACCOUNT. Loss can't exceed the budget; profit extends it; pregame unaffected. Docs suggest `"budget_usd": "15"`; nothing configured in AWS. Checks: 862 passed, 2 skipped; two budget tests fail with their guards removed; ruff; `package.sh` builds without draft files. Limit: the shared 1%/2% caps (about $0.50 a map) still apply; not deployed.
