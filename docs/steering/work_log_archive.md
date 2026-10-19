@@ -2,6 +2,30 @@
 
 Older entries moved from `work_log.md`, newest first. Add nothing here by hand.
 
+## 2026-10-17 — Second live research wave: conditional gains and role leads
+
+Branch `research/live-candidates` from `e0a9617`. Protocol in `cand_followups.py` fixed before scoring; the test set was already used, so gains are retrospective. Beyond objectives (3,857 feed maps): original draft −0.0018 (−0.0035 to −0.0002), interaction draft −0.0026, momentum −0.0025 (−0.0033 to −0.0017; −0.0136 vs v1). Raw objective calibration beats global: log loss −0.0017 (−0.0031 to −0.0001), ECE 0.008 vs 0.019; time buckets worsen 20–30 minutes. Role leads at OE 10–25 minutes (3,378 maps), beyond gold + Elo: gold+CS −0.0030, +XP −0.0068 (−0.0100 to −0.0035); no gain shown beyond objectives. Nothing adopted. Artifacts in `data/research/live_followups/`. Checks: 784 passed, 2 skipped; three new tests (empty cohort, orientation); ruff; 66 links. No runtime, CI or dependency change.
+
+## 2026-10-17 — Consolidate live candidates; momentum and calibration checks
+
+Branch `research/live-candidates`, base `9b670eb` (PR #83). Imported the objectives candidate (`5cb5e0f`, full script), the draft candidate and per-map Elo (`baf763a`); results in [the candidate review](../research/live_candidates.md). Objectives − v1 −0.0111 (−0.0146 to −0.0075); draft −0.0027 (−0.0052 to −0.0002, coverage caveats); neither deployed. Three-minute gold momentum − v1 −0.0006 (−0.0022 to +0.0010): not adopted. Raw and time-bucket calibration don't beat global significantly and have worse slices: no change. Checks: 781 passed, 2 skipped; ruff; `git diff --check`; 40 links; draft and objectives reports reproduced. No production, CI or build change.
+
+## 2026-10-17 — Live map model candidate: objectives on top of gold
+
+Branch `cand-objectives` from `9b670eb`. `scripts/research/cand_objectives.py` (report `docs/research/cand_objectives.md`): protocol committed first (`e33fa23`); v1's six features plus blue − red towers, dragons, barons, inhibitors, kills and soul, each with a time interaction, trained on 2,757 2024 feed maps. Test (3,857 maps): − v1 −0.0111 (−0.0146 to −0.0075), passing the adoption rule; gains from minute 10 on, none at 0–10; ECE 0.0147 → 0.0191. Not shipped: needs a live model contract and a prospective check. A repeated clock key in one map is now aligned by position. Checks: research and steering tests, ruff, `git diff --check`.
+
+## 2026-10-17 — Back up the feed timelines; live model v3 (weights that change with game time)
+
+Branch `time-model-v3` from `27c3013` (PR #66). Feed timelines (9,046 maps, 7.8 MB tarball) uploaded to `s3://$DATA_BACKUP_BUCKET/prometheus/feed-timelines/` with their SHA-256, downloaded again and matched (`deployment.md`). `train_time_model_v2.partitions` shares v2's split. `scripts/research/train_time_model_v3.py` (report `docs/research/time_model_v3.md`): spline-in-time weights on time, gold lead, gold share and Elo gap; test v3 − v1 +0.0000 (−0.0012 to +0.0013), not adopted (better at 10–20 and 30+ minutes, worse at 0–10). With gold, Elo and time the model looks saturated; the next tests are new inputs (Future work). Checks: live and research tests, ruff, `git diff --check`.
+
+## 2026-10-17 — Align alert selection with execution fees
+
+Branch `alert-execution-fees`, base `0cc01bd` (PR #80). The executor rejected the KC v MVK alert, so new alerts use the Lambda's fee bound (`trading.quote(execution_fees=True)` → `core.fee_bound`, rate 0.07, precision 0.0001): at 86¢ the reserve is 3¢, so 87.66% doesn't clear it. Edges are subtracted in Decimal, so a zero edge is rejected. New records freeze the fee policy; old alerts and paper results keep their terms. Update the two public fee constants with any private fee-profile change. No executor, metric or order change. Checks: 59 focused and 745 full passed, 2 skipped; ruff; quote +3.7 µs per call. Copy review: PASS (Market Blend page at 1440/390; "estimated fee" → "execution fee bound").
+
+## 2026-10-17 — Faster Live prices and started fixture handoff
+
+Branch `live-refresh`, base `ac5745c` (PR #76). Kalshi books and publication every 2 s (was 10), browser polls every 2 s (was 5), live JSON cache 1 s; the Riot feed, settlement and model stay at 10 s, and price-only cycles refresh the page without replaying the model. Coming up hides a match once its series shows live or between maps, keeping later repeat pairings and supporting older worker summaries. Cost while live: orderbook reads 720 → 3,600 an hour, S3 cycles 360 → 1,800, browser polls 2.5×. Checks: live and Node tests (cadence: 6 price cycles per Riot cycle); 717 passed, 2 skipped; ruff. Production timings unverified. Copy review: PASS (Live and Watch at 1440/390; no strings added).
+
 ## 2026-10-17 — Series score in live calls, feed timeline backfill and model v2 refit
 
 Branch `series-checkpoint` from `eb11b9e` (PR #66).

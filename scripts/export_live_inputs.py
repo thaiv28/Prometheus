@@ -67,6 +67,11 @@ def main():
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     data = build(args.db)
+    from prometheus.live.draft_export import build as draft_history
+
+    data["draft"] = draft_history(
+        args.db, datetime.datetime.now(datetime.UTC).date().isoformat()
+    )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(data, separators=(",", ":")))
     print(f"{len(data['teams']):,} teams through {data['data_through']} -> {args.out}")

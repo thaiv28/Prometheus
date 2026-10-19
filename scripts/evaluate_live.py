@@ -715,14 +715,34 @@ def page_for(m, fields):
                 "teams": [dict(zip(fields, team)) for team in s["teams"]],
             }
         )
-    return {"game": {"blue": m["blue"], "frames": frames}}
+    return {
+        "match": {"teams": [{"name": n} for n in m["teams"]]},
+        "game": {
+            "id": m["game"],
+            "blue": m["blue"],
+            "frames": frames,
+            "start": m["start"],
+            "draft_observations": m.get("draft_observations", []),
+        },
+    }
 
 
 def map_calls(m, model, elos, fields):
     """(pregame call, calls with game minute and sample offset) for team 0."""
     page = page_for(m, fields)
     ratings = [{"elo": e} for e in elos]
-    pregame, calls = timeline.timeline_calls(page, model, ratings, start=m["start"])
+    draft = None
+    if (
+        model.get("schema") == "time_objectives_draft_v2"
+        and m.get("draft_history")
+        and m.get("forge_p") is not None
+    ):
+        from prometheus.live.draft import prepare
+
+        draft = prepare(page, m["draft_history"], model, m["forge_p"])
+    pregame, calls = timeline.timeline_calls(
+        page, model, ratings, start=m["start"], draft=draft
+    )
     start = pd.Timestamp(m["start"])
     offset = {s["t"]: i for i, s in enumerate(m["samples"])}
     rows = []
@@ -1267,6 +1287,7 @@ def main():
     parser.add_argument("--publish-data", action="store_true")
     parser.add_argument("--fetch-data", action="store_true")
     parser.add_argument("--data", type=Path, default=DATA)
+    parser.add_argument("--model", type=Path, default=timeline.MODEL_PATH)
     args = parser.parse_args()
     if args.build_data:
         build_data(args.refresh_markets)
@@ -1280,14 +1301,14 @@ def main():
         return
     started = time.monotonic()
     data = load_data(args.data)
-    calls, skipped = replay(data)
-    pre = replay_premaps(data)
+    calls, skipped = replay(data, model_path=args.model)
+    pre = replay_premaps(data, model_path=args.model)
     _log(
         f"{calls['game'].nunique()} maps, {len(calls)} calls, {len(pre)} pre-maps "
         f"({time.monotonic() - started:.1f} s)"
     )
     if args.dump:
-        write_dump(calls, args.dump, pre=pre)
+        write_dump(calls, args.dump, model_path=args.model, pre=pre)
     if args.out or not args.dump:
         text = report(data, calls, skipped, pre)
         if args.out:

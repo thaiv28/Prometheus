@@ -47,6 +47,7 @@ Required repository settings:
 
 - Runs on `pull_request` only (opened, synchronize, reopened, labeled, unlabeled); never on `main` pushes, schedules or dispatch. Concurrency group `benchmarks-<PR number>`, cancelling the PR's older run. Permissions: `contents: read`, `pull-requests: write` (the comment).
 - Three jobs. `prepare` reads any stored verdict to reuse (label changes), the base commit (the merge commit's first parent) and whether its scripts have `--dump`, and looks up the newest `oracles-elixir-*` cache entry. `bench` runs as a matrix, `head` (the merge commit) and `base` × `core` and `markets`, in parallel, each on its own runner: `uv sync`, that exact CSV entry (so both read the same data; no `REFRESH_DATA`, so Drive only if the cache is empty), the cached DB under the same `prometheus-db-<hash>` key as `publish.yml` (usually a hit for the base, and for the head when the PR leaves the DB build alone), else `setup_db.sh`, then (`core`) the benchmark scripts at once (`--dump`; they only read the DB): forecasts, season stats and AURA, plus the prop projections on the fourth core when the side's `evaluate_props.py` can dump (a base from before it skips it and the comparison notes it) or (`markets`) `evaluate_markets.py --offline --dump` on the Kalshi cache entry `prepare` picked and then `evaluate_live.py --fetch-data --dump` (the in-game benchmark: downloads the data file pinned in that side's `scripts/live_bench_data.json` from the `live-bench-data` release, under 1 MB, public, no secret; about 2 s to replay; a side without the pin file skips it), uploading `dumps/` as an artifact. `markets` runs only when a `kalshi-markets-*` cache exists and the base's `evaluate_markets.py` has `--dump`. The base's dumps are cached as `benchmark-dumps-<group>-<base sha>-<CSV entry>[-<Kalshi entry>]`, so later pushes to a PR with the same base skip the whole base side. `compare` downloads each side's artifacts into one directory, compares, comments and gives the verdict.
+- **Local candidate selection:** `evaluate_live.py --model <supported-runtime-artifact.json> --dump <dir>` uses that artifact for live/pre-map replay and its fit cutoff for the comparison. CI omits the option and continues to test the production default. Research draft dumps can use the same comparator locally; they are not the pinned market cohort and add no CI training job.
 - **Live benchmark data.** The release `live-bench-data` holds one asset per data version (`live_maps-<sha256 prefix>.json.gz`); `scripts/live_bench_data.json` pins the one each commit uses, so base and head each read their own pin and the comparison pairs the maps both scored. Refresh it locally (it needs the feed timelines on this machine): `uv run python scripts/evaluate_live.py --build-data --refresh-markets`, then `--publish-data` (gh CLI, uploads and rewrites the pin), and commit the pin in a PR. Old assets stay so old commits still fetch.
 - If the base's scripts have no `--dump` (until this check merged), nothing runs: "no baseline yet", pass.
 - `scripts/compare_benchmarks.py` compares the dumps (see `tech.md`, *Benchmark comparison*). `scripts/benchmark_comment.sh` keeps one sticky PR comment (a `<!-- benchmark-report -->` marker; edited in place) with the verdict, the override state and the report (including the report-only betting table); the report also goes to the run summary. Fork PRs get a read-only token, so their comment step fails softly (`continue-on-error`).
@@ -175,6 +176,49 @@ not an online accuracy monitor. Preserve archived calls as made. See
 [release validation](../research/live_model_release.md) for checked evidence and
 actual rollout status.
 
+## Live-map execution transport (prepared 2026-10-18)
+
+The existing Lambda package now contains the shared live-map contract, monthly
+artifact, minimal stdlib inference and SQS handler. Source hashes/path filters
+cover every packaged input; existing deploy-on-merge preserves modes. The new
+strategy defaults off even when pregame trading is live. No AWS change was made.
+
+`deploy/execution/live-map-transport.json` is a separate reviewable transport
+stack: retained encrypted queues, TLS-only queue policy, batch size one/zero
+batching, partial failures, exact-role queue/prefix grants and a disabled
+mapping. It references the existing executor/worker roles/function/private bucket
+without taking ownership or installing credentials. Existing SSM, secrets and
+ledger stay with their current stack. Verify Lambda timeout <=150s for its 900s
+visibility and existing reserved concurrency before rollout.
+
+`kalshi-live-map-control.yml` shares the existing manual-control concurrency
+group/role. It changes only nested live-map mode/epoch after runtime validation;
+existing configuration workflow saves explicit nested limits while global off.
+Worker `LIVE_MAP_SIGNAL_ARGS` is absent by default; when enabled it adds bounded
+trade GETs and private candidate delivery through role-authenticated AWS CLI.
+Backup includes private `trading/` evidence. Shadow never loads signing keys or
+uses account/order endpoints. [Review/rollout](../live_map_execution.md).
+
+### Draft v2 private observation (prepared 2026-10-18)
+
+The existing main-only `Publish ratings for the live worker` step also exports
+prior-day draft histories inside `live_inputs.json` (about 18.3 MB locally,
+~11.6 s extra CPU wall time). The refresh timer fetches it as before; no new
+S3 key, dependency, secret, provider request, CI step or service flag is needed.
+The worker starts collecting private candidate calls automatically when it has
+compatible histories and the packaged candidate's exact production parent.
+This does not change displayed predictions or execution/trading behavior.
+
+`calls.jsonl` contains `draft_shadow` (context and latest candidate/fallback
+call). Each map's `draft_context.json` is included by the existing backup sync
+and packed with its finished collector evidence. Keep raw observations/receipt
+times for prospective scoring. A stale day or unknown identity means fallback;
+UTC-midnight rollover may await the next daily input export/worker refresh.
+Actions timings for checks are recorded in the PR; main-only export/upload and
+production reload timings remain unverified until rollout. There is no manual
+AWS deployment in this change. Merging main lets the existing publish/refresh
+path install this private observation mode.
+
 ### Refresh unit ordering (2026-10-18)
 
 `prometheus-live-refresh.service` queues `systemctl --no-block try-restart`
@@ -202,3 +246,12 @@ permissions/resources or systemd changes. The existing sync owns this JSON and
 retains it at shutdown, independent of the empty active index. Lifecycle derives
 from existing minute discovery calls; browsers read one additional small object
 per poll. Final untracking attempts one last settlement and snapshot.
+
+### Live-map executor package (2026-10-19)
+
+The executor zip includes stdlib `live/draft.py` only because `live/timeline.py`
+imports it; draft v2's model and blend are not packaged (the trading benchmark
+failed, see [evidence](../research/live_map_draft_trading.md)). Live maps need an
+explicit `live_maps.budget_usd` before shadow or live mode; the ledger's
+`ENV#<mode> / LIVE_MAPS` row (held, realized) enforces it. No new table, IAM or
+CI step. Nothing was deployed or activated.

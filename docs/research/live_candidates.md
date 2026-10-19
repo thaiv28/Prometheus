@@ -101,7 +101,7 @@ adjustment. These are retrospective gains rather than untouched confirmation.
   cohort; compare a frozen objectives model with v1 on the same maps.
 - Confirm the objectives-plus-original-draft and objectives-plus-momentum gains on a fresh cohort with an objectives-only control; test their combination without retuning on these results.
 - Role phase A now supports collecting role gold/CS/XP; the collected timelines still lack participant fields needed for live validation. The [earlier snapshot research](snapshot_report.md) provides additional context.
-- Kalshi blend remains pending explicit go-ahead, as requested in the handoff.
+- Kalshi blend research was authorized and completed on 2026-10-18: [historical trading study](live_trading.md). Prospective executable-book validation remains; no blend was deployed.
 - Recollecting participant data also remains pending explicit go-ahead: about
   a day of requests and an awake, plugged-in laptop. No collection was started.
 

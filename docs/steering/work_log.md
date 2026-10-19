@@ -2,16 +2,40 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — Remove draft v2 from map trading; add a $15 live-map budget
+
+User asked to drop draft v2 (no trading gain; FST significantly worse) and cap live-map trading at $15. The draft route is gone from `live_map.py`, `live/signals.py`, `pyproject.toml` and the README; `live_map_draft_blend.json` deleted; the executor zip, release hash and publish filter drop the draft model and blend but keep `live/draft.py` (imported by `live/timeline.py`). New required `live_maps.budget_usd` for shadow and live map modes: the ledger's `LIVE_MAPS` row tracks held cost and realized profit, and a map order is capped at budget + realized − held, reserved in the same transaction as ACCOUNT. Loss can't exceed the budget; profit extends it; pregame unaffected. Docs suggest `"budget_usd": "15"`; nothing configured in AWS. Checks: 862 passed, 2 skipped; two budget tests fail with their guards removed; ruff; `package.sh` builds without draft files. Limit: the shared 1%/2% caps (about $0.50 a map) still apply; not deployed.
+
+## 2026-10-19 — Review draft v2 for the 30-second trading blend
+
+User asked to merge and activate PR #92's draft model only if benchmarks improved. Integrated main `bc02c4e` into `live-map-trading`; signals used the frozen ready draft with separate earlier-only monthly fits, and absent or conflicting drafts kept the original inference. Fixed, untuned comparison (1,352 maps, 655 series): log loss −0.00133 (−0.00437 to +0.00174); FST significantly worse, +0.02692 (+0.01188 to +0.04563); flat ROI +18.74% vs original +21.05%. Gate FAIL: no merge, deploy or activation; evidence in `docs/research/live_map_draft_trading.md`. Checks: 873 passed, 2 skipped (signing tests pass with pinned cryptography); ruff; 110 links; runtime blend matches the replay within 1.12e-16; package SHA256 `ac8c5a02…`. No UI or CI change.
+
 ## 2026-10-19 — Cut agents' token use: lean AGENTS.md, rotating log, doc budgets
 
 Branch `token-diet`, base `b0acbac` (main). Docs and tooling only; no metric, build or CI change.
 - `AGENTS.md` 4.1k → 2.3k words: read only the docs a change touches and the newest 5 log entries (`scripts/work_log.py recent 5`). Layout, metric change rules and benchmark commands moved to `tech.md`.
 - `tech.md` 17.1k → 8.9k words (Codex, via the delegate skill): history and research cut to pointers.
 - `.githooks/pre-commit` runs `work_log.py rotate`: past 15 entries, the newest 10 stay. Moved 68; no heading or line lost.
-- Kept entries shortened to 150 words (originals at `b0acbac`).
+- Kept entries shortened to 150 words (originals at `b0acbac`); main's six from PR #94 too.
 - `test_steering.py`: word budgets for changed steering docs and new entries.
 
 Checks: pytest 794 passed, 2 skipped; ruff; `git diff --check`. Hook not yet run on a real commit.
+
+## 2026-10-18 — Prepare API draft v2 as a private live candidate
+
+Branch `live-draft-v2` (PR #92), base `f999333`, updated with main `b0acbac`. `live.draft` resolves all ten Riot participants to OE players by role, side, champion and exact names (team-scoped first; no fuzzy matching); failures fall back to the current model. The first valid receipt freezes the draft shift, later conflicts stop its use, and the context persists across restarts. One read-only SQL pass exports the v2 histories (earlier UTC days) in the daily ratings artifact (about 12 s more on main's export, 18 MB); the worker reads no DB. `time_model_draft_v2.json` runs as a private shadow (`calls.jsonl`); public calls unchanged. `evaluate_live.py --model` and `prepare_draft_benchmark.py` replay it. Checks: 20-map API sample, 17 resolved; features reproduce within 4.4e-14; 822 passed, 2 skipped; ruff; CI passed on PR #92; replay +4 ms per map. Limit: availability timing is a proxy; upload and reload timing unmeasured.
+
+## 2026-10-18 — Benchmark draft v3 against the current live model
+
+Branch `research/live-draft-v3`, base `f522db3` (PR #85), with the v2 walk-forward and v3 player studies imported from `5811254` / `b5a2613`. Protocol fixed before scoring ([report](../research/live_draft_v3.md)). 3,893 test maps: v3 − production −0.00164 (−0.00393 to +0.00048), inconclusive; v3 − v2 +0.00138 (+0.00022 to +0.00250), significantly worse; v2 − production −0.00302 (−0.00582 to −0.00043). v3 not promoted. The test chronology was already viewed, so this is not prospective. `evaluate_live.py` gains `--model`; default and explicit dumps are identical on 13,935 rows, and CI is unchanged. Frozen inference matches runtime to 5e-16. Checks: 23 focused tests; 800 passed, 2 skipped; ruff; links. No runtime, weights, UI or CI change.
+
+## 2026-10-18 — Wire the selected 30-second live-map blend for review
+
+Branch `live-map-trading`, base research `e35e5d0` / main `f522db3`; the user chose 30-second trade stability. A frozen monthly earlier-only blend, last-trade market input, pinned objective/momentum inference, a net 5-cent edge and a private worker outbox feed the executor via SQS; off/shadow/live map controls are independent of pregame. Historical replay reproduces all 189 entries (ROI +21.05%, +1.83% to +41.61%; retrospective, on reused history). The executor adds map rules, trade and book rechecks, quarter-or-smaller Kelly, 1% map / 2% series caps and shared reservations; existing vetoes, fences and IOC stay. Details: `docs/live_map_execution.md`. Worker load: two trade GETs per eligible quote cycle, +55 ms per feed update. Checks: 827 passed, 2 skipped; ruff; cfn-lint; 71 links; Lambda zip matches its sources (SHA256 `8bbe0120…`). Nothing deployed or activated.
+
+## 2026-10-18 — Historical live-map trading and Kelly research
+
+Branch `research/live-trading`, base `f522db3`; protocol fixed first, research only. Earlier-only monthly blends on 1,352 maps / 655 series (March–October 2026). Primary rule (first entry in minutes 5–30, net edge ≥ 5¢ after the 7% fee, stable fresh tape): 273 entries, ROI +8.86% (−4.76% to +23.94%), CLV +1.25¢. Blend log loss − market −0.00643 (−0.01331 to +0.00020); − current model −0.00835 (−0.01238 to −0.00438). The 30-second stability variant, +21.05% (+1.83% to +41.61%), is exploratory. A +5¢ cost stress turns ROI to −2.58%. Kelly from $100: full $151 (95% drawdown); quarter capped at 1%/2%, $125 (10%); every log-growth interval includes zero. No historical books, depth or fills. Report `docs/research/live_trading.md`. Checks: four tests; 793 passed, 2 skipped; ruff; 84 links. No production change.
 
 ## 2026-10-18 — Repair Live discovery and series lifecycle
 
@@ -24,27 +48,3 @@ Branch `live-refresh-ordering`, base `f522db3` (PR #85). Rollout exposed a deadl
 ## 2026-10-18 — Release objective and gold-momentum in-game calls
 
 Branch `live-model-release`, base research `de6ec95`, runtime base `27c3013`; the user asked to deploy. `time_model_objectives_v1.json` freezes the objective + momentum model (2024 feed training, Jan–Jun 2025 calibration): raw objective counters, a dragons ≥ 4 soul proxy, and the gold-lead change over at least 180 estimated seconds. Invalid objectives fall back to v1; clock range 0–40 minutes. Pre-map calls keep the old model (the new inputs worsened them, +0.0025, +0.0012 to +0.0038). Test: 3,857 maps, log loss −0.0136 vs v1 (−0.0170 to −0.0100), ECE 0.018; export parity 5e-16. Pinned benchmark: all guards pass; checkpoints −0.0127 (−0.0177 to −0.0073). Replay +33 ms per map; no new dependency, request, DB read or CI step. Checks: 789 passed, 2 skipped; ruff; links; site build. No UI change.
-
-## 2026-10-17 — Second live research wave: conditional gains and role leads
-
-Branch `research/live-candidates` from `e0a9617`. Protocol in `cand_followups.py` fixed before scoring; the test set was already used, so gains are retrospective. Beyond objectives (3,857 feed maps): original draft −0.0018 (−0.0035 to −0.0002), interaction draft −0.0026, momentum −0.0025 (−0.0033 to −0.0017; −0.0136 vs v1). Raw objective calibration beats global: log loss −0.0017 (−0.0031 to −0.0001), ECE 0.008 vs 0.019; time buckets worsen 20–30 minutes. Role leads at OE 10–25 minutes (3,378 maps), beyond gold + Elo: gold+CS −0.0030, +XP −0.0068 (−0.0100 to −0.0035); no gain shown beyond objectives. Nothing adopted. Artifacts in `data/research/live_followups/`. Checks: 784 passed, 2 skipped; three new tests (empty cohort, orientation); ruff; 66 links. No runtime, CI or dependency change.
-
-## 2026-10-17 — Consolidate live candidates; momentum and calibration checks
-
-Branch `research/live-candidates`, base `9b670eb` (PR #83). Imported the objectives candidate (`5cb5e0f`, full script), the draft candidate and per-map Elo (`baf763a`); results in [the candidate review](../research/live_candidates.md). Objectives − v1 −0.0111 (−0.0146 to −0.0075); draft −0.0027 (−0.0052 to −0.0002, coverage caveats); neither deployed. Three-minute gold momentum − v1 −0.0006 (−0.0022 to +0.0010): not adopted. Raw and time-bucket calibration don't beat global significantly and have worse slices: no change. Checks: 781 passed, 2 skipped; ruff; `git diff --check`; 40 links; draft and objectives reports reproduced. No production, CI or build change.
-
-## 2026-10-17 — Live map model candidate: objectives on top of gold
-
-Branch `cand-objectives` from `9b670eb`. `scripts/research/cand_objectives.py` (report `docs/research/cand_objectives.md`): protocol committed first (`e33fa23`); v1's six features plus blue − red towers, dragons, barons, inhibitors, kills and soul, each with a time interaction, trained on 2,757 2024 feed maps. Test (3,857 maps): − v1 −0.0111 (−0.0146 to −0.0075), passing the adoption rule; gains from minute 10 on, none at 0–10; ECE 0.0147 → 0.0191. Not shipped: needs a live model contract and a prospective check. A repeated clock key in one map is now aligned by position. Checks: research and steering tests, ruff, `git diff --check`.
-
-## 2026-10-17 — Back up the feed timelines; live model v3 (weights that change with game time)
-
-Branch `time-model-v3` from `27c3013` (PR #66). Feed timelines (9,046 maps, 7.8 MB tarball) uploaded to `s3://$DATA_BACKUP_BUCKET/prometheus/feed-timelines/` with their SHA-256, downloaded again and matched (`deployment.md`). `train_time_model_v2.partitions` shares v2's split. `scripts/research/train_time_model_v3.py` (report `docs/research/time_model_v3.md`): spline-in-time weights on time, gold lead, gold share and Elo gap; test v3 − v1 +0.0000 (−0.0012 to +0.0013), not adopted (better at 10–20 and 30+ minutes, worse at 0–10). With gold, Elo and time the model looks saturated; the next tests are new inputs (Future work). Checks: live and research tests, ruff, `git diff --check`.
-
-## 2026-10-17 — Align alert selection with execution fees
-
-Branch `alert-execution-fees`, base `0cc01bd` (PR #80). The executor rejected the KC v MVK alert, so new alerts use the Lambda's fee bound (`trading.quote(execution_fees=True)` → `core.fee_bound`, rate 0.07, precision 0.0001): at 86¢ the reserve is 3¢, so 87.66% doesn't clear it. Edges are subtracted in Decimal, so a zero edge is rejected. New records freeze the fee policy; old alerts and paper results keep their terms. Update the two public fee constants with any private fee-profile change. No executor, metric or order change. Checks: 59 focused and 745 full passed, 2 skipped; ruff; quote +3.7 µs per call. Copy review: PASS (Market Blend page at 1440/390; "estimated fee" → "execution fee bound").
-
-## 2026-10-17 — Faster Live prices and started fixture handoff
-
-Branch `live-refresh`, base `ac5745c` (PR #76). Kalshi books and publication every 2 s (was 10), browser polls every 2 s (was 5), live JSON cache 1 s; the Riot feed, settlement and model stay at 10 s, and price-only cycles refresh the page without replaying the model. Coming up hides a match once its series shows live or between maps, keeping later repeat pairings and supporting older worker summaries. Cost while live: orderbook reads 720 → 3,600 an hour, S3 cycles 360 → 1,800, browser polls 2.5×. Checks: live and Node tests (cadence: 6 price cycles per Riot cycle); 717 passed, 2 skipped; ruff. Production timings unverified. Copy review: PASS (Live and Watch at 1440/390; no strings added).

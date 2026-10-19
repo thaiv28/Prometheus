@@ -40,7 +40,7 @@ from .page import build_page, summary, write_atomic
 from .requests import SITE_API_HOST, probe, utc_now
 from .series import map_prior, map_shift, series_chance
 from .start import find_start
-from .timeline import MODEL_PATH, latest_elo
+from .timeline import MODEL_PATH, latest_elo, timeline_calls
 
 GETSCHEDULE = f"https://{SITE_API_HOST}/persisted/gw/getSchedule?hl=en-US"
 GETLIVE = f"https://{SITE_API_HOST}/persisted/gw/getLive?hl=en-US"
@@ -325,12 +325,15 @@ class Ratings:
     def __init__(self, inputs=None, db=None):
         self.inputs, self.db = inputs, db
         self.teams, self.stamp = None, None
+        self.draft = None
 
     def _load(self):
         if self.inputs and self.inputs.exists():
             stamp = self.inputs.stat().st_mtime
             if stamp != self.stamp:
-                self.teams = json.loads(self.inputs.read_text())["teams"]
+                payload = json.loads(self.inputs.read_text())
+                self.teams = payload["teams"]
+                self.draft = payload.get("draft")
                 self.stamp = stamp
             return self.teams
         if not (self.db and Path(self.db).exists()):
@@ -361,6 +364,10 @@ class Ratings:
                     teams[team]["model_elo_as_of"] = found["as_of"]
             self.teams, self.stamp = teams, time.monotonic()
         return self.teams
+
+    def draft_history(self):
+        self._load()
+        return self.draft
 
     def model_elo(self, name):
         """The game-length Elo the in-game model was trained on, with its date."""
@@ -508,6 +515,7 @@ class Game:
     ):
         self.mapping, self.id = mapping, game["id"]
         self.number, self.start_time = game["number"], start_time
+        self.latest_signal_book = None
         self.ticker = self.series_ticker = self.forge = self.page_out = None
         self.dir = root / mapping["match_id"] / self.id
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -544,6 +552,27 @@ class Game:
         start_file = self.dir / "start.json"
         self.start = json.loads(start_file.read_text()) if start_file.exists() else None
         self.timeline = None
+        # Pin history/model on the first complete draft; a restart reuses the packet.
+        self.draft_history = (
+            ratings.draft_history() if hasattr(ratings, "draft_history") else None
+        )
+        candidate = Path(__file__).with_name("time_model_draft_v2.json")
+        self.draft_model = (
+            json.loads(candidate.read_text())
+            if self.draft_history and candidate.exists()
+            else None
+        )
+        if self.draft_model and (
+            not model or self.draft_model["fallback_model"] != model
+        ):
+            self.draft_model = None  # Candidate must be paired with its tested parent.
+        self.draft_loaded_at = utc_now()
+        self.draft_path = self.dir / "draft_context.json"
+        self.draft_context = (
+            json.loads(self.draft_path.read_text())
+            if self.draft_path.exists()
+            else None
+        )
         if model:
             try:
                 elos = [ratings.model_elo(t["name"]) for t in mapping["teams"]]
@@ -658,8 +687,18 @@ class Game:
     def poll_quote(self, ticker, path):
         """One orderbook read for YES on team 0, appended to `path` when two-sided."""
         out = self.request_dir("book")
-        _, book = fetch_json(f"{KALSHI}/markets/{ticker}/orderbook", out)
+        record, book = fetch_json(f"{KALSHI}/markets/{ticker}/orderbook", out)
         q = quote(book or {}, utc_now())
+        if ticker == self.ticker:
+            self.latest_signal_book = None
+            headers = record.get("headers") or {}
+            # Trading also needs a current, uncached exchange response.
+            if q and headers.get("Date") and float(headers.get("Age") or 0) == 0:
+                import email.utils
+
+                server = email.utils.parsedate_to_datetime(headers["Date"])
+                if 0 <= (timestamp(q["at"]) - server).total_seconds() <= 3:
+                    self.latest_signal_book = q
         if q:
             with path.open("a") as f:
                 row = dict(q, ticker=ticker, **book_levels(book))
@@ -692,6 +731,34 @@ class Game:
         if self.state == "waiting" and page.get("game") and not page["game"]["frames"]:
             page.update(status="waiting", note=None)
         game = page.get("game")
+        if game and self.timeline and self.draft_model and self.forge:
+            from .draft import prepare
+
+            game["start"] = (self.start or {}).get("source_at")
+            packet = prepare(
+                page,
+                self.draft_history,
+                self.draft_model,
+                self.forge["p_game"],
+                self.draft_context,
+                not_before=self.draft_loaded_at,
+            )
+            if packet != self.draft_context:
+                self.draft_context = packet
+                write_atomic(self.draft_path, packet)
+            _, shadow = timeline_calls(
+                page,
+                self.draft_model,
+                self.timeline[1],
+                (self.start or {}).get("source_at"),
+                shift,
+                draft=packet,
+            )
+            # Save privately with the journal; public calls remain the baseline.
+            self.draft_shadow = {
+                "context": packet,
+                "call": shadow[-1] if shadow else None,
+            }
         result = self.results().get(self.number)
         if score:
             page["match"]["score"] = score
@@ -832,6 +899,7 @@ class Game:
             "minute": calls[-1]["minute"] if calls else None,
             "p_map": calls[-1]["p"] if calls else None,
             "p_series": series.get("ours"),
+            "draft_shadow": getattr(self, "draft_shadow", None),
             "score": self.mapping.get("score"),
             "status": page["status"],
         }
@@ -849,6 +917,7 @@ class Game:
             self.dir / "requests",
             self.collector_dir,
             self.dir / "quotes.jsonl",
+            self.draft_path,
         ]
         with tarfile.open(self.dir / "archive.tar.gz", "w:gz") as archive:
             for part in parts:
@@ -1021,6 +1090,15 @@ def run(args):
         adopt[gid] = (Path(path), session)
     games, failed, last_discovery = {}, {}, 0.0
     pre = PreMaps(args.root)
+    signals = None
+    if getattr(args, "live_map_signals", False):
+        from .signals import Cli, Outbox, Signals
+
+        outbox = None
+        if args.signal_bucket:
+            bridge = Cli(args.root / "signal-outbox")
+            outbox = Outbox(bridge, bridge, args.signal_bucket, args.signal_queue)
+        signals = Signals(fetch_json, outbox)
     events, last_active = None, time.monotonic()
     scheduled = []
     waiting_ids = set()
@@ -1254,6 +1332,9 @@ def run(args):
                                         game=g.id,
                                         ticker=g.series_ticker,
                                     )
+                        if signals:
+                            for g in games.values():
+                                signals.discover(g, markets)
                     except Stop as error:
                         kalshi = False
                         log("kalshi_stopped", reason=str(error))
@@ -1305,6 +1386,14 @@ def run(args):
                     )
                     if game.state == "finished" and feed_due:
                         game.write_snapshot(catalog)
+                    if signals and kalshi and game.state == "live":
+                        try:
+                            signals.poll(game, page, fresh_model=feed_due)
+                        except Stop as error:
+                            kalshi = False
+                            log("kalshi_stopped", reason=str(error))
+                        except (ValueError, OSError, subprocess.SubprocessError):
+                            log("live_signal_unavailable", game=gid)
                 except (
                     ValueError,
                     KeyError,
@@ -1420,12 +1509,29 @@ def main():
         default=[],
         help="GAME_ID:COLLECTOR_DIR:SESSION — continue another run's collector",
     )
+    parser.add_argument(
+        "--live-map-signals",
+        action="store_true",
+        help="Record private 30s live-map candidates",
+    )
+    parser.add_argument(
+        "--signal-bucket", help="Private signal bucket; requires --signal-queue"
+    )
+    parser.add_argument(
+        "--signal-queue", help="Private SQS URL; requires --signal-bucket"
+    )
     parser.add_argument("--fetch", action="store_true")
     args = parser.parse_args()
     if not args.fetch:
         parser.error("network requires --fetch")
     if not 10 <= args.interval <= 30 or args.discover_interval < 30:
         parser.error("interval 10..30 s; discovery at least every 30 s")
+    if bool(args.signal_bucket) != bool(args.signal_queue) or (
+        args.signal_bucket and not args.live_map_signals
+    ):
+        parser.error(
+            "Signal delivery requires --live-map-signals, --signal-bucket and --signal-queue together"
+        )
     if args.no_model:
         args.model = None
     args.ratings = Ratings(args.inputs, args.db)
