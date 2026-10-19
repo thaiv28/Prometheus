@@ -115,6 +115,7 @@ def raw_probability(observation):
         if (
             saved["model_sha256"] != draft_artifact()["model_sha256"]
             or not available(packet, observation["received_at"], model)
+            or not available(packet, observation["calculated_at"], model)
             or packet["game_id"] != observation["game_id"]
             or packet["history_as_of"]
             != timestamp(observation["start"]).strftime("%Y-%m-%d")
@@ -251,7 +252,15 @@ def validate_observation(observation, at):
         raise ValueError("live_rating_not_earlier_day")
     if len(observation["rating_as_of"]) != 2:
         raise ValueError("live_ratings_missing")
-    return raw_probability(observation)
+    raw = raw_probability(observation)
+    if observation.get("draft") is not None:
+        from .live.draft import available
+
+        if not available(
+            observation["draft"]["context"], at, json.loads(DRAFT_MODEL.read_text())
+        ):
+            raise ValueError("live_draft_invalidated")
+    return raw
 
 
 def evaluate(observation, trades, book, at, fee):

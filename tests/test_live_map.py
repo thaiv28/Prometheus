@@ -603,6 +603,10 @@ def test_private_worker_observation_keeps_unshifted_model_and_exact_input_parity
     fallback = collect(game, page, NOW.isoformat())
     assert "draft" not in fallback and fallback["inputs"] == o["inputs"]
     assert "invalid_at" not in drafted["draft"]["context"]
+    # Metadata can be invalidated after the newest valid feed frame was received.
+    game.draft_context["invalid_at"] = (NOW + dt.timedelta(seconds=0.5)).isoformat()
+    fallback = collect(game, page, (NOW + dt.timedelta(seconds=1)).isoformat())
+    assert "draft" not in fallback and fallback["inputs"] == o["inputs"]
 
     # Many source frames share one receipt; receipt equality cannot identify
     # which frame the last successful model call used.
@@ -840,3 +844,18 @@ def test_draft_artifact_requires_earlier_month_and_context_for_shift():
                 live_map.blend(0.2, 0.4, at, draft=True)[0],
             )
         ) == pytest.approx(1)
+
+
+def test_draft_invalidation_after_last_frame_stops_current_trading():
+    value = draft_observation()
+    invalid = NOW + dt.timedelta(seconds=1)
+    value["draft"]["context"]["invalid_at"] = invalid.isoformat()
+    # A previously valid frame cannot continue trading after a known conflict.
+    assert live_map.validate_observation(value, NOW.isoformat()) > 0
+    with pytest.raises(ValueError, match="invalidated"):
+        live_map.validate_observation(
+            value, (invalid + dt.timedelta(seconds=1)).isoformat()
+        )
+    value["calculated_at"] = (invalid + dt.timedelta(seconds=1)).isoformat()
+    with pytest.raises(ValueError, match="invalid_live_draft_context"):
+        live_map.raw_probability(value)

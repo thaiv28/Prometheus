@@ -9,7 +9,8 @@ Preserved both chronological logs, lifecycle fixes, draft observation and privat
 trading backups. Trading signals now use the frozen ready draft when available,
 recompute its prior/model on the consumer and route to separate earlier-only
 monthly fits; absent/conflicting draft retains exact original inference/blend.
-Checks bind model/parent/artifact, map, receipt availability and earlier-day
+Known draft conflicts after the latest valid feed receipt also stop current
+use; they cannot borrow an older valid frame. Checks bind model/parent/artifact, map, receipt availability and earlier-day
 history. Package, release fingerprint and deploy path filter include new inputs.
 No public prediction/UI/copy, fit schedule, DB schema or published metric change.
 
@@ -24,7 +25,7 @@ activation or production/account change. No tuning or benchmark override.
 Full evidence/reproduction: `docs/research/live_map_draft_trading.md`.
 
 Focused combined trading/draft suite: 64 passed in 0.20s. Final full suite:
-872 passed, 2 optional signing tests skipped in 10.86s; those two pass separately
+873 passed, 2 optional signing tests skipped in 11.01s; those two pass separately
 with pinned cryptography in 0.16s. Repository ruff check/format (337 files), shell
 syntax, whitespace and 110 relative documentation links pass. Native API-enriched
 replay: 1,665 maps / 54,557 calls / 3,327 pre-maps, every existing Live comparator
@@ -33,15 +34,18 @@ not the trading improvement claim. Parent/draft replay takes 1.60s / 1.55s,
 startup/load variation; unchanged public default path performs no draft work.
 All 32,158 shared runtime blend values match the review replay within 1.12e-16.
 
-Review zip: 5,038,581 bytes / 192 files, source-content parity/private-input
+Review zip: 5,038,625 bytes / 192 files, source-content parity/private-input
 exclusion and isolated scheduled/SQS OFF/public-only shadow smoke pass.
-Package SHA256 `18ad8229bf16a1130e89c805497153eca545d890491301cb02c7838245362c05`;
-source `4728b02e3cff510af22686c888cdd6343bb3fade2ffecc9ce3bf3479036c3d8c`.
+Package SHA256 `ac8c5a027af42fb0c3c710772428060faf7892e73e096280183185b3dc27ac6b`;
+source `3fcf0ffa2936d6fe379101c43bc28d12391024b4a0416c6246d5a25cbfe5661c`.
 Offline comparison takes 10.49s, no CI job/dependency added. Compared with the
 pre-upgrade 827-test run (8.66s), integration includes merged main's additional
-cases; the final 10.86s cannot attribute startup/load differences to this change.
+cases; the final 11.01s cannot attribute startup/load differences to this change.
 Automatic main publish would reuse its existing package step; no extra job/step.
-Actual PR Actions timings are pending submission; rollout remains unperformed.
+Initial PR #94 Actions timings: check 43s, head core benchmarks 2m46s; build
+and market jobs were still running at the invalidation follow-up. This adds no
+CI job; model/transport validation stays in existing checks. Final-head status
+is retained in the PR. Rollout remains unperformed.
 Copy review: not applicable; public UI/copy is unchanged from merged main.
 
 ## 2026-10-18 — Prepare API draft v2 as a private live candidate

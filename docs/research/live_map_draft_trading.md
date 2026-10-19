@@ -53,7 +53,8 @@ The private worker uses its already-resolved/frozen draft context when ready at
 the frame's receipt. Signals include the pinned model/context, exact input
 features, earlier-day history and blue-oriented FORGE prior. Consumer recomputes
 the prior shift and map probability, verifies model/artifact/parent hashes,
-map identity, history day, readiness and invalidation, then uses separate draft
+map identity, history day, readiness and invalidation at both receipt and current
+decision time, then uses separate draft
 monthly coefficients. Missing/conflicting draft metadata selects the unchanged
 objective/momentum model and original blend. Missing snapshot months fail closed.
 Neither route changes public page calls or adds online fitting/DB/provider reads.
@@ -91,7 +92,7 @@ research dependency is added. Final checks and Actions timings are in the work l
 
 ## Final local validation
 
-872 tests pass in 10.86 s; the two optional real signing tests pass separately
+873 tests pass in 11.01 s; the two optional real signing tests pass separately
 in 0.16 s. Ruff format/check, shell syntax, whitespace and 110 relative document
 links pass. Shared runtime blend matches all 32,158 replay rows within 1.12e-16.
 
@@ -101,8 +102,8 @@ drafts; all later API-absent maps retain the parent exactly. This limited screen
 checks inference/fallback behavior, not improvement of the trading strategy.
 Parent/candidate replay takes 1.60 s / 1.55 s; the small timing difference is noise.
 
-The Linux executor zip has 192 files / 5,038,581 bytes. Source-content parity,
+The Linux executor zip has 192 files / 5,038,625 bytes. Source-content parity,
 private-input exclusion and isolated scheduled/SQS OFF smoke pass, including
 loading the draft artifact without numpy/pandas/sklearn/cryptography. Package
-SHA256: `18ad8229bf16a1130e89c805497153eca545d890491301cb02c7838245362c05`.
+SHA256: `ac8c5a027af42fb0c3c710772428060faf7892e73e096280183185b3dc27ac6b`.
 No deployment, account reads/settings, order submission or activation occurred.

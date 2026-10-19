@@ -46,7 +46,11 @@ def observation(game, page, at):
         if page["game"]["frames"]
         else at
     )
-    use_draft = bool(candidate and available(packet, receipt, candidate))
+    use_draft = bool(
+        candidate
+        and available(packet, receipt, candidate)
+        and available(packet, at, candidate)
+    )
     if use_draft and candidate != json.loads(live_map.DRAFT_MODEL.read_text()):
         raise ValueError("live_draft_version_mismatch")
     _, calls = timeline_calls(
