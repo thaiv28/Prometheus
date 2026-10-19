@@ -1,5 +1,68 @@
 # Work log
 
+## 2026-10-18 — Prepare API draft v2 as a private live candidate
+
+Branch `live-draft-v2`, based on `f999333` (the v3 comparison), main base
+`f522db3` (PR #85), updated with main `09679a5` (PR #90 refresh ordering)
+before publication; documentation conflicts preserve both entries. User
+requested a usable, merge-ready integration PR.
+
+- `live.draft` resolves all ten Riot participants by role, side, champion token
+  and unambiguous historical name. Team-scoped names first; exact unique global
+  names support transfers, and confirmed team codes support unspaced LPL names.
+  Riot player IDs never substitute for OE IDs. Missing/ambiguous players, stale
+  history, duplicate participants and unsupported champions fall back. First
+  valid receipt freezes the blue-oriented shift; later conflicts stop future
+  use without changing earlier calls. Context persists across restart. Recovered
+  observations cannot make a newly loaded candidate/history available before
+  its actual worker load time; a frozen context keeps its original readiness.
+- One chronological, read-only SQL pass exports the four v2 histories using
+  earlier UTC days only. The existing daily ratings artifact now includes them;
+  the worker still reads no DB and performs no fit or extra provider request.
+  `time_model_draft_v2.json` freezes the tested live coefficients and prior-year
+  draft weights, with its exact current-model parent embedded. The service
+  records candidate calls/context privately in `calls.jsonl`; published map,
+  pregame and series chances stay on the current model. Candidate evaluation
+  stops if the production parent differs. Context is packed/backed up.
+- Native `evaluate_live.py --model` now accepts the candidate and optional raw
+  API observations/prior-day lookup rows from the data. Missing draft input
+  retains exact production fallback. `prepare_draft_benchmark.py` enriches a COPY
+  with explicit bounded opt-in fetches; it never changes the pin. Historical
+  availability is marked as a window proxy, not measured receipt timing.
+- Validation so far: bounded 20-map API sample, 17 complete resolutions / 3
+  conservative name fallbacks (initial 3/20 coverage exposed transfers/unspaced
+  team tags; fixed with exact identity rules, no fuzzy matching). Twenty real
+  prior-day maps reproduce all research features within 4.4e-14. Native replay
+  covers 1,665 maps / 54,557 calls / 3,344 pre-maps: candidate/base comparison on
+  the enriched copy passes every CI guard; only 17 maps have real API drafts,
+  so this is functional evidence, not a fresh accuracy claim. Production and
+  pregame untouched. Final suite: 819 passed, 2 skipped in 8.86 s (main 789
+  passed, 2 skipped in 9.00 s; single-run timing difference is noise). Repository
+  ruff format/check, shell syntax and diff whitespace checks pass. All affected
+  document links resolve. On the enriched benchmark, 13,855/13,935 checkpoints
+  outside candidate-covered maps are exactly unchanged; 70 candidate checkpoints
+  differ. No UI/rendered copy changed, so copy review is not applicable. PR CI
+  source checks passed on PR #92 at `dab8f52`: check 36 s, build 3m58s,
+  head core benchmarks 3m47s, head market/live job 5m02s, paired comparison 51 s
+  (Actions 39212108655 / 39212108579). All checks and guarded comparisons passed;
+  deployment jobs correctly skipped. The availability-bound follow-up passed
+  all 819 tests locally in 8.86 s. Main-only history upload/reload remains a
+  rollout measurement. This documentation follow-up changes no validated code.
+  GitHub briefly reported a conflicting merge despite main `09679a5` being an
+  ancestor of the tested head (verified locally and via its commit API); branch
+  state is refreshed before handoff.
+- Recorded KC–C9 map 5: 5,743 frames, full draft resolved from the actual API
+  collector with real receipt times, 26 candidate calls. Three-run median replay
+  baseline 40.88 ms / candidate 44.82 ms; private parallel scoring adds about
+  45 ms per 10 s model cycle (quote-only cycles unchanged). Daily history export
+  14.01 s before key caching / 11.56 s after, with 18,268,353 bytes including
+  global aliases; this adds ~12 s to main's existing live-input export, not PR
+  builds, hourly jobs or a new CI job. Required to collect prospective draft
+  identity/accuracy evidence without worker DB access; one SQL pass and cached
+  keys avoid repeated history construction. Production upload/reload timing is
+  unmeasured. No new dependency, public UI/copy, DB schema or trading change.
+
+
 ## 2026-10-18 — Fix refresh/publisher ordering during live rollout
 
 Branch `live-refresh-ordering`, based on merged release `f522db3` (PR #85).
@@ -39,6 +102,50 @@ smoke PASS without fallback, publisher active/running and normal publish cycles.
 Refresh inactive/success and no publisher/refresh job remains blocked. No
 tracked game at readback, so first new-map behavior/calibration is still open.
 Main static publish 39146569946 remained in progress at this readback.
+
+## 2026-10-18 — Benchmark draft v3 against the current live model
+
+Branch `research/live-draft-v3`, isolated worktree based on fetched `origin/main`
+`f522db3` (PR #85). Main fast-forwarded from `ac5745c`; it contains the
+objectives/momentum release and original draft study, not the v2 walk-forward or
+v3 player study. Imported those two research sources and their tests from
+`5811254` / `b5a2613`; no cherry-pick of overlapping runtime work.
+
+Fixed protocol before scoring: v3 entire player block plus v2 draft shift and
+shift×time on current objectives/momentum; frozen production primary control,
+same-row refit and v2 secondary controls. Draft weights end 2023 for 2024 live
+training inputs, 2024 for 2025+ inputs. Missing drafts retained, zero shift;
+no tuning or subset selection. [Report](../research/live_draft_v3.md).
+
+- **Do not promote v3:** 3,893 test maps, LL 0.46621 production → 0.46458 v3,
+  −0.00164 (95% −0.00393 to +0.00048), inconclusive. V3 versus v2 +0.00138
+  (+0.00022 to +0.00250), significantly worse. V2 versus production −0.00302
+  (−0.00582 to −0.00043). Existing CI comparator on feed checkpoint dumps passes
+  v3 vs production's no-regression guard but rejects v3 vs v2 in all four scored
+  guards. No pregame/market values fabricated. Research chronology has already
+  been viewed, so this is not prospective validation or evidence of tradable edge.
+- Rebuilt corpus: train 2,757 / calibration 1,819 / test 3,893, 39 missing test
+  drafts. More calibration/test maps than release; refit is a separate control.
+  Frozen matrix inference matches runtime on every test row (max 5e−16).
+- Existing live benchmark gains optional `--model`; both live/pre-map replay
+  and fit-cutoff metadata use it. Default and CI workflow unchanged. New causal,
+  missing-draft, split-boundary, checkpoint and CLI routing tests protect the work.
+- Own DB copied from the completed draft player worktree; feed/gol inputs are
+  read-only shared symlinks. No published weights, schema, runtime, UI, trading,
+  provider call or deployment changes. No DB rebuild or site build needed.
+- Checks and cost: focused 23 tests passed in 1.11 s. First complete research
+  run including row construction/fit/52 slice comparisons: 40.49 s, opt-in only.
+  Unchanged main suite 789 passed, 2 skipped in 9.00 s; final suite 800 passed,
+  2 skipped in 9.60 s (+11 tests, +0.60 s in these single runs, not a stable
+  performance estimate). Repository format/lint and diff whitespace checks pass.
+  Pinned CI asset hash verified by the existing fetcher: 1,665 replayed maps,
+  54,557 calls, 3,344 pre-maps, 1.7 s with either CLI path. Default and explicit
+  production-model dumps match exactly on all 13,935 checkpoint rows and cutoff
+  metadata. Final-source cached reproduction agrees (18.27 s); final post-fix
+  suite again passes: 800 passed, 2 skipped in 8.26 s. Relative links in all
+  six affected documents resolve. No CI training step or new dependency;
+  Actions timings remain unmeasured until a PR runs.
+
 
 ## 2026-10-18 — Release objective and gold-momentum in-game calls
 

@@ -48,3 +48,7 @@ Scope: season stats cover the 4 major leagues (LCK, LPL, LEC, LCS), 2014 to pres
 
 - Whether GLORY should use logistic rather than linear regression (the README says logistic; the code uses `LinearRegression`). Form already uses logistic weights.
 - AURA's open design questions: how to credit junglers and supports beyond their lane, and whether to adjust for champion matchups.
+
+Draft v2 API integration is prepared for private live observation: the worker
+records candidate calls alongside the current model, with identity/timing gates.
+It does not change the published in-game metric. [Evidence](../research/live_draft_integration.md).
