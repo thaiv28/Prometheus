@@ -887,3 +887,51 @@ def test_published_update_slope_follows_event_league(league):
         1500 + 4 * 6.5 - discount_after
     )
     assert calls[1]["elo"] != calls[1]["opponent_elo"]
+
+
+def test_glicko2_volatility_matches_glickman_worked_example():
+    # Glickman (2013): phi 1.2, sigma .06, v 1.7785, delta -.4834, tau .5.
+    sigma = elo._glicko2_volatility(1.2, 0.06, 1.7785, -0.4834, 0.5)
+    assert sigma == pytest.approx(0.05999, abs=2e-5)
+
+
+def test_player_volatility_default_is_published_and_validated():
+    games = _rd_games(["2020-01-01", "2020-01-02", "2021-01-01"])
+    rd = (250, 100, 250, 100)
+    base, _ = compute_elo_records(games, calculate_game_length_elo_change, player_rd=rd)
+    same, _ = compute_elo_records(
+        games, calculate_game_length_elo_change, player_rd=rd, player_volatility=None
+    )
+    pd.testing.assert_frame_equal(base, same)
+    for bad in [(0.5, 0.06), (0, 0.06, 7), (0.5, float("nan"), 7), (0.5, 0.06, -1)]:
+        with pytest.raises(ValueError, match="player_volatility"):
+            compute_elo_records(
+                games,
+                calculate_game_length_elo_change,
+                player_rd=rd,
+                player_volatility=bad,
+            )
+    with pytest.raises(ValueError, match="player_volatility"):
+        compute_elo_records(
+            games, calculate_game_length_elo_change, player_volatility=(0.5, 0.06, 7)
+        )
+
+
+def test_player_volatility_replaces_fixed_growth_on_hand_made_games():
+    # Same-day games add no growth; a year away with a large sigma hits the cap.
+    games = _rd_games(["2020-01-01", "2020-01-01", "2021-01-01"])
+    rd = (250, 100, 250, 0)
+    big, _ = compute_elo_records(
+        games,
+        lambda **kw: 10,
+        player_rd=rd,
+        player_rd_information=1.0,
+        player_volatility=(0.5, 0.10, 1),
+    )
+    a = big[big.teamid == "A"]
+    assert a.iloc[1].elo_change < 10
+    assert a.iloc[2].elo_change == pytest.approx(10)  # 365 days x 17.4^2 > cap
+    fixed, _ = compute_elo_records(
+        games, lambda **kw: 10, player_rd=rd, player_rd_information=1.0
+    )
+    assert fixed[fixed.teamid == "A"].iloc[2].elo_change < 10  # growth 0

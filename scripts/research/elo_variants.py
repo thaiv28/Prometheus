@@ -339,6 +339,17 @@ def replay(
             args.pop("expected_slope", None)
             return margin_elo_change(**args, K=K, expected_slope=next(slopes))
 
+    if kw.get("player_volatility") is not None:
+        # Volatility consumes native game lengths and native soft scores, too.
+        # Restrict this experiment to the published score/slope contract.
+        if league_slopes is not None or expected_slope != elo.EXPECTED_SLOPE:
+            raise ValueError("volatility replay requires native slope rules")
+        np.testing.assert_array_equal(
+            games.gamelength.to_numpy(),
+            elo.winner_score(inputs.games.gamelength.to_numpy()),
+        )
+        games = inputs.games[ELO_COLUMNS]
+        change = functools.partial(elo.calculate_game_length_elo_change, K=K)
     if league_slopes is not None:
         kw["other_league_slope"] = None
     with _international(international):

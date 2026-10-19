@@ -165,6 +165,39 @@ def calculate_game_length_elo_change(
     return K * (actual - expected_score(elo, opponent_elo, slope=expected_slope))
 
 
+GLICKO2_SCALE = 173.7178
+
+
+def _glicko2_volatility(phi, sigma, variance, delta, tau):
+    """Glickman (2013), step 5: Illinois root solve on log volatility squared."""
+    a = math.log(sigma * sigma)
+    d2 = delta * delta
+    base = phi * phi + variance
+
+    def f(x):
+        ex = math.exp(x)
+        return ex * (d2 - base - ex) / (2 * (base + ex) ** 2) - (x - a) / tau**2
+
+    left = a
+    if d2 > base:
+        right = math.log(d2 - base)
+    else:
+        k = 1
+        while f(a - k * tau) < 0:
+            k += 1
+        right = a - k * tau
+    fl, fr = f(left), f(right)
+    while abs(right - left) > 1e-6:
+        middle = left + (left - right) * fl / (fr - fl)
+        fm = f(middle)
+        if fm * fr <= 0:
+            left, fl = right, fr
+        else:
+            fl /= 2
+        right, fr = middle, fm
+    return math.exp(left / 2)
+
+
 def compute_elo_records(
     games: pd.DataFrame,
     elo_func,
@@ -192,6 +225,7 @@ def compute_elo_records(
     player_rd_information: float = PLAYER_RD_INFORMATION,
     player_rd_normalize: bool = False,
     other_league_slope: float | None = OTHER_LEAGUE_SLOPE,
+    player_volatility: tuple[float, float, float] | None = None,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay games in order and return per-team Elo records built from player ratings.
 
@@ -199,7 +233,8 @@ def compute_elo_records(
     ratings plus its home league's offset, so a roster move carries ratings with the
     players. Glicko-1-style RD scales each player's move by RD²/floor². RD² grows
     by growth² × days away (capped at new²) and shrinks with each game's expected-score
-    information to a floor; there is no volatility or g(RD). Domestic games
+    information to a floor. Optional Glicko-2 volatility replaces fixed growth;
+    no opponent g(RD) is applied. Domestic games
     only move players. Leagues are linked only by international events, so when teams
     from two leagues meet there, each league's offset also moves by `league_share` of
     the team's change: an upset at Worlds lifts the whole region, not only the team
@@ -261,6 +296,14 @@ def compute_elo_records(
         other_league_slope: Expected-score log-odds per point for non-major
             domestic events. Majors, international events and input without a
             league use the callback's default; None disables the override.
+        player_volatility: Opt-in (tau, sigma0, period_days), all finite positive.
+            Requires player_rd. Before each game RD² grows by
+            (173.7178 × sigma)² × days / period_days, capped at new².
+            After each game sigma updates by Glickman's Illinois step using
+            team expectation, native game-length score and the game's slope.
+            The callback must use the native score/slope for this option.
+            With player_records, posterior sigma/RD diagnostics are in records.attrs;
+            default None preserves published results and return columns.
         player_rd_normalize: Research compatibility option for v1. Normalize
             side weights to a shared mean, making mean stored updates zero-sum.
             Default False keeps the literal per-player RD weight, so settled
@@ -291,6 +334,18 @@ def compute_elo_records(
             )
         if not math.isfinite(player_rd_information) or player_rd_information <= 0:
             raise ValueError("player_rd_information must be finite and positive")
+    if player_volatility is not None:
+        if (
+            player_rd is None
+            or len(player_volatility) != 3
+            or not all(math.isfinite(x) and x > 0 for x in player_volatility)
+        ):
+            raise ValueError(
+                "player_volatility requires RD and positive finite tau, sigma0, period_days"
+            )
+        tau, sigma0, period_days = player_volatility
+    sigmas = {}
+    volatility_rows = []
     rd_variance = {}  # player -> posterior RD squared
     has_league = "league" in games.columns
     leagues = games["league"] if has_league else [None] * len(games)
@@ -443,7 +498,15 @@ def compute_elo_records(
                 * expectation
                 * (1 - expectation)
             )
-            for _, _, roster in sides:
+            if player_volatility is not None:
+                slope = slope_args.get("expected_slope", EXPECTED_SLOPE)
+                ve = expected_score(pre[0], pre[1], slope=slope)
+                b = slope * GLICKO2_SCALE
+                v = 1 / (b * b * max(ve * (1 - ve), 1e-15))
+                score = winner_score(row.gamelength)
+                actual = score if row.result else 1 - score
+                delta = v * b * (actual - ve)
+            for _, team_home, roster in sides:
                 side_weights = {}
                 for player in roster:
                     variance = rd_variance.get(player, rd_new**2)
@@ -452,7 +515,12 @@ def compute_elo_records(
                         seen = last_seen[player][0]
                         if seen is not None:
                             days = max(0, (date - seen).days)
-                    variance = min(rd_new**2, variance + rd_growth**2 * days)
+                    if player_volatility is None:
+                        growth = rd_growth**2 * days
+                    else:
+                        sigma = sigmas.get(player, sigma0)
+                        growth = (GLICKO2_SCALE * sigma) ** 2 * days / period_days
+                    variance = min(rd_new**2, variance + growth)
                     weight = variance / rd_ref**2
                     if played[player] < provisional_games:
                         weight *= provisional_factor
@@ -462,6 +530,21 @@ def compute_elo_records(
                     rd_variance[player] = max(
                         rd_min**2, 1 / (1 / variance + information)
                     )
+                    if player_volatility is not None:
+                        sigmas[player] = _glicko2_volatility(
+                            math.sqrt(variance) / GLICKO2_SCALE, sigma, v, delta, tau
+                        )
+                        if player_records:
+                            volatility_rows.append(
+                                (
+                                    row.gameid,
+                                    player,
+                                    date,
+                                    team_home,
+                                    sigmas[player],
+                                    math.sqrt(rd_variance[player]),
+                                )
+                            )
                 weights.append(side_weights)
             means = [sum(w.values()) / len(w) for w in weights]
             shared = sum(means) / 2
@@ -581,6 +664,11 @@ def compute_elo_records(
     offsets = pd.DataFrame(
         offset_records, columns=["gameid", "date", "league", "league_offset"]
     )
+    if player_volatility is not None and player_records:
+        records.attrs["player_volatility"] = pd.DataFrame(
+            volatility_rows,
+            columns=["gameid", "playerid", "date", "home_league", "sigma", "rd"],
+        )
     if player_records:
         players = pd.DataFrame(
             player_rows,
@@ -634,7 +722,7 @@ def load_rosters() -> dict:
     return {key: tuple(ids) for key, ids in rosters.items()}
 
 
-def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO) -> None:
+def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO, **overrides) -> None:
     """Recompute Elo ratings for all teams and overwrite the method's Elo tables.
 
     Args:
@@ -654,6 +742,7 @@ def bootstrap_elo(method: str, starting_elo: int = STARTING_ELO) -> None:
         starting_elo=starting_elo,
         rosters=load_rosters(),
         player_records=True,
+        **overrides,
     )
 
     # Clear rather than drop so the schema from 001_create_tables.sql is preserved.

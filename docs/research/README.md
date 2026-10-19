@@ -6,6 +6,8 @@
 
 - [Joint Glicko RD + non-major update scale](elo_glicko_scale.md): fixed two-stage tuning through 2021; the combination improves held-out 2022+ forecasts but regresses on nine international roster-change games versus Glicko alone. Manager decision: combined RD + non-major slope shipped 2026-10-19; main guarded sections pass, with the nine-game roster-slice limit recorded.
 
+- [Glicko-2 player volatility](elo_glicko2.md): 18-cell grid plus one edge extension, tuned through 2021; selected (tau .15, sigma0 .16, 7 days) is pinned at the upper bound, so it acts as faster fixed growth. Held-out gain only Elo other leagues, -0.00009; native check clean. Not shipped.
+
 - [Player Elo Glicko-style uncertainty](elo_glicko.md): v2 ties reference to floor
   and tests information speed; 268 settings, selected through 2021. Held-out
   2022+ other-league Elo/FORGE improve significantly, including starter changes,
