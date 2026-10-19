@@ -54,13 +54,18 @@
       </figure>
     </section>
 
-    {% if finished is not none %}
     <section class="live-finished fixtures-block" aria-labelledby="finished-heading">
       <div class="block-head">
         <h2 id="finished-heading">Finished</h2>
       </div>
       <figure class="register-figure" aria-labelledby="finished-cap">
         <figcaption id="finished-cap" class="table-caption">Table III. {% if finished %}Followed live, last 7 days. A row opens its maps.{% else %}None in the last week.{% endif %}</figcaption>
+        <div class="table-scroll">
+          <table class="register" id="recent-finished" hidden>
+            <thead><tr><th scope="col">Date</th><th scope="col" class="wide-only">League</th><th scope="col">Match</th><th scope="col" class="num">Result</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
         {% if finished %}
         <div class="table-scroll">{{ fixtures_table(finished, results=True, compact=True, id='finished') }}</div>
         {% endif %}
@@ -69,7 +74,6 @@
       <p class="month-index"><span class="month-index-lead">By month</span> {% for m in live_months %}<a href="live-results/{{ m.key }}.html">{{ m.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
       {% endif %}
     </section>
-    {% endif %}
 
     <aside class="live-notes notes" aria-labelledby="notes-heading">
       <h2 id="notes-heading" class="margin-head">Notes</h2>

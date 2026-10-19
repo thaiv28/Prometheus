@@ -46,7 +46,8 @@
   // ---- State --------------------------------------------------------------
   let index = null;        // live/index.json: every match in progress
   let matches = [];        // its live matches, in display order
-  let matchId = new URLSearchParams(location.search).get("match") || store.get("live.match");
+  const requestedMatch = new URLSearchParams(location.search).get("match");
+  let matchId = requestedMatch || store.get("live.match");
   let state = null;        // the chosen match's file
   let failed = false;      // the last read failed
   let skew = 0;            // server clock minus ours, from the Date header
@@ -76,9 +77,9 @@
       index = (await read(root.dataset.index)) || { matches: [] };
       matches = L.liveMatches(index, MAJORS);
       // Keep the chosen match while it's in progress; otherwise take the first.
-      if (!matches.some((m) => m.id === matchId) && matches.length) selectMatch(matches[0].id, { quiet: true });
+      if (!requestedMatch && !matches.some((m) => m.id === matchId) && matches.length) selectMatch(matches[0].id, { quiet: true });
       const m = matches.find((x) => x.id === matchId);
-      const url = m && L.safeUrl(m.url);
+      const url = L.safeUrl(m ? m.url : requestedMatch && `live/${matchId}.json`);
       const next = url ? await read(url) : null;
       if (!m || (next && next.match && next.match.id === matchId) || !next) state = next;
       failed = false;
@@ -391,7 +392,7 @@
   function setStatus(past) {
     const age = now() - (L.time(state.published_at) || 0);
     const parts = [];
-    if (past) {
+    if (past || state.final) {
       const g = view.game;
       status.textContent = "Final.";
       status.classList.remove("is-stale");

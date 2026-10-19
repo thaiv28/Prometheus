@@ -118,7 +118,15 @@ def feed_sides(game, out):
     stats, never finishes and leaves no snapshot.
     """
     try:
-        _, payload = fetch_json(WINDOW.split("?")[0].format(game["id"]), out)
+        query = datetime.now(UTC).replace(microsecond=0) - timedelta(seconds=QUERY_LAG)
+        query -= timedelta(seconds=query.second % 10)
+        _, payload = fetch_json(
+            WINDOW.format(
+                game["id"],
+                urlencode({"startingTime": query.strftime("%Y-%m-%dT%H:%M:%SZ")}),
+            ),
+            out,
+        )
     except ValueError as error:
         log("sides_failed", game=game["id"], reason=str(error))
         return None
@@ -854,6 +862,118 @@ class Game:
         log("archived", game=self.id)
 
 
+def update_lifecycle(page_dir, events, catalog, aliases, at):
+    """Persist provider-confirmed series state across empty indexes and shutdowns."""
+    path = page_dir / "lifecycle.json"
+    saved = json.loads(path.read_text()) if path.exists() else {"series": {}}
+    before = json.dumps(saved, sort_keys=True)
+    series = saved["series"]
+    for event in events:
+        if event.get("state") not in {"inProgress", "completed"}:
+            continue
+        match = event.get("match") or {}
+        mid = match.get("id") or event.get("id")
+        teams = [
+            {"name": resolve_team(t, catalog, aliases), "code": t.get("code")}
+            for t in match.get("teams", [])
+        ]
+        if not mid or len(teams) != 2 or any(not t["name"] for t in teams):
+            continue
+        start = event.get("startTime")
+        if not start or timestamp(at) - timestamp(start) > timedelta(days=7):
+            continue
+        old = series.get(mid) or {}
+        league = event.get("league") or {}
+        score = [t.get("result", {}).get("gameWins") for t in match["teams"]]
+        series[mid] = dict(
+            old,
+            id=mid,
+            teams=teams,
+            start=start,
+            league=LEAGUES.get(league.get("slug"), league.get("name")),
+            best_of=match.get("strategy", {}).get("count"),
+            status="completed"
+            if event["state"] == "completed" or old.get("status") == "completed"
+            else "live",
+            score=score if all(type(v) is int for v in score) else old.get("score"),
+        )
+        if old.get("status") == "completed" and event["state"] != "completed":
+            series[mid] = old
+        page_path = page_dir / f"{mid}.json"
+        if page_path.exists():
+            page = json.loads(page_path.read_text())
+            if (page.get("game") or {}).get("frames"):
+                series[mid].update(recorded=True, url=f"live/{mid}.json")
+                if series[mid]["status"] == "completed":
+                    complete_page(page_dir, page, series[mid])
+    series = {
+        k: v
+        for k, v in series.items()
+        if timestamp(at) - timestamp(v["start"]) <= timedelta(days=7)
+    }
+    body = {"series": series}
+    if json.dumps(body, sort_keys=True) != before or not path.exists():
+        write_atomic(path, body)
+        return True
+    return False
+
+
+def complete_page(page_dir, page, row):
+    """Use the provider's final series score, with each page's pinned team order."""
+    names = [t["name"] for t in page["match"]["teams"]]
+    incoming = [t["name"] for t in row["teams"]]
+    score = row.get("score")
+    need = (page["match"].get("best_of") or 1) // 2 + 1
+    if set(names) != set(incoming) or not score or None in score or max(score) < need:
+        return
+    score = [score[incoming.index(name)] for name in names]
+    previous = page["match"].get("score")
+    game = page["game"]
+    if game.get("winner") is None and previous and None not in previous:
+        delta = [a - b for a, b in zip(score, previous)]
+        if delta in ([1, 0], [0, 1]) and sum(score) == game["number"]:
+            game["winner"] = delta.index(1)
+    winner = 0 if score[0] > score[1] else 1
+    note = f"{names[winner]} won the series {max(score)}–{min(score)}."
+    if (
+        page["match"].get("score") == score
+        and page.get("note") == note
+        and page.get("final")
+        and page.get("status") == "between_games"
+    ):
+        return
+    page["match"]["score"] = score
+    page.update(status="between_games", note=note, final=True)
+    game["ended_at"] = game.get("ended_at") or game["frames"][-1]["at"]
+    write_atomic(page_dir / f"{row['id']}.json", page)
+    snapshot = dict(page, final=True)
+    write_atomic(page_dir / row["id"] / f"map{game['number']}.json", snapshot)
+
+
+def update_observed(page_dir, games, at):
+    """Attach watch links only for recorded maps; settle a known deciding win."""
+    path = page_dir / "lifecycle.json"
+    saved = json.loads(path.read_text()) if path.exists() else {"series": {}}
+    before = json.dumps(saved, sort_keys=True)
+    for game in games:
+        mid = game.mapping["match_id"]
+        row = saved["series"].get(mid)
+        if row is None:
+            continue
+        row["url"] = f"live/{mid}.json"
+        row["recorded"] = True
+        if row.get("status") == "completed":
+            continue
+        score = game.score()
+        names = [t["name"] for t in game.mapping["teams"]]
+        if score and [t["name"] for t in row["teams"]] == names:
+            row["score"] = score
+            if max(score) >= (game.mapping.get("best_of") or 1) // 2 + 1:
+                row["status"] = "completed"
+    if before != json.dumps(saved, sort_keys=True):
+        write_atomic(path, saved)
+
+
 def write_index(page_dir, at):
     """Every fresh match file, including ones other publishers wrote."""
     matches = []
@@ -909,6 +1029,7 @@ def run(args):
     try:
         while True:
             cycle = time.monotonic()
+            lifecycle_changed = False
             if cycle - last_discovery >= args.discover_interval:
                 last_discovery = cycle
                 stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
@@ -922,16 +1043,6 @@ def run(args):
                     if payload
                     else None
                 )
-                if events is not None:
-                    live_ids = {e["id"] for e in events}
-                    for gid in [
-                        k
-                        for k, g in games.items()
-                        if g.mapping["match_id"] not in live_ids
-                    ]:
-                        games.pop(gid).close()
-                        log("untracked", game=gid, reason="match no longer live")
-                    pre.keep(live_ids)
                 try:
                     _, schedule = fetch_json(
                         GETSCHEDULE, args.root / "schedule" / stamp
@@ -940,6 +1051,43 @@ def run(args):
                 except (ValueError, KeyError, TypeError) as error:
                     scheduled = []
                     log("schedule_failed", reason=str(error))
+                completed = {
+                    e.get("id") or (e.get("match") or {}).get("id")
+                    for e in scheduled
+                    if e.get("state") == "completed"
+                }
+                if events is not None:
+                    events = [e for e in events if e["id"] not in completed]
+                if events is not None:
+                    live_ids = {e["id"] for e in events}
+                    for gid in [
+                        k
+                        for k, g in games.items()
+                        if g.mapping["match_id"] not in live_ids
+                    ]:
+                        done = games.pop(gid)
+                        if done.mapping["match_id"] in completed:
+                            done.state = "finished"
+                        if done.state == "finished":
+                            if kalshi:
+                                try:
+                                    done.settle()
+                                except Stop as error:
+                                    kalshi = False
+                                    log("kalshi_stopped", reason=str(error))
+                                except ValueError as error:
+                                    log("settle_failed", game=gid, reason=str(error))
+                            done.write_snapshot(catalog)
+                        done.close()
+                        log("untracked", game=gid, reason="match no longer live")
+                    pre.keep(live_ids)
+                lifecycle_changed = update_lifecycle(
+                    args.page_out,
+                    scheduled + (events or []),
+                    catalog,
+                    aliases,
+                    utc_now(),
+                )
                 for event in events or []:
                     for game in event["match"]["games"]:
                         gid = game["id"]
@@ -1167,6 +1315,7 @@ def run(args):
                     failed[gid] = str(error)
                     games.pop(gid).close()
                     log("game_failed", game=gid, reason=str(error))
+            update_observed(args.page_out, games.values(), utc_now())
             at = utc_now()
             tracked = {g.mapping["match_id"] for g in games.values()}
             pending = waiting_pages(
@@ -1184,7 +1333,7 @@ def run(args):
                 write_atomic(args.page_out / f"{page['match']['id']}.json", page)
             waiting_ids = current_waiting
             count, changed = write_index(args.page_out, utc_now())
-            if args.s3 and (games or changed):
+            if args.s3 and (games or changed or lifecycle_changed):
                 publish_s3(args.page_out, args.s3)
             log("cycle", tracked=len(games), published=count)
             # Activity is a map not yet over; getLive can list a decided match for hours.

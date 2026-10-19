@@ -156,3 +156,10 @@ test("Coming up waits for the same started series on Live", () => {
   assert.equal(check({...m, start:null}), true); // compatible with an older worker
   assert.equal(L.fixtureOnLive(["Cloud9"], at(0), [m]), false);
 });
+
+
+test("Coming up recognizes confirmed finished series after an index clears", () => {
+  const done = {status:"completed", start:at(0), teams:[{name:"Karmine Corp"}, {name:"MVK Esports"}]};
+  assert.equal(L.fixtureOnLive(["MVK Esports", "Karmine Corp"], at(0), [done]), true);
+  assert.equal(L.fixtureOnLive(["MVK Esports", "Karmine Corp"], at(86400), [done]), false);
+});
