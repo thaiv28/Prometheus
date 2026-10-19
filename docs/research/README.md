@@ -1,5 +1,11 @@
 # Research
 
+- [Player Elo Glicko-style uncertainty](elo_glicko.md): v2 ties reference to floor
+  and tests information speed; 268 settings, selected through 2021. Held-out
+  2022+ other-league Elo/FORGE improve significantly, including starter changes,
+  with no significant guarded regression. Iterate on remaining boundary choices;
+  published Elo unchanged. Includes the [flawed v1 archive](elo_glicko_v1.md).
+
 - [API draft v2 integration](live_draft_integration.md): prepared private live candidate, exact identity/fallback/timing gates, real API and collector validation; no displayed probability change.
 
 - **Draft v3 beyond the current live model (2026-10-18).** [Protocol/results](live_draft_v3.md): v3 fails the improvement gate against frozen objectives/momentum and regresses significantly versus the v2 prior. Existing CI comparator reused for feed-only research dumps; no runtime/default/data-pin change. V2 remains the stronger live research candidate.
