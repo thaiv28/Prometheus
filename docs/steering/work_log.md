@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — Elo's forecast curves can't be removed (step 3 of the review)
+
+Research only. `elo_one_scale.py` ([report](../research/elo_one_scale.md)): one update slope with tier K (training picks M 24 / O 20, share 1) is no better held out (other leagues +.0005, significant) and its no-curve forecast fails non-inferiority in 4/4 Elo sections (+.006 to +.015). Elo's expected score is compressed about 1.5× in every tier; raising K lowers that but loses accuracy. Cause (`elo_score_compression.py`): the game-length score; with 1/0 results c ≈ 1 but training loss +.005. The exploratory win-scale update (`elo_win_scale.py`, [report](../research/elo_win_scale.md)) is calibrated near K 24 but worse: cross-league +.016, other leagues +.004; no curve +.011 to +.021. Verdict: keep the fitted curves; regional effects are an offset level bias. Checks: published replay matches DB (9e−13); ruff; steering tests.
+
 ## 2026-10-19 — Call staleness measured
 
 `scripts/research/call_staleness.py` on the published prediction log: of 74 settled calls frozen at the start (since Oct 4), 40 used data one day old and 34 two to four days old (Oracle's Elixir lag). Rebuilding 4,201 settled logged series with older ratings than the backtest's day-before: one more day +0.0039 series log loss (+0.0007 to +0.0074), two +0.0053, seven +0.0134; international (155) within noise. So the backtest and market report flatter published calls, and fresher results (Leaguepedia before Oracle's Elixir) are worth about .004 a day of lag. Same-day results are not measured. Research only; no published change.
