@@ -95,3 +95,7 @@ Additional diagnostic replay with player histories: 9.94 s. Diagnostics are coll
 
 Held-out gate: **PASS**. Requires a significant gain in at least one of the seven Elo/FORGE target sections and none significantly worse. Roster slices are reported, not extra gate sections. Final adoption also requires no native guarded value significantly worse; see [native comparison](elo_glicko2_native.md). Keep the published default pending that combined verdict; no parameter or weight file is changed by this research. Remaining boundary optima are unresolved.
 
+
+## Review note
+
+τ has no effect: for each (σ0, period) the tuning objective is identical to five decimals across τ 0.3/0.6/1.2, and σ stays at σ0 (table above). The adaptive volatility never engages because all five starters share one team result, so a player's own volatility is not identifiable. The selected (σ0 .16, 7 days) inflates RD by about 10.5 points per √day, the published growth of 10: the model reduces to the published Glicko-1-style RD (tuning objective 0.619986 vs 0.619995), at +46% replay time. Not adopted.
