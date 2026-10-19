@@ -1,5 +1,213 @@
 # Work log
 
+## 2026-10-18 — Prepare API draft v2 as a private live candidate
+
+Branch `live-draft-v2`, based on `f999333` (the v3 comparison), main base
+`f522db3` (PR #85), updated with main `09679a5` (PR #90 refresh ordering)
+before publication; final handoff also integrates main `b0acbac` (PR #93
+lifecycle fixes). Documentation conflicts preserve both entries. User
+requested a usable, merge-ready integration PR.
+
+- `live.draft` resolves all ten Riot participants by role, side, champion token
+  and unambiguous historical name. Team-scoped names first; exact unique global
+  names support transfers, and confirmed team codes support unspaced LPL names.
+  Riot player IDs never substitute for OE IDs. Missing/ambiguous players, stale
+  history, duplicate participants and unsupported champions fall back. First
+  valid receipt freezes the blue-oriented shift; later conflicts stop future
+  use without changing earlier calls. Context persists across restart. Recovered
+  observations cannot make a newly loaded candidate/history available before
+  its actual worker load time; a frozen context keeps its original readiness.
+- One chronological, read-only SQL pass exports the four v2 histories using
+  earlier UTC days only. The existing daily ratings artifact now includes them;
+  the worker still reads no DB and performs no fit or extra provider request.
+  `time_model_draft_v2.json` freezes the tested live coefficients and prior-year
+  draft weights, with its exact current-model parent embedded. The service
+  records candidate calls/context privately in `calls.jsonl`; published map,
+  pregame and series chances stay on the current model. Candidate evaluation
+  stops if the production parent differs. Context is packed/backed up.
+- Native `evaluate_live.py --model` now accepts the candidate and optional raw
+  API observations/prior-day lookup rows from the data. Missing draft input
+  retains exact production fallback. `prepare_draft_benchmark.py` enriches a COPY
+  with explicit bounded opt-in fetches; it never changes the pin. Historical
+  availability is marked as a window proxy, not measured receipt timing.
+- Validation so far: bounded 20-map API sample, 17 complete resolutions / 3
+  conservative name fallbacks (initial 3/20 coverage exposed transfers/unspaced
+  team tags; fixed with exact identity rules, no fuzzy matching). Twenty real
+  prior-day maps reproduce all research features within 4.4e-14. Native replay
+  covers 1,665 maps / 54,557 calls / 3,344 pre-maps: candidate/base comparison on
+  the enriched copy passes every CI guard; only 17 maps have real API drafts,
+  so this is functional evidence, not a fresh accuracy claim. Production and
+  pregame untouched. Final suite: 819 passed, 2 skipped in 8.86 s (main 789
+  passed, 2 skipped in 9.00 s; single-run timing difference is noise). Repository
+  ruff format/check, shell syntax and diff whitespace checks pass. All affected
+  document links resolve. On the enriched benchmark, 13,855/13,935 checkpoints
+  outside candidate-covered maps are exactly unchanged; 70 candidate checkpoints
+  differ. No UI/rendered copy changed, so copy review is not applicable. PR CI
+  source checks passed on PR #92 at `dab8f52`: check 36 s, build 3m58s,
+  head core benchmarks 3m47s, head market/live job 5m02s, paired comparison 51 s
+  (Actions 39212108655 / 39212108579). All checks and guarded comparisons passed;
+  deployment jobs correctly skipped. The availability-bound follow-up passed
+  all 819 tests locally in 8.86 s. Main-only history upload/reload remains a
+  rollout measurement. This documentation follow-up changes no validated code.
+  Main advanced again during mergeability computation; the PR history was
+  linearized without tree changes, then updated with `b0acbac`. The lifecycle
+  runtime changes merge cleanly; only log entries needed reconciliation.
+  Combined source: 822 passed, 2 skipped in 10.58 s; repository format/lint
+  pass. Final-head CI runs against the lifecycle base before handoff.
+- Recorded KC–C9 map 5: 5,743 frames, full draft resolved from the actual API
+  collector with real receipt times, 26 candidate calls. Three-run median replay
+  baseline 40.88 ms / candidate 44.82 ms; private parallel scoring adds about
+  45 ms per 10 s model cycle (quote-only cycles unchanged). Daily history export
+  14.01 s before key caching / 11.56 s after, with 18,268,353 bytes including
+  global aliases; this adds ~12 s to main's existing live-input export, not PR
+  builds, hourly jobs or a new CI job. Required to collect prospective draft
+  identity/accuracy evidence without worker DB access; one SQL pass and cached
+  keys avoid repeated history construction. Production upload/reload timing is
+  unmeasured. No new dependency, public UI/copy, DB schema or trading change.
+
+## 2026-10-18 — Repair Live discovery and series lifecycle
+
+Branch `fix-live-lifecycle`, based on `09679a5` (main, PR #90).
+KC–MVK Oct 18 evidence: worker already running before map 1; default window
+side probes returned 204 from 17:53 through 18:32 UTC, first 200 at 18:33.
+Map start was 18:10:06, first recorded frame 22:54 into play. Side discovery
+now uses the same delayed timestamped window as polling, retaining feed-side
+identity validation. This removes dependence on the delayed default window;
+prospective availability still depends on Riot. Earlier uncollected map-1
+observations and calls cannot be presented as calls made live.
+
+Map 2 also lost 5,975 frames to a red aggregate/player kill disagreement.
+Invalidate that kill counter alone, keep the valid gold/objectives and field
+reason, and use existing v1 objective-model fallback. Other invalid fields,
+identities and stale/future timestamps still reject. No model coefficients,
+probability method or benchmark inputs changed.
+
+Persist provider-confirmed started/completed series in `live/lifecycle.json`
+(seven days), kept through empty indexes and service shutdown. Coming up reads
+it after reload; Finished immediately links recorded completed series to Watch
+until the daily richer archive row exists. The worker performs a final map
+settlement/snapshot before untracking. No daily build is needed for these rows.
+One extra browser JSON read per existing poll; no extra worker request: side
+URL replaces its old request, lifecycle uses existing schedule/live responses.
+No new dependency, CI job, database read or fit. Checks and measured timings
+are recorded below after completion.
+
+Local validation: full suite 792 passed, 2 skipped in 9.39 s (baseline 789 /
+2 skipped in 9.10 s; the small difference is within startup/load noise).
+Focused Live+JS suite 97 passed in 1.16 s. Full fetch-disabled site build
+completed (2,087 team / 4,854 player pages); copied DB is old and lacks Props
+columns, so that unrelated page was skipped with its existing warning. No DB
+schema or published metric change; no rebuild/refit required. Live pinned replay
+scores 1,665 maps / 54,557 calls / 3,327 pre-maps in 1.7 s. All lints, format
+and whitespace checks pass. Final confirmation after the Watch fix: 792 passed, 2 skipped in 8.69 s;
+base/head pinned benchmark calls and metrics are exactly identical (1.8 s each).
+Changed-document relative links and the Watch design detector pass.
+
+Real-data migration reconciles KC–MVK to 3–0, closes map 3 with its known winner
+and preserves map links. It took 214 ms locally including parsing/rewriting the
+full retained page, once; subsequent minute checks parse retained recorded
+pages but do not rewrite unchanged scores. No publish/hourly work added.
+Already-idle retained pages are also reopened as final saved pages.
+Final series state survives shutdown and no longer counts as a stalled live
+match on Watch. Explicit saved-match links work even with an empty active index
+and do not switch to another live match.
+
+Copy review: PASS — Live and saved-match Watch at desktop 1440px and emulated
+phone 390px. Existing notes/definitions retained; final-state copy replaces
+“Between maps”/“Stalled”; compact finished rows show Date/Match/Result (League
+on desktop). Shortened date display and allowed team names to wrap so the result
+stays visible on phones. No new explanatory paragraph or duplicate methodology.
+Browser assertions cover empty active index, reload persistence, stale fixture
+removal, 3–0 result, Watch navigation and absence of JS errors/page overflow.
+Desktop/phone screenshots inspected. Initial browser pass caught the old Watch
+reader's dependence on active-index membership; corrected explicit saved links
+and confirmed both widths. Design detector returned no findings.
+
+
+## 2026-10-18 — Fix refresh/publisher ordering during live rollout
+
+Branch `live-refresh-ordering`, based on merged release `f522db3` (PR #85).
+All release CI passed, including the full paired benchmark matrix (run
+39146063514); main merge is f522db3003c4d82a242371d69d92f06e7f2ea134.
+The worker was stopped, started for rollout, and its standard refresh exposed
+a pre-existing deadlock: refresh remained activating/start-post while the
+publisher start job waited on its After=prometheus-live-refresh.service order.
+Old logs show the same 30-minute timeout on 2026-10-17. Queue the conditional
+try-restart with `--no-block`, allowing refresh to finish before the publisher
+starts. No polling, sleep, dependency, extra job, network/API request or changed
+restart condition. This removes an existing half-hour startup failure rather
+than adding CI/runtime work.
+
+Installed that exact unit correction through SSM, ran daemon-reload and
+systemd-analyze verify, and terminated only the old stuck refresh control
+process to release the dependency cycle. The verifier reports an unrelated
+AL2023 acpid.socket legacy /var/run path warning. The initial health read caught
+the expected nonblocking restart while the publisher was deactivating; final
+health/model verification is recorded below. No trading mode/settings/order
+changes. Unit files are installed once, so this live fix is also committed for
+future hosts; refresh.sh's git pull alone does not install changed units.
+
+CI timing evidence for PR #85: check 41 s, site build 3m58 s; core benchmark
+step head 2m33 s vs base 2m38 s (total jobs head 3m50 vs base 3m04 due setup/
+cache differences). Market jobs head 4m56 vs base 2m49; the new live replay
+itself takes 3.5 s on the runner. These one-off full-job differences do not
+isolate model cost; local paired native replay adds about 0.5 s, real full-map
+replay +33 ms. No new CI job/step. Final checks: 789 passed, 2 skipped in 9.27 s; repository-wide ruff check/format
+and whitespace pass. Remote `systemd-analyze verify` passes apart from the
+unrelated acpid warning. No new test/job added for a one-line unit correction;
+real systemd state is the meaningful check. SSM readback
+371b2f6d-4342-4067-83d7-aaa6f18e4fce succeeds: deployed revision f522db3,
+model hash 1e6832a9d1a6a40287fe66199adc903d23b1f2f0aadb83deac478dfec875a1bc,
+schema time_objectives_momentum_v1, version objectives-momentum-2026-10-17,
+smoke PASS without fallback, publisher active/running and normal publish cycles.
+Refresh inactive/success and no publisher/refresh job remains blocked. No
+tracked game at readback, so first new-map behavior/calibration is still open.
+Main static publish 39146569946 remained in progress at this readback.
+
+## 2026-10-18 — Benchmark draft v3 against the current live model
+
+Branch `research/live-draft-v3`, isolated worktree based on fetched `origin/main`
+`f522db3` (PR #85). Main fast-forwarded from `ac5745c`; it contains the
+objectives/momentum release and original draft study, not the v2 walk-forward or
+v3 player study. Imported those two research sources and their tests from
+`5811254` / `b5a2613`; no cherry-pick of overlapping runtime work.
+
+Fixed protocol before scoring: v3 entire player block plus v2 draft shift and
+shift×time on current objectives/momentum; frozen production primary control,
+same-row refit and v2 secondary controls. Draft weights end 2023 for 2024 live
+training inputs, 2024 for 2025+ inputs. Missing drafts retained, zero shift;
+no tuning or subset selection. [Report](../research/live_draft_v3.md).
+
+- **Do not promote v3:** 3,893 test maps, LL 0.46621 production → 0.46458 v3,
+  −0.00164 (95% −0.00393 to +0.00048), inconclusive. V3 versus v2 +0.00138
+  (+0.00022 to +0.00250), significantly worse. V2 versus production −0.00302
+  (−0.00582 to −0.00043). Existing CI comparator on feed checkpoint dumps passes
+  v3 vs production's no-regression guard but rejects v3 vs v2 in all four scored
+  guards. No pregame/market values fabricated. Research chronology has already
+  been viewed, so this is not prospective validation or evidence of tradable edge.
+- Rebuilt corpus: train 2,757 / calibration 1,819 / test 3,893, 39 missing test
+  drafts. More calibration/test maps than release; refit is a separate control.
+  Frozen matrix inference matches runtime on every test row (max 5e−16).
+- Existing live benchmark gains optional `--model`; both live/pre-map replay
+  and fit-cutoff metadata use it. Default and CI workflow unchanged. New causal,
+  missing-draft, split-boundary, checkpoint and CLI routing tests protect the work.
+- Own DB copied from the completed draft player worktree; feed/gol inputs are
+  read-only shared symlinks. No published weights, schema, runtime, UI, trading,
+  provider call or deployment changes. No DB rebuild or site build needed.
+- Checks and cost: focused 23 tests passed in 1.11 s. First complete research
+  run including row construction/fit/52 slice comparisons: 40.49 s, opt-in only.
+  Unchanged main suite 789 passed, 2 skipped in 9.00 s; final suite 800 passed,
+  2 skipped in 9.60 s (+11 tests, +0.60 s in these single runs, not a stable
+  performance estimate). Repository format/lint and diff whitespace checks pass.
+  Pinned CI asset hash verified by the existing fetcher: 1,665 replayed maps,
+  54,557 calls, 3,344 pre-maps, 1.7 s with either CLI path. Default and explicit
+  production-model dumps match exactly on all 13,935 checkpoint rows and cutoff
+  metadata. Final-source cached reproduction agrees (18.27 s); final post-fix
+  suite again passes: 800 passed, 2 skipped in 8.26 s. Relative links in all
+  six affected documents resolve. No CI training step or new dependency;
+  Actions timings remain unmeasured until a PR runs.
+
+
 ## 2026-10-18 — Wire the selected 30-second live-map blend for review
 
 Branch `live-map-trading`, base research `e35e5d0` / main `f522db3`. User chose

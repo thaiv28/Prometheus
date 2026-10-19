@@ -29,6 +29,7 @@
   const table = $("matches");
   const empty = $("matches-empty");
   let index = null;
+  let lifecycle = [];
   let failed = false;
   let skew = 0;
   let timer = null;
@@ -57,6 +58,10 @@
       if (res.status === 404 || res.status === 403) index = { matches: [] };
       else if (!res.ok) throw new Error(res.status);
       else index = await res.json();
+      try {
+        const states = await fetch("live/lifecycle.json", { cache: "no-store" });
+        if (states.ok) lifecycle = Object.values((await states.json()).series || {});
+      } catch (_) { /* Keep the last confirmed states if this read fails. */ }
       failed = false;
     } catch (e) {
       failed = true;
@@ -83,7 +88,7 @@
       if (failed) $("matches-caption").textContent = "Feed unreachable.";
       return;
     }
-    const matches = L.liveMatches(index, MAJORS);
+    const matches = L.liveMatches(index, MAJORS).filter((m) => !lifecycle.some((s) => s.id === m.id && s.status === "completed"));
     const age = Date.now() + skew - (L.time(index.published_at) || 0);
     const n = matches.length;
     const stale = failed || (n > 0 && age > STALE_MS);
@@ -94,11 +99,37 @@
     ].join("");
     $("matches-cap").classList.toggle("is-stale", stale);
     if (!rows) return;
-    updateUpcoming(matches);
+    const recent = lifecycle.filter((m) => L.time(m.start) >= Date.now() + skew - 7 * 86400000);
+    updateUpcoming([...matches, ...recent]);
+    updateFinished(recent);
     table.hidden = !n;
     empty.hidden = !!n;
     [...table.tBodies].forEach((b) => b.remove());
     for (const m of matches) table.appendChild(row(m));
+  }
+
+  function updateFinished(series) {
+    const table = $("recent-finished");
+    if (!table) return;
+    const done = series.filter((m) => m.status === "completed" && m.recorded && L.safeUrl(m.url))
+      .sort((a, b) => L.time(b.start) - L.time(a.start));
+    // The daily archive takes over once its richer row is available.
+    const archived = [...root.querySelectorAll(".live-finished tr.fx")];
+    const fresh = done.filter((m) => !archived.some((r) => L.fixtureOnLive((r.dataset.teams || "").split("|"), r.dataset.start, [m])));
+    table.hidden = !fresh.length;
+    table.tBodies[0].replaceChildren();
+    for (const m of fresh) {
+      const link = watchUrl(m);
+      const date = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(m.start));
+      const row = h("tr", {},
+        h("td", {}, h("time", { dateTime: m.start }, date)),
+        h("td", { class: "wide-only" }, m.league || ""),
+        h("td", { class: "team" }, h("a", { href: link }, m.teams.map((t) => t.name).join(" v "))),
+        h("td", { class: "num" }, h("a", { href: link }, L.pair(...(m.score || [null, null])))));
+      row.addEventListener("click", (e) => { if (!e.target.closest("a") && !String(window.getSelection())) location.href = link; });
+      table.tBodies[0].append(row);
+    }
+    $("finished-cap").textContent = fresh.length || archived.length ? "Table III. Followed live, last 7 days. A row opens its maps." : "Table III. None in the last week.";
   }
 
   // One match: a tbody with its row, and a second line of figures for phones.

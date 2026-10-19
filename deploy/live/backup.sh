@@ -16,7 +16,7 @@ if [ -d data/live ]; then
   aws s3 sync data/live "$dest/" --only-show-errors \
     --exclude '*' --include '*/archive.tar.gz' --include '*/results.json' \
     --include '*/calls.jsonl' --include '*/forge.json' --include '*/series_quotes.jsonl' \
-    --include '*/pre_quotes.jsonl' --include '*/trading/*'
+    --include '*/pre_quotes.jsonl' --include '*/draft_context.json' --include '*/trading/*'
 fi
 for match in output/live/*/; do
   [ -d "$match" ] || continue

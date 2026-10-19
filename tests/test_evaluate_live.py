@@ -392,3 +392,35 @@ def test_replay_premaps_and_dump_band(tmp_path):
     dump = pd.read_csv(tmp_path / "d" / "calls.csv.gz")
     premap = dump[dump["checkpoint"] == -1]
     assert list(premap["game"]) == ["oe1"] and premap["kalshi"].iloc[0] == 0.55
+
+
+def test_cli_model_used_for_both_replays_and_dump(monkeypatch, tmp_path):
+    """An explicit candidate must not silently replay or date-cut the default."""
+    import sys
+
+    path = tmp_path / "candidate.json"
+    seen = []
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["evaluate_live.py", "--model", str(path), "--dump", str(tmp_path / "dump")],
+    )
+    monkeypatch.setattr(el, "load_data", lambda _: {})
+    calls = pd.DataFrame({"game": ["g"]})
+
+    def replay(data, *, model_path):
+        seen.append(("live", model_path))
+        return calls, 0
+
+    def pre(data, *, model_path):
+        seen.append(("pre", model_path))
+        return pd.DataFrame()
+
+    def dump(calls, dirname, *, model_path, pre):
+        seen.append(("dump", model_path))
+
+    monkeypatch.setattr(el, "replay", replay)
+    monkeypatch.setattr(el, "replay_premaps", pre)
+    monkeypatch.setattr(el, "write_dump", dump)
+    el.main()
+    assert seen == [("live", path), ("pre", path), ("dump", path)]

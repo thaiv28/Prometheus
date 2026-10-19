@@ -566,3 +566,73 @@ class PreMapsTest(unittest.TestCase):
             pre.seen(PRE_EVENT, PRE_GAME, mapping)
             pre.keep(set())  # match no longer live
             self.assertEqual(pre.maps, {})
+
+
+class LifecycleTest(unittest.TestCase):
+    def test_confirmed_state_survives_empty_discovery_and_does_not_regress(self):
+        from prometheus.live.service import update_lifecycle, update_observed
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            e = event()
+            e["startTime"] = "2026-10-18T18:00:00Z"
+            at = "2026-10-18T21:00:00Z"
+            self.assertTrue(update_lifecycle(root, [e], CATALOG, {}, at))
+            game = mock.Mock()
+            game.mapping = mapping_for(e, CATALOG, {})
+            game.score.return_value = [1, 2]
+            update_observed(root, [game], at)
+            e["state"] = "completed"
+            self.assertTrue(update_lifecycle(root, [e], CATALOG, {}, at))
+            self.assertFalse(update_lifecycle(root, [], CATALOG, {}, at))
+            e["state"] = "inProgress"
+            update_lifecycle(root, [e], CATALOG, {}, at)
+            row = json.loads((root / "lifecycle.json").read_text())["series"]["m1"]
+            self.assertEqual(row["status"], "completed")
+            self.assertTrue(row["recorded"])
+            self.assertEqual(row["url"], "live/m1.json")
+            update_lifecycle(root, [], CATALOG, {}, "2026-10-26T00:00:00Z")
+            self.assertEqual(
+                json.loads((root / "lifecycle.json").read_text())["series"], {}
+            )
+
+    def test_side_discovery_uses_timestamped_window(self):
+        with mock.patch(
+            "prometheus.live.service.fetch_json", return_value=({}, None)
+        ) as fetch:
+            feed_sides(MAP3, Path("unused"))
+        self.assertIn("startingTime=", fetch.call_args.args[0])
+
+
+class CompletedPageTest(unittest.TestCase):
+    def test_final_score_orients_to_saved_teams_and_closes_only_the_deciding_map(self):
+        from prometheus.live.service import complete_page
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            page = {
+                "match": {"teams": [{"name": "KC"}, {"name": "MVK"}], "score": [2, 0]},
+                "game": {
+                    "number": 3,
+                    "winner": None,
+                    "frames": [{"at": "2026-10-18T20:20:00Z"}],
+                },
+            }
+            row = {
+                "id": "m",
+                "teams": [{"name": "MVK"}, {"name": "KC"}],
+                "score": [0, 3],
+            }
+            complete_page(root, page, row)
+            self.assertEqual(page["match"]["score"], [3, 0])
+            self.assertEqual(page["game"]["winner"], 0)
+            self.assertIn("KC won the series 3–0", page["note"])
+            self.assertTrue((root / "m/map3.json").exists())
+            page.update(status="idle", final=False)
+            complete_page(root, page, row)
+            self.assertTrue(page["final"])
+            self.assertEqual(page["status"], "between_games")
+            page["game"].update(number=1, winner=None)
+            page["match"]["score"] = [0, 0]
+            complete_page(root, page, row)
+            self.assertIsNone(page["game"]["winner"])

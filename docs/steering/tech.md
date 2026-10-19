@@ -412,3 +412,74 @@ explicit UTC, while feed/receipt/book timestamps stay strictly timezone-aware.
 Private `include_inputs` output pins the exact modeled source frame; public
 call records remain unchanged. Physical map identity is canonical teams + UTC
 scheduled start + map number, separate from the additional exchange-event fence.
+
+### Draft v3 live-prior comparison (2026-10-18)
+
+`scripts/research/live_draft_v3.py` reuses the feed partitions, objective and causal
+momentum builders; it fits prior-year v2/v3 draft shifts from the frozen
+full-roster player-feature table. Live train/calibration/test stay 2024 / 2025 H1 /
+2025 H2 onward. Missing drafts remain with zero shift; no test-only exclusions.
+It compares against frozen production and a same-row refit, verifies frozen
+runtime inference parity, hashes inputs, and exports research-only fits plus
+CI-compatible feed-only checkpoint dumps. `compare_benchmarks.py` reads these
+without changes. No fake Kalshi price or pregame call is supplied. The actual
+pinned market benchmark remains the production regression guard; research dumps
+are a separate cohort. See [protocol and results](../research/live_draft_v3.md).
+
+`evaluate_live.py --model` selects a supported runtime artifact for both replay
+paths and dump cutoff metadata; omitting it retains `timeline.MODEL_PATH`.
+The draft research exports have no supported runtime schema and cannot be
+activated with that option. No DB schema, worker dependency or live input changed.
+
+### API draft v2 shadow path (prepared 2026-10-18)
+
+`live.draft_export.History` makes a chronological SQL pass over the roster,
+results and pre-match Elo. It exports player–champion experience, 60-day
+champion-role residuals, same-role matchup residuals and champion-role pair
+residuals, plus exact alias/catalog lookups. A snapshot excludes the entire
+UTC day named in `as_of`. The normal live-input export includes that snapshot;
+no worker DB read or fitting is added. The history has schema `draft_history_v2`.
+
+`page.build_state` preserves metadata changes as `game.draft_observations`,
+in blue/red order with source and receipt times and mapped team codes.
+`live.draft.prepare` resolves all ten identities, computes the frozen draft
+log-odds shift on the unconditioned FORGE map prior, and freezes a context at
+the first complete receipt, bounded by when model/history inputs actually loaded
+in the worker. A restart retains the frozen bound. Later contradictory metadata sets an invalid-from
+time. `draft_context.json` preserves the context across restart; the artifact
+fingerprint and game ID prevent reuse with a different model/map. UTC-day
+mismatch or an unknown/ambiguous identity leaves the base model in use.
+
+`time_model_draft_v2.json` uses `time_objectives_draft_v2`: the current state
+features plus shift and shift×time, frozen training/calibration and prior-year
+weights, with its base artifact embedded. `timeline_calls(..., draft=context)`
+uses the candidate only at/after readiness, before conflict, with valid objective
+inputs. Otherwise it retains the base or existing legacy objective fallback.
+Pregame stays on the existing model. The worker performs a separate candidate
+replay, logs it as `draft_shadow` in the private call journal and leaves public
+calls/series chances unchanged; it disables the candidate when the parent differs.
+
+`prepare_draft_benchmark.py` can enrich a separate data file with actual API
+metadata and compact earlier-day lookup rows. `evaluate_live.py --model` uses
+the same resolver and inference path. Historical first-window timestamps are a
+proxy, explicitly labelled, not proof of original live availability. The release
+pin and default CI benchmark remain unchanged until a suitable prospective corpus
+exists. See [integration validation](../research/live_draft_integration.md).
+
+### Refresh restart ordering
+
+The publisher has `After=prometheus-live-refresh.service`. Its refresh post-step
+must use `systemctl --no-block try-restart`: a synchronous restart waits on
+the publisher, which waits for the refresh post-step itself. The queued restart
+keeps the existing changed-code/data condition and lets systemd apply ordering.
+
+### Live lifecycle and incomplete counters (2026-10-18)
+
+The worker writes a seven-day `output/live/lifecycle.json` from existing Riot
+schedule/discovery responses and observed map scores. Completion is monotone;
+empty indexes and shutdown do not clear it. Recorded completed series link to
+Watch immediately, and the daily archive replaces those rows. Side discovery
+uses the delayed timestamped window, avoiding the default endpoint's late 204s.
+An aggregate/player kill mismatch retains a candidate with null totalKills
+and its field reason; missing counters invoke the existing v1 model fallback.
+Other invalid fields and freshness/identity validation still reject.

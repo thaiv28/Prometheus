@@ -2,6 +2,10 @@
 
 - [Live map trading](live_trading.md): earlier-series-only market/model blend, fee-aware entries, freshness/stability proxies, execution-cost stress and Kelly paths; [fixed protocol](live_trading_protocol.md). Historical tape returns remain inconclusive; no trading change.
 
+- [API draft v2 integration](live_draft_integration.md): prepared private live candidate, exact identity/fallback/timing gates, real API and collector validation; no displayed probability change.
+
+- **Draft v3 beyond the current live model (2026-10-18).** [Protocol/results](live_draft_v3.md): v3 fails the improvement gate against frozen objectives/momentum and regresses significantly versus the v2 prior. Existing CI comparator reused for feed-only research dumps; no runtime/default/data-pin change. V2 remains the stronger live research candidate.
+
 - [Conditional objective gains](cand_followups.md) and [role leads phase A](cand_role_leads.md): original draft and momentum add to objectives; role gold/CS/XP add to gold+Elo on exact checkpoints. Retrospective, no runtime change.
 
 - [Live model candidate review](live_candidates.md): objectives, draft, per-map Elo, momentum and calibration; retrospective research, no model deployed.

@@ -43,7 +43,7 @@ def session(max_age=30, game_id="g"):
 
 
 class RiotFeedTests(unittest.TestCase):
-    def test_reported_team_kills_disagreeing_with_player_sum_are_preserved_but_rejected(
+    def test_conflicting_kills_are_unknown_without_losing_valid_frame(
         self,
     ):
         data = fixture()
@@ -52,11 +52,15 @@ class RiotFeedTests(unittest.TestCase):
         ]
         data["frames"][0]["blueTeam"]["totalKills"] = 1
         row = session().review(data, "2026-10-04T20:33:31Z", {})[0]
-        self.assertEqual(row["teams"]["blue"]["totalKills"], 1)
+        self.assertIsNone(row["teams"]["blue"]["totalKills"])
         self.assertIn(
             "blue.totalKills:participant_sum_disagreement", row["field_reasons"]
         )
-        self.assertEqual(row["status"], "rejected")
+        self.assertEqual(row["status"], "research_candidate")
+        self.assertEqual(
+            row["teams"]["blue"]["totalGold"],
+            data["frames"][0]["blueTeam"]["totalGold"],
+        )
 
     def test_stale_in_game_never_becomes_live_and_elapsed_stays_null(self):
         row = session().review(fixture(), "2026-10-08T00:00:00Z", {})[0]

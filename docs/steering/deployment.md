@@ -47,6 +47,7 @@ Required repository settings:
 
 - Runs on `pull_request` only (opened, synchronize, reopened, labeled, unlabeled); never on `main` pushes, schedules or dispatch. Concurrency group `benchmarks-<PR number>`, cancelling the PR's older run. Permissions: `contents: read`, `pull-requests: write` (the comment).
 - Three jobs. `prepare` reads any stored verdict to reuse (label changes), the base commit (the merge commit's first parent) and whether its scripts have `--dump`, and looks up the newest `oracles-elixir-*` cache entry. `bench` runs as a matrix, `head` (the merge commit) and `base` × `core` and `markets`, in parallel, each on its own runner: `uv sync`, that exact CSV entry (so both read the same data; no `REFRESH_DATA`, so Drive only if the cache is empty), the cached DB under the same `prometheus-db-<hash>` key as `publish.yml` (usually a hit for the base, and for the head when the PR leaves the DB build alone), else `setup_db.sh`, then (`core`) the benchmark scripts at once (`--dump`; they only read the DB): forecasts, season stats and AURA, plus the prop projections on the fourth core when the side's `evaluate_props.py` can dump (a base from before it skips it and the comparison notes it) or (`markets`) `evaluate_markets.py --offline --dump` on the Kalshi cache entry `prepare` picked and then `evaluate_live.py --fetch-data --dump` (the in-game benchmark: downloads the data file pinned in that side's `scripts/live_bench_data.json` from the `live-bench-data` release, under 1 MB, public, no secret; about 2 s to replay; a side without the pin file skips it), uploading `dumps/` as an artifact. `markets` runs only when a `kalshi-markets-*` cache exists and the base's `evaluate_markets.py` has `--dump`. The base's dumps are cached as `benchmark-dumps-<group>-<base sha>-<CSV entry>[-<Kalshi entry>]`, so later pushes to a PR with the same base skip the whole base side. `compare` downloads each side's artifacts into one directory, compares, comments and gives the verdict.
+- **Local candidate selection:** `evaluate_live.py --model <supported-runtime-artifact.json> --dump <dir>` uses that artifact for live/pre-map replay and its fit cutoff for the comparison. CI omits the option and continues to test the production default. Research draft dumps can use the same comparator locally; they are not the pinned market cohort and add no CI training job.
 - **Live benchmark data.** The release `live-bench-data` holds one asset per data version (`live_maps-<sha256 prefix>.json.gz`); `scripts/live_bench_data.json` pins the one each commit uses, so base and head each read their own pin and the comparison pairs the maps both scored. Refresh it locally (it needs the feed timelines on this machine): `uv run python scripts/evaluate_live.py --build-data --refresh-markets`, then `--publish-data` (gh CLI, uploads and rewrites the pin), and commit the pin in a PR. Old assets stay so old commits still fetch.
 - If the base's scripts have no `--dump` (until this check merged), nothing runs: "no baseline yet", pass.
 - `scripts/compare_benchmarks.py` compares the dumps (see `tech.md`, *Benchmark comparison*). `scripts/benchmark_comment.sh` keeps one sticky PR comment (a `<!-- benchmark-report -->` marker; edited in place) with the verdict, the override state and the report (including the report-only betting table); the report also goes to the run summary. Fork PRs get a read-only token, so their comment step fails softly (`continue-on-error`).
@@ -156,7 +157,7 @@ The existing worker refresh/restart deploys the two-second Kalshi quote cycle; t
 
 The ordinary publish/hourly paths use the same stdlib fee-bound function as Lambda for alert selection and issue refresh. No new API call, AWS permission, job or dependency. Public fee constants mirror the approved live 0.07 rate / 0.0001 precision and must be updated together if those private settings change. No packaged executor input changed, so this change does not trigger an execution release or modify live configuration. It takes effect for new notifications when the merged publish/hourly jobs run; earlier saved alerts remain frozen.
 
-## Live model release — objectives and momentum (2026-10-17)
+## Live model release — objectives and momentum (deployed 2026-10-18)
 
 The frozen `prometheus/live/time_model_objectives_v1.json` and stdlib inference
 ship through the existing main-branch worker refresh. No infrastructure,
@@ -197,3 +198,51 @@ Worker `LIVE_MAP_SIGNAL_ARGS` is absent by default; when enabled it adds bounded
 trade GETs and private candidate delivery through role-authenticated AWS CLI.
 Backup includes private `trading/` evidence. Shadow never loads signing keys or
 uses account/order endpoints. [Review/rollout](../live_map_execution.md).
+
+### Draft v2 private observation (prepared 2026-10-18)
+
+The existing main-only `Publish ratings for the live worker` step also exports
+prior-day draft histories inside `live_inputs.json` (about 18.3 MB locally,
+~11.6 s extra CPU wall time). The refresh timer fetches it as before; no new
+S3 key, dependency, secret, provider request, CI step or service flag is needed.
+The worker starts collecting private candidate calls automatically when it has
+compatible histories and the packaged candidate's exact production parent.
+This does not change displayed predictions or execution/trading behavior.
+
+`calls.jsonl` contains `draft_shadow` (context and latest candidate/fallback
+call). Each map's `draft_context.json` is included by the existing backup sync
+and packed with its finished collector evidence. Keep raw observations/receipt
+times for prospective scoring. A stale day or unknown identity means fallback;
+UTC-midnight rollover may await the next daily input export/worker refresh.
+Actions timings for checks are recorded in the PR; main-only export/upload and
+production reload timings remain unverified until rollout. There is no manual
+AWS deployment in this change. Merging main lets the existing publish/refresh
+path install this private observation mode.
+
+### Refresh unit ordering (2026-10-18)
+
+`prometheus-live-refresh.service` queues `systemctl --no-block try-restart`
+in its post-step. A synchronous restart deadlocks with the publisher's `After`
+order; this was observed during the model rollout and in prior boot logs.
+When changing a unit, install its reviewed file under `/etc/systemd/system/`
+and run `systemctl daemon-reload`; a code refresh alone does not replace unit
+files. For an already deadlocked old post-step, terminate only its control
+process, then run the corrected refresh and let the queued publisher restart
+finish before checking health. Do not wait for the old 30-minute timeout.
+
+Rollout verified on worker `i-026b4649ad0e7dd80`: main release `f522db3`,
+model `objectives-momentum-2026-10-17`, SHA256
+`1e6832a9d1a6a40287fe66199adc903d23b1f2f0aadb83deac478dfec875a1bc`,
+runtime smoke PASS, active/running publisher and successful regular cycles.
+The nonblocking refresh correction is installed; the original deadlocked
+post-step was terminated. No match was tracked during verification; confirm
+new-map schema/prospective accuracy when matches start. No execution rollout.
+
+### Live lifecycle repair (2026-10-18)
+
+The ordinary worker refresh deploys timestamped side discovery and the persistent
+`current/live/lifecycle.json`; ordinary site publish delivers its reader. No new
+permissions/resources or systemd changes. The existing sync owns this JSON and
+retains it at shutdown, independent of the empty active index. Lifecycle derives
+from existing minute discovery calls; browsers read one additional small object
+per poll. Final untracking attempts one last settlement and snapshot.

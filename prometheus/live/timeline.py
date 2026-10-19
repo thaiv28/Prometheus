@@ -7,6 +7,7 @@ from bisect import bisect_right
 from functools import lru_cache
 from pathlib import Path
 
+from .draft import available, fingerprint
 from .feed import timestamp
 
 # The model the live service calls with (and `scripts/evaluate_live.py` scores).
@@ -81,11 +82,19 @@ def predict(
     *,
     objectives=None,
     momentum=0.0,
+    draft_shift=None,
 ):
     schema = model.get("schema")
     names = FEATURES if schema == "time_gold_elo_v1" else STATE_FEATURES
+    if schema == "time_objectives_draft_v2":
+        names = STATE_FEATURES + ["draft", "draft_time"]
     if (
-        schema not in ("time_gold_elo_v1", "time_objectives_momentum_v1")
+        schema
+        not in (
+            "time_gold_elo_v1",
+            "time_objectives_momentum_v1",
+            "time_objectives_draft_v2",
+        )
         or model.get("features") != names
     ):
         raise ValueError("unsupported time-aware model contract")
@@ -100,6 +109,10 @@ def predict(
         x = state_features(
             clock_seconds, blue_gold, red_gold, blue_elo, red_elo, objectives, momentum
         )
+    if schema == "time_objectives_draft_v2":
+        if type(draft_shift) not in (int, float) or not math.isfinite(draft_shift):
+            raise ValueError("finite draft shift required")
+        x.extend((draft_shift, draft_shift * clock_seconds / 1200))
     mean, scale, coef = model["mean"], model["scale"], model["coef"]
     if (
         len(mean) != len(names)
@@ -191,7 +204,7 @@ def latest_elo(db_path, team_name, before):
 
 
 def timeline_calls(
-    page, model, ratings, start=None, shift=0.0, *, include_inputs=False
+    page, model, ratings, start=None, shift=0.0, draft=None, *, include_inputs=False
 ):
     """Pregame and per-minute calls for teams[0]; ratings in match-team order.
 
@@ -210,13 +223,15 @@ def timeline_calls(
         return 1 / (1 + math.exp(-(math.log(p / (1 - p)) + shift)))
 
     elo = [ratings[blue]["elo"], ratings[1 - blue]["elo"]]
-    state_model = model.get("schema") == "time_objectives_momentum_v1"
+    draft_model = model.get("schema") == "time_objectives_draft_v2"
+    state_model = draft_model or model.get("schema") == "time_objectives_momentum_v1"
     # Upgrade in-game inference only; keep pre-map calls on frozen v1.
     pregame_model = legacy_model() if state_model else model
     pregame = first(predict(pregame_model, 0, START_GOLD, START_GOLD, *elo))
     calls = []
     history_seconds, history_lead = [], []
     frames = game["frames"]
+    model_fingerprint = fingerprint(model) if draft_model else None
     for frame, seconds in zip(frames, elapsed_seconds(frames, start)):
         frame["clock_estimate"] = None if seconds is None else round(seconds, 1)
         if seconds is None or seconds > model["supported_seconds"][1]:
@@ -225,6 +240,9 @@ def timeline_calls(
         if None in gold or min(gold) <= 0:
             continue
         active_model, options = model, {}
+        draft_ready = draft_model and available(draft, frame["at"], model_fingerprint)
+        if draft_model and not draft_ready:
+            active_model = model["fallback_model"]
         if state_model:
             teams = (frame["teams"][blue], frame["teams"][1 - blue])
             try:
@@ -237,6 +255,8 @@ def timeline_calls(
                 lead = gold[0] - gold[1]
                 momentum = (lead - history_lead[lag]) / 1000 if lag >= 0 else 0.0
                 options = {"objectives": teams, "momentum": momentum}
+                if draft_ready:
+                    options["draft_shift"] = draft["shift"]
             history_seconds.append(seconds)
             history_lead.append(gold[0] - gold[1])
         call = {

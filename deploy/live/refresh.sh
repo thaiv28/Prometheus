@@ -20,8 +20,8 @@ git reset --quiet --hard origin/main
 mkdir -p data output
 changed=$([ "$(git rev-parse HEAD)" != "$before" ] && echo 1 || echo 0)
 
-# Ratings for FORGE and the in-game model (scripts/export_live_inputs.py, uploaded
-# by the publish build): a small file, so the worker never loads the database.
+# Ratings and draft histories (scripts/export_live_inputs.py, uploaded by the
+# publish build), so the worker never loads the database.
 aws s3 cp "s3://$ARTIFACTS_BUCKET/prometheus/live-inputs/live_inputs.json" \
   data/live_inputs.json.new --only-show-errors
 if ! cmp -s data/live_inputs.json.new data/live_inputs.json; then
