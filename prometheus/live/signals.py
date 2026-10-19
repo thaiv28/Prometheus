@@ -34,9 +34,28 @@ def observation(game, page, at):
         or page.get("status") != "live"
     ):
         raise ValueError("live_model_or_identity_unavailable")
+    from .draft import available
+
     model, ratings = game.timeline
+    if model != json.loads(live_map.MODEL.read_text()):
+        raise ValueError("live_model_version_mismatch")
+    packet = getattr(game, "draft_context", None)
+    candidate = getattr(game, "draft_model", None)
+    receipt = (
+        page["game"]["frames"][-1]["actual_received_at"]
+        if page["game"]["frames"]
+        else at
+    )
+    use_draft = bool(candidate and available(packet, receipt, candidate))
+    if use_draft and candidate != json.loads(live_map.DRAFT_MODEL.read_text()):
+        raise ValueError("live_draft_version_mismatch")
     _, calls = timeline_calls(
-        page, model, ratings, start=game.start["source_at"], include_inputs=True
+        page,
+        candidate if use_draft else model,
+        ratings,
+        start=game.start["source_at"],
+        draft=packet if use_draft else None,
+        include_inputs=True,
     )
     frames = page["game"]["frames"]
     if (
@@ -48,7 +67,26 @@ def observation(game, page, at):
     frame = frames[-1]
     homes = game.forge["homes"]
     teams = [t["name"] for t in game.mapping["teams"]]
+    draft_input = {}
+    if use_draft:
+        blue = page["game"]["blue"]
+        packet = json.loads(json.dumps(packet))
+        if packet.get("history_through"):
+            packet["history_through"] = rating_time(packet["history_through"])
+        draft_input = {
+            "game_id": game.id,
+            "draft": {
+                "context": packet,
+                "p_blue": game.forge["p_game"]
+                if blue == 0
+                else 1 - game.forge["p_game"],
+                "model_sha256": hashlib.sha256(
+                    live_map.DRAFT_MODEL.read_bytes()
+                ).hexdigest(),
+            },
+        }
     return {
+        **draft_input,
         "version": live_map.VERSION,
         "state": "live",
         "teams": teams,

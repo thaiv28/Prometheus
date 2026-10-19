@@ -1,5 +1,49 @@
 # Work log
 
+## 2026-10-19 — Review draft v2 for the 30-second trading blend
+
+User requested PR #92's draft model, then merge and live activation only if
+benchmarks improve. Integrated main `bc02c4e` into the separate `live-map-trading`
+worktree (original implementation `c6cb26e`, research `e35e5d0` / main `f522db3`).
+Preserved both chronological logs, lifecycle fixes, draft observation and private
+trading backups. Trading signals now use the frozen ready draft when available,
+recompute its prior/model on the consumer and route to separate earlier-only
+monthly fits; absent/conflicting draft retains exact original inference/blend.
+Checks bind model/parent/artifact, map, receipt availability and earlier-day
+history. Package, release fingerprint and deploy path filter include new inputs.
+No public prediction/UI/copy, fit schedule, DB schema or published metric change.
+
+Fixed, untuned same-cohort comparison: 1,352 maps / 655 series / 32,158 calls;
+1,663/1,666 research draft joins. Equal-map paired LL change −0.00133 (95%
+−0.00437 to +0.00174); FST 24-map slice significantly worse +0.02692 (+0.01188
+to +0.04563). Historical ordinary-fee flat-dollar ROI +18.74% (219 entries,
+−0.76% to +38.18%) versus original +21.05% (189, +1.83% to +41.61%).
+This uses OE draft availability proxies, not measured API coverage/receipts,
+asks/depth/fills or independent confirmation. Gate FAIL; no merge, deploy,
+activation or production/account change. No tuning or benchmark override.
+Full evidence/reproduction: `docs/research/live_map_draft_trading.md`.
+
+Focused combined trading/draft suite: 64 passed in 0.20s. Final full suite:
+872 passed, 2 optional signing tests skipped in 10.86s; those two pass separately
+with pinned cryptography in 0.16s. Repository ruff check/format (337 files), shell
+syntax, whitespace and 110 relative documentation links pass. Native API-enriched
+replay: 1,665 maps / 54,557 calls / 3,327 pre-maps, every existing Live comparator
+guard passes; only 17 maps have API drafts, so this is functional evidence and
+not the trading improvement claim. Parent/draft replay takes 1.60s / 1.55s,
+startup/load variation; unchanged public default path performs no draft work.
+All 32,158 shared runtime blend values match the review replay within 1.12e-16.
+
+Review zip: 5,038,581 bytes / 192 files, source-content parity/private-input
+exclusion and isolated scheduled/SQS OFF/public-only shadow smoke pass.
+Package SHA256 `18ad8229bf16a1130e89c805497153eca545d890491301cb02c7838245362c05`;
+source `4728b02e3cff510af22686c888cdd6343bb3fade2ffecc9ce3bf3479036c3d8c`.
+Offline comparison takes 10.49s, no CI job/dependency added. Compared with the
+pre-upgrade 827-test run (8.66s), integration includes merged main's additional
+cases; the final 10.86s cannot attribute startup/load differences to this change.
+Automatic main publish would reuse its existing package step; no extra job/step.
+Actual PR Actions timings are pending submission; rollout remains unperformed.
+Copy review: not applicable; public UI/copy is unchanged from merged main.
+
 ## 2026-10-18 — Prepare API draft v2 as a private live candidate
 
 Branch `live-draft-v2`, based on `f999333` (the v3 comparison), main base

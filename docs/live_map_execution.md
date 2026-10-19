@@ -5,6 +5,17 @@ No infrastructure, credentials, account settings or orders were changed during
 implementation. Existing pregame execution can remain enabled in production;
 this strategy is absent/off until explicitly configured and activated.
 
+## Draft upgrade under review (2026-10-19)
+
+The branch now includes PR #92's frozen draft v2. A ready, map-bound context
+selects draft inference and separate earlier-only monthly blend coefficients;
+missing/conflicting draft retains the original model/blend exactly. Consumer
+recomputes the prior, checks readiness/history/model/parent hashes and rejects
+altered shifts. Public calls remain unchanged. The draft comparison fails:
+paired gain inconclusive and FST significantly worse. The user authorized merge
+and live activation conditional on improving benchmarks; keep this PR unmerged
+and maps disabled. [Full results](research/live_map_draft_trading.md).
+
 ## Strategy contract
 
 `live-map-30s-v1` is the user's selected historical 30-second sensitivity:
@@ -74,7 +85,7 @@ policy change if the account profile changes.
    concurrency and the ledger's independent concurrency protection.
 
 This does not mark the research feed as `live_state_verified=true`, establish a
-verified game clock, add draft inputs or change public model probabilities.
+verified game clock, change public model probabilities. The review-only draft route is described above.
 
 ## Capital and modes
 

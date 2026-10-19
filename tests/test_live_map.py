@@ -588,6 +588,22 @@ def test_private_worker_observation_keeps_unshifted_model_and_exact_input_parity
     assert o["inputs"]["momentum"] == 0
     assert live_map.raw_probability(o) == pytest.approx(predict(model, **o["inputs"]))
     assert page["game"]["frames"][-1]["clock_estimate"] == 600
+
+    game.id = "riot-map-1"
+    game.forge["p_game"] = 0.65
+    game.draft_model = json.loads(live_map.DRAFT_MODEL.read_text())
+    game.draft_context = draft_observation()["draft"]["context"]
+    drafted = collect(game, page, NOW.isoformat())
+    assert "draft_shift" in drafted["inputs"]
+    assert live_map.raw_probability(drafted) == pytest.approx(
+        predict(game.draft_model, **drafted["inputs"])
+    )
+    # The context is copied into evidence; future invalidation cannot rewrite it.
+    game.draft_context["invalid_at"] = (NOW - dt.timedelta(seconds=1)).isoformat()
+    fallback = collect(game, page, NOW.isoformat())
+    assert "draft" not in fallback and fallback["inputs"] == o["inputs"]
+    assert "invalid_at" not in drafted["draft"]["context"]
+
     # Many source frames share one receipt; receipt equality cannot identify
     # which frame the last successful model call used.
     bad = copy.deepcopy(page)
@@ -731,3 +747,96 @@ def test_emergency_off_controls_survive_malformed_live_map_configuration(broken)
     assert Config.parse(parameter.value).mode == "off"
     control.set_live_map_mode(parameter, "/config", "off", now=NOW)
     assert parameter.value["live_maps"]["mode"] == "off"
+
+
+def draft_observation():
+    from prometheus.live.draft import fingerprint, prior_shift
+
+    value = observation()
+    model = json.loads(live_map.DRAFT_MODEL.read_text())
+    values = {"exp": 0.7, "meta": 0.1, "matchup": -0.1, "synergy": 0.2}
+    shift = prior_shift(values, 0.65, model)
+    value["game_id"] = "riot-map-1"
+    value["inputs"]["draft_shift"] = shift
+    value["draft"] = {
+        "p_blue": 0.65,
+        "model_sha256": live_map.draft_artifact()["model_sha256"],
+        "context": {
+            "status": "ready",
+            "game_id": "riot-map-1",
+            "ready_at": (NOW - dt.timedelta(seconds=30)).isoformat(),
+            "model": fingerprint(model),
+            "features": values,
+            "shift": shift,
+            "history_as_of": "2026-10-15",
+            "history_through": "2026-10-14T12:00:00Z",
+        },
+    }
+    return value
+
+
+def test_draft_execution_recomputes_prior_and_routes_to_separate_blend():
+    from prometheus.live.timeline import predict
+
+    value = draft_observation()
+    raw = live_map.raw_probability(value)
+    assert raw == pytest.approx(
+        predict(json.loads(live_map.DRAFT_MODEL.read_text()), **value["inputs"])
+    )
+    result = live_map.evaluate(value, tape(), book(), NOW.isoformat(), fee)
+    expected, _ = live_map.blend(raw, 0.5, NOW.isoformat(), draft=True)
+    assert result["probability"] == pytest.approx(expected)
+    opposite = copy.deepcopy(value)
+    opposite["blue"] = 1
+    assert live_map.raw_probability(opposite) == pytest.approx(1 - raw)
+    candidate = live_map.proposal(value, tape(), book(), NOW.isoformat(), fee)
+    assert (
+        live_map.validate(candidate, Config.parse(config()), NOW.isoformat())
+        == candidate
+    )
+    candidate["live"]["observation"]["draft"]["context"]["features"]["exp"] += 1
+    with pytest.raises(ValueError, match="shift_mismatch"):
+        live_map.validate(candidate, Config.parse(config()), NOW.isoformat())
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda o: o["draft"]["context"].update(
+            ready_at=(NOW + dt.timedelta(seconds=1)).isoformat()
+        ),
+        lambda o: o["draft"]["context"].update(
+            invalid_at=(NOW - dt.timedelta(seconds=1)).isoformat()
+        ),
+        lambda o: o["draft"]["context"].update(game_id="another-map"),
+        lambda o: o["draft"]["context"].update(history_as_of="2026-10-14"),
+        lambda o: o["draft"]["context"].update(history_through="2026-10-15T00:00:00Z"),
+        lambda o: o["draft"].update(model_sha256="unreviewed"),
+        lambda o: o["draft"]["context"].update(model="unreviewed"),
+        lambda o: o["inputs"].update(draft_shift=100),
+        lambda o: o["draft"]["context"]["features"].update(exp=float("nan")),
+        lambda o: o["draft"].update(p_blue=0),
+    ],
+)
+def test_draft_signal_refuses_future_conflicting_stale_or_unpinned_context(change):
+    value = draft_observation()
+    change(value)
+    with pytest.raises(ValueError):
+        live_map.validate_observation(value, NOW.isoformat())
+
+
+def test_draft_artifact_requires_earlier_month_and_context_for_shift():
+    with pytest.raises(ValueError, match="no_earlier_only"):
+        live_map.blend(0.8, 0.6, "2026-11-01T00:00:00Z", draft=True)
+    value = observation()
+    value["inputs"]["draft_shift"] = 0.3
+    with pytest.raises(ValueError, match="context_missing"):
+        live_map.raw_probability(value)
+    for fit in live_map.draft_artifact()["snapshots"]:
+        at = fit["month"] + "-15T00:00:00Z"
+        assert sum(
+            (
+                live_map.blend(0.8, 0.6, at, draft=True)[0],
+                live_map.blend(0.2, 0.4, at, draft=True)[0],
+            )
+        ) == pytest.approx(1)

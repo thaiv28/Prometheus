@@ -1,5 +1,7 @@
 # Research
 
+- [Draft v2 map trading](live_map_draft_trading.md): ready-draft execution and exact original fallback; fixed market-blend comparison fails improvement/no-regression gates. Prepared for review, unmerged and disabled.
+
 - [Live map trading](live_trading.md): earlier-series-only market/model blend, fee-aware entries, freshness/stability proxies, execution-cost stress and Kelly paths; [fixed protocol](live_trading_protocol.md). Historical tape returns remain inconclusive; no trading change.
 
 - [API draft v2 integration](live_draft_integration.md): prepared private live candidate, exact identity/fallback/timing gates, real API and collector validation; no displayed probability change.

@@ -12,9 +12,9 @@ uv run --no-project --python 3.12 --with pip python -m pip install \
 mkdir -p "$stage/prometheus" "$stage/deploy/execution"
 cp "$root/prometheus/__init__.py" "$root/prometheus/alert_contract.py" "$stage/prometheus/"
 cp "$root/prometheus/market_blend.py" "$root/prometheus/market_blend.json" "$stage/prometheus/"
-cp "$root/prometheus/live_map.py" "$root/prometheus/live_map_blend.json" "$stage/prometheus/"
+cp "$root/prometheus/live_map.py" "$root/prometheus/live_map_blend.json" "$root/prometheus/live_map_draft_blend.json" "$stage/prometheus/"
 mkdir -p "$stage/prometheus/live"
-for name in __init__.py feed.py timeline.py time_model_objectives_v1.json time_model_v1.json; do
+for name in __init__.py feed.py draft.py timeline.py time_model_draft_v2.json time_model_objectives_v1.json time_model_v1.json; do
   cp "$root/prometheus/live/$name" "$stage/prometheus/live/"
 done
 cp -R "$root/prometheus/execution" "$stage/prometheus/execution"

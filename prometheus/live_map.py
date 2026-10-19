@@ -15,6 +15,8 @@ VERSION = "live-map-30s-v1"
 PREFIX = "prometheus/live-trading/signals/"
 MODEL = Path(__file__).with_name("live") / "time_model_objectives_v1.json"
 ARTIFACT = Path(__file__).with_name("live_map_blend.json")
+DRAFT_MODEL = MODEL.with_name("time_model_draft_v2.json")
+DRAFT_ARTIFACT = ARTIFACT.with_name("live_map_draft_blend.json")
 
 
 def timestamp(value):
@@ -57,8 +59,24 @@ def artifact():
     return value
 
 
-def blend(raw, market, at, frozen=None):
-    frozen = artifact() if frozen is None else frozen
+@lru_cache(maxsize=1)
+def draft_artifact():
+    value = json.loads(DRAFT_ARTIFACT.read_text())
+    model = json.loads(DRAFT_MODEL.read_text())
+    if (
+        value["version"] != VERSION
+        or value["model_sha256"] != hashlib.sha256(DRAFT_MODEL.read_bytes()).hexdigest()
+        or model["fallback_model"] != json.loads(MODEL.read_text())
+        or value["parent_blend_sha256"]
+        != hashlib.sha256(ARTIFACT.read_bytes()).hexdigest()
+    ):
+        raise ValueError("live_draft_version_mismatch")
+    return value
+
+
+def blend(raw, market, at, frozen=None, *, draft=False):
+    if frozen is None:
+        frozen = draft_artifact() if draft else artifact()
     month = timestamp(at).strftime("%Y-%m")
     fit = next((s for s in frozen["snapshots"] if s["month"] == month), None)
     cutoff = timestamp(month + "-01T00:00:00Z")
@@ -86,8 +104,40 @@ def raw_probability(observation):
         raise ValueError("outside_live_entry_minutes")
     if type(observation["blue"]) is not int or observation["blue"] not in (0, 1):
         raise ValueError("ambiguous_live_sides")
-    # No v1 fallback, no series shift, no probability taken on trust from JSON.
-    value = predict(json.loads(MODEL.read_text()), **inputs)
+    # Recompute both the draft prior and map inference; never trust a saved chance.
+    model = json.loads(MODEL.read_text())
+    if observation.get("draft") is not None:
+        from .live.draft import available, prior_shift
+
+        saved = observation["draft"]
+        packet = saved["context"]
+        model = json.loads(DRAFT_MODEL.read_text())
+        if (
+            saved["model_sha256"] != draft_artifact()["model_sha256"]
+            or not available(packet, observation["received_at"], model)
+            or packet["game_id"] != observation["game_id"]
+            or packet["history_as_of"]
+            != timestamp(observation["start"]).strftime("%Y-%m-%d")
+            or not packet.get("history_through")
+            or timestamp(packet["history_through"])
+            >= timestamp(packet["history_as_of"] + "T00:00:00Z")
+            or timestamp(packet["ready_at"]) > timestamp(observation["calculated_at"])
+        ):
+            raise ValueError("invalid_live_draft_context")
+        values = {
+            k: number(packet["features"][k])
+            for k in ("exp", "meta", "matchup", "synergy")
+        }
+        shift = prior_shift(values, probability(saved["p_blue"]), model)
+        if (
+            abs(number(packet["shift"]) - shift) > 1e-12
+            or abs(number(inputs["draft_shift"]) - shift) > 1e-12
+        ):
+            raise ValueError("live_draft_shift_mismatch")
+    elif "draft_shift" in inputs:
+        raise ValueError("live_draft_context_missing")
+    # No v1 objective fallback or series shift in the execution model.
+    value = predict(model, **inputs)
     return value if observation["blue"] == 0 else 1 - value
 
 
@@ -214,7 +264,7 @@ def evaluate(observation, trades, book, at, fee):
     if bid > ask:
         raise ValueError("crossed_live_book")
     market, costs = market_state(trades, at)
-    p, snapshot = blend(raw, market, at)
+    p, snapshot = blend(raw, market, at, draft=observation.get("draft") is not None)
     decision = entry(p, costs, fee, asks=(ask, 1 - bid))
     return {**decision, "snapshot": snapshot, "raw": raw, "market": market}
 
@@ -275,6 +325,7 @@ def proposal(observation, trades, book, at, fee):
         "schema_version": 1,
         "kind": VERSION,
         "blend_sha256": hashlib.sha256(ARTIFACT.read_bytes()).hexdigest(),
+        "draft_blend_sha256": hashlib.sha256(DRAFT_ARTIFACT.read_bytes()).hexdigest(),
         "alert_id": signal_id,
         "fixture_id": fixture_id,
         "alert_at": at,
