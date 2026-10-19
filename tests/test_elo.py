@@ -676,6 +676,7 @@ def test_explicit_expected_slope_changes_updates_on_hand_made_game():
     ) == pytest.approx(-change)
     assert change < calculate_game_length_elo_change(1600, 1500, 1800, 1, K=16)
 
+
 def _rd_games(dates=None):
     games = pd.DataFrame(
         {
