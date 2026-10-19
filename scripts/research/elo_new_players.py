@@ -1,4 +1,6 @@
-"""
+"""Frozen: runs against `prometheus/elo.py` at commit 00237c0 (options since removed).
+
+
 elo_new_players.py: where should a new player's Elo start?
 
 Player-built Elo seats a new player at the average rating of their league's active

@@ -8,18 +8,12 @@ from prometheus.elo import (
     expected_score,
 )
 
-# Disable RD, slope overrides, discounts and league-move bonuses (and use the
-# linear rookie curve), so a test sees one mechanism.
+# Disable RD, slope overrides, discounts and league-move bonuses to isolate mechanisms.
 OFF = {
     "player_rd": None,
     "other_league_slope": None,
     "rookie_penalty": 0,
     "rookie_games": 0,
-    "rookie_curve": "linear",
-    "provisional_games": 0,
-    "provisional_factor": 1.0,
-    "away_factor": 0.0,
-    "move_up_penalty": 0.0,
     "move_down_bonus": 0.0,
 }
 
@@ -391,25 +385,6 @@ def _two_games():
     return games, rosters
 
 
-def test_new_player_offset_starts_newcomers_lower():
-    games, rosters = _two_games()
-    base, _ = compute_elo_records(
-        games, calculate_game_length_elo_change, rosters=rosters
-    )
-    low, _ = compute_elo_records(
-        games,
-        calculate_game_length_elo_change,
-        rosters=rosters,
-        new_player_offset=100,
-    )
-    # Every player is new in g1 (no active players: 1500 - 100); x0 in g2 starts
-    # 100 below the active average, costing A 100 / 5 more than B.
-    assert _row(low, "g1", "A").pre_match_elo == pytest.approx(1400)
-    a_drop = _row(base, "g2", "A").pre_match_elo - _row(low, "g2", "A").pre_match_elo
-    b_drop = _row(base, "g2", "B").pre_match_elo - _row(low, "g2", "B").pre_match_elo
-    assert a_drop - b_drop == pytest.approx(100 / 5, abs=0.5)
-
-
 def test_rookie_discount_fades_and_is_not_stored():
     games, rosters = _two_games()
     base, _ = compute_elo_records(
@@ -420,7 +395,7 @@ def test_rookie_discount_fades_and_is_not_stored():
         calculate_game_length_elo_change,
         rosters=rosters,
         rookie_penalty=100,
-        rookie_games=2,
+        rookie_games=3,
     )
     # First game: every player counts 100 lower, so the game itself is unchanged
     # (the team's rating change also shows the discount halving, 100 to 50).
@@ -436,22 +411,6 @@ def test_rookie_discount_fades_and_is_not_stored():
     assert b2 == pytest.approx(_row(base, "g2", "B").pre_match_elo - 50)
 
 
-def test_provisional_players_move_faster():
-    games, rosters = _two_games()
-    base, _ = compute_elo_records(
-        games, calculate_game_length_elo_change, rosters=rosters
-    )
-    fast, _ = compute_elo_records(
-        games,
-        calculate_game_length_elo_change,
-        rosters=rosters,
-        provisional_games=1,
-        provisional_factor=2,
-    )
-    change = _row(base, "g1", "A").elo_change
-    assert _row(fast, "g1", "A").post_match_elo == pytest.approx(1500 + 2 * change)
-
-
 def test_published_defaults_discount_rookies():
     games, rosters = _two_games()
     df, _ = elo.compute_elo_records(
@@ -459,46 +418,6 @@ def test_published_defaults_discount_rookies():
     )
     # Everyone is new in g1: counted ROOKIE_PENALTY below the 1500 start.
     assert _row(df, "g1", "A").pre_match_elo == pytest.approx(1500 - elo.ROOKIE_PENALTY)
-
-
-def test_league_factors_scale_player_moves_but_not_offsets():
-    base, _ = compute_elo_records(
-        _league_games(), calculate_game_length_elo_change, league_share=0.5
-    )
-    fast, _ = compute_elo_records(
-        _league_games(),
-        calculate_game_length_elo_change,
-        league_share=0.5,
-        league_factors={"LCK": 2.0, "Worlds": 3.0},
-    )
-    # An LCK game moves A twice as far; LCS (not listed) is unchanged.
-    assert _row(fast, "g1", "A").elo_change == pytest.approx(
-        2 * _row(base, "g1", "A").elo_change
-    )
-    assert _row(fast, "g2", "C").elo_change == pytest.approx(
-        _row(base, "g2", "C").elo_change
-    )
-    # At Worlds the players move 3 times the change and the offset half of it once.
-    worlds = _row(fast, "g3", "A")
-    assert worlds.league_offset == pytest.approx(0.5 * worlds.elo_change / 3.5)
-
-
-def test_time_away_moves_returning_players_more():
-    games, rosters = _two_games()
-    games["date"] = ["2026-01-01", "2027-06-01"]  # more than `away_days` apart
-    base, _ = compute_elo_records(
-        games, calculate_game_length_elo_change, rosters=rosters
-    )
-    away, _ = compute_elo_records(
-        games, calculate_game_length_elo_change, rosters=rosters, away_factor=1.0
-    )
-    # g1 has no one returning; in g2 B's five are back after over a year: twice the move.
-    assert _row(away, "g1", "A").elo_change == pytest.approx(
-        _row(base, "g1", "A").elo_change
-    )
-    assert _row(away, "g2", "B").elo_change == pytest.approx(
-        2 * _row(base, "g2", "B").elo_change
-    )
 
 
 def _move_games(first_league, second_league):
@@ -528,7 +447,7 @@ def _move_games(first_league, second_league):
 
 @pytest.mark.parametrize(
     "first, second, expected",
-    [("LCKC", "LCK", -50), ("LCK", "LCKC", 30), ("LCKC", "LFL", 0), ("LEC", "LCK", 0)],
+    [("LCKC", "LCK", 0), ("LCK", "LCKC", 30), ("LCKC", "LFL", 0), ("LEC", "LCK", 0)],
 )
 def test_league_move_adjustment_by_direction(first, second, expected):
     games, rosters = _move_games(first, second)
@@ -539,7 +458,6 @@ def test_league_move_adjustment_by_direction(first, second, expected):
         games,
         calculate_game_length_elo_change,
         rosters=rosters,
-        move_up_penalty=50,
         move_down_bonus=30,
     )
     diff = _row(moved, "g2", "A").pre_match_elo - _row(base, "g2", "A").pre_match_elo
@@ -547,25 +465,6 @@ def test_league_move_adjustment_by_direction(first, second, expected):
     # Stored in c0's rating: still there a game later (less the game's own change).
     diff3 = _row(moved, "g3", "A").pre_match_elo - _row(base, "g3", "A").pre_match_elo
     assert diff3 == pytest.approx(expected / 5, abs=1)
-
-
-def test_temporary_league_move_adjustment_fades():
-    games, rosters = _move_games("LCKC", "LCK")
-    base, _ = compute_elo_records(
-        games, calculate_game_length_elo_change, rosters=rosters
-    )
-    moved, _ = compute_elo_records(
-        games,
-        calculate_game_length_elo_change,
-        rosters=rosters,
-        move_up_penalty=50,
-        move_games=2,
-    )
-    diff2 = _row(moved, "g2", "A").pre_match_elo - _row(base, "g2", "A").pre_match_elo
-    diff3 = _row(moved, "g3", "A").pre_match_elo - _row(base, "g3", "A").pre_match_elo
-    assert diff2 == pytest.approx(-50 / 5)
-    # One of two games since the move: half the adjustment, and none stored.
-    assert diff3 == pytest.approx(-25 / 5, abs=1)
 
 
 def test_log_rookie_curve_falls_with_log_games():
@@ -579,54 +478,12 @@ def test_log_rookie_curve_falls_with_log_games():
         rosters=rosters,
         rookie_penalty=100,
         rookie_games=3,
-        rookie_curve="log",
     )
     # First game: the full 100. g2: veterans have 1 game, 100 × (1 − log 2 / log 4)
     # = 50 off; x0 is new (100 off).
     assert _row(disc, "g1", "A").pre_match_elo == pytest.approx(1400)
     a2 = _row(disc, "g2", "A").pre_match_elo
     assert a2 == pytest.approx(_row(base, "g2", "A").pre_match_elo - (4 * 50 + 100) / 5)
-
-
-def test_veteran_discount_grows_with_games():
-    games, rosters = _two_games()
-    base, _ = compute_elo_records(
-        games, calculate_game_length_elo_change, rosters=rosters
-    )
-    vet, _ = compute_elo_records(
-        games,
-        calculate_game_length_elo_change,
-        rosters=rosters,
-        veteran_penalty=40,
-        veteran_games=1,
-    )
-    # g1: nobody has played. g2: B's five have 1 game (not past 1); off by nothing.
-    assert _row(vet, "g2", "B").pre_match_elo == pytest.approx(
-        _row(base, "g2", "B").pre_match_elo
-    )
-    # After g2 they have 2 games = 2 × veteran_games: the full 40 off the team's
-    # rating, while the game's change (from equal pre-game ratings) is the same.
-    after = _row(vet, "g2", "B").post_match_elo
-    assert after == pytest.approx(_row(base, "g2", "B").post_match_elo - 40)
-
-
-def test_veteran_discount_by_years():
-    games, rosters = _two_games()
-    games = games.assign(date=pd.to_datetime(["2014-01-01", "2020-01-01"]))
-    base, _ = compute_elo_records(
-        games, calculate_game_length_elo_change, rosters=rosters
-    )
-    vet, _ = compute_elo_records(
-        games,
-        calculate_game_length_elo_change,
-        rosters=rosters,
-        veteran_penalty=30,
-        veteran_years=2,
-    )
-    # Six years after their first game, B's players are past 2 + 3 years: full 30.
-    assert _row(vet, "g2", "B").pre_match_elo == pytest.approx(
-        _row(base, "g2", "B").pre_match_elo - 30
-    )
 
 
 def test_published_defaults_use_rd_and_the_move_down_bonus():
@@ -638,22 +495,13 @@ def test_published_defaults_use_rd_and_the_move_down_bonus():
         games,
         calculate_game_length_elo_change,
         rosters=rosters,
-        rookie_curve="log",
         player_rd=elo.PLAYER_RD,
         player_rd_information=elo.PLAYER_RD_INFORMATION,
         other_league_slope=elo.OTHER_LEAGUE_SLOPE,
-        provisional_games=0,
-        away_factor=0,
-        away_days=elo.AWAY_DAYS,
         move_down_bonus=elo.MOVE_DOWN_BONUS,
-        move_up_penalty=elo.MOVE_UP_PENALTY,
     )
     pd.testing.assert_frame_equal(published, explicit)
-    assert (elo.AWAY_FACTOR, elo.MOVE_DOWN_BONUS, elo.ROOKIE_CURVE) == (
-        0.0,
-        25.0,
-        "log",
-    )
+    assert elo.MOVE_DOWN_BONUS == 25.0
 
 
 @pytest.mark.parametrize("gap", [-400, -100, 0, 100, 400])
@@ -698,32 +546,12 @@ def _rd_games(dates=None):
     return games
 
 
-def test_legacy_elo_preserves_old_first_game_and_discount_decay():
-    games = _rd_games(["2020-01-01", "2020-01-01", "2021-01-01"]).iloc[:2]
-    default, offsets = elo.compute_elo_records(
-        games, calculate_game_length_elo_change, **elo.LEGACY_ELO
-    )
-    explicit, explicit_offsets = elo.compute_elo_records(
-        games,
-        calculate_game_length_elo_change,
-        **elo.LEGACY_ELO,
-        player_rd_information=0.25,
-    )
-    pd.testing.assert_frame_equal(default, explicit)
-    pd.testing.assert_frame_equal(offsets, explicit_offsets)
-    # Independent first-game arithmetic with the old published defaults.
-    first = default.iloc[0]
-    assert first.pre_match_elo == 1250
-    discount_after = 250 * (1 - np.log(2) / np.log(201))
-    assert first.post_match_elo == pytest.approx(1500 + 2 * 6.5 - discount_after)
-
-
 @pytest.mark.parametrize("information", [0.25, 0.5, 1.0])
 def test_rd_harmonic_shrink_matches_hand_calculation_without_dates(information):
     records, _ = compute_elo_records(
         _rd_games().iloc[:2],
         lambda **kw: 10,
-        player_rd=(250, 100, 100, 0),
+        player_rd=(250, 100, 0),
         player_rd_information=information,
     )
     a = records[records.teamid == "A"]
@@ -745,7 +573,7 @@ def test_rd_floor_reference_reaches_published_k_after_hand_counted_games():
         records, _ = compute_elo_records(
             games.iloc[:count],
             lambda **kw: next(calls),
-            player_rd=(250, 100, 100, 0),
+            player_rd=(250, 100, 0),
             player_rd_information=multiplier,
         )
         return records.iloc[-2].elo_change
@@ -763,7 +591,7 @@ def test_rd_rejects_invalid_information(information):
         compute_elo_records(
             _rd_games(),
             lambda **kw: 10,
-            player_rd=(250, 100, 100, 0),
+            player_rd=(250, 100, 0),
             player_rd_information=information,
         )
 
@@ -773,56 +601,38 @@ def test_rd_inactivity_inflates_variance_and_caps_at_new():
     records, _ = compute_elo_records(
         games,
         lambda **kw: 10,
-        player_rd=(250, 100, 250, 100),
+        player_rd=(250, 100, 100),
         player_rd_information=1.0,
     )
     a = records[records.teamid == "A"]
-    assert a.iloc[1].elo_change < 10
-    assert a.iloc[2].elo_change == pytest.approx(10)  # long break resets to cap
-    floor, _ = compute_elo_records(games, lambda **kw: 10, player_rd=(100, 100, 100, 0))
+    assert a.iloc[1].elo_change < 62.5
+    assert a.iloc[2].elo_change == pytest.approx(62.5)  # long break resets to cap
+    floor, _ = compute_elo_records(games, lambda **kw: 10, player_rd=(100, 100, 0))
     np.testing.assert_allclose(floor[floor.teamid == "A"].elo_change, 10)
 
 
-@pytest.mark.parametrize("on_top", [False, True])
-@pytest.mark.parametrize("normalize", [False, True])
-def test_rd_rookie_weight_and_optional_legacy_side_normalization(on_top, normalize):
-    games = _rd_games(["2020-01-01", "2020-01-02", "2021-01-01"]).iloc[:2]
+def test_rd_rookie_weight_uses_floor_reference():
+    games = _rd_games().iloc[:2]
     rosters = {
         ("r1", "A"): ("a", "b"),
         ("r2", "A"): ("a", "rookie"),
         ("r1", "B"): ("c", "d"),
         ("r2", "B"): ("c", "d"),
     }
-    kw = (
-        {"provisional_games": 1, "provisional_factor": 2, "away_factor": 2}
-        if on_top
-        else {}
-    )
     _, _, players = compute_elo_records(
         games,
         lambda **kw: 10,
         rosters=rosters,
         player_records=True,
-        player_rd=(250, 100, 250, 0),
+        player_rd=(250, 100, 0),
         player_rd_information=1.0,
-        player_rd_normalize=normalize,
-        **kw,
     )
     current = players[players.gameid == "r2"].set_index("playerid")
     moves = current.post_match_elo - current.pre_match_elo
-    assert moves["rookie"] > moves["a"]
-    # First posterior variance, then the common mean of both sides' mean scales.
     v = 1 / (1 / 250**2 + (np.log(10) / 400) ** 2 * 0.25)
-    veteran_weight = v / 250**2 * (1 + 2 / 365 if on_top else 1)
-    rookie_weight = 2 if on_top else 1
-    shared = ((veteran_weight + rookie_weight) / 2 + veteran_weight) / 2
-    if normalize:
-        assert moves[["a", "rookie"]].mean() == pytest.approx(-moves[["c", "d"]].mean())
-        assert moves[["a", "rookie"]].mean() == pytest.approx(10 * shared)
-    else:
-        assert moves["a"] == pytest.approx(10 * veteran_weight)
-        assert moves["rookie"] == pytest.approx(10 * rookie_weight)
-        assert moves["c"] == pytest.approx(-10 * veteran_weight)
+    assert moves["a"] == pytest.approx(10 * v / 100**2)
+    assert moves["rookie"] == pytest.approx(62.5)
+    assert moves["c"] == pytest.approx(-10 * v / 100**2)
 
 
 def test_rd_settled_player_keeps_baseline_move_beside_uncertain_teammate():
@@ -838,7 +648,7 @@ def test_rd_settled_player_keeps_baseline_move_beside_uncertain_teammate():
         lambda **kw: next(calls),
         rosters=rosters,
         player_records=True,
-        player_rd=(250, 100, 100, 0),
+        player_rd=(250, 100, 0),
         player_rd_information=1.0,
     )
     final = players[players.gameid == 13].set_index("playerid")
@@ -851,11 +661,10 @@ def test_rd_settled_player_keeps_baseline_move_beside_uncertain_teammate():
 @pytest.mark.parametrize(
     "rd",
     [
-        (100, 200, 100, 1),
-        (100, 0, 100, 1),
-        (100, 50, 0, 1),
-        (100, 50, 100, -1),
-        (np.inf, 50, 100, 1),
+        (100, 200, 1),
+        (100, 0, 1),
+        (100, 50, -1),
+        (np.inf, 50, 1),
     ],
 )
 def test_rd_rejects_invalid_configuration(rd):

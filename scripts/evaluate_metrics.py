@@ -285,10 +285,7 @@ def load_team_elo():
         other_league_slope=None,
         rookie_penalty=0,
         rookie_games=0,
-        provisional_games=0,
-        away_factor=0,
         move_down_bonus=0,
-        move_up_penalty=0,
     )
     return records.set_index(["gameid", "teamid"])["pre_match_elo"]
 

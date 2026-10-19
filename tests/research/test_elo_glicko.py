@@ -10,23 +10,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts" / "resear
 import elo_glicko as eg
 
 
-def test_grid_has_unit_weight_at_floor_and_one_boundary_extension():
-    grids = eg.designs()
-    assert sum(map(len, grids.values())) == 243
-    for arm, grid in grids.items():
-        for kw in grid:
-            new, floor, reference, _ = kw["player_rd"]
-            assert reference == floor
-            assert new > floor
-        center = eg.parameters(arm, (80, 2, 20, 0.5))
-        assert eg.extension(arm, center) == []
-        corner = eg.parameters(arm, (60, 2.5, 10, 1))
-        extra = eg.extension(arm, corner)
-        assert len(extra) == 15
-        assert eg.parameters(arm, (40, 3.25, 0, 2)) in extra
-        assert corner not in extra
-
-
 def test_tuning_prefix_preserves_intervening_future_labelled_games():
     inputs = eg.ev.Inputs(
         games=pd.DataFrame({"year": [2020, 2022, 2021, 2022]}),

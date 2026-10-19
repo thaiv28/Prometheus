@@ -1,4 +1,6 @@
-"""elo_glicko_scale.py: Joint Glicko RD and non-major Elo update-scale research.
+"""Frozen: runs against `prometheus/elo.py` at commit 00237c0 (options since removed).
+
+elo_glicko_scale.py: Joint Glicko RD and non-major Elo update-scale research.
 
 Fixed before scoring: extend the v2 Glicko winner over RD floor {140,180,220}
 and information {0.125,0.0625}, new/reference = twice floor/floor, growth 10.

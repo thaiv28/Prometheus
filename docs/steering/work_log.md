@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — Simplify the Elo engine
+
+Removed inactive and rejected options, legacy constants and their tests; kept the log rookie discount, stored move-down bonus, RD and non-major slope. RD now takes (new, floor, growth); bootstrap accepts research overrides. Eight historical research scripts frozen at 00237c0. Added the existing win-share report and its not-adopted index entry. Checks: DB rebuilt; the three Elo tables match main row for row (max |Δ| 0.0); pytest 886 passed, 2 skipped; ruff clean.
+
 ## 2026-10-19 — Remove draft v2 from map trading; add a $15 live-map budget
 
 User asked to drop draft v2 (no trading gain; FST significantly worse) and cap live-map trading at $15. The draft route is gone from `live_map.py`, `live/signals.py`, `pyproject.toml` and the README; `live_map_draft_blend.json` deleted; the executor zip, release hash and publish filter drop the draft model and blend but keep `live/draft.py` (imported by `live/timeline.py`). New required `live_maps.budget_usd` for shadow and live map modes: the ledger's `LIVE_MAPS` row tracks held cost and realized profit, and a map order is capped at budget + realized − held, reserved in the same transaction as ACCOUNT. Loss can't exceed the budget; profit extends it; pregame unaffected. Docs suggest `"budget_usd": "15"`; nothing configured in AWS. Checks: 862 passed, 2 skipped; two budget tests fail with their guards removed; ruff; `package.sh` builds without draft files. Limit: the shared 1%/2% caps (about $0.50 a map) still apply; not deployed.
