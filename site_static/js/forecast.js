@@ -60,4 +60,7 @@
   a.addEventListener("change", update);
   b.addEventListener("change", update);
   update();
+  PrometheusFresh.load(config.dataThrough).then((overlay) => {
+    if (overlay && PrometheusFresh.apply(rows, overlay)) update();
+  });
 })();

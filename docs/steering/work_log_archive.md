@@ -2,6 +2,40 @@
 
 Older entries moved from `work_log.md`, newest first. Add nothing here by hand.
 
+## 2026-10-19 — Live results' map odds follow the series score; current_state trimmed
+
+Branch `live-anchor`, base `b6e0b62`. Series pages showed the pre-series map chance on every row; "Map: ours" and the map chart's opening call now take `series.map_prior` (rho from `forge.json`, else the log's home leagues), as the live page and series column already did. The shift alone beats the unshifted pregame call on 732 priced maps 2+ (−0.0077, −0.0135 to −0.0025; `live_anchor.md`). `current_state.md` condensed 9,561 → ~2,900 words (Codex). Checks: archive tests (one new), full pytest, ruff; site built from a read-only S3 sync of compact live maps; four series tables checked, one page screenshotted at desktop and phone widths. Copy review: PASS (Table I, note and figure; no copy changed, the note already says "FORGE and the score"). Headless phone render clips the table's right edge, unverified on a device.
+
+## 2026-10-19 — Live model: FORGE pregame, FORGE anchor, raw calibration tested
+
+`scripts/research/live_anchor.py` ([report](../research/live_anchor.md)); rule fixed before scoring; viewed test split. Pregame: displayed FORGE + series shift beats the benchmark's v1 t=0 call by −0.0111 (−0.0209 to −0.0019) on 1,271 priced maps; shift −0.0044, FORGE over shifted v1 −0.0066 (n.s.). Anchoring in-game calls on FORGE: +0.0023 (−0.0014 to +0.0060), 30+ min significantly worse: rejected. Dropping calibration: feed −0.0015 (−0.0030 to −0.0002) but live-benchmark 30 min +0.0030 (+0.0002 to +0.0055): rejected. No runtime, model or CI change; 37 s, local only. Limit: FORGE p is the backtest's (month-start ratings, out-of-year curves), covering 38% of pre-maps.
+
+## 2026-10-19 — Wide-register pages drop the margin below 1280px
+
+Base `20d6708` (main). Between 1001 and 1279px the margin narrowed the main column (629px at 1024), so registers scrolled: Predictions by up to 228px, Call performance 145, GLORY 133, players 151, FORGE/Elo/teams about 75. `spread--wide` (stat registers, team, player, Predictions, Call performance, results months) puts the notes under the main column below 1280px; entry pages switch to their inline contents there, and the game log's 1001–1280px squeeze is gone. Home, Props and the rest keep the margin. Checks: pytest; ruff; full build; no overflow at 1024/1152/1279/1440 on 13 pages; screenshots at 1152. Copy review: PASS (no copy change). Limit: at those widths a register's notes sit after it (GLORY: after 602 rows).
+
+## 2026-10-19 — Merge Live into Predictions; props page fix
+
+Base `fd8120c`; Codex via delegate. Predictions now holds Live now, Coming up and 7 days of results, linked to live series pages when recorded. `live.html` and `live-results/<month>` redirect. Record and Kalshi tables moved to Call performance. Home and watch fixtures keep whole UTC days (`_whole_days`). The header marks Predictions with a red dot while a match is live (not if the index is 10+ minutes old). Dropped the fixtures "By" column (in the tooltip) and live towers/dragons/barons. Props: NaN `p_side` crashed the page silently; page failures now fail the build.
+
+Checks: pytest 906 passed, 2 skipped; ruff; full build; no table overflow at 1280/1440 (Predictions, Call performance). Copy review: PASS (Predictions, Call performance, home; cut full name and "Gold lead" to "Gold"). Limit: tables still scroll at 1001–1279px.
+
+## 2026-10-19 — Live-map trading switched on with a $15 budget
+
+At the user's request (shadow skipped), merged #94 (executor released by publish `39300099249`) and infrastructure PR #20 (signal queue in `ThaivPrometheusExecution`, worker grants and `LIVE_MAP_SIGNAL_ARGS` in `ThaivPrometheusLive`). Deployed both stacks through their workflows after diffs (no existing resource replaced except the worker instance; no match was live). Updated `LIVE_WORKER_INSTANCE_ID`. Paused global execution about 1.5 minutes to save `live_maps` (queue ARN, quarter Kelly, 1%/2% caps, `budget_usd` 15), restored live, then set live-map mode live; activation validated the config and runtime. Unverified: the new worker's env and first signal delivery (local AWS session expired), real fills and latency. Infra cost estimate: about $0–0.30 a month (SQS polling inside the free tier).
+
+## 2026-10-19 — RD information on the game's slope; Elo follow-up results
+
+RD's information term now uses the game's update slope (.0065 in non-major domestic games), matching the update. Reproduces the research variant exactly; FORGE, Form and league-curve weights refit, `metric_backtest.md` regenerated (season stats unchanged). Paired vs main: other-league FORGE −0.0001 (−0.0002 to −0.0000); every other guarded row, including markets, within noise.
+
+Also tested, not adopted (reports in `docs/research/`; scripts on their branches): Glicko-2 volatility (τ has no effect; reduces to the shipped RD, +46% replay), g(RD) in forecasts (≈1e-5), league-offset RD (cross-league −0.0002, other leagues +0.00002), no move-down bonus (cross-league +0.0052), no regional calibration (cross-league +0.0015).
+
+Checks: DB rebuilt, pytest, ruff, `evaluate_metrics.py --write-weights`, `evaluate_markets.py --offline --dump`, `compare_benchmarks.py`.
+
+## 2026-10-19 — Simplify the Elo engine
+
+Removed inactive and rejected options, legacy constants and their tests; kept the log rookie discount, stored move-down bonus, RD and non-major slope. RD now takes (new, floor, growth); bootstrap accepts research overrides. Eight historical research scripts frozen at 00237c0. Added the existing win-share report and its not-adopted index entry. Checks: DB rebuilt; the three Elo tables match main row for row (max |Δ| 0.0); pytest 886 passed, 2 skipped; ruff clean.
+
 ## 2026-10-19 — Remove draft v2 from map trading; add a $15 live-map budget
 
 User asked to drop draft v2 (no trading gain; FST significantly worse) and cap live-map trading at $15. The draft route is gone from `live_map.py`, `live/signals.py`, `pyproject.toml` and the README; `live_map_draft_blend.json` deleted; the executor zip, release hash and publish filter drop the draft model and blend but keep `live/draft.py` (imported by `live/timeline.py`). New required `live_maps.budget_usd` for shadow and live map modes: the ledger's `LIVE_MAPS` row tracks held cost and realized profit, and a map order is capped at budget + realized − held, reserved in the same transaction as ACCOUNT. Loss can't exceed the budget; profit extends it; pregame unaffected. Docs suggest `"budget_usd": "15"`; nothing configured in AWS. Checks: 862 passed, 2 skipped; two budget tests fail with their guards removed; ruff; `package.sh` builds without draft files. Limit: the shared 1%/2% caps (about $0.50 a map) still apply; not deployed.

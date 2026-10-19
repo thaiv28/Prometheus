@@ -1,0 +1,476 @@
+[
+  [
+    {
+      "gameid": "g1",
+      "teamid": "a",
+      "pre_match_elo": 1250.0,
+      "post_match_elo": 1319.3375646842285,
+      "elo_change": 69.33756468422848,
+      "home_league": "LCK",
+      "league_offset": 0.0,
+      "main_elo": 1319.3375646842285
+    },
+    {
+      "gameid": "g1",
+      "teamid": "b",
+      "pre_match_elo": 1250.0,
+      "post_match_elo": 1246.0129283174672,
+      "elo_change": -3.9870716825328145,
+      "home_league": "LCK",
+      "league_offset": 0.0,
+      "main_elo": 1246.0129283174672
+    },
+    {
+      "gameid": "g2",
+      "teamid": "c",
+      "pre_match_elo": 1250.0,
+      "post_match_elo": 1268.8561097652453,
+      "elo_change": 18.856109765245264,
+      "home_league": "LPL",
+      "league_offset": 0.0,
+      "main_elo": 1268.8561097652453
+    },
+    {
+      "gameid": "g2",
+      "teamid": "d",
+      "pre_match_elo": 1250.0,
+      "post_match_elo": 1296.4943832364504,
+      "elo_change": 46.4943832364504,
+      "home_league": "LPL",
+      "league_offset": 0.0,
+      "main_elo": 1296.4943832364504
+    },
+    {
+      "gameid": "g3",
+      "teamid": "a",
+      "pre_match_elo": 1319.3375646842285,
+      "post_match_elo": 1361.2086057664505,
+      "elo_change": 41.871041082222064,
+      "home_league": "LCK",
+      "league_offset": 2.5285830197117845,
+      "main_elo": 1361.2086057664505
+    },
+    {
+      "gameid": "g3",
+      "teamid": "c",
+      "pre_match_elo": 1268.8561097652453,
+      "post_match_elo": 1265.2126564926552,
+      "elo_change": -3.6434532725900226,
+      "home_league": "LPL",
+      "league_offset": -2.5285830197117845,
+      "main_elo": 1265.2126564926552
+    },
+    {
+      "gameid": "g4",
+      "teamid": "a",
+      "pre_match_elo": 1311.9257604325048,
+      "post_match_elo": 1307.3485239405345,
+      "elo_change": -4.577236491970325,
+      "home_league": "LCK",
+      "league_offset": 2.5285830197117845,
+      "main_elo": 1307.3485239405345
+    },
+    {
+      "gameid": "g4",
+      "teamid": "b",
+      "pre_match_elo": 1248.541511337179,
+      "post_match_elo": 1296.3716137124998,
+      "elo_change": 47.83010237532085,
+      "home_league": "LCK",
+      "league_offset": 2.5285830197117845,
+      "main_elo": 1296.3716137124998
+    },
+    {
+      "gameid": "g5",
+      "teamid": "c",
+      "pre_match_elo": 1313.210631129553,
+      "post_match_elo": 1361.4671886266553,
+      "elo_change": 48.25655749710245,
+      "home_league": "LPL",
+      "league_offset": -2.5285830197117845,
+      "main_elo": 1361.4671886266553
+    },
+    {
+      "gameid": "g5",
+      "teamid": "d",
+      "pre_match_elo": 1293.9658002167387,
+      "post_match_elo": 1277.1121106827468,
+      "elo_change": -16.853689533991883,
+      "home_league": "LPL",
+      "league_offset": -2.5285830197117845,
+      "main_elo": 1277.1121106827468
+    },
+    {
+      "gameid": "g6",
+      "teamid": "a",
+      "pre_match_elo": 1307.3485239405345,
+      "post_match_elo": 1311.863394930734,
+      "elo_change": 4.514870990199597,
+      "home_league": "LCK",
+      "league_offset": 1.3839645874667923,
+      "main_elo": 1311.863394930734
+    },
+    {
+      "gameid": "g6",
+      "teamid": "c",
+      "pre_match_elo": 1361.4671886266553,
+      "post_match_elo": 1382.287834372853,
+      "elo_change": 20.82064574619767,
+      "home_league": "LPL",
+      "league_offset": -1.3839645874667923,
+      "main_elo": 1382.287834372853
+    },
+    {
+      "gameid": "g7",
+      "teamid": "b",
+      "pre_match_elo": 1270.4815084335396,
+      "post_match_elo": 1328.920565298762,
+      "elo_change": 58.43905686522248,
+      "home_league": "LCK",
+      "league_offset": 5.308487622664887,
+      "main_elo": 1328.920565298762
+    },
+    {
+      "gameid": "g7",
+      "teamid": "d",
+      "pre_match_elo": 1278.2567291149917,
+      "post_match_elo": 1256.4974743942407,
+      "elo_change": -21.75925472075096,
+      "home_league": "LPL",
+      "league_offset": -5.308487622664887,
+      "main_elo": 1256.4974743942407
+    },
+    {
+      "gameid": "g8",
+      "teamid": "a",
+      "pre_match_elo": 1315.7879179659321,
+      "post_match_elo": 1362.536194766883,
+      "elo_change": 46.74827680095086,
+      "home_league": "LCK",
+      "league_offset": 5.308487622664887,
+      "main_elo": 1362.536194766883
+    },
+    {
+      "gameid": "g8",
+      "teamid": "b",
+      "pre_match_elo": 1328.920565298762,
+      "post_match_elo": 1308.0668087006434,
+      "elo_change": -20.853756598118707,
+      "home_league": "LCK",
+      "league_offset": 5.308487622664887,
+      "main_elo": 1308.0668087006434
+    },
+    {
+      "gameid": "g9",
+      "teamid": "c",
+      "pre_match_elo": 1378.363311337655,
+      "post_match_elo": 1399.476118498553,
+      "elo_change": 21.112807160898,
+      "home_league": "LPL",
+      "league_offset": -5.308487622664887,
+      "main_elo": 1399.476118498553
+    },
+    {
+      "gameid": "g9",
+      "teamid": "d",
+      "pre_match_elo": 1256.4974743942407,
+      "post_match_elo": 1254.4984611381587,
+      "elo_change": -1.9990132560819802,
+      "home_league": "LPL",
+      "league_offset": -5.308487622664887,
+      "main_elo": 1254.4984611381587
+    }
+  ],
+  [
+    {
+      "gameid": "g3",
+      "date": "2025-04-01 00:00:00",
+      "league": "LCK",
+      "league_offset": 2.5285830197117845
+    },
+    {
+      "gameid": "g3",
+      "date": "2025-04-01 00:00:00",
+      "league": "LPL",
+      "league_offset": -2.5285830197117845
+    },
+    {
+      "gameid": "g6",
+      "date": "2025-10-01 00:00:00",
+      "league": "LCK",
+      "league_offset": 1.3839645874667923
+    },
+    {
+      "gameid": "g6",
+      "date": "2025-10-01 00:00:00",
+      "league": "LPL",
+      "league_offset": -1.3839645874667923
+    },
+    {
+      "gameid": "g7",
+      "date": "2025-10-02 00:00:00",
+      "league": "LCK",
+      "league_offset": 5.308487622664887
+    },
+    {
+      "gameid": "g7",
+      "date": "2025-10-02 00:00:00",
+      "league": "LPL",
+      "league_offset": -5.308487622664887
+    }
+  ],
+  [
+    {
+      "gameid": "g1",
+      "teamid": "a",
+      "playerid": "a1",
+      "pre_match_elo": 1250.0,
+      "post_match_elo": 1319.3375646842285,
+      "home_league": "LCK",
+      "league_offset": 0.0
+    },
+    {
+      "gameid": "g1",
+      "teamid": "a",
+      "playerid": "a2",
+      "pre_match_elo": 1250.0,
+      "post_match_elo": 1319.3375646842285,
+      "home_league": "LCK",
+      "league_offset": 0.0
+    },
+    {
+      "gameid": "g1",
+      "teamid": "b",
+      "playerid": "b1",
+      "pre_match_elo": 1250.0,
+      "post_match_elo": 1246.0129283174672,
+      "home_league": "LCK",
+      "league_offset": 0.0
+    },
+    {
+      "gameid": "g1",
+      "teamid": "b",
+      "playerid": "b2",
+      "pre_match_elo": 1250.0,
+      "post_match_elo": 1246.0129283174672,
+      "home_league": "LCK",
+      "league_offset": 0.0
+    },
+    {
+      "gameid": "g2",
+      "teamid": "c",
+      "playerid": "c1",
+      "pre_match_elo": 1250.0,
+      "post_match_elo": 1268.8561097652453,
+      "home_league": "LPL",
+      "league_offset": 0.0
+    },
+    {
+      "gameid": "g2",
+      "teamid": "c",
+      "playerid": "c2",
+      "pre_match_elo": 1250.0,
+      "post_match_elo": 1268.8561097652453,
+      "home_league": "LPL",
+      "league_offset": 0.0
+    },
+    {
+      "gameid": "g3",
+      "teamid": "a",
+      "playerid": "a1",
+      "pre_match_elo": 1319.3375646842285,
+      "post_match_elo": 1361.2086057664505,
+      "home_league": "LCK",
+      "league_offset": 2.5285830197117845
+    },
+    {
+      "gameid": "g3",
+      "teamid": "a",
+      "playerid": "a2",
+      "pre_match_elo": 1319.3375646842285,
+      "post_match_elo": 1361.2086057664505,
+      "home_league": "LCK",
+      "league_offset": 2.5285830197117845
+    },
+    {
+      "gameid": "g3",
+      "teamid": "c",
+      "playerid": "c1",
+      "pre_match_elo": 1268.8561097652453,
+      "post_match_elo": 1265.2126564926552,
+      "home_league": "LPL",
+      "league_offset": -2.5285830197117845
+    },
+    {
+      "gameid": "g3",
+      "teamid": "c",
+      "playerid": "c2",
+      "pre_match_elo": 1268.8561097652453,
+      "post_match_elo": 1265.2126564926552,
+      "home_league": "LPL",
+      "league_offset": -2.5285830197117845
+    },
+    {
+      "gameid": "g4",
+      "teamid": "a",
+      "playerid": "a1",
+      "pre_match_elo": 1361.2086057664505,
+      "post_match_elo": 1348.0951947521667,
+      "home_league": "LCK",
+      "league_offset": 2.5285830197117845
+    },
+    {
+      "gameid": "g4",
+      "teamid": "a",
+      "playerid": "rookie",
+      "pre_match_elo": 1262.642915098559,
+      "post_match_elo": 1266.6018531289021,
+      "home_league": "LCK",
+      "league_offset": 2.5285830197117845
+    },
+    {
+      "gameid": "g4",
+      "teamid": "b",
+      "playerid": "b1",
+      "pre_match_elo": 1248.541511337179,
+      "post_match_elo": 1296.3716137124998,
+      "home_league": "LCK",
+      "league_offset": 2.5285830197117845
+    },
+    {
+      "gameid": "g4",
+      "teamid": "b",
+      "playerid": "b2",
+      "pre_match_elo": 1248.541511337179,
+      "post_match_elo": 1296.3716137124998,
+      "home_league": "LCK",
+      "league_offset": 2.5285830197117845
+    },
+    {
+      "gameid": "g5",
+      "teamid": "c",
+      "playerid": "a2",
+      "pre_match_elo": 1361.2086057664505,
+      "post_match_elo": 1409.465163263553,
+      "home_league": "LPL",
+      "league_offset": -2.5285830197117845
+    },
+    {
+      "gameid": "g5",
+      "teamid": "c",
+      "playerid": "c2",
+      "pre_match_elo": 1265.2126564926552,
+      "post_match_elo": 1313.4692139897577,
+      "home_league": "LPL",
+      "league_offset": -2.5285830197117845
+    },
+    {
+      "gameid": "g6",
+      "teamid": "a",
+      "playerid": "a1",
+      "pre_match_elo": 1348.0951947521667,
+      "post_match_elo": 1348.3127087179548,
+      "home_league": "LCK",
+      "league_offset": 1.3839645874667923
+    },
+    {
+      "gameid": "g6",
+      "teamid": "a",
+      "playerid": "rookie",
+      "pre_match_elo": 1266.6018531289021,
+      "post_match_elo": 1275.4140811435136,
+      "home_league": "LCK",
+      "league_offset": 1.3839645874667923
+    },
+    {
+      "gameid": "g6",
+      "teamid": "c",
+      "playerid": "a2",
+      "pre_match_elo": 1409.465163263553,
+      "post_match_elo": 1430.2858090097507,
+      "home_league": "LPL",
+      "league_offset": -1.3839645874667923
+    },
+    {
+      "gameid": "g6",
+      "teamid": "c",
+      "playerid": "c2",
+      "pre_match_elo": 1313.4692139897577,
+      "post_match_elo": 1334.2898597359554,
+      "home_league": "LPL",
+      "league_offset": -1.3839645874667923
+    },
+    {
+      "gameid": "g7",
+      "teamid": "b",
+      "playerid": "b1",
+      "pre_match_elo": 1295.2269952802549,
+      "post_match_elo": 1344.1091551930692,
+      "home_league": "LCK",
+      "league_offset": 5.308487622664887
+    },
+    {
+      "gameid": "g7",
+      "teamid": "b",
+      "playerid": "late rookie",
+      "pre_match_elo": 1245.7360215868243,
+      "post_match_elo": 1313.731975404455,
+      "home_league": "LCK",
+      "league_offset": 5.308487622664887
+    },
+    {
+      "gameid": "g8",
+      "teamid": "a",
+      "playerid": "a1",
+      "pre_match_elo": 1352.2372317531529,
+      "post_match_elo": 1396.5021392804993,
+      "home_league": "LCK",
+      "league_offset": 5.308487622664887
+    },
+    {
+      "gameid": "g8",
+      "teamid": "a",
+      "playerid": "rookie",
+      "pre_match_elo": 1279.3386041787116,
+      "post_match_elo": 1328.5702502532665,
+      "home_league": "LCK",
+      "league_offset": 5.308487622664887
+    },
+    {
+      "gameid": "g8",
+      "teamid": "b",
+      "playerid": "b1",
+      "pre_match_elo": 1344.1091551930692,
+      "post_match_elo": 1318.9580415705389,
+      "home_league": "LCK",
+      "league_offset": 5.308487622664887
+    },
+    {
+      "gameid": "g8",
+      "teamid": "b",
+      "playerid": "late rookie",
+      "pre_match_elo": 1313.731975404455,
+      "post_match_elo": 1297.1755758307477,
+      "home_league": "LCK",
+      "league_offset": 5.308487622664887
+    },
+    {
+      "gameid": "g9",
+      "teamid": "c",
+      "playerid": "a2",
+      "pre_match_elo": 1426.3612859745526,
+      "post_match_elo": 1447.4740931354506,
+      "home_league": "LPL",
+      "league_offset": -5.308487622664887
+    },
+    {
+      "gameid": "g9",
+      "teamid": "c",
+      "playerid": "c2",
+      "pre_match_elo": 1330.3653367007573,
+      "post_match_elo": 1351.4781438616553,
+      "home_league": "LPL",
+      "league_offset": -5.308487622664887
+    }
+  ]
+]

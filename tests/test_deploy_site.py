@@ -83,7 +83,7 @@ def test_with_a_manifest_only_changed_files_are_sent(site, monkeypatch):
     assert not any(c[:2] == ("s3", "cp") and "--recursive" in c for c in calls)
     (delete,) = [c for c in calls if c[:2] == ("s3api", "delete-objects")]
     assert json.loads(delete[-1])["Objects"] == [{"Key": "current/old.html"}]
-    assert any(c[-1] == "max-age=300" and c[2].endswith("kalshi.json") for c in calls)
+    assert any(c[-1] == "max-age=30" and c[2].endswith("kalshi.json") for c in calls)
 
 
 def test_css_js_and_fonts_go_up_with_long_cache_headers(site, monkeypatch):
@@ -131,11 +131,20 @@ def test_full_upload_resends_long_cached_files_with_their_headers(site, monkeypa
 
 def test_hourly_history_upload_has_html_type_and_short_cache(site, monkeypatch):
     (site / "alerts.html").write_text("history")
+    (site / "predictions.json").write_text("{}")
+    (site / "props-lines.json").write_text("{}")
     calls = _fake_aws(monkeypatch, manifest=None)
     deploy.upload_hourly_files(site, "test", False)
     upload = next(c for c in calls if "s3://test/current/alerts.html" in c)
     assert upload[upload.index("--content-type") + 1] == "text/html; charset=utf-8"
     assert upload[upload.index("--cache-control") + 1] == "max-age=300"
+    for name, cache in (
+        ("kalshi.json", "max-age=30"),
+        ("predictions.json", "max-age=30"),
+        ("props-lines.json", "max-age=300"),
+    ):
+        upload = next(c for c in calls if f"s3://test/current/{name}" in c)
+        assert upload[upload.index("--cache-control") + 1] == cache
 
 
 def test_live_files_are_never_deployed_or_deleted(site, monkeypatch):

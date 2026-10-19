@@ -349,6 +349,30 @@ def render_predictions(view, coverage):
     )
 
 
+def render_from_log(log, backtest, team_slugs, series_links, coverage, now, out_dir):
+    """Render the DB-free predictions pages using the last build's replay."""
+    from prometheus.site.call_performance import render_call_performance
+
+    replay = {entry["match_id"]: entry for entry in backtest["matches"]}
+    backtest_log = {
+        mid: replay.get(entry["match_id"], entry)
+        if entry.get("reconstructed")
+        else entry
+        for mid, entry in log.items()
+    }
+    view = predictions_view(backtest_log, team_slugs, now, series_links=series_links)
+    previous = site_config.OUTPUT_DIR
+    try:
+        site_config.OUTPUT_DIR = out_dir
+        os.makedirs(out_dir, exist_ok=True)
+        render_predictions(view, coverage)
+        render_results(view)
+        render_call_performance(backtest_log, view)
+    finally:
+        site_config.OUTPUT_DIR = previous
+    return view
+
+
 def update_predictions(states):
     """Fetch the schedule and update the prediction log; on any failure keep the
     log as it was, so the site still builds (with yesterday's calls).

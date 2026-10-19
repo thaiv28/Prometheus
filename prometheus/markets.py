@@ -298,35 +298,53 @@ def fee(price, stake, rate=TAKER_RATE):
 
 
 def prices_file(log, now, days_back=2):
-    """The site's `kalshi.json`: when prices were last read and, for every rated
-    match with a price that starts after `now` − `days_back` days, team 1's and
-    team 2's chance (whole numbers adding to 100, as the register shows them),
-    when that price was read and the market's page. The fixture registers apply
-    it in the browser, so prices refreshed between site builds show."""
+    """The site's `kalshi.json`: recent market prices plus refreshed calls for
+    upcoming rated matches. Market chances use whole numbers adding to 100, as
+    the register shows them; calls use the same rounding. The fixture registers
+    apply both in the browser, so refreshes between site builds show."""
     from prometheus import trading
 
     since = (now - datetime.timedelta(days=days_back)).strftime("%Y-%m-%dT%H:%MZ")
     out = {}
     for entry in log.values():
         market = entry.get("market")
-        if not entry.get("matched") or not market or entry["start"] < since:
+        if not entry.get("matched") or entry["start"] < since:
             continue
-        p1 = min(99, max(1, round(market["p"] * 100)))
-        out[entry["match_id"]] = {
-            "p1": p1,
-            "p2": 100 - p1,
-            "at": market["at"],
-            "url": event_url(market["ticker"]) if market.get("ticker") else None,
-        }
-        estimate = trading.quote(entry)
-        if estimate:
-            trade1 = min(99, max(1, round(estimate["probability"] * 100)))
-            out[entry["match_id"]]["trading"] = {
-                "p1": trade1,
-                "p2": 100 - trade1,
-                "net_edge": estimate["pick"]["net_edge"],
-                "at": estimate["at"],
-            }
+        row = {}
+        if (
+            entry["start"] > now.strftime("%Y-%m-%dT%H:%MZ")
+            and entry.get("p_series") is not None
+            and entry.get("p_game") is not None
+        ):
+            # Match _pct_pair in prometheus.site.predictions without importing the site.
+            s1 = min(99, max(1, round(entry["p_series"] * 100)))
+            g1 = min(99, max(1, round(entry["p_game"] * 100)))
+            row["ours"] = {"s1": s1, "g1": g1}
+            if entry.get("results_through"):
+                row["ours"]["through"] = entry["results_through"]
+        if market:
+            p1 = min(99, max(1, round(market["p"] * 100)))
+            row.update(
+                {
+                    "p1": p1,
+                    "p2": 100 - p1,
+                    "at": market["at"],
+                    "url": event_url(market["ticker"])
+                    if market.get("ticker")
+                    else None,
+                }
+            )
+            estimate = trading.quote(entry)
+            if estimate:
+                trade1 = min(99, max(1, round(estimate["probability"] * 100)))
+                row["trading"] = {
+                    "p1": trade1,
+                    "p2": 100 - trade1,
+                    "net_edge": estimate["pick"]["net_edge"],
+                    "at": estimate["at"],
+                }
+        if row:
+            out[entry["match_id"]] = row
     return {"at": now.strftime("%Y-%m-%dT%H:%MZ"), "matches": out}
 
 

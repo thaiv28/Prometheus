@@ -368,8 +368,10 @@
     countEl.textContent = count === total
       ? `${numberFormat.format(total)} shown.`
       : `${numberFormat.format(count)} of ${numberFormat.format(total)} shown.`;
+    if (resultsThrough && showingNow()) countEl.textContent += ` Results through ${PrometheusFresh.stamp(resultsThrough)}.`;
   }
 
+  let resultsThrough = null;
   let started = false;
   function update() {
     const before = started ? snapshot() : null;
@@ -462,4 +464,10 @@
   readUrl();
   if (searchInput) searchInput.value = state.search;
   update();
+  PrometheusFresh.load(config.dataThrough).then((overlay) => {
+    if (!overlay) return;
+    PrometheusFresh.apply(rows, overlay, entity);
+    resultsThrough = overlay.results_through;
+    update();
+  });
 })();
