@@ -1,0 +1,233 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Opt-in live-map signal transport. Existing executor, config, ledger and secrets keep their owners.",
+  "Parameters": {
+    "ExecutionFunctionArn": {
+      "Type": "String"
+    },
+    "ExecutionRoleName": {
+      "Type": "String"
+    },
+    "WorkerRoleName": {
+      "Type": "String"
+    },
+    "ArtifactsBucketName": {
+      "Type": "String"
+    },
+    "QueueConsumerEnabled": {
+      "Type": "String",
+      "AllowedValues": [
+        "true",
+        "false"
+      ],
+      "Default": "false"
+    }
+  },
+  "Conditions": {
+    "EnableConsumer": {
+      "Fn::Equals": [
+        {
+          "Ref": "QueueConsumerEnabled"
+        },
+        "true"
+      ]
+    }
+  },
+  "Resources": {
+    "DeadLetters": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "SqsManagedSseEnabled": true,
+        "MessageRetentionPeriod": 1209600
+      }
+    },
+    "Signals": {
+      "Type": "AWS::SQS::Queue",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "SqsManagedSseEnabled": true,
+        "MessageRetentionPeriod": 86400,
+        "VisibilityTimeout": 900,
+        "RedrivePolicy": {
+          "deadLetterTargetArn": {
+            "Fn::GetAtt": [
+              "DeadLetters",
+              "Arn"
+            ]
+          },
+          "maxReceiveCount": 3
+        }
+      }
+    },
+    "Consumer": {
+      "Type": "AWS::Lambda::EventSourceMapping",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "ExecutionFunctionArn"
+        },
+        "EventSourceArn": {
+          "Fn::GetAtt": [
+            "Signals",
+            "Arn"
+          ]
+        },
+        "BatchSize": 1,
+        "MaximumBatchingWindowInSeconds": 0,
+        "FunctionResponseTypes": [
+          "ReportBatchItemFailures"
+        ],
+        "Enabled": {
+          "Fn::If": [
+            "EnableConsumer",
+            true,
+            false
+          ]
+        }
+      },
+      "DependsOn": [
+        "ConsumerPolicy"
+      ]
+    },
+    "ConsumerPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "prometheus-live-map-consumer",
+        "Roles": [
+          {
+            "Ref": "ExecutionRoleName"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sqs:ReceiveMessage",
+                "sqs:DeleteMessage",
+                "sqs:GetQueueAttributes"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "Signals",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactsBucketName}/prometheus/live-trading/signals/*"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "ProducerPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "prometheus-live-map-producer",
+        "Roles": [
+          {
+            "Ref": "WorkerRoleName"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sqs:SendMessage"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "Signals",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:PutObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:s3:::${ArtifactsBucketName}/prometheus/live-trading/signals/*"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "UnencryptedTransportDenied": {
+      "Type": "AWS::SQS::QueuePolicy",
+      "Properties": {
+        "Queues": [
+          {
+            "Ref": "Signals"
+          },
+          {
+            "Ref": "DeadLetters"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "sqs:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "Signals",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::GetAtt": [
+                    "DeadLetters",
+                    "Arn"
+                  ]
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "QueueArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Signals",
+          "Arn"
+        ]
+      }
+    },
+    "QueueUrl": {
+      "Value": {
+        "Ref": "Signals"
+      }
+    },
+    "DeadLetterQueueUrl": {
+      "Value": {
+        "Ref": "DeadLetters"
+      }
+    }
+  }
+}

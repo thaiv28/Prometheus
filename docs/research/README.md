@@ -1,5 +1,9 @@
 # Research
 
+- [Draft v2 map trading](live_map_draft_trading.md): draft v2 as the map-trading model input; the fixed market-blend comparison fails the improvement and no-regression gates (FST worse). Not adopted; its runtime wiring was removed from the trading branch on 2026-10-19.
+
+- [Live map trading](live_trading.md): earlier-series-only market/model blend, fee-aware entries, freshness/stability proxies, execution-cost stress and Kelly paths; [fixed protocol](live_trading_protocol.md). Historical tape returns remain inconclusive; no trading change.
+
 - [Joint Glicko RD + non-major update scale](elo_glicko_scale.md): fixed two-stage tuning through 2021; the combination improves held-out 2022+ forecasts but regresses on nine international roster-change games versus Glicko alone. Manager decision: combined RD + non-major slope shipped 2026-10-19; main guarded sections pass, with the nine-game roster-slice limit recorded.
 
 - [Player Elo Glicko-style uncertainty](elo_glicko.md): v2 ties reference to floor

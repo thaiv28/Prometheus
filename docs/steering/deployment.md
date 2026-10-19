@@ -176,6 +176,29 @@ not an online accuracy monitor. Preserve archived calls as made. See
 [release validation](../research/live_model_release.md) for checked evidence and
 actual rollout status.
 
+## Live-map execution transport (prepared 2026-10-18)
+
+The existing Lambda package now contains the shared live-map contract, monthly
+artifact, minimal stdlib inference and SQS handler. Source hashes/path filters
+cover every packaged input; existing deploy-on-merge preserves modes. The new
+strategy defaults off even when pregame trading is live. No AWS change was made.
+
+`deploy/execution/live-map-transport.json` is a separate reviewable transport
+stack: retained encrypted queues, TLS-only queue policy, batch size one/zero
+batching, partial failures, exact-role queue/prefix grants and a disabled
+mapping. It references the existing executor/worker roles/function/private bucket
+without taking ownership or installing credentials. Existing SSM, secrets and
+ledger stay with their current stack. Verify Lambda timeout <=150s for its 900s
+visibility and existing reserved concurrency before rollout.
+
+`kalshi-live-map-control.yml` shares the existing manual-control concurrency
+group/role. It changes only nested live-map mode/epoch after runtime validation;
+existing configuration workflow saves explicit nested limits while global off.
+Worker `LIVE_MAP_SIGNAL_ARGS` is absent by default; when enabled it adds bounded
+trade GETs and private candidate delivery through role-authenticated AWS CLI.
+Backup includes private `trading/` evidence. Shadow never loads signing keys or
+uses account/order endpoints. [Review/rollout](../live_map_execution.md).
+
 ### Draft v2 private observation (prepared 2026-10-18)
 
 The existing main-only `Publish ratings for the live worker` step also exports
@@ -223,3 +246,12 @@ permissions/resources or systemd changes. The existing sync owns this JSON and
 retains it at shutdown, independent of the empty active index. Lifecycle derives
 from existing minute discovery calls; browsers read one additional small object
 per poll. Final untracking attempts one last settlement and snapshot.
+
+### Live-map executor package (2026-10-19)
+
+The executor zip includes stdlib `live/draft.py` only because `live/timeline.py`
+imports it; draft v2's model and blend are not packaged (the trading benchmark
+failed, see [evidence](../research/live_map_draft_trading.md)). Live maps need an
+explicit `live_maps.budget_usd` before shadow or live mode; the ledger's
+`ENV#<mode> / LIVE_MAPS` row (held, realized) enforces it. No new table, IAM or
+CI step. Nothing was deployed or activated.

@@ -20,13 +20,18 @@ import urllib.request
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from .core import decimal, timestamp
+from .core import decimal, fee_bound, timestamp
 
 ROOTS = {
     "demo": "https://external-api.demo.kalshi.co",
     "live": "https://external-api.kalshi.com",
 }
 PATH = "/trade-api/v2"
+MAP_RULES = re.compile(
+    r"^If (?P<side>.+?) wins game (?P<map>\d+) in the (?P<event>.+): (?P<team1>.+?) vs\.? (?P<team2>.+?) "
+    r"League of Legends match originally scheduled for (?P<day>\w{3} \d{1,2}, \d{4})"
+    r" at (?P<time>\d{1,2}:\d{2} [AP]M) E[DS]T"
+)
 RULES = re.compile(
     r"^If (?P<side>.+?) wins the (?P<event>.+): (?P<team1>.+?) vs\.? (?P<team2>.+?) "
     r"League of Legends match originally scheduled for (?P<day>\w{3} \d{1,2}, \d{4})"
@@ -134,16 +139,20 @@ class Kalshi:
         return self.aliases.get(name.strip(), name.strip())
 
     def resolve(self, alert, now, config):
+        from prometheus import live_map
+
+        is_map = alert.get("kind") == live_map.VERSION
+        series_ticker = "KXLOLMAP" if is_map else "KXLOLGAME"
         ticker = urllib.parse.quote(alert["event_ticker"], safe="")
         response = self.request("GET", f"/events/{ticker}", with_nested_markets="true")
         event = response["event"]
         if (
             event["event_ticker"] != alert["event_ticker"]
-            or event["series_ticker"] != "KXLOLGAME"
+            or event["series_ticker"] != series_ticker
             or event.get("mutually_exclusive") is not True
         ):
             raise ValueError("wrong_or_nonexclusive_event")
-        series = self.request("GET", "/series/KXLOLGAME")["series"]
+        series = self.request("GET", f"/series/{series_ticker}")["series"]
         # Ordinary event responses need not expose current fee overrides. Read
         # their authoritative history, including explicit null/null clears.
         changes = self.pages(
@@ -165,9 +174,9 @@ class Kalshi:
             if now < timestamp(c["scheduled_ts"]) <= timestamp(alert["start"])
         ]
         series_changes = self.request(
-            "GET", "/series/fee_changes", series_ticker="KXLOLGAME"
+            "GET", "/series/fee_changes", series_ticker=series_ticker
         )["series_fee_change_arr"]
-        if any(c.get("series_ticker") != "KXLOLGAME" for c in series_changes):
+        if any(c.get("series_ticker") != series_ticker for c in series_changes):
             raise ValueError("fee_series_mismatch")
         future_series = [
             c
@@ -196,9 +205,12 @@ class Kalshi:
             raise ValueError("ambiguous_outcomes")
         parsed = []
         for market in markets:
-            rules = RULES.match(market.get("rules_primary", ""))
+            rules = (MAP_RULES if is_map else RULES).match(
+                market.get("rules_primary", "")
+            )
             if (
                 not rules
+                or (is_map and int(rules["map"]) != alert["map_number"])
                 or market.get("market_type") != "binary"
                 or market.get("event_ticker") != alert["event_ticker"]
                 or decimal(market.get("notional_value_dollars", "0")) != 1
@@ -219,9 +231,38 @@ class Kalshi:
             parsed.append((market, side))
         if {side for _, side in parsed} != set(alert["teams"]):
             raise ValueError("duplicate_or_missing_outcome")
+        if is_map:
+            parent = self.request(
+                "GET",
+                f"/events/{urllib.parse.quote(alert['series_id'], safe='')}",
+                with_nested_markets="true",
+            )["event"]
+            parents = parent.get("markets") or []
+            if (
+                parent.get("event_ticker") != alert["series_id"]
+                or parent.get("series_ticker") != "KXLOLGAME"
+                or len(parents) != 2
+            ):
+                raise ValueError("live_series_identity_mismatch")
+            parent_sides = set()
+            for item in parents:
+                rule = RULES.match(item.get("rules_primary", ""))
+                if not rule or {
+                    self.canonical(rule[n]) for n in ("team1", "team2")
+                } != set(alert["teams"]):
+                    raise ValueError("live_series_identity_mismatch")
+                when = dt.datetime.strptime(
+                    f"{rule['day']} {rule['time']}", "%b %d, %Y %I:%M %p"
+                ).replace(tzinfo=ZoneInfo("America/New_York"))
+                if when.astimezone(dt.UTC) != timestamp(alert["start"]):
+                    raise ValueError("live_series_identity_mismatch")
+                parent_sides.add(self.canonical(rule["side"]))
+            if parent_sides != set(alert["teams"]):
+                raise ValueError("live_series_identity_mismatch")
         self._fixture_tickers = {market["ticker"] for market, _ in parsed}
         routes = []
         mids, quote_times = [], []
+        live_book = None
         for market, team in parsed:
             if (
                 market.get("status") != "active"
@@ -240,6 +281,24 @@ class Kalshi:
             ):
                 raise ValueError("stale_or_undated_orderbook")
             own = team == alert["backed_team"]
+            if is_map and team == alert["teams"][0]:
+                levels = book.get("orderbook_fp") or {}
+                bids = [
+                    decimal(p)
+                    for p, q in levels.get("yes_dollars", [])
+                    if decimal(q) > 0
+                ]
+                offers = [
+                    decimal(p)
+                    for p, q in levels.get("no_dollars", [])
+                    if decimal(q) > 0
+                ]
+                if bids and offers:
+                    live_book = {
+                        "at": received.isoformat(),
+                        "bid": str(max(bids)),
+                        "ask": str(1 - max(offers)),
+                    }
             if alert.get("trading"):
                 bids = []
                 for field in ("yes_dollars", "no_dollars"):
@@ -297,6 +356,50 @@ class Kalshi:
             for route in routes:
                 route["market_mid"] = str(sum(mids) / len(mids))
                 route["at"] = min(timestamp(route["at"]), *quote_times).isoformat()
+        if is_map:
+            if live_book is None:
+                raise ValueError("missing_live_two_sided_book")
+            trades = []
+            tickers = {m["ticker"]: alert["teams"].index(team) for m, team in parsed}
+            for name in tickers:
+                page = self.request(
+                    "GET",
+                    "/markets/trades",
+                    ticker=name,
+                    min_ts=int(now.timestamp()) - 31,
+                    limit=1000,
+                )
+                if (
+                    page.get("cursor")
+                    or page.get("_cache_age") is None
+                    or decimal(page["_cache_age"]) != 0
+                    or page.get("_server_time") is None
+                    or not 0
+                    <= (self.now() - timestamp(page["_server_time"])).total_seconds()
+                    <= 3
+                ):
+                    raise ValueError("incomplete_live_trade_window")
+                trades.extend(page["trades"])
+            checked = self.now()
+            decision = live_map.evaluate(
+                alert["live"]["observation"],
+                live_map.normalize_trades(trades, tickers),
+                live_book,
+                checked.isoformat(),
+                lambda price: fee_bound(
+                    decimal(price),
+                    1,
+                    config.number("fee_rate_upper_bound"),
+                    config.number("balance_precision_usd"),
+                ),
+            )
+            if alert["teams"][decision["side"]] != alert["backed_team"]:
+                raise ValueError("live_signal_side_changed")
+            for route in routes:
+                route.update(
+                    live_probability=str(decision["probability"]),
+                    live_checked_at=checked.isoformat(),
+                )
         return routes
 
     def balance(self):
@@ -436,3 +539,19 @@ class Kalshi:
             f"/portfolio/events/orders/{urllib.parse.quote(order_id, safe='')}",
             market_ticker=market_ticker,
         )
+
+
+class PublicKalshi(Kalshi):
+    def __init__(self, canonical_aliases=None):
+        self.environment, self.aliases = "live", canonical_aliases or {}
+        self.opener = urllib.request.build_opener(NoRedirect())
+
+    def headers(self, method, path):
+        if method != "GET" or not path.startswith(
+            ("/markets/", "/events/", "/series/")
+        ):
+            raise ValueError("shadow_private_request_refused")
+        return {
+            "Cache-Control": "no-cache, no-store",
+            "User-Agent": "prometheus-live-shadow/1",
+        }
