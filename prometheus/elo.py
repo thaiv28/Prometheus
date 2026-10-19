@@ -63,9 +63,19 @@ def _players_table(method: str) -> str:
     return f"{method}_player_elo"
 
 
-def expected_score(elo: float, opponent_elo: float) -> float:
-    """Standard Elo expected score for a team against an opponent."""
-    return 1 / (1 + 10 ** ((opponent_elo - elo) / 400))
+EXPECTED_SLOPE = math.log(10) / 400
+
+
+def expected_score(
+    elo: float, opponent_elo: float, slope: float = EXPECTED_SLOPE
+) -> float:
+    """Expected score; slope is log-odds per point (opt-in research scale).
+
+    Keep the original arithmetic on the default path for exact replay parity.
+    """
+    if slope == EXPECTED_SLOPE:
+        return 1 / (1 + 10 ** ((opponent_elo - elo) / 400))
+    return 1 / (1 + math.exp(slope * (opponent_elo - elo)))
 
 
 def power_winner_score(
@@ -115,6 +125,7 @@ def calculate_game_length_elo_change(
     steepness=None,
     K=20,
     transition=5 * 60,
+    expected_slope=EXPECTED_SLOPE,
 ):
     """Calculate the Elo change for a team based on game length.
 
@@ -136,7 +147,7 @@ def calculate_game_length_elo_change(
     )
     actual = score if result else 1 - score
 
-    return K * (actual - expected_score(elo, opponent_elo))
+    return K * (actual - expected_score(elo, opponent_elo, slope=expected_slope))
 
 
 def compute_elo_records(

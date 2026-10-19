@@ -1,5 +1,121 @@
 # Work log
 
+## 2026-10-19 — Non-major-only Elo update scale / K (research follow-up)
+
+Branch `elo-fitted-scale`, builds on committed first run `313d9de`; changes left
+uncommitted as requested. Third design in `elo_fitted_scale.py`: non-major
+domestic slope {ln(10)/400,.0070,.0085,.0103} × K {20,24,28,32}, majors and
+international slope ln(10)/400 and K 20. Reuse opt-in event slopes and
+`league_factors`, leaving international callbacks and offset rules native.
+One predeclared boundary extension: .0045/.0121 or K 16/36 on the selected
+lower/upper edge; score new Cartesian cells once, selected through 2021 only.
+Same objective, held-out sections and curve/FORGE refits as the first run.
+Adds current-data 20/28 and tuned K-only controls, plus the existing recent
+roster-change slice without extra replay/DB work. Published behavior untouched.
+
+Training winner: other slope .0070 / K 24, objective .620996 (published
+.621480). Interior optimum: no extension needed. Regenerated report:
+[`elo_fitted_scale.md`](../research/elo_fitted_scale.md).
+
+Held out 2022–2026, Δ LL versus published (paired-game bootstrap 95% CI):
+Elo domestic +.000051 (−.000216, +.000339), international +.000243
+(−.000280, +.000776); FORGE domestic +.000086 (−.000087, +.000272),
+international same as Elo; other-league Elo −.001899 (−.002351, −.001428),
+FORGE −.000812 (−.001167, −.000456); cross-league Elo −.003496
+(−.004760, −.002196). Recent roster-change slice (2,527 major/international
+games, either lineup changed <5 games ago): Elo +.000199 (−.000375, +.000773),
+FORGE +.000232 (−.000130, +.000597), both inside noise.
+**Passes the requested significance rule:** gains in both targeted sections,
+no reported section significantly worse; the earlier uniform/tier designs
+still fail domestic FORGE. Recommendation: **iterate**, no production release
+in this research change; confirm with earlier-only calibration and native
+release guards, plus series-cluster sensitivity. Historical holdout has been
+repeatedly viewed; international calibration is disabled equally for all arms
+as in the first run, so this is published ratings with refitted curves, not
+today's calibrated international forecast.
+
+Slope adds beyond K: the current-data K-only tuning winner is K-major 20 /
+K-other 28 (objective .621141). Compared directly with that arm, the new design
+improves other-league Elo −.000531 (−.000733, −.000339), FORGE −.000767
+(−.000926, −.000616), cross-league Elo −.002633 (−.003660, −.001646),
+and domestic FORGE −.000379 (−.000599, −.000181), all significant.
+This compares jointly tuned slope/K with tuned K-only, not a fixed-K slope
+ablation. Surprise: K-only 20/28 significantly hurts domestic Elo (+.001015)
+and FORGE (+.000465) despite native major callbacks; changed incoming player
+ratings and refitted curves can propagate across leagues. Offset rules remain
+native, not identical offset values after changed history. The older
+`elo_k_tier.md` includes 20/28 in tuning but only reports selected 28/28 held
+out; the new same-data 20/28 control avoids conflating baseline versions.
+No new production bug found; the existing frozen international-calibration
+artifact incompatibility and pandas input-cast warning remain documented.
+
+Checks: 67 focused Elo/harness tests pass in 0.98 s; full suite 802 passed,
+2 skipped, 1 existing loky CPU-count warning in 22.43 s under shared load
+(first run recorded 799 / 2 skipped in 10.28 s; not an isolated cost estimate).
+Three added research tests cover grid/extension scope, exact native-option
+parity and hand-calculated mixed-event slope/K updates; isolated run 3 passed
+in 0.92 s including startup, one call .01 s and two <.005 s. Default full replay
+reproduction max error 1.14e−12 across 205,858 team-games. Repository-wide ruff
+format/check and whitespace pass. Relative file links in all changed docs pass.
+41 grid replays of 102,929 games: median 7.06 s, range 3.63–10.18 s;
+selected non-major arm 3.90 s; whole experiment 400.6 s, all with
+VECLIB_MAXIMUM_THREADS=1. No production/CI/publish/hourly work, new dependency,
+DB change, or fitted artifact change. No Actions timing: branch not pushed.
+
+Native check (manager, same day): `bootstrap_elo` patched in a throwaway worktree (`elo-nonmajor-native`, not merged) to use slope .0070 and K 24 in non-major domestic games, `004_bootstrap_elo.py` rerun, then `evaluate_metrics.py --dump` on base and candidate and `compare_benchmarks.py`. No guarded value significantly worse. Cross-league Elo −0.0022 (−0.0030 to −0.0014), within other leagues per-league Elo −0.0012 (−0.0016 to −0.0009), within other leagues FORGE −0.0004 (−0.0006 to −0.0002); domestic FORGE +0.0001 (−0.0000 to +0.0002), international FORGE/Elo +0.0003 (−0.0000 to +0.0005). Unguarded: international Form +0.0004 (worse; not a published forecast) and other-league Elo on the 400-point curve +0.0011 (expected, the ratings spread more). These rolling sections include the tuning years. Still to check before shipping: `evaluate_markets.py` (our calls vs Kalshi), the published `league_curves.json`/FORGE refit, and the international calibration fitted on the old scale.
+
+## 2026-10-19 — Elo expected-score scale with K retuned (research)
+
+Branch `elo-fitted-scale`, based on `177004c` (future-work documentation).
+Fixed grid: update slope {ln(10)/400, .0070, .0085, .0100} × K {12,16,20,24,28};
+plus .0085 major/international and .0103 other-domestic slopes with the same K grid.
+Tune through 2021 with the existing games-weighted domestic + other-league Elo
+objective; shared harness refits the forecast curves and FORGE blends.
+Published behavior, DB and fitted weight artifacts unchanged. Report:
+[`elo_fitted_scale.md`](../research/elo_fitted_scale.md). Best uniform .0070 / K 24
+(train LL .620959 vs published .621480); tier .0085/.0103 selects K 20.
+
+Held out 2022–2026, uniform Δ LL (paired game bootstrap, 95% CI): Elo domestic
++.000599 (−.000373, +.001650), international +.002774 (−.000835, +.006651);
+FORGE domestic +.000975 (+.000361, +.001647), international +.002774
+(−.000835, +.006651); other-league Elo −.001959 (−.002417, −.001479),
+FORGE −.000842 (−.001200, −.000477); cross-league Elo −.004108
+(−.005615, −.002553). Tier also fails: domestic FORGE +.001015
+(+.000287, +.001807), despite significant other-league/cross-league gains.
+Verdict: drop the proposed change; both violate the no-regression significance
+rule. No significant major-league Elo/international gain. Held-out descriptive
+refit slopes for the uniform winner: majors/international .00939438, other
+pooled .01060021, still steeper than update .0070. Duration-weighted update
+scores are not binary outcomes, so equality is not required.
+
+Evaluation issue found: the newer international calibration artifact replaces
+refitted FORGE probabilities with its frozen old-scale slope. Disable it locally
+for both baseline and variants; no published setting or shared scorer changed.
+This baseline means published ratings with refitted curves, not today's
+calibrated international calls. Keep prior harness limits explicit: out-of-year
+fits can use later held-out seasons, other-league FORGE Form weights use all
+other years, intervals resample games rather than series, repeated historical
+research is not an untouched holdout. One pandas cast warning during input load.
+
+Default reproduction max error 1.14e−12 over 205,858 team-games. Replay median
+4.85 s (4.69–6.07 s), 102,929 games; experiment 195.1 s with
+VECLIB_MAXIMUM_THREADS=1. No build/CI job, dependency, DB read or runtime fitting
+added to production. Unit checks cover exact default arithmetic, a hand-made
+slope/K update and event-slope override order. Full suite: 799 passed, 2 skipped,
+1 warning in 13.64 s; focused Elo/harness: 64 passed in 4.74 s. Repository-wide
+ruff format/check and git diff whitespace pass. Final full-suite confirmation: 799 passed, 2 skipped, 1 existing loky CPU-count
+warning in 10.28 s. Same suite excluding the seven added cases: 792 passed,
+2 skipped in 8.96 s (separate runs under shared load; not an isolated cost
+estimate). All seven added case durations are individually <5 ms; selected
+run 0.68 s including startup. That small test cost buys default-parity and
+scale/row-order guards; the research grid is never run by CI. Changed-document
+relative file links (all five documents), ruff format/check and whitespace pass.
+No Actions timing is available because this branch is not pushed, as requested.
+The sandbox rejects index.lock writes in the main repo's external worktree metadata;
+the reviewed change is committed on `elo-fitted-scale` in a temporary Git repository
+and exported as `/tmp/elo-fitted-scale.bundle`. The actual worktree branch ref
+remains at the base until that bundle is applied.
+
 ## 2026-10-19 — Player Elo RD v2: reference tied to floor
 
 Branch `elo-glicko`, based on `177004c` (future-work documentation on
