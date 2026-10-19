@@ -628,6 +628,10 @@ class CompletedPageTest(unittest.TestCase):
             self.assertEqual(page["game"]["winner"], 0)
             self.assertIn("KC won the series 3–0", page["note"])
             self.assertTrue((root / "m/map3.json").exists())
+            page.update(status="idle", final=False)
+            complete_page(root, page, row)
+            self.assertTrue(page["final"])
+            self.assertEqual(page["status"], "between_games")
             page["game"].update(number=1, winner=None)
             page["match"]["score"] = [0, 0]
             complete_page(root, page, row)

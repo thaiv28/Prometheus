@@ -897,7 +897,7 @@ def update_lifecycle(page_dir, events, catalog, aliases, at):
             else "live",
             score=score if all(type(v) is int for v in score) else old.get("score"),
         )
-        if old.get("status") == "completed":
+        if old.get("status") == "completed" and event["state"] != "completed":
             series[mid] = old
         page_path = page_dir / f"{mid}.json"
         if page_path.exists():
@@ -935,7 +935,12 @@ def complete_page(page_dir, page, row):
             game["winner"] = delta.index(1)
     winner = 0 if score[0] > score[1] else 1
     note = f"{names[winner]} won the series {max(score)}–{min(score)}."
-    if page["match"].get("score") == score and page.get("note") == note:
+    if (
+        page["match"].get("score") == score
+        and page.get("note") == note
+        and page.get("final")
+        and page.get("status") == "between_games"
+    ):
         return
     page["match"]["score"] = score
     page.update(status="between_games", note=note, final=True)

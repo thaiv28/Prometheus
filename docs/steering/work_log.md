@@ -42,6 +42,7 @@ Real-data migration reconciles KC–MVK to 3–0, closes map 3 with its known wi
 and preserves map links. It took 214 ms locally including parsing/rewriting the
 full retained page, once; subsequent minute checks parse retained recorded
 pages but do not rewrite unchanged scores. No publish/hourly work added.
+Already-idle retained pages are also reopened as final saved pages.
 Final series state survives shutdown and no longer counts as a stalled live
 match on Watch. Explicit saved-match links work even with an empty active index
 and do not switch to another live match.
