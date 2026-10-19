@@ -2,6 +2,14 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-19 — Live results' map odds follow the series score; current_state trimmed
+
+Branch `live-anchor`, base `b6e0b62`. Series pages showed the pre-series map chance on every row; "Map: ours" and the map chart's opening call now take `series.map_prior` (rho from `forge.json`, else the log's home leagues), as the live page and series column already did. The shift alone beats the unshifted pregame call on 732 priced maps 2+ (−0.0077, −0.0135 to −0.0025; `live_anchor.md`). `current_state.md` condensed 9,561 → ~2,900 words (Codex). Checks: archive tests (one new), full pytest, ruff; site built from a read-only S3 sync of compact live maps; four series tables checked, one page screenshotted at desktop and phone widths. Copy review: PASS (Table I, note and figure; no copy changed, the note already says "FORGE and the score"). Headless phone render clips the table's right edge, unverified on a device.
+
+## 2026-10-19 — Live model: FORGE pregame, FORGE anchor, raw calibration tested
+
+`scripts/research/live_anchor.py` ([report](../research/live_anchor.md)); rule fixed before scoring; viewed test split. Pregame: displayed FORGE + series shift beats the benchmark's v1 t=0 call by −0.0111 (−0.0209 to −0.0019) on 1,271 priced maps; shift −0.0044, FORGE over shifted v1 −0.0066 (n.s.). Anchoring in-game calls on FORGE: +0.0023 (−0.0014 to +0.0060), 30+ min significantly worse: rejected. Dropping calibration: feed −0.0015 (−0.0030 to −0.0002) but live-benchmark 30 min +0.0030 (+0.0002 to +0.0055): rejected. No runtime, model or CI change; 37 s, local only. Limit: FORGE p is the backtest's (month-start ratings, out-of-year curves), covering 38% of pre-maps.
+
 ## 2026-10-19 — Live-map trading switched on with a $15 budget
 
 At the user's request (shadow skipped), merged #94 (executor released by publish `39300099249`) and infrastructure PR #20 (signal queue in `ThaivPrometheusExecution`, worker grants and `LIVE_MAP_SIGNAL_ARGS` in `ThaivPrometheusLive`). Deployed both stacks through their workflows after diffs (no existing resource replaced except the worker instance; no match was live). Updated `LIVE_WORKER_INSTANCE_ID`. Paused global execution about 1.5 minutes to save `live_maps` (queue ARN, quarter Kelly, 1%/2% caps, `budget_usd` 15), restored live, then set live-map mode live; activation validated the config and runtime. Unverified: the new worker's env and first signal delivery (local AWS session expired), real fills and latency. Infra cost estimate: about $0–0.30 a month (SQS polling inside the free tier).

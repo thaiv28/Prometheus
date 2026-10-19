@@ -12,7 +12,8 @@ import json
 import os
 from pathlib import Path
 
-from prometheus.live.series import series_chance
+from prometheus.live.series import map_prior, series_chance
+from prometheus.schedule import series_rho
 from prometheus.site import config as site_config
 from prometheus.site.predictions import _by_day, fixture_row
 from prometheus.site.render import env, write
@@ -187,15 +188,16 @@ def _before_map(p_game, rho, best_of, score, record, flip):
     def first(p):
         return None if p is None else round(100 * (1 - p if flip else p))
 
-    series = (
-        series_chance(p_game, best_of, rho, score)
-        if p_game is not None and rho is not None and score is not None
-        else None
-    )
+    known = p_game is not None and rho is not None and score is not None
+    series = series_chance(p_game, best_of, rho, score) if known else None
+    # The map chance moves with the score as the series model expects
+    # (`series.map_prior`, the live page's pregame); unshifted without `rho`.
+    p_map = map_prior(p_game, rho, *score) if known else p_game
     shown = None if score is None else (score[::-1] if flip else score)
     return {
         "score": f"{shown[0]}–{shown[1]}" if shown else None,
-        "map_ours": first(p_game),
+        "p_map": p_map,
+        "map_ours": first(p_map),
         "map_kalshi": first(record.get("kalshi_map")),
         "series_ours": first(series),
         "series_kalshi": first(record.get("kalshi_series")),
@@ -253,8 +255,11 @@ def series_view(log, archive, team_slugs, now=None):
         # Our map chance for live team 0: the logged call before the series
         # (the live service's forge.json can be for the other team when getLive
         # swapped the order before 2026-10-17), else the service's.
+        rho = forge.get("rho")
         if entry:
             p_game = 1 - entry["p_game"] if flip else entry["p_game"]
+            if rho is None and entry.get("home1") and entry.get("home2"):
+                rho = series_rho(entry["home1"], entry["home2"])
         else:
             p_game = forge.get("p_game")
         best_of = first["match"].get("best_of") or 1
@@ -267,13 +272,13 @@ def series_view(log, archive, team_slugs, now=None):
                 won = row["winner"] - 1  # the last map goes to the series winner
             m = maps.get(n)
             recorded = bool(m and (m["calls"] or m["gold"]))
+            before = _before_map(p_game, rho, best_of, score, record.get(n) or {}, flip)
+            p_map = before.pop("p_map")
             item = {
                 "number": n,
                 "winner": names[won] if won is not None else None,
                 "recorded": recorded,
-                "before": _before_map(
-                    p_game, forge.get("rho"), best_of, score, record.get(n) or {}, flip
-                ),
+                "before": before,
             }
             live_won = winners.get(n)
             if score is not None and live_won in (0, 1):
@@ -283,7 +288,7 @@ def series_view(log, archive, team_slugs, now=None):
             if recorded:
                 item.update(
                     length=_minutes(m.get("length")),
-                    figure=figure(m, flip, pre=p_game if entry else None),
+                    figure=figure(m, flip, pre=p_map if entry else None),
                     backfilled=bool(m.get("market_backfilled")),
                 )
             map_rows.append(item)
