@@ -1,0 +1,7 @@
+#!/bin/sh
+# Rotate the work log when a commit touches it (see scripts/work_log.py).
+# Enable once per clone: git config core.hooksPath .githooks
+if git diff --cached --name-only | grep -qx 'docs/steering/work_log.md'; then
+    python3 scripts/work_log.py rotate &&
+        git add docs/steering/work_log.md docs/steering/work_log_archive.md
+fi
