@@ -58,6 +58,7 @@ from prometheus.evaluation import (
     out_of_year_league_probabilities,
     out_of_year_probabilities,
     paired_bootstrap,
+    series_ids,
     shrunk_league_slopes,
 )
 from prometheus.forge import (
@@ -155,8 +156,8 @@ def summarize_other_leagues(games):
         "|---|---:|---:|---:|---:|---|---|",
     ]
 
-    def delta(a, b):
-        mean, lo, hi = paired_bootstrap(a, b)
+    def delta(a, b, clusters):
+        mean, lo, hi = paired_bootstrap(a, b, clusters=clusters)
         return f"{mean:+.4f} ({lo:+.4f} to {hi:+.4f})"
 
     for label, mask in (("All", games["year"] > 0), ("2022 on", games["year"] >= 2022)):
@@ -166,7 +167,7 @@ def summarize_other_leagues(games):
         )
         lines.append(
             f"| {label} | {int(mask.sum()):,} | {s.mean():.4f} | {f.mean():.4f} | {l.mean():.4f} "
-            f"| {delta(f, s)} | {delta(l, f)} |"
+            f"| {delta(f, s, games.loc[mask, 'series'])} | {delta(l, f, games.loc[mask, 'series'])} |"
         )
     return (
         "\n".join(lines)
@@ -197,8 +198,8 @@ def summarize_other_league_forge(games, fitted, per_league):
         "|---|---:|---:|---:|---:|---:|---:|---|---|",
     ]
 
-    def delta(a, b):
-        mean, lo, hi = paired_bootstrap(a, b)
+    def delta(a, b, clusters):
+        mean, lo, hi = paired_bootstrap(a, b, clusters=clusters)
         return f"{mean:+.4f} ({lo:+.4f} to {hi:+.4f})"
 
     for label, mask in (("All", sub["year"] > 0), ("2022 on", sub["year"] >= 2022)):
@@ -210,7 +211,7 @@ def summarize_other_league_forge(games, fitted, per_league):
         acc_g = forge_l["accuracy"].to_numpy()[mask].mean()
         lines.append(
             f"| {label} | {int(mask.sum()):,} | {f.mean():.4f} | {l.mean():.4f} | {g.mean():.4f} "
-            f"| {acc_l:.1%} | {acc_g:.1%} | {delta(g, l)} | {delta(g, f)} |"
+            f"| {acc_l:.1%} | {acc_g:.1%} | {delta(g, l, sub.loc[mask, 'series'])} | {delta(g, f, sub.loc[mask, 'series'])} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -487,7 +488,9 @@ def summarize(frame, losses):
             if key == BASELINE:
                 delta = "baseline"
             else:
-                mean, lo, hi = paired_bootstrap(l["log_loss"].to_numpy(), base)
+                mean, lo, hi = paired_bootstrap(
+                    l["log_loss"].to_numpy(), base, clusters=frame.loc[mask, "series"]
+                )
                 delta = f"{mean:+.4f} ({lo:+.4f} to {hi:+.4f})"
             lines.append(
                 f"| {label} | {l['accuracy'].mean():.1%} | {l['brier'].mean():.4f} "
@@ -498,6 +501,7 @@ def summarize(frame, losses):
             mean, lo, hi = paired_bootstrap(
                 losses[blend]["log_loss"].to_numpy()[mask],
                 losses[part]["log_loss"].to_numpy()[mask],
+                clusters=frame.loc[mask, "series"],
             )
             lines.append(
                 f"- {LABELS[blend]} vs {LABELS[part]}: log loss "
@@ -524,14 +528,16 @@ def summarize(frame, losses):
         mask = mask.to_numpy()
         team = losses["team_elo_live"]["log_loss"].to_numpy()[mask]
         player = losses["elo_live"]["log_loss"].to_numpy()[mask]
-        mean, lo, hi = paired_bootstrap(player, team)
+        mean, lo, hi = paired_bootstrap(
+            player, team, clusters=frame.loc[mask, "series"]
+        )
         lines.append(
             f"| {label} | {int(mask.sum()):,} | {team.mean():.4f} | {player.mean():.4f} "
             f"| {mean:+.4f} ({lo:+.4f} to {hi:+.4f}) |"
         )
     lines.append(
         "\nLower Brier and log loss are better. A negative log-loss delta means the "
-        "metric beats win % so far; an interval that excludes 0 is a real difference."
+        "metric beats win % so far. Intervals resample whole series (games between the same two teams within 12 hours)."
     )
     return "\n".join(lines)
 
@@ -663,6 +669,8 @@ def _dump_rows(section, forecast, games, losses, teamcol):
             "gameid": games["gameid"].to_numpy(),
             "teamid": games[teamcol].to_numpy(),
             "year": games["year"].to_numpy(),
+            "series": games["series"].to_numpy(),
+            "date": games["date"].astype(str).str[:10].to_numpy(),
             "won": games["won"].to_numpy(),
             **{
                 col: losses[col].to_numpy() for col in ("log_loss", "brier", "accuracy")
@@ -676,8 +684,8 @@ def write_dump(out_dir, frame, losses, cross, other):
 
     `forecasts.csv.gz`: one row per (section, forecast, game), keyed by gameid and
     teamid (blue's in Domestic / International, the lower team id elsewhere), with
-    the same losses the report averages. `metrics.json`: mean log loss and games
-    per section and forecast. Recomputes the cross-league and other-league
+    series labels, ISO dates and the same losses the report averages. `metrics.json`:
+    mean log loss and games per section and forecast. Recomputes the cross-league and other-league
     probabilities exactly as the report does.
     """
     parts = []
@@ -760,9 +768,15 @@ def main():
     states = form_states()
     print("Backtesting:")
     frame = backtest(games, results, elo_timeline, years)
+    frame["series"] = series_ids(
+        frame["date"].to_numpy(), frame["blue_id"], frame["red_id"]
+    )
     relative = out_of_year_form(frame, states)
     frame = add_form(frame, states, relative)
     pairs = load_pair_games()
+    pairs["series"] = series_ids(
+        pairs["date"].to_numpy(), pairs["teamid"], pairs["opponent_teamid"]
+    )
     other = other_league_games(pairs, INTERNATIONAL_LEAGUES, MAJORS)
     other = other.assign(
         form=form_gap(

@@ -18,6 +18,18 @@ Worker records each settled map in `maps.json` (winner, players from the collect
 
 `EloState` makes the replay resumable (rebuilt Elo tables identical row for row). Publish saves the state (3.1 MB, ~11 s); the hourly job's new step replays Leaguepedia games Oracle's Elixir lacks (each matched to an OE game of the same pair within 3 hours, or applied) and refreshes unstarted calls; Form stays frozen, `data_through` stays the OE date. Real run: 31 games applied, 37 known, 6 calls changed, 13 s. Justified by measured lag (+0.0039 series log loss a day); same-day games alone are within noise (−0.0010, −0.0024 to +0.0003) after fixing a leak in the first research run (own games dated before the start). Checks: pytest, ruff. Limits: not yet run in CI.
 
+## 2026-10-19 — Call staleness measured
+
+`scripts/research/call_staleness.py` on the published prediction log: of 74 settled calls frozen at the start (since Oct 4), 40 used data one day old and 34 two to four days old (Oracle's Elixir lag). Rebuilding 4,201 settled logged series with older ratings than the backtest's day-before: one more day +0.0039 series log loss (+0.0007 to +0.0074), two +0.0053, seven +0.0134; international (155) within noise. So the backtest and market report flatter published calls, and fresher results (Leaguepedia before Oracle's Elixir) are worth about .004 a day of lag. Same-day results are not measured. Research only; no published change.
+
+## 2026-10-19 — Series-clustered forecast intervals, forward holdout, addition/removal rules
+
+Forecast report/dumps and PR comparisons now resample whole series; dumps carry series/ISO dates, with head metadata supporting older bases. Forward rows from 2026-10-20 are unguarded. Rules require ≥0.0005 log-loss gain for additions and upper CI <+0.0005 for removals. Clustering barely widens intervals (~2 games a series; domestic FORGE vs Elo −0.0028 to −0.0009 both ways), so game-level intervals were not the problem. Report runtime: 37.80 s before, 28.33 s after (local, no CI work added). Checks: report, unchanged `--check-weights`, dump/self-comparison (exit 0), pytest (902 passed, 2 skipped), ruff format/check, diff whitespace. Limit: research scripts in `scripts/research` retain game-level intervals.
+
+## 2026-10-19 — Elo/forecast review added to Future work
+
+Docs only, base `1057307`. Reviewed every Elo and forecast assumption against the code, the research reports and the literature (Glicko, TrueSkill 2, Elo++, dynamic Bradley-Terry, forecast combination). Added one ordered Future work item to `current_state.md`: evaluation rules (series-clustered bootstrap, non-inferiority for removals, minimum gain, forward holdout), call staleness, one rating scale with league offsets fixed at the source, fast/slow Elo in place of Form, and a dynamic Bradley-Terry ceiling. Checks: `pytest tests/test_steering.py`.
+
 ## 2026-10-19 — Live benchmark refresh: first CI runs, seed fix
 
 First dispatch of `live-bench.yml` failed: the hand seed was made with macOS `tar`, whose AppleDouble `._*.json` files broke JSON reads on Linux. Reseeded with `COPYFILE_DISABLE=1 tar --no-xattrs` (checked with Python `tarfile`: no metadata entries) and fixed the seed commands in `deployment.md`. Second run (39327787116) passed in 10 min: Riot's feed served the GitHub runner without refusals (14 new maps, 81 s), `--build-data` took 7.9 min (CPU-bound; it re-reduces every map, so it grows with the data), state synced to S3, and `live-bench-data-63ee7c2a…` (2.2 MB) cached: 1,772 maps / 823 series, up from 1,666 / 813. Limit: no PR has read the cached entry yet.
@@ -54,3 +66,5 @@ RD's information term now uses the game's update slope (.0065 in non-major domes
 Also tested, not adopted (reports in `docs/research/`; scripts on their branches): Glicko-2 volatility (τ has no effect; reduces to the shipped RD, +46% replay), g(RD) in forecasts (≈1e-5), league-offset RD (cross-league −0.0002, other leagues +0.00002), no move-down bonus (cross-league +0.0052), no regional calibration (cross-league +0.0015).
 
 Checks: DB rebuilt, pytest, ruff, `evaluate_metrics.py --write-weights`, `evaluate_markets.py --offline --dump`, `compare_benchmarks.py`.
+
+

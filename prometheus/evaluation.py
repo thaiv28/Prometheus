@@ -12,6 +12,29 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
 EPS = 1e-6
+# Same 12-hour rule as gamelog.SERIES_GAP; avoid importing gamelog.
+SERIES_GAP_HOURS = 12
+# Untouched forward holdout; research must not tune or select on games from this date on.
+FORWARD_START = "2026-10-20"
+
+
+def series_ids(dates, teams, opponents):
+    """Series labels for unordered team pairs, returned in input order."""
+    dates = pd.DatetimeIndex(pd.to_datetime(dates))
+    teams, opponents = np.asarray(teams, dtype=str), np.asarray(opponents, dtype=str)
+    if not (len(dates) == len(teams) == len(opponents)):
+        raise ValueError("dates, teams and opponents must have equal length")
+    labels = np.empty(len(dates), dtype=object)
+    previous = {}
+    for i in np.argsort(dates, kind="stable"):
+        pair = tuple(sorted((teams[i], opponents[i])))
+        date = dates[i]
+        last, number = previous.get(pair, (date, 0))
+        if date - last > pd.Timedelta(hours=SERIES_GAP_HOURS):
+            number += 1
+        previous[pair] = (date, number)
+        labels[i] = f"{pair[0]}|{pair[1]}|{number}"
+    return labels.astype(str)
 
 
 def _as_matrix(diff):
@@ -117,14 +140,27 @@ def ece(p, won, bins=10):
     )
 
 
-def paired_bootstrap(loss_a, loss_b, n_resamples=2000, seed=0):
+def paired_bootstrap(loss_a, loss_b, n_resamples=2000, seed=0, clusters=None):
     """Mean of (loss_a - loss_b) and its 95% bootstrap interval.
 
     Both metrics are scored on the same games, so resampling games (not each
-    metric separately) gives a much tighter, fairer comparison.
+    metric separately) gives a much tighter, fairer comparison. Games in a
+    series share rating errors, so game-level intervals are too narrow; pass
+    series labels as `clusters` to resample whole series together.
     """
     diff = np.asarray(loss_a, dtype=float) - np.asarray(loss_b, dtype=float)
-    means = [diff[i].mean() for i in resamples(len(diff), n_resamples, seed)]
+    if clusters is None:
+        means = [diff[i].mean() for i in resamples(len(diff), n_resamples, seed)]
+    else:
+        if len(clusters) != len(diff):
+            raise ValueError("clusters and losses must have equal length")
+        codes, labels = pd.factorize(np.asarray(clusters))
+        sums = np.bincount(codes, weights=diff)
+        counts = np.bincount(codes)
+        means = [
+            sums[pick].sum() / counts[pick].sum()
+            for pick in resamples(len(labels), n_resamples, seed)
+        ]
     return (diff.mean(), *interval(means))
 
 

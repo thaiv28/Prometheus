@@ -456,3 +456,36 @@ def test_a_crash_exits_2_not_worse(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as stop:
         cb.main()
     assert stop.value.code == 2
+
+
+@pytest.mark.parametrize("both_metadata", [False, True])
+@pytest.mark.parametrize("forward", [False, True])
+def test_forecasts_series_metadata_and_forward_holdout(
+    monkeypatch, both_metadata, forward
+):
+    base = _forecasts("Domestic", "forge", n=6)
+    dates = ["2026-10-19"] * 4 + [
+        cb.evaluation.FORWARD_START if forward else "2026-10-19"
+    ] * 2
+    head = base.assign(series=["a", "a", "b", "b", "c", "c"], date=dates)
+    if both_metadata:
+        base = base.assign(series="old", date="2026-01-01")
+    calls = []
+    original = cb.paired_bootstrap
+
+    def capture(a, b, **kwargs):
+        calls.append(list(kwargs["clusters"]))
+        return original(a, b, **kwargs)
+
+    monkeypatch.setattr(cb, "paired_bootstrap", capture)
+    rows = cb.compare_forecasts(base, head, n_resamples=N)
+    assert calls[0] == head["series"].tolist()
+    assert len(rows) == (2 if forward else 1)
+    assert rows[0]["guarded"]
+    if forward:
+        assert calls[1] == ["c", "c"]
+        assert (
+            rows[1]["name"]
+            == f"forge log loss, forward from {cb.evaluation.FORWARD_START} (2 games)"
+        )
+        assert not rows[1]["guarded"]
