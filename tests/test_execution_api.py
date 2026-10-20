@@ -195,7 +195,7 @@ def test_stale_cached_or_undated_orderbook_rejected(change):
         api.resolve(alert(), NOW, config())
 
 
-def test_only_explicit_aliases_can_resolve_team_spelling():
+def test_a_different_name_needs_an_explicit_alias():
     api = PublicClient()
     api.event["markets"][0]["rules_primary"] = market("A")["rules_primary"].replace(
         "If A wins", "If Alpha wins"
@@ -205,6 +205,35 @@ def test_only_explicit_aliases_can_resolve_team_spelling():
         api.resolve(alert(), NOW, config())
     api.aliases = {"Alpha": "A"}
     assert len(api.resolve(alert(), NOW, config())) == 2
+
+
+def kalshi_spelling(api, names):
+    for item, (ours, theirs) in zip(api.event["markets"], names.items()):
+        item["yes_sub_title"] = theirs
+        item["rules_primary"] = (
+            item["rules_primary"]
+            .replace(f"If {ours} wins", f"If {theirs} wins")
+            .replace("A vs. B", " vs. ".join(names.values()))
+        )
+
+
+def test_case_and_accent_spellings_resolve_to_the_fixture_teams():
+    # Kalshi's Worlds 2026 rules, 2026-10-19.
+    api = PublicClient()
+    kalshi_spelling(api, {"A": "Dplus KIA", "B": "LOS"})
+    fixture = {**alert(), "teams": ["Dplus Kia", "LØS"], "backed_team": "Dplus Kia"}
+    routes = api.resolve(fixture, NOW, config())
+    assert {route["outcome_team"] for route in routes} == {"Dplus Kia", "LØS"}
+
+
+@pytest.mark.parametrize(
+    "teams", [["Dplus", "LØS"], ["Dplus Kia", "Dplus-Kia"]], ids=["near", "twins"]
+)
+def test_folding_needs_one_identical_fixture_team(teams):
+    api = PublicClient()
+    kalshi_spelling(api, {"A": "Dplus KIA", "B": "LOS"})
+    with pytest.raises(ValueError):
+        api.resolve({**alert(), "teams": teams, "backed_team": teams[0]}, NOW, config())
 
 
 def test_v2_write_cancel_and_read_paths_and_pagination_are_distinct():

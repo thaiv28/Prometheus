@@ -27,7 +27,6 @@ import math
 import os
 import re
 import time
-import unicodedata
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -35,6 +34,7 @@ from pathlib import Path
 import pandas as pd
 
 from prometheus import markets, regional_calibration
+from prometheus.alert_contract import fold
 from prometheus.elo import LatestElos, get_latest_elos
 from prometheus.forge import (
     CROSS_REGION_ELO_WEIGHT,
@@ -101,19 +101,6 @@ EVENT_LEAGUES = {
 # Leaguepedia names that don't fold to an Oracle's Elixir name. Keys are folded
 # (see `fold`); values are team names as they appear in `matches`.
 ALIASES_PATH = Path(__file__).with_name("team_aliases.json")
-
-
-# Letters that Unicode doesn't split into a base letter and an accent.
-_PLAIN_LETTERS = str.maketrans(
-    {"ø": "o", "æ": "ae", "œ": "oe", "ß": "ss", "đ": "d", "ł": "l", "þ": "th"}
-)
-
-
-def fold(name):
-    """Lower-case, accent-free, punctuation-free form of a team name."""
-    name = str(name).lower().translate(_PLAIN_LETTERS)
-    name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
-    return re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
 
 
 def strip_disambiguation(name):

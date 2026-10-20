@@ -20,6 +20,8 @@ import urllib.request
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+from prometheus.alert_contract import fold
+
 from .core import decimal, fee_bound, timestamp
 
 ROOTS = {
@@ -134,9 +136,13 @@ class Kalshi:
             seen.add(cursor)
         raise ValueError("pagination_limit_exceeded")
 
-    def canonical(self, name):
-        # Explicit aliases only, no fuzzy names or substring matching.
-        return self.aliases.get(name.strip(), name.strip())
+    def canonical(self, name, teams):
+        # An explicit alias, else the one fixture team whose folded name (case,
+        # accents, punctuation) is identical: "Dplus KIA" -> "Dplus Kia", "LOS"
+        # -> "LØS". No substring or similarity matching.
+        name = self.aliases.get(name.strip(), name.strip())
+        matches = [team for team in teams if fold(team) == fold(name)]
+        return matches[0] if len(matches) == 1 else name
 
     def resolve(self, alert, now, config):
         from prometheus import live_map
@@ -216,8 +222,11 @@ class Kalshi:
                 or decimal(market.get("notional_value_dollars", "0")) != 1
             ):
                 raise ValueError("unsupported_or_ambiguous_market")
-            teams = {self.canonical(rules[name]) for name in ("team1", "team2")}
-            side = self.canonical(rules["side"])
+            teams = {
+                self.canonical(rules[name], alert["teams"])
+                for name in ("team1", "team2")
+            }
+            side = self.canonical(rules["side"], alert["teams"])
             when = dt.datetime.strptime(
                 f"{rules['day']} {rules['time']}", "%b %d, %Y %I:%M %p"
             ).replace(tzinfo=ZoneInfo("America/New_York"))
@@ -226,7 +235,7 @@ class Kalshi:
             # Exact timed fixture match; reschedules with changed rules fail safe.
             if when.astimezone(dt.UTC) != timestamp(alert["start"]):
                 raise ValueError("fixture_start_mismatch")
-            if self.canonical(market.get("yes_sub_title", "")) != side:
+            if self.canonical(market.get("yes_sub_title", ""), alert["teams"]) != side:
                 raise ValueError("outcome_label_mismatch")
             parsed.append((market, side))
         if {side for _, side in parsed} != set(alert["teams"]):
@@ -248,7 +257,7 @@ class Kalshi:
             for item in parents:
                 rule = RULES.match(item.get("rules_primary", ""))
                 if not rule or {
-                    self.canonical(rule[n]) for n in ("team1", "team2")
+                    self.canonical(rule[n], alert["teams"]) for n in ("team1", "team2")
                 } != set(alert["teams"]):
                     raise ValueError("live_series_identity_mismatch")
                 when = dt.datetime.strptime(
@@ -256,7 +265,7 @@ class Kalshi:
                 ).replace(tzinfo=ZoneInfo("America/New_York"))
                 if when.astimezone(dt.UTC) != timestamp(alert["start"]):
                     raise ValueError("live_series_identity_mismatch")
-                parent_sides.add(self.canonical(rule["side"]))
+                parent_sides.add(self.canonical(rule["side"], alert["teams"]))
             if parent_sides != set(alert["teams"]):
                 raise ValueError("live_series_identity_mismatch")
         self._fixture_tickers = {market["ticker"] for market, _ in parsed}
