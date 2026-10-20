@@ -410,22 +410,23 @@ def warn_missing_results(log, data_through, now=None):
 
 
 def write_kalshi_alert(log, coverage, team_slugs, path=None):
-    """Record this build's alerts in the log and write the day's issue to `path`
-    (`alerts.update`). Runs only on fresh prices (this build's fetch worked) and
-    unless KALSHI_ALERTS=0. A stale file from an earlier run is always removed,
-    so a day without alerts posts nothing. Returns the issue dict or None."""
+    """Save candidates on fresh prices; optionally record public alert history.
+
+    Remove stale local alert artifacts and write today's payload when enabled.
+    Public workflows no longer post this payload to GitHub.
+    """
     path = path or site_config.KALSHI_ALERT
     if os.path.exists(path):
         os.remove(path)
-    if (
-        os.environ.get("KALSHI_ALERTS", "1") == "0"
-        or not coverage
-        or not coverage.get("priced")
-    ):
+    if not coverage or not coverage.get("priced"):
         return None
     now = datetime.datetime.strptime(coverage["at"], "%Y-%m-%dT%H:%MZ").replace(
         tzinfo=datetime.UTC
     )
+    alerts.mark_candidates(log, now)
+    if os.environ.get("KALSHI_ALERTS", "1") == "0":
+        schedule.save_log(log, site_config.PREDICTIONS_LOG)
+        return None
     alert = alerts.update(log, now, coverage.get("data_through"), slugify, team_slugs)
     schedule.save_log(log, site_config.PREDICTIONS_LOG)
     if alert is None:

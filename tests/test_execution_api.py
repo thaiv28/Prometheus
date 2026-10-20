@@ -472,3 +472,44 @@ def test_announced_fee_change_before_match_cannot_exceed_reserve_bound(level):
         ]
     with pytest.raises(ValueError, match="fee_bound_exceeded"):
         api.resolve(alert(), NOW, config())
+
+
+def test_open_markets_parses_dollar_quotes_and_paginates():
+    from prometheus.execution.kalshi import PublicKalshi
+
+    api = object.__new__(Kalshi)
+    calls = []
+
+    def request(method, path, body=None, **query):
+        calls.append((method, path, query))
+        return {
+            "markets": [
+                {
+                    "event_ticker": "E",
+                    "ticker": "A" if not query["cursor"] else "B",
+                    "yes_sub_title": "A",
+                    "yes_bid_dollars": ".40",
+                    "yes_ask_dollars": None,
+                }
+            ],
+            "cursor": "next" if not query["cursor"] else "",
+        }
+
+    api.request = request
+    quotes = api.open_markets()
+    assert len(quotes["E"]) == 2
+    assert quotes["E"][0] == {
+        "ticker": "A",
+        "yes_sub_title": "A",
+        "yes_bid": Decimal(".40"),
+        "yes_ask": None,
+    }
+    assert calls[0] == (
+        "GET",
+        "/markets",
+        {"limit": 100, "cursor": None, "series_ticker": "KXLOLGAME", "status": "open"},
+    )
+    assert calls[1][2]["cursor"] == "next"
+    assert PublicKalshi().headers("GET", "/markets?status=open")
+    with pytest.raises(ValueError):
+        PublicKalshi().headers("GET", "/markets-evil")

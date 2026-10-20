@@ -1,10 +1,11 @@
 """Private scheduled Lambda entry point. No site build imports this module."""
 
+import datetime as dt
 import json
 import os
 from pathlib import Path
 
-from prometheus.alert_contract import saved_alerts
+from prometheus.alert_contract import saved_candidates
 
 ALIASES_PATH = Path(__file__).with_name("market_aliases.json")
 
@@ -25,6 +26,23 @@ def handler(event, context, *, clients=None):
     from prometheus.execution.core import Config, run
     from prometheus.execution.kalshi import Kalshi
     from prometheus.execution.ledger import DynamoLedger
+    from prometheus.execution.notify import github_issue
+
+    notify = None
+    if secret_id := os.environ.get("GITHUB_ISSUES_SECRET_ID"):
+
+        def notify(row):
+            try:
+                token = clients["secretsmanager"].get_secret_value(SecretId=secret_id)[
+                    "SecretString"
+                ]
+                return github_issue(
+                    token,
+                    os.environ.get("GITHUB_ISSUES_REPO", "thaiv28/prometheus-trades"),
+                    row,
+                )
+            except Exception:
+                return False
 
     def configuration():
         raw = clients["ssm"].get_parameter(
@@ -66,12 +84,14 @@ def handler(event, context, *, clients=None):
                 Bucket=os.environ["PREDICTIONS_BUCKET"],
                 Key=os.environ["PREDICTIONS_KEY"],
             )
-            proposals = saved_alerts(json.loads(source["Body"].read()))
+            proposals = saved_candidates(
+                json.loads(source["Body"].read()), dt.datetime.now(dt.UTC)
+            )
         except Exception:
             # Source outages must not prevent cancellation/fill reconciliation.
             source_failed = True
     ledger = DynamoLedger(os.environ["EXECUTION_TABLE"], clients["dynamodb"])
-    result = run(proposals, configuration, ledger, api)
+    result = run(proposals, configuration, ledger, api, notify=notify)
     # Only aggregate counters reach function logs/response. Detailed account,
     # intent, fill, fee and skip records stay in the private DynamoDB ledger.
     if source_failed:

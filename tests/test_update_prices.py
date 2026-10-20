@@ -61,6 +61,7 @@ def test_run_prices_the_log_writes_site_files_and_the_alert(tmp_path):
     )
     assert summary["priced"] == 1 and summary["alert"]["new"] == 1
     saved = json.loads(log_path.read_text())["matches"][0]
+    assert "execution_candidate" in saved
     assert (
         saved["market"]["ask2"] == 0.36 and saved["alert"]["side"] == 2
     )  # backs Shopify Rebellion: 43% vs 36¢
@@ -89,3 +90,37 @@ def test_run_without_markets_writes_no_alert(tmp_path):
         == 0
     )
     assert not alert_path.exists()
+
+
+def test_candidates_saved_with_alerts_disabled(tmp_path, monkeypatch):
+    monkeypatch.setenv("KALSHI_ALERTS", "0")
+    log_path = tmp_path / "predictions.json"
+    entry = {
+        "match_id": "m",
+        "start": "2026-10-07T11:00Z",
+        "matched": True,
+        "method": "forge",
+        "p_series": 0.4,
+        "ours1": "FlyQuest",
+        "ours2": "Shopify Rebellion",
+        "home1": "LCS",
+        "home2": "LCS",
+        "event": "Demacia Cup",
+        "league": "DCup",
+        "data_through": "2026-10-05",
+    }
+    log_path.write_text(json.dumps({"matches": [entry]}))
+    summary = update_prices.run(
+        str(log_path),
+        str(tmp_path / "site"),
+        str(tmp_path / "alert.json"),
+        now=NOW,
+        fetch=lambda: [
+            _market("Shopify Rebellion", 0.35, 0.36),
+            _market("FlyQuest", 0.64, 0.65),
+        ],
+        pages={},
+    )
+    saved = json.loads(log_path.read_text())["matches"][0]
+    assert summary["priced"] == 1 and summary["alert"] is None
+    assert "execution_candidate" in saved and "alert" not in saved

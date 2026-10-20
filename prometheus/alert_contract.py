@@ -1,16 +1,21 @@
-"""Versioned immutable alert identity and a stdlib-only execution adapter.
+"""Private forecast candidates and immutable legacy alert execution contracts.
 
-Only authoritative posted alert records qualify here. This module selects no
-trades and never changes saved terms. Execution/account data belongs elsewhere.
+Adapters select no trades; execution/account data belongs elsewhere.
 """
 
+import datetime as dt
 import hashlib
 import json
 import re
 import unicodedata
 from decimal import Decimal, InvalidOperation
 
+from prometheus import market_blend
+
 SCHEMA_VERSION = 1
+CANDIDATE_KIND = "candidate-v1"
+CANDIDATE_KEY = "execution_candidate"
+CANDIDATE_MAX_AGE = dt.timedelta(hours=3)
 POSTED_KEYS = ("alert", "international_paper_alert")
 GROUPS = frozenset(
     (
@@ -145,5 +150,129 @@ def saved_alerts(document):
                 }
             )
         except (KeyError, TypeError, ValueError, InvalidOperation):
+            continue
+    return out
+
+
+def candidate(entry, now_s, group, international):
+    """Pin current forecast inputs independently of public alert selection."""
+    teams = sorted(entry.get(f"ours{i}") or entry[f"team{i}"] for i in (1, 2))
+    first = entry.get("ours1") or entry["team1"]
+    second = entry.get("ours2") or entry["team2"]
+    return {
+        "kind": CANDIDATE_KIND,
+        "schema_version": SCHEMA_VERSION,
+        "at": now_s,
+        "fixture_id": _digest(
+            [teams, entry["start"], entry.get("league"), entry.get("event")]
+        ),
+        "event_ticker": entry["market"]["ticker"],
+        "teams": teams,
+        "team_homes": {
+            entry.get(f"ours{i}") or entry[f"team{i}"]: entry.get(f"home{i}")
+            for i in (1, 2)
+        },
+        "international": international,
+        "group": group,
+        "start": entry["start"],
+        "raw": {
+            first: round(entry["p_series"], 6),
+            second: round(1 - entry["p_series"], 6),
+        },
+        "provenance": {
+            key: entry.get(key)
+            for key in (
+                "calibration",
+                "method",
+                "p_game",
+                "p_series",
+                "home1",
+                "home2",
+                "data_through",
+                "start",
+            )
+        },
+    }
+
+
+def saved_candidates(document, now):
+    """Two backed-side proposals from fresh private forecast records."""
+    snap = market_blend.snapshot(now)
+    if snap is None:
+        return []
+    entries = document.get("matches", []) if isinstance(document, dict) else document
+    if isinstance(entries, dict):
+        entries = list(entries.values())
+    if not isinstance(entries, (list, tuple)):
+        return []
+    out = []
+    for entry in entries:
+        try:
+            saved = entry[CANDIDATE_KEY]
+            teams = saved["teams"]
+            when = dt.datetime.fromisoformat(saved["at"].replace("Z", "+00:00"))
+            start = dt.datetime.fromisoformat(saved["start"].replace("Z", "+00:00"))
+            raw = saved["raw"]
+            if (
+                saved["kind"] != CANDIDATE_KIND
+                or saved["schema_version"] != SCHEMA_VERSION
+                or saved["group"] not in TRADE_GROUPS
+                or not isinstance(teams, list)
+                or len(teams) != 2
+                or not all(isinstance(t, str) and t for t in teams)
+                or teams[0] == teams[1]
+                or not all(
+                    isinstance(saved[k], str) and saved[k]
+                    for k in ("fixture_id", "event_ticker")
+                )
+                or not isinstance(saved["international"], bool)
+                or not isinstance(saved["team_homes"], dict)
+                or not isinstance(saved["provenance"], dict)
+                or start <= now
+                or not dt.timedelta(0) <= now - when <= CANDIDATE_MAX_AGE
+                or not all(market_blend.valid_probability(raw[t]) for t in teams)
+            ):
+                continue
+            for backed in teams:
+                out.append(
+                    {
+                        "schema_version": SCHEMA_VERSION,
+                        "kind": CANDIDATE_KIND,
+                        "alert_id": _digest(
+                            [saved["fixture_id"], CANDIDATE_KIND, backed]
+                        ),
+                        **{
+                            key: saved[key]
+                            for key in (
+                                "fixture_id",
+                                "start",
+                                "teams",
+                                "team_homes",
+                                "international",
+                                "event_ticker",
+                                "group",
+                                "provenance",
+                            )
+                        },
+                        "alert_at": saved["at"],
+                        "backed_team": backed,
+                        "probability": str(raw[backed]),
+                        "trading": {
+                            "version": market_blend.VERSION,
+                            "policy": market_blend.POLICY,
+                            "model": snap["available_from"],
+                            **{
+                                key: snap[key]
+                                for key in (
+                                    "trained_through",
+                                    "market_slope",
+                                    "gap_slope",
+                                )
+                            },
+                            "raw_probability": raw[backed],
+                        },
+                    }
+                )
+        except (KeyError, TypeError, ValueError, AttributeError, InvalidOperation):
             continue
     return out

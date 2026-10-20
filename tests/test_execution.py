@@ -306,7 +306,13 @@ def test_default_off_no_credentials_no_exchange_calls():
         forbidden,
         NOW,
     )
-    assert result == {"submitted": 0, "skipped": 0, "reconciled": 0, "errors": 0}
+    assert result == {
+        "submitted": 0,
+        "skipped": 0,
+        "reconciled": 0,
+        "errors": 0,
+        "filtered": 0,
+    }
     assert client.data == {}
 
 
@@ -343,7 +349,7 @@ def test_stale_future_backlog_invalid_alerts_do_not_submit(change):
     assert execute([saved(**change)])["skipped"] == 1
     assert not api.calls
     assert not ledger.pending()
-    assert any("SKIP#" in key[1] for key in client.data)
+    assert not client.data  # Validation failures never reach full resolution.
 
 
 def test_intent_precedes_submission_and_v2_body():
@@ -743,3 +749,187 @@ def test_midnight_between_reservation_and_post_aborts_daily_spending():
     assert result["submitted"] == 0 and result["skipped"] == 1
     assert not api.calls and held(ledger) == 0
     assert ledger.get("demo", "DAY#2026-10-15")["committed"] == 0
+
+
+def candidate_api(api):
+    api.canonical = lambda name, teams: name
+    api.open_markets = lambda: {
+        "KXLOLGAME-F": [
+            {"yes_sub_title": "A", "yes_bid": ".58", "yes_ask": ".60"},
+            {"yes_sub_title": "B", "yes_bid": ".40", "yes_ask": ".42"},
+        ]
+    }
+    api.routes[0]["market_mid"] = ".59"
+
+
+def candidate_proposal(**changes):
+    from prometheus.alert_contract import CANDIDATE_KIND
+
+    return saved(
+        **{
+            "kind": CANDIDATE_KIND,
+            "trading": market_blend.estimate(0.99, 0.59, NOW),
+            **changes,
+        }
+    )
+
+
+def test_candidate_current_price_can_exceed_old_ask_activation_and_age():
+    _, api, ledger, execute = harness()
+    candidate_api(api)
+    proposal = candidate_proposal(original_ask=".10", alert_at="2020-01-01T00:00Z")
+    assert execute([proposal])["submitted"] == 1
+    assert ledger.pending()[0]["request"]["price"] == "0.6000"
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [{"start": NOW.isoformat()}, {"probability": "0"}, {"group": "other-cross-league"}],
+)
+def test_invalid_candidate_filtered_before_bulk_without_ledger_write(changes):
+    client, api, _, execute = harness()
+    api.open_markets = lambda: pytest.fail("invalid candidate must not fetch quotes")
+    result = execute([candidate_proposal(**changes)])
+    assert result["filtered"] == 1 and result["submitted"] == 0
+    assert not client.data and not api.calls
+
+
+def test_prefilter_keeps_positive_side_and_rejects_bad_books():
+    from prometheus.execution.core import prefilter
+
+    _, api, _, _ = harness()
+    candidate_api(api)
+    good = candidate_proposal()
+    bad = candidate_proposal(
+        backed_team="B", trading=market_blend.estimate(0.01, 0.41, NOW)
+    )
+    proposals = [good, bad, saved()]
+    config = Config.parse(settings())
+    assert prefilter(proposals, api.open_markets(), NOW, config, api.canonical) == [
+        good,
+        proposals[2],
+    ]
+    for books in (
+        [],
+        api.open_markets()["KXLOLGAME-F"][:1],
+        [
+            {"yes_sub_title": "A", "yes_bid": ".1", "yes_ask": ".6"},
+            {"yes_sub_title": "B", "yes_bid": ".4", "yes_ask": ".42"},
+        ],
+        [
+            {"yes_sub_title": "C", "yes_bid": ".58", "yes_ask": ".6"},
+            {"yes_sub_title": "B", "yes_bid": ".4", "yes_ask": ".42"},
+        ],
+    ):
+        assert (
+            prefilter([good], {"KXLOLGAME-F": books}, NOW, config, api.canonical) == []
+        )
+
+
+def test_candidate_bulk_failure_submits_nothing_and_writes_nothing():
+    client, api, _, execute = harness()
+
+    def failed():
+        raise TimeoutError
+
+    api.open_markets = failed
+    result = execute([candidate_proposal()])
+    assert result["errors"] == 1 and result["filtered"] == 1
+    assert not api.calls and not client.data
+
+
+def test_filtered_edge_and_duplicate_fixture_have_no_skip_writes():
+    client, api, _, execute = harness()
+    candidate_api(api)
+    assert (
+        execute([candidate_proposal(trading=market_blend.estimate(0.1, 0.59, NOW))])[
+            "filtered"
+        ]
+        == 1
+    )
+    assert not client.data
+    assert execute([saved()])["submitted"] == 1
+    before = copy.deepcopy(client.data)
+    result = run(
+        [candidate_proposal()],
+        lambda: settings(),
+        DynamoLedger("private", client),
+        lambda env: api,
+        NOW,
+        reconcile_existing=False,
+    )
+    assert result["filtered"] == 1 and client.data == before
+
+
+@pytest.mark.parametrize("outcome", [True, False, "raise"])
+def test_fill_notification_success_failure_and_exception_retries(outcome):
+    _, api, ledger, execute = harness()
+    execute([saved()])
+    fill(api)
+    issues = []
+
+    def notify(row):
+        issues.append(copy.deepcopy(row))
+        if outcome == "raise":
+            raise RuntimeError("private notifier failure")
+        return outcome
+
+    for _ in range(2):
+        result = run(
+            [], lambda: settings(), ledger, lambda env: api, NOW, notify=notify
+        )
+        assert result["errors"] == 0
+    row = ledger.pending()[0]
+    assert bool(row.get("notified")) == (outcome is True)
+    assert len(issues) == (1 if outcome is True else 2)
+    assert issues[0]["actual_cost"] == "1.77" and isinstance(issues[0]["fills"], list)
+    assert row["revision"] == (4 if outcome is True else 3) + 1
+
+
+def test_unfilled_and_no_notifier_leave_notification_unmarked():
+    _, api, ledger, execute = harness()
+    execute([saved()])
+    result = run(
+        [],
+        lambda: settings(),
+        ledger,
+        lambda env: api,
+        NOW,
+        notify=lambda row: pytest.fail("zero fills cannot notify"),
+    )
+    assert result["reconciled"] == 1
+    assert "notified" not in json.loads(ledger.get("demo", "INTENT#f")["payload"])
+    _, api, ledger, execute = harness()
+    execute([saved()])
+    fill(api)
+    execute([])
+    assert "notified" not in ledger.pending()[0]
+
+
+def test_bulk_quotes_fetched_once_and_only_good_side_reaches_resolve():
+    client, api, _, execute = harness()
+    candidate_api(api)
+    fetch = api.open_markets
+    resolve = api.resolve
+    fetched, resolved = [], []
+
+    def bulk():
+        fetched.append(True)
+        return fetch()
+
+    def full(alert, now, config):
+        resolved.append(alert["backed_team"])
+        return resolve(alert, now, config)
+
+    api.open_markets, api.resolve = bulk, full
+    result = execute(
+        [
+            candidate_proposal(),
+            candidate_proposal(
+                backed_team="B", trading=market_blend.estimate(0.01, 0.41, NOW)
+            ),
+        ]
+    )
+    assert result["submitted"] == 1 and result["filtered"] == 1
+    assert fetched == [True] and resolved == ["A"]
+    assert not any("SKIP#" in key[1] for key in client.data)

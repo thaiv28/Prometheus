@@ -64,6 +64,37 @@ def select(log, now, edge=EDGE):
     return sorted(out, key=lambda a: (a["entry"]["start"], a["entry"]["match_id"]))
 
 
+def mark_candidates(log, now):
+    """Refresh eligible forecasts, regardless of edge, lead or saved quote time."""
+    now_s = now.strftime("%Y-%m-%dT%H:%MZ")
+    count = 0
+    for entry in log.values():
+        if entry.get("winner") in (1, 2) or _start(entry) <= now:
+            continue
+        group = forecast_groups.classify(entry)
+        p = entry.get("p_series")
+        if (
+            entry.get("matched")
+            and entry.get("method") in ("forge", "elo", "elo-cross")
+            and group in alert_contract.TRADE_GROUPS
+            and isinstance(p, (int, float))
+            and math.isfinite(p)
+            and 0 < p < 1
+            and (entry.get("market") or {}).get("ticker")
+            and not _stale(log, entry, now)
+        ):
+            try:
+                entry[alert_contract.CANDIDATE_KEY] = alert_contract.candidate(
+                    entry, now_s, group, forecast_groups.international(entry)
+                )
+                count += 1
+                continue
+            except (KeyError, TypeError):
+                pass  # A malformed entry is never traded; the build carries on.
+        entry.pop(alert_contract.CANDIDATE_KEY, None)
+    return count
+
+
 def record(alerts, now, key="alert"):
     """Store each alert on its log entry under `key`, unless the match already has one."""
     now_s = now.strftime("%Y-%m-%dT%H:%MZ")
