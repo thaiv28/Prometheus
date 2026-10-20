@@ -15,6 +15,14 @@ STARTING_ELO = 1500
 # Share of a team's Elo change in a cross-league international game that also moves
 # its home league's offset (and so every team in that league). Tuned in the backtest.
 LEAGUE_SHARE = 0.5
+# Non-international cross-league link share; tuned through 2021 by scripts/research/elo_offsets.py.
+LINK_SHARE = 0.5
+# Keep link offsets out of player conversion; tuned through 2021 by scripts/research/elo_offsets.py.
+LINK_MODE = "team"
+# Compensated mover evidence share; tuned through 2021 by scripts/research/elo_offsets.py.
+TRANSFER_SHARE = 0.02
+# Destination appearances supplying transfer evidence; tuned through 2021 by scripts/research/elo_offsets.py.
+TRANSFER_GAMES = 20
 # A new player starts at the average of players whose last game in the league was
 # within this many days.
 ACTIVE_DAYS = 365
@@ -159,7 +167,23 @@ class EloState:
         player_rd_information=PLAYER_RD_INFORMATION,
         other_league_slope=OTHER_LEAGUE_SLOPE,
         has_league=True,
+        link_share=LINK_SHARE,
+        link_mode=LINK_MODE,
+        transfer_share=TRANSFER_SHARE,
+        transfer_games=TRANSFER_GAMES,
     ):
+        if link_mode not in ("plain", "team"):
+            raise ValueError("link_mode must be plain or team")
+        if not all(math.isfinite(x) and x >= 0 for x in (link_share, transfer_share)):
+            raise ValueError("offset shares must be finite and nonnegative")
+        if not isinstance(transfer_games, int) or transfer_games < 0:
+            raise ValueError("transfer_games must be a nonnegative integer")
+        self.link_share = link_share
+        self.link_mode = link_mode
+        self.transfer_share = transfer_share
+        self.transfer_games = transfer_games
+        self.link_offset = {}
+        self.transfers = {}
         if player_rd is not None:
             rd_new, rd_min, rd_growth = player_rd
             if not all(math.isfinite(x) for x in player_rd) or not (
@@ -251,6 +275,18 @@ class EloState:
                 )
                 player_league[player] = league
             elif player_league[player] != league:
+                previous = player_league[player]
+                self.transfers.pop(player, None)
+                if (
+                    self.transfer_share
+                    and self.transfer_games
+                    and domestic
+                    and previous is not None
+                    and league is not None
+                    and previous not in INTERNATIONAL_LEAGUES
+                    and league not in INTERNATIONAL_LEAGUES
+                ):
+                    self.transfers[player] = (previous, league, self.transfer_games)
                 # Moving league (a transfer, promotion, a cup) keeps the player's rating.
                 own[player] += (
                     league_offset[player_league[player]] - league_offset[league]
@@ -286,16 +322,17 @@ class EloState:
                 seat(player, team_league, date)
             sides.append((team, team_league, roster))
 
+        def offset(league):
+            return self.rating_offset(league)
+
         def rating(side):
             _, team_league, roster = side
-            offset = league_offset[team_league] if team_league is not None else 0.0
-            return sum(eff(p) for p in roster) / len(roster) + offset
+            return sum(eff(p) for p in roster) / len(roster) + offset(team_league)
 
         pre = [rating(side) for side in sides]
         if player_records:
             player_pre = {
-                p: eff(p)
-                + (league_offset[team_league] if team_league is not None else 0.0)
+                p: eff(p) + offset(team_league)
                 for _, team_league, roster in sides
                 for p in roster
             }
@@ -313,6 +350,27 @@ class EloState:
             result=row.result,
             **slope_args,
         )
+        moved_offsets = {}
+
+        def update_player(player, team_league, change):
+            own[player] += change
+            played[player] += 1
+            transfer = self.transfers.get(player)
+            if transfer is not None and team_league == transfer[1]:
+                source, destination, left = transfer
+                # A mover gaining in B means B is weaker relative to A than
+                # the offsets say. Use the player's scaled change, not the team's.
+                adjustment = self.transfer_share * change
+                league_offset[source] += adjustment
+                league_offset[destination] -= adjustment
+                # Cancel this evidence move in the mover's own effective rating.
+                own[player] += adjustment
+                moved_offsets[source] = moved_offsets[destination] = None
+                if left == 1:
+                    del self.transfers[player]
+                else:
+                    self.transfers[player] = (source, destination, left - 1)
+
         if player_rd is not None:
             weights = []
             # Information on the same expected-score slope the update used.
@@ -337,37 +395,47 @@ class EloState:
                         rd_min**2, 1 / (1 / variance + information)
                     )
                 weights.append(side_weights)
-            for (_, _, roster), change, side_weights in zip(
+            for (_, team_league, roster), change, side_weights in zip(
                 sides, (elo_change, -elo_change), weights
             ):
                 for player in roster:
-                    own[player] += change * side_weights[player]
-                    played[player] += 1
+                    update_player(player, team_league, change * side_weights[player])
         else:
-            for (_, _, roster), change in zip(sides, (elo_change, -elo_change)):
+            for (_, team_league, roster), change in zip(
+                sides, (elo_change, -elo_change)
+            ):
                 for player in roster:
-                    own[player] += change
-                    played[player] += 1
+                    update_player(player, team_league, change)
 
         team_league, opponent_league = sides[0][1], sides[1][1]
         if (
             has_league
-            and not domestic
             and team_league is not None
             and opponent_league is not None
             and team_league != opponent_league
         ):
-            league_offset[team_league] += league_share * elo_change
-            league_offset[opponent_league] -= league_share * elo_change
-            for moved in (team_league, opponent_league):
-                offset_records.append(
-                    {
-                        "gameid": row.gameid,
-                        "date": getattr(row, "date", None),
-                        "league": moved,
-                        "league_offset": league_offset[moved],
-                    }
+            if not domestic:
+                league_offset[team_league] += league_share * elo_change
+                league_offset[opponent_league] -= league_share * elo_change
+                moved_offsets[team_league] = moved_offsets[opponent_league] = None
+            elif self.link_share:
+                target = self.link_offset if self.link_mode == "team" else league_offset
+                target[team_league] = (
+                    target.get(team_league, 0.0) + self.link_share * elo_change
                 )
+                target[opponent_league] = (
+                    target.get(opponent_league, 0.0) - self.link_share * elo_change
+                )
+                moved_offsets[team_league] = moved_offsets[opponent_league] = None
+        for moved in moved_offsets:
+            offset_records.append(
+                {
+                    "gameid": row.gameid,
+                    "date": getattr(row, "date", None),
+                    "league": moved,
+                    "league_offset": offset(moved),
+                }
+            )
 
         for side, before in zip(sides, pre):
             team, team_league, roster = side
@@ -384,7 +452,7 @@ class EloState:
                 last_seen[player] = (date, team_league)
                 members[team_league].add(player)
             after = rating(side)
-            offset_now = league_offset[team_league] if team_league is not None else 0.0
+            offset_now = offset(team_league)
             if player_records and roster != (("team", team),):
                 for player in roster:
                     player_rows.append(
@@ -400,15 +468,7 @@ class EloState:
                     )
             main = main_roster[team]
             # Each player's own rating plus the offset of the league they sit in now.
-            main_elo = sum(
-                eff(p)
-                + (
-                    league_offset[player_league[p]]
-                    if player_league[p] is not None
-                    else 0.0
-                )
-                for p in main
-            ) / len(main)
+            main_elo = sum(eff(p) + offset(player_league[p]) for p in main) / len(main)
             elo_records.append(
                 {
                     "gameid": row.gameid,
@@ -417,9 +477,7 @@ class EloState:
                     "post_match_elo": after,
                     "elo_change": after - before,
                     "home_league": team_league,
-                    "league_offset": league_offset[team_league]
-                    if team_league is not None
-                    else 0.0,
+                    "league_offset": offset(team_league),
                     "main_elo": main_elo,
                 }
             )
@@ -427,6 +485,16 @@ class EloState:
         for team in (row.teamid, row.opponent_teamid):
             self.team_last[team] = date
         return elo_records, offset_records, player_rows
+
+    def rating_offset(self, league):
+        """Offsets entering ratings/history, including team links in player rows.
+
+        Team links deliberately never enter seat()'s player league conversion.
+        """
+        if league is None:
+            return 0.0
+        value = self.league_offset[league]
+        return value + self.link_offset.get(league, 0.0) if self.link_share else value
 
     def player_rating(self, player):
         """Effective player rating with the offset of their current league."""
@@ -440,11 +508,7 @@ class EloState:
             else 0.0
         )
         league = self.player_league[player]
-        return (
-            self.own[player]
-            - discount
-            + (self.league_offset[league] if league is not None else 0.0)
-        )
+        return self.own[player] - discount + self.rating_offset(league)
 
     def team_rating(self, team):
         """Current effective main-roster rating, including current league offsets."""
@@ -463,13 +527,7 @@ class EloState:
             return self.own[p] - discount
 
         return sum(
-            eff(p)
-            + (
-                self.league_offset[self.player_league[p]]
-                if self.player_league[p] is not None
-                else 0.0
-            )
-            for p in roster
+            eff(p) + self.rating_offset(self.player_league[p]) for p in roster
         ) / len(roster)
 
     def to_dict(self):
@@ -499,6 +557,10 @@ class EloState:
             "player_rd_information",
             "other_league_slope",
             "has_league",
+            "link_share",
+            "link_mode",
+            "transfer_share",
+            "transfer_games",
         )
         mutable = (
             "own",
@@ -510,6 +572,8 @@ class EloState:
             "last_roster",
             "main_roster",
             "league_offset",
+            "link_offset",
+            "transfers",
             "played",
             "rd_variance",
             "team_last",
@@ -560,6 +624,10 @@ def compute_elo_records(
     player_rd: tuple[float, float, float] | None = PLAYER_RD,
     player_rd_information: float = PLAYER_RD_INFORMATION,
     other_league_slope: float | None = OTHER_LEAGUE_SLOPE,
+    link_share: float = LINK_SHARE,
+    link_mode: str = LINK_MODE,
+    transfer_share: float = TRANSFER_SHARE,
+    transfer_games: int = TRANSFER_GAMES,
 ) -> tuple[pd.DataFrame, ...]:
     """Replay ordered games into team and league-offset frames, plus optional players.
 
@@ -584,6 +652,11 @@ def compute_elo_records(
     non-major domestic events; None disables it. Cross-home international games
     also move both league offsets by league_share of the unscaled team change.
 
+    Non-international cross-league games learn team-only link offsets by default,
+    excluded from player conversion. Transfers supply offset evidence from scaled
+    updates over transfer_games destination appearances, compensating each mover's
+    own rating for their evidence offset move.
+
     games contains gameid, teamid, opponent_teamid, gamelength (seconds), result,
     and optional league/date. rosters maps (gameid, teamid) to starter IDs.
     Team records contain pre/post ratings, elo_change, home_league, league_offset
@@ -604,6 +677,10 @@ def compute_elo_records(
         player_rd_information=player_rd_information,
         other_league_slope=other_league_slope,
         has_league="league" in games.columns,
+        link_share=link_share,
+        link_mode=link_mode,
+        transfer_share=transfer_share,
+        transfer_games=transfer_games,
     )
     leagues = games["league"] if state.has_league else [None] * len(games)
     dates = (
