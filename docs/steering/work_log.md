@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-20 — Executor accepts Kalshi starts within two hours
+
+After the name fix, Dplus–G2 and T1–LØS failed `fixture_start_mismatch`: Kalshi lists both an hour before Leaguepedia, as for all seven Worlds Oct 23 fixtures and ~100 fixtures in the log. `kalshi.START_TOLERANCE` (2 h) now bounds the gap for fixtures and live-map parent series; routes carry `first_start` (the earlier start) and `plan_order` drops pregame routes at or after it, including the pre-POST recheck; fee changes are covered through our start plus 2 h. Checks: execution tests (four new/changed fail without the change), full pytest, ruff, package build; read-only public resolve of the three current alerts (Dplus–G2, T1–LØS now resolve, cutoff 20:00Z/22:00Z). Limit: a genuine reschedule under two hours is treated as the same fixture.
+
 ## 2026-10-20 — Executor matches Kalshi team names by fold
 
 Live ledger: Worlds alerts were skipped as `fixture_team_mismatch` because Kalshi writes "Dplus KIA" and "LOS" while the executor took only exact names or explicit aliases; alerts already fold names, so issues posted. `alert_contract.fold` (moved from `schedule.py`, which re-imports it) now ships in the Lambda; `Kalshi.canonical` maps a name to the one fixture team with an identical fold. Checks: new resolve tests (fail without the fix), execution/schedule tests, full pytest, ruff, package build; read-only public resolve of the real Dplus–G2, T1–LØS and Galions–Solary events. Limit: Dplus–G2 and T1–LØS now fail `fixture_start_mismatch`: all seven Worlds Oct 23 fixtures have Leaguepedia starts differing from Kalshi's (~100 such fixtures in the log overall); not changed here.

@@ -103,6 +103,7 @@ def test_routes_resolve_backed_yes_and_opponent_no_from_actual_books():
             "limit": "0.6000",
             "quantity": "3",
             "at": NOW.isoformat(),
+            "first_start": "2026-10-16T12:00:00+00:00",
         },
         {
             "ticker": "KXLOLGAME-F-B",
@@ -112,6 +113,7 @@ def test_routes_resolve_backed_yes_and_opponent_no_from_actual_books():
             "limit": "0.7000",
             "quantity": "5",
             "at": NOW.isoformat(),
+            "first_start": "2026-10-16T12:00:00+00:00",
         },
     ]
     assert [call[1] for call in api.calls][-2:] == [
@@ -157,7 +159,7 @@ def test_blended_routes_reject_missing_or_wide_market_input():
             rules_primary=market("A")["rules_primary"].replace("A vs. B", "A vs. C")
         ),
         lambda api: api.event["markets"][0].update(
-            rules_primary=market("A")["rules_primary"].replace("8:00 AM", "9:00 AM")
+            rules_primary=market("A")["rules_primary"].replace("8:00 AM", "10:01 AM")
         ),
         lambda api: api.event["markets"][0].update(
             rules_primary=market("A")["rules_primary"].replace(" at 8:00 AM EDT", "")
@@ -224,6 +226,15 @@ def test_case_and_accent_spellings_resolve_to_the_fixture_teams():
     fixture = {**alert(), "teams": ["Dplus Kia", "LØS"], "backed_team": "Dplus Kia"}
     routes = api.resolve(fixture, NOW, config())
     assert {route["outcome_team"] for route in routes} == {"Dplus Kia", "LØS"}
+
+
+@pytest.mark.parametrize("kalshi, first", [("6:00 AM", "10:00"), ("10:00 AM", "12:00")])
+def test_kalshi_start_within_two_hours_resolves_with_earlier_start(kalshi, first):
+    api = PublicClient()
+    for item in api.event["markets"]:
+        item["rules_primary"] = item["rules_primary"].replace("8:00 AM", kalshi)
+    routes = api.resolve(alert(), NOW, config())
+    assert {r["first_start"] for r in routes} == {f"2026-10-16T{first}:00+00:00"}
 
 
 @pytest.mark.parametrize(
