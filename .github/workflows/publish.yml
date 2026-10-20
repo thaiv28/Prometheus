@@ -21,7 +21,6 @@ on:
 permissions:
   contents: read
   id-token: write
-  issues: write # the daily Kalshi alert issue
 
 # One group per ref (a PR's is refs/pull/<n>/merge), so PR runs never wait on or
 # cancel a main publish. A new push to a PR cancels its older run; main runs queue.
@@ -278,17 +277,6 @@ jobs:
       - name: Save the prediction log
         if: env.CAN_USE_AWS == 'true' && hashFiles('data/predictions.json') != ''
         run: bash scripts/prediction_log.sh save
-      # The build writes data/kalshi_alert.json when FORGE beats Kalshi's ask by 5+
-      # points on a match 6+ hours out (prometheus/alerts.py); post it as the day's
-      # issue (scripts/post_kalshi_alert.sh). The hourly prices workflow does the same
-      # between builds. Never blocks the deploy.
-      - name: Post the Kalshi alert
-        if: env.CAN_USE_AWS == 'true' && hashFiles('data/kalshi_alert.json') != ''
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: bash scripts/post_kalshi_alert.sh
       # Only deploy reads it, and deploy never runs on PRs.
       - uses: actions/upload-artifact@v7
         if: github.event_name != 'pull_request'

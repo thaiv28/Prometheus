@@ -440,3 +440,57 @@ def test_unposted_legacy_minor_can_notify_once_at_current_terms_without_rewritin
     assert e["alert"]["p"] == round(trading.quote(e)["pick"]["p"], 4)
     assert e["paper_alert"] == original
     assert alerts.update({"m": e}, NOW, "5 Oct", SLUG, set())["new"] == 0
+
+
+def test_mark_candidates_ignores_edge_lead_and_quote_timestamp_and_clears_ineligible():
+    from prometheus.alert_contract import CANDIDATE_KEY
+
+    log = {
+        "soon": _entry("soon", start="2026-10-06T10:01Z", p=0.5, ask1=0.99, at="old"),
+        "unmatched": _entry("unmatched", matched=False),
+        "other": _entry(
+            "other",
+            method="elo-cross",
+            home1="LFL",
+            home2="PRM",
+            league="EM",
+            event="EMEA Masters",
+        ),
+        "settled": _entry("settled", winner=1),
+        "started": _entry("started", start=AT),
+        "stale": _entry(
+            "stale", data_through="2026-10-01", team1="JD Gaming", team2="LGD Gaming"
+        ),
+        "result": {
+            "start": "2026-10-03T09:00Z",
+            "team1": "JD Gaming",
+            "team2": "Other",
+            "winner": 1,
+        },
+    }
+    assert alerts.mark_candidates(log, NOW) == 1
+    assert CANDIDATE_KEY in log["soon"]
+    assert all(CANDIDATE_KEY not in log[k] for k in log if k != "soon")
+    log["soon"]["matched"] = False
+    assert alerts.mark_candidates(log, NOW) == 0
+    assert CANDIDATE_KEY not in log["soon"]
+    log["settled"][CANDIDATE_KEY] = {"unchanged": True}
+    alerts.mark_candidates(log, NOW)
+    assert log["settled"][CANDIDATE_KEY] == {"unchanged": True}
+
+
+def test_write_candidates_even_when_alerts_disabled(tmp_path, monkeypatch):
+    from prometheus.alert_contract import CANDIDATE_KEY
+    from prometheus.site import config, predictions
+
+    monkeypatch.setenv("KALSHI_ALERTS", "0")
+    monkeypatch.setattr(config, "PREDICTIONS_LOG", str(tmp_path / "predictions.json"))
+    log = {"m": _entry("m")}
+    assert (
+        predictions.write_kalshi_alert(
+            log, {"priced": 1, "at": AT}, set(), str(tmp_path / "alert.json")
+        )
+        is None
+    )
+    persisted = json.loads((tmp_path / "predictions.json").read_text())["matches"][0]
+    assert CANDIDATE_KEY in persisted and "alert" not in persisted

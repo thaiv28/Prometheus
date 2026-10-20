@@ -73,3 +73,60 @@ def test_invalid_identity_or_terms_never_become_execution_inputs():
     nan = fixture()
     nan["alert"]["p"] = float("nan")
     assert alert_contract.saved_alerts({"matches": [missing, wrong, nan]}) == []
+
+
+def test_candidates_share_legacy_fixture_fence_and_emit_both_sides():
+    import datetime as dt
+
+    entry = {**fixture(), "p_series": 0.7, "home1": "LFL", "home2": "LFL"}
+    now = dt.datetime(2026, 10, 19, 10, tzinfo=dt.UTC)
+    saved = alert_contract.candidate(entry, now.isoformat(), "minor-domestic", False)
+    assert (
+        saved["fixture_id"]
+        == alert_contract.identity(entry, entry["alert"])["fixture_id"]
+    )
+    entry[alert_contract.CANDIDATE_KEY] = saved
+    proposals = alert_contract.saved_candidates({"matches": {"m": entry}}, now)
+    assert [p["backed_team"] for p in proposals] == ["A", "B"]
+    assert [p["probability"] for p in proposals] == ["0.7", "0.3"]
+    assert len({p["alert_id"] for p in proposals}) == 2
+    assert all(
+        p["trading"]["raw_probability"] == float(p["probability"]) for p in proposals
+    )
+    assert all("original_ask" not in p for p in proposals)
+
+
+def test_candidates_reject_started_aged_future_and_malformed(monkeypatch):
+    import datetime as dt
+
+    now = dt.datetime(2026, 10, 19, 10, tzinfo=dt.UTC)
+    entry = {**fixture(), "p_series": 0.7}
+    saved = alert_contract.candidate(entry, now.isoformat(), "minor-domestic", False)
+
+    def proposals(record):
+        return alert_contract.saved_candidates(
+            {"matches": [{alert_contract.CANDIDATE_KEY: record}]}, now
+        )
+
+    assert (
+        len(proposals({**saved, "at": (now - dt.timedelta(hours=3)).isoformat()})) == 2
+    )
+    for change in (
+        {"start": now.isoformat()},
+        {"at": (now - dt.timedelta(hours=3, seconds=1)).isoformat()},
+        {"at": (now + dt.timedelta(seconds=1)).isoformat()},
+        {"at": "bad"},
+        {"teams": ["A", "A"]},
+        {"teams": None},
+        {"raw": {"A": 0.7}},
+        {"raw": {"A": float("nan"), "B": 0.3}},
+        {"schema_version": 2},
+        {"kind": "old"},
+        {"team_homes": []},
+        {"event_ticker": ""},
+        {"group": "other-cross-league"},
+    ):
+        assert proposals({**saved, **change}) == []
+    assert proposals(None) == []
+    monkeypatch.setattr(alert_contract.market_blend, "snapshot", lambda now: None)
+    assert proposals(saved) == []

@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-20 — Executor decides on every fixture; fill issues
+
+The publish and hourly jobs now save an `execution_candidate` on every eligible upcoming fixture (alert eligibility minus edge, lead and same-run price), whatever `KALSHI_ALERTS` says. The Lambda reads candidates under 3h old instead of saved alerts and prices both sides now, after one bulk Kalshi market call screens them. No alert-cost cap, alert-age or 6h rule; vetoes, fees, Kelly, caps, the one-buy-per-fixture rule and the start cutoff stay. Fills open a best-effort issue in the private `thaiv28/prometheus-trades` repo (token in Secrets Manager). Public alert issues stopped; `alerts.html` stays. Implemented by Codex. Checks: ruff; full pytest; package build. Limits: needs infra PR #22 (1-minute schedule, token access); buying up to start was unproven in the timing backtest (PR #111); untested against live Kalshi/GitHub.
+
 ## 2026-10-20 — Executor accepts Kalshi starts within two hours
 
 After the name fix, Dplus–G2 and T1–LØS failed `fixture_start_mismatch`: Kalshi lists both an hour before Leaguepedia, as for all seven Worlds Oct 23 fixtures and ~100 fixtures in the log. `kalshi.START_TOLERANCE` (2 h) now bounds the gap for fixtures and live-map parent series; routes carry `first_start` (the earlier start) and `plan_order` drops pregame routes at or after it, including the pre-POST recheck; fee changes are covered through our start plus 2 h. Checks: execution tests (four new/changed fail without the change), full pytest, ruff, package build; read-only public resolve of the three current alerts (Dplus–G2, T1–LØS now resolve, cutoff 20:00Z/22:00Z). Limit: a genuine reschedule under two hours is treated as the same fixture.

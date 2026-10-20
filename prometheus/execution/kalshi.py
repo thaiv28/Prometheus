@@ -139,6 +139,25 @@ class Kalshi:
             seen.add(cursor)
         raise ValueError("pagination_limit_exceeded")
 
+    def open_markets(self):
+        grouped = {}
+        for market in self.pages(
+            "/markets", "markets", series_ticker="KXLOLGAME", status="open"
+        ):
+            grouped.setdefault(market["event_ticker"], []).append(
+                {
+                    "ticker": market["ticker"],
+                    "yes_sub_title": market.get("yes_sub_title"),
+                    **{
+                        name: decimal(market[name + "_dollars"])
+                        if market.get(name + "_dollars") is not None
+                        else None
+                        for name in ("yes_bid", "yes_ask")
+                    },
+                }
+            )
+        return grouped
+
     def canonical(self, name, teams):
         # An explicit alias, else the one fixture team whose folded name (case,
         # accents, punctuation) is identical: "Dplus KIA" -> "Dplus Kia", "LOS"
@@ -566,8 +585,9 @@ class PublicKalshi(Kalshi):
         self.opener = urllib.request.build_opener(NoRedirect())
 
     def headers(self, method, path):
-        if method != "GET" or not path.startswith(
-            ("/markets/", "/events/", "/series/")
+        if method != "GET" or not (
+            path.split("?")[0] == "/markets"
+            or path.startswith(("/markets/", "/events/", "/series/"))
         ):
             raise ValueError("shadow_private_request_refused")
         return {

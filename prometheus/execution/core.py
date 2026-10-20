@@ -1,4 +1,4 @@
-"""One saved alert, at most one IOC order. Money is Decimal, never float.
+"""Current fixture decisions, at most one IOC order. Money is Decimal, never float.
 
 The ledger owns atomic fixture/event fences and spending reservations. An intent
 that might have reached the exchange is never automatically submitted again.
@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 
 from prometheus import live_map, market_blend
-from prometheus.alert_contract import TRADE_GROUPS, trade_veto
+from prometheus.alert_contract import CANDIDATE_KIND, TRADE_GROUPS, trade_veto
 from prometheus.execution.sizing import QUANTITY_STEP, kelly_order
 
 ZERO = Decimal(0)
@@ -144,15 +144,17 @@ def validate_alert(alert, config, now):
         raise ValueError("ambiguous_teams")
     if reason := trade_veto(alert):
         raise ValueError(reason)
-    when = timestamp(alert["alert_at"])
-    if when < timestamp(config.raw["activation_at"]):
-        raise ValueError("before_activation")
-    age = (now - when).total_seconds()
-    if age < 0 or age > config.number("max_alert_age_seconds"):
-        raise ValueError("stale_alert")
+    is_candidate = alert.get("kind") == CANDIDATE_KIND
+    if not is_candidate:
+        when = timestamp(alert["alert_at"])
+        if when < timestamp(config.raw["activation_at"]):
+            raise ValueError("before_activation")
+        age = (now - when).total_seconds()
+        if age < 0 or age > config.number("max_alert_age_seconds"):
+            raise ValueError("stale_alert")
     if timestamp(alert["start"]) <= now:
         raise ValueError("fixture_started")
-    for name in ("probability", "original_ask"):
+    for name in ("probability",) if is_candidate else ("probability", "original_ask"):
         if not 0 < decimal(alert[name]) < 1:
             raise ValueError("invalid_probability_or_price")
 
@@ -226,11 +228,10 @@ def plan_order(
         if not is_map and timestamp(route.get("first_start", alert["start"])) <= now:
             continue
         price = decimal(route["price"])
-        if (
-            not 0
-            < price
-            <= min(config.number("max_price"), decimal(alert["original_ask"]))
-        ):
+        price_cap = config.number("max_price")
+        if alert.get("kind") != CANDIDATE_KIND:
+            price_cap = min(price_cap, decimal(alert["original_ask"]))
+        if not 0 < price <= price_cap:
             continue
         unit_fee = fee_bound(
             price,
@@ -329,7 +330,7 @@ def plan_order(
     }
 
 
-def reconcile(row, api, ledger, pause=False):
+def reconcile(row, api, ledger, pause=False, notify=None):
     """Only release an uncertain reservation after exchange evidence is complete."""
     order = api.lookup(row["client_order_id"], row.get("order_id"))
     if order is None:
@@ -447,12 +448,71 @@ def reconcile(row, api, ledger, pause=False):
                     min(revenue for _, revenue in verified) - cost - fees
                 ),
             )
-    ledger.replace(row, update)
+    stored = ledger.replace(row, update)
+    if stored is not None and total > 0 and not row.get("notified") and notify:
+        try:
+            if notify(update):
+                ledger.replace(
+                    stored, {**update, "notified": dt.datetime.now(dt.UTC).isoformat()}
+                )
+        except Exception:
+            pass  # Best effort; pending filled intents retry on reconciliation.
     return True
 
 
+def prefilter(proposals, quotes, now, config, canonical):
+    """Cheap two-sided quote screen; full resolution still verifies every order."""
+    kept = []
+    for proposal in proposals:
+        if proposal.get("kind") != CANDIDATE_KIND:
+            kept.append(proposal)
+            continue
+        try:
+            markets = quotes.get(proposal["event_ticker"], [])
+            if len(markets) != 2:
+                continue
+            sides = {}
+            for market in markets:
+                name = canonical(market["yes_sub_title"], proposal["teams"])
+                bid, ask = decimal(market["yes_bid"]), decimal(market["yes_ask"])
+                if (
+                    name in sides
+                    or not 0 < bid <= ask < 1
+                    or ask - bid > Decimal(".10")
+                ):
+                    raise ValueError("invalid_quote")
+                sides[name] = (bid, ask)
+            if set(sides) != set(proposal["teams"]):
+                continue
+            own = sides[proposal["backed_team"]]
+            other = sides[
+                next(t for t in proposal["teams"] if t != proposal["backed_team"])
+            ]
+            mid = ((own[0] + own[1]) / 2 + 1 - (other[0] + other[1]) / 2) / 2
+            cost = min(own[1], 1 - other[0])
+            p = decimal(market_blend.refresh(proposal["trading"], mid))
+            fee = fee_bound(
+                cost,
+                1,
+                config.number("fee_rate_upper_bound"),
+                config.number("balance_precision_usd"),
+            )
+            if cost <= config.number("max_price") and p - cost - fee > 0:
+                kept.append(proposal)
+        except (KeyError, TypeError, ValueError, AttributeError, ArithmeticError):
+            continue
+    return kept
+
+
 def run(
-    alerts, config_provider, ledger, api_factory, now=None, *, reconcile_existing=True
+    alerts,
+    config_provider,
+    ledger,
+    api_factory,
+    now=None,
+    *,
+    reconcile_existing=True,
+    notify=None,
 ):
     """Run privately; return counters only, never credentials/account contents.
 
@@ -462,7 +522,7 @@ def run(
     """
     now = now or dt.datetime.now(dt.UTC)
     config = Config.parse(config_provider())
-    result = {"submitted": 0, "skipped": 0, "reconciled": 0, "errors": 0}
+    result = {"submitted": 0, "skipped": 0, "reconciled": 0, "errors": 0, "filtered": 0}
     apis = {}
 
     def api_for(environment):
@@ -474,7 +534,9 @@ def run(
         try:
             api = api_for(row["environment"])
             result["reconciled"] += int(
-                reconcile(row, api, ledger, config.mode != row["environment"])
+                reconcile(
+                    row, api, ledger, config.mode != row["environment"], notify=notify
+                )
             )
         except Exception:
             # Unknown status, missing credentials or cancellation failure retains
@@ -483,8 +545,38 @@ def run(
             result["errors"] += 1
     if config.mode == "off":
         return result
+    alerts = list(alerts)
+    candidates = []
+    for alert in alerts:
+        if alert.get("kind") != CANDIDATE_KIND:
+            continue
+        try:
+            validate_alert(alert, config, now)
+            if ledger.seen(alert, config.mode):
+                raise ValueError("duplicate_fixture_or_event")
+            candidates.append(alert)
+        except (ValueError, KeyError, TypeError, ArithmeticError):
+            result["filtered"] += 1
+    if candidates:
+        try:
+            api = api_for(config.mode)
+            screened = prefilter(
+                candidates, api.open_markets(), now, config, api.canonical
+            )
+        except Exception:
+            result["errors"] += 1
+            screened = []
+        result["filtered"] += len(candidates) - len(screened)
+        candidates = screened
+    accepted = {id(alert) for alert in candidates}
+    alerts = [
+        alert
+        for alert in alerts
+        if alert.get("kind") != CANDIDATE_KIND or id(alert) in accepted
+    ]
     for alert in alerts:
         reserved = None
+        resolving = False
         try:
             validate_alert(alert, config, now)
             if (
@@ -495,6 +587,7 @@ def run(
             if ledger.seen(alert, config.mode):
                 raise ValueError("duplicate_fixture_or_event")
             api = api_for(config.mode)
+            resolving = True
             routes = api.resolve(alert, now, config)
             balance = decimal(api.balance())
             exposure = decimal(api.exposure())
@@ -590,9 +683,16 @@ def run(
                 ledger.note_error(reserved, "submission_uncertain", checked)
                 result["errors"] += 1
         except (ValueError, KeyError, TypeError, ArithmeticError) as error:
-            ledger.skip(alert, config.mode, str(error), now)
-            result["skipped"] += 1
+            if resolving or alert.get("kind") == live_map.VERSION:
+                ledger.skip(alert, config.mode, str(error), now)
+            key = (
+                "filtered"
+                if not resolving and alert.get("kind") == CANDIDATE_KIND
+                else "skipped"
+            )
+            result[key] += 1
         except Exception:
-            ledger.skip(alert, config.mode, "exchange_or_ledger_unavailable", now)
+            if resolving or alert.get("kind") == live_map.VERSION:
+                ledger.skip(alert, config.mode, "exchange_or_ledger_unavailable", now)
             result["errors"] += 1
     return result

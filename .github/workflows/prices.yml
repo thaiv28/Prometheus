@@ -1,7 +1,7 @@
 name: Kalshi prices
 
 # Between daily site builds: refresh Kalshi's prices on upcoming matches, update
-# the live site's prices, prediction log and alert ledger, and post the day's issue
+# the live site's prices, prediction log, execution candidates and alert ledger
 # (scripts/update_prices.py). No database, no site rebuild; about a minute.
 on:
   schedule:
@@ -11,7 +11,6 @@ on:
 permissions:
   contents: read
   id-token: write
-  issues: write # the daily Kalshi alert issue
 
 concurrency:
   group: kalshi-prices
@@ -106,10 +105,6 @@ jobs:
             aws s3 cp "output-prices/$f" "s3://$BUCKET/current/$f" --only-show-errors \
               --content-type "$content_type" --cache-control "$cache_control"
           done
-      - name: Post the Kalshi alert
-        if: steps.busy.outputs.busy == 'false' && steps.save_prediction_log.outputs.saved == 'true' && hashFiles('data/kalshi_alert.json') != ''
-        continue-on-error: true
-        run: bash scripts/post_kalshi_alert.sh
 
   # The pick'em apps' LoL prop lines (scripts/collect_props.py), appended to a log in
   # the backup bucket, then priced against the last build's projections

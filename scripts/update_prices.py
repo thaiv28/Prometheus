@@ -74,6 +74,9 @@ def run(log_path, out_dir, alert_path, now=None, fetch=None, pages=None):
     open_markets = (fetch or markets.fetch_open_markets)()
     priced = markets.attach_prices(log, open_markets, team_matcher(log), now)
 
+    if priced:
+        alerts.mark_candidates(log, now)
+
     alert = None
     if os.environ.get("KALSHI_ALERTS", "1") != "0" and priced:
         pages = team_pages() if pages is None else pages
