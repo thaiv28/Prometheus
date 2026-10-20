@@ -6,6 +6,8 @@ trades and never changes saved terms. Execution/account data belongs elsewhere.
 
 import hashlib
 import json
+import re
+import unicodedata
 from decimal import Decimal, InvalidOperation
 
 SCHEMA_VERSION = 1
@@ -21,6 +23,19 @@ GROUPS = frozenset(
     )
 )
 TRADE_GROUPS = GROUPS - {"other-cross-league"}
+
+
+# Letters that Unicode doesn't split into a base letter and an accent.
+_PLAIN_LETTERS = str.maketrans(
+    {"ø": "o", "æ": "ae", "œ": "oe", "ß": "ss", "đ": "d", "ł": "l", "þ": "th"}
+)
+
+
+def fold(name):
+    """Lower-case, accent-free, punctuation-free form of a team name."""
+    name = str(name).lower().translate(_PLAIN_LETTERS)
+    name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
+    return re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
 
 
 def trade_veto(alert):
