@@ -43,6 +43,7 @@ Code baseline; read `db/prometheus.db` or the live site for current rankings. Ev
 
 ## Future work
 
+- **Executor timing:** drop the alert-cost cap (keep positive net edge) and consider deciding up to start without alerts, with buy notifications ([backtest](../research/execution_timing.md)).
 - Fresh calls, next: token/SSM grant and live-stack deploy pending; measure Leaguepedia and dispatch latency on the first match days; Form from Leaguepedia team stats if worth it.
 
 - **Live trading and alert validation:** confirm first live-map signals reach the executor (worker env/queue ARN, no `foreign_live_queue` skips), measure source-to-order latency and compare actual asks/fills with tape results; confirm order/fill/cancel/settlement, pause and runtime credentials from exchange evidence. Preserve cash/fee/fixture/day/exposure guards and reservations; refresh monthly blend artifacts offline before use (missing months fail closed), freezing artifacts through ongoing events. Evaluate all five allowed fixture groups and execution after personal vetoes on untouched completed series/events: after-fee return, CLV, calibration, event dependence and lead time; compare paper/backtest after two or three months and revisit thresholds only on forward evidence ([execution](../kalshi_execution.md), [live-map guide](../live_map_execution.md), [blend validation](../research/market_blend_validation.md)).
