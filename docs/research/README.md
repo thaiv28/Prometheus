@@ -24,6 +24,7 @@
 
 - [Conditional objective gains](cand_followups.md) and [role leads phase A](cand_role_leads.md): original draft and momentum add to objectives; role gold/CS/XP add to gold+Elo on exact checkpoints. Retrospective, no runtime change.
 
+- [Live refit, buffs and boosted trees](live_raw_refit.md) (2026-10-20): raw refit on all pre-2026 maps is −0.0010 (ns) on the live benchmark but worse after the Kalshi blend; buffs no gain, trees worse; not shipped.
 - [Live anchor and calibration](live_anchor.md): FORGE + series-shift pregame beats the v1 pre-map call; FORGE anchor and raw calibration rejected; nothing deployed.
 - [Live model candidate review](live_candidates.md): objectives, draft, per-map Elo, momentum and calibration; retrospective research, no model deployed.
 

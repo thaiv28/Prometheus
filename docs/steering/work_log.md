@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-20 — Live model refit on more data: not shipped
+
+Research only ([report](../research/live_raw_refit.md)). `refit_live_raw.py` refits the deployed objectives/momentum recipe on 5,633 pre-2026 feed maps without calibration. Live benchmark (1,665 priced 2026 maps): all −0.0010 (−0.0027 to +0.0006), no band worse. Trading study with monthly blends refit: blend +0.0008 (ns), minutes 10–20 +0.0015 and CBLOL +0.0037 significantly worse, paper ROI 11.7%→10.7%, so the gate fails. Screen on 2026 feed maps: Baron/inhibitor recency no gain; boosted trees +0.0048. Checks: runtime parity (3e−16), `compare_benchmarks.py`, paired trading bootstrap, pytest, ruff. Limits: reused retrospective test; trade prices not asks.
+
 ## 2026-10-20 — Executor accepts Kalshi starts within two hours
 
 After the name fix, Dplus–G2 and T1–LØS failed `fixture_start_mismatch`: Kalshi lists both an hour before Leaguepedia, as for all seven Worlds Oct 23 fixtures and ~100 fixtures in the log. `kalshi.START_TOLERANCE` (2 h) now bounds the gap for fixtures and live-map parent series; routes carry `first_start` (the earlier start) and `plan_order` drops pregame routes at or after it, including the pre-POST recheck; fee changes are covered through our start plus 2 h. Checks: execution tests (four new/changed fail without the change), full pytest, ruff, package build; read-only public resolve of the three current alerts (Dplus–G2, T1–LØS now resolve, cutoff 20:00Z/22:00Z). Limit: a genuine reschedule under two hours is treated as the same fixture.
