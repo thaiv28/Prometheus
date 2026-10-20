@@ -223,6 +223,8 @@ def plan_order(
         )
         if not 0 <= age <= age_limit:
             continue
+        if not is_map and timestamp(route.get("first_start", alert["start"])) <= now:
+            continue
         price = decimal(route["price"])
         if (
             not 0

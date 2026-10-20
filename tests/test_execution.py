@@ -560,6 +560,7 @@ def test_remaining_exposure_shrinks_order_instead_of_exceeding_cap():
         {"quantity": ".009"},
         {"at": "2026-10-15T11:58:00Z"},
         {"at": "2026-10-15T12:00:01Z"},
+        {"first_start": "2026-10-15T12:00:00Z"},  # Kalshi's earlier start
     ],
 )
 def test_original_price_cap_liquidity_and_quote_freshness(route):

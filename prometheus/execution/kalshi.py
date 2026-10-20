@@ -29,6 +29,9 @@ ROOTS = {
     "live": "https://external-api.kalshi.com",
 }
 PATH = "/trade-api/v2"
+# Leaguepedia and Kalshi often list one fixture up to an hour or two apart
+# (all of Worlds 2026's Oct 23 day). Teams and the event ticker still pin it.
+START_TOLERANCE = dt.timedelta(hours=2)
 MAP_RULES = re.compile(
     r"^If (?P<side>.+?) wins game (?P<map>\d+) in the (?P<event>.+): (?P<team1>.+?) vs\.? (?P<team2>.+?) "
     r"League of Legends match originally scheduled for (?P<day>\w{3} \d{1,2}, \d{4})"
@@ -161,6 +164,7 @@ class Kalshi:
         series = self.request("GET", f"/series/{series_ticker}")["series"]
         # Ordinary event responses need not expose current fee overrides. Read
         # their authoritative history, including explicit null/null clears.
+        latest_start = timestamp(alert["start"]) + START_TOLERANCE
         changes = self.pages(
             "/events/fee_changes",
             "event_fee_changes",
@@ -175,9 +179,7 @@ class Kalshi:
             else event
         )
         future_overrides = [
-            c
-            for c in changes
-            if now < timestamp(c["scheduled_ts"]) <= timestamp(alert["start"])
+            c for c in changes if now < timestamp(c["scheduled_ts"]) <= latest_start
         ]
         series_changes = self.request(
             "GET", "/series/fee_changes", series_ticker=series_ticker
@@ -187,9 +189,10 @@ class Kalshi:
         future_series = [
             c
             for c in series_changes
-            if now < timestamp(c["scheduled_ts"]) <= timestamp(alert["start"])
+            if now < timestamp(c["scheduled_ts"]) <= latest_start
         ]
-        # Conservatively cover every announced combination through fixture start.
+        # Conservatively cover every announced combination through the latest
+        # start the market rules may give.
         # IOC execution occurs now; bounding future changes avoids a clock/race at
         # a scheduled fee boundary without a second authenticated quote phase.
         for profile in [series, *future_series]:
@@ -209,7 +212,7 @@ class Kalshi:
         markets = event.get("markets") or response.get("markets") or []
         if len(markets) != 2:
             raise ValueError("ambiguous_outcomes")
-        parsed = []
+        parsed, first_start = [], timestamp(alert["start"])
         for market in markets:
             rules = (MAP_RULES if is_map else RULES).match(
                 market.get("rules_primary", "")
@@ -232,9 +235,11 @@ class Kalshi:
             ).replace(tzinfo=ZoneInfo("America/New_York"))
             if teams != set(alert["teams"]) or side not in teams:
                 raise ValueError("fixture_team_mismatch")
-            # Exact timed fixture match; reschedules with changed rules fail safe.
-            if when.astimezone(dt.UTC) != timestamp(alert["start"]):
+            # Timed fixture match; a reschedule beyond the tolerance fails safe.
+            starts = when.astimezone(dt.UTC)
+            if abs(starts - timestamp(alert["start"])) > START_TOLERANCE:
                 raise ValueError("fixture_start_mismatch")
+            first_start = min(first_start, starts)
             if self.canonical(market.get("yes_sub_title", ""), alert["teams"]) != side:
                 raise ValueError("outcome_label_mismatch")
             parsed.append((market, side))
@@ -263,7 +268,10 @@ class Kalshi:
                 when = dt.datetime.strptime(
                     f"{rule['day']} {rule['time']}", "%b %d, %Y %I:%M %p"
                 ).replace(tzinfo=ZoneInfo("America/New_York"))
-                if when.astimezone(dt.UTC) != timestamp(alert["start"]):
+                if (
+                    abs(when.astimezone(dt.UTC) - timestamp(alert["start"]))
+                    > START_TOLERANCE
+                ):
                     raise ValueError("live_series_identity_mismatch")
                 parent_sides.add(self.canonical(rule["side"], alert["teams"]))
             if parent_sides != set(alert["teams"]):
@@ -357,6 +365,8 @@ class Kalshi:
                     "limit": f"{price if own else best:.4f}",
                     "quantity": str(quantity),
                     "at": received.isoformat(),
+                    # Pregame orders stop at the earlier of the two starts.
+                    "first_start": first_start.isoformat(),
                 }
             )
         if alert.get("trading"):
