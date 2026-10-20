@@ -56,7 +56,12 @@ def inputs():
 def test_frozen_replay():
     games, rosters = inputs()
     actual = compute_elo_records(
-        games, calculate_game_length_elo_change, rosters=rosters, player_records=True
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        player_records=True,
+        link_share=0,
+        transfer_share=0,
     )
     frozen = json.loads(
         Path(__file__)
@@ -72,8 +77,14 @@ def test_frozen_replay():
 
 
 def test_round_trip():
+    # Last-record equality here assumes no later transfer offset movement.
     games, rosters = inputs()
-    state = EloState(calculate_game_length_elo_change, rosters=rosters)
+    state = EloState(
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        link_share=0,
+        transfer_share=0,
+    )
     accumulated = [[], [], []]
     for i, row in enumerate(games.itertuples(index=False)):
         if i == 4:
@@ -97,7 +108,12 @@ def test_round_trip():
         for target, part in zip(accumulated, records):
             target.extend(part)
     full = compute_elo_records(
-        games, calculate_game_length_elo_change, rosters=rosters, player_records=True
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        player_records=True,
+        link_share=0,
+        transfer_share=0,
     )
     for values, frame in zip(accumulated, full):
         pd.testing.assert_frame_equal(

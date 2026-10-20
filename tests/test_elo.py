@@ -324,8 +324,13 @@ def test_a_cup_keeps_the_home_league_and_main_roster():
     rosters.update({(g, "B"): _five("B") for g in games.gameid})
     rosters.update({(g, "C"): _five("C") for g in games.gameid})
     rosters[("g3", "A")] = _five("a")  # academy lineup under A's name
+    # Isolate roster selection from cross-league link and transfer evidence.
     df, _ = compute_elo_records(
-        games, calculate_game_length_elo_change, rosters=rosters
+        games,
+        calculate_game_length_elo_change,
+        rosters=rosters,
+        link_share=0,
+        transfer_share=0,
     )
 
     # Two LCK games outweigh the cup, so A's home stays LCK through it and into 2025.
