@@ -1,5 +1,7 @@
 # Research
 
+- **Elo's forecast curve (2026-10-19), not adopted.** [One Elo scale](elo_one_scale.md) (tier K and offset share) and the exploratory [win-scale follow-up](elo_win_scale.md): Elo's expected score is compressed about 1.5× because of the game-length score; calibrating it costs .003–.02 log loss, so the fitted curves stay.
+
 - **Elo follow-ups (2026-10-19), none adopted except RD information on the game's slope.** [RD slope / move-down bonus](elo_rd_simplify.md) ([native](elo_rd_simplify_native.md)); [Glicko-2 volatility](elo_glicko2.md) ([native](elo_glicko2_native.md)); [g(RD) in forecasts](elo_grd.md); [league-offset RD and dropping the regional calibration](elo_offset_rd.md) ([native](elo_offset_rd_native.md)). Scripts and engine options on branches `elo-rd-slope-movedown`, `elo-glicko2`, `elo-grd`, `elo-offset-rd` (not merged).
 
 - [Draft v2 map trading](live_map_draft_trading.md): draft v2 as the map-trading model input; the fixed market-blend comparison fails the improvement and no-regression gates (FST worse). Not adopted; its runtime wiring was removed from the trading branch on 2026-10-19.
