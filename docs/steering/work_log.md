@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-20 — Execution timing backtest
+
+`scripts/research/execution_timing.py` ([report](../research/execution_timing.md)) replays the executor's blended net-edge rule hourly over the last 12h before 1,253 trade-group series (May 1–Oct 19). Rules fixed before scoring; holdout untouched. Alert-time buys: 488, +6.4% (−0.2% to +12.7%). Bets the alert-cost cap blocks after a 1h delay: 58, +18.4% (+3.8% to +38.1%); at 2–3h positive but spanning zero. Buying up to start adds 98 bets, +11.8% (−9.7% to +32.3%), CLV +0.003. No policy difference is significant; no runtime change. 17 s locally, no CI cost. Limit: hourly closes, 12h grid, no vetoes/sizing.
+
 ## 2026-10-20 — Executor accepts Kalshi starts within two hours
 
 After the name fix, Dplus–G2 and T1–LØS failed `fixture_start_mismatch`: Kalshi lists both an hour before Leaguepedia, as for all seven Worlds Oct 23 fixtures and ~100 fixtures in the log. `kalshi.START_TOLERANCE` (2 h) now bounds the gap for fixtures and live-map parent series; routes carry `first_start` (the earlier start) and `plan_order` drops pregame routes at or after it, including the pre-POST recheck; fee changes are covered through our start plus 2 h. Checks: execution tests (four new/changed fail without the change), full pytest, ruff, package build; read-only public resolve of the three current alerts (Dplus–G2, T1–LØS now resolve, cutoff 20:00Z/22:00Z). Limit: a genuine reschedule under two hours is treated as the same fixture.
