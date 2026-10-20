@@ -24,6 +24,7 @@
 
 - [Conditional objective gains](cand_followups.md) and [role leads phase A](cand_role_leads.md): original draft and momentum add to objectives; role gold/CS/XP add to gold+Elo on exact checkpoints. Retrospective, no runtime change.
 
+- [Champion scaling](live_champ_scaling.md) and [late-game teams/players](live_late_teams.md) (2026-10-20): earlier-only "wins more in long games" slopes add nothing to the live model (+0.0013 and +0.00003, ns); traits barely persist year to year.
 - [Live anchor and calibration](live_anchor.md): FORGE + series-shift pregame beats the v1 pre-map call; FORGE anchor and raw calibration rejected; nothing deployed.
 - [Live model candidate review](live_candidates.md): objectives, draft, per-map Elo, momentum and calibration; retrospective research, no model deployed.
 

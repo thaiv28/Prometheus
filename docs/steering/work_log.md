@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-20 — Champion and team late-game scaling: no live gain
+
+Research only. `live_champ_scaling.py` and `live_late_teams.py` estimate, from earlier days only, how much more each champion, team or player wins than Elo expects as games run longer (shrunk, decayed), and add the blue−red gap and gap×time to the deployed objectives/momentum recipe on the fixed split. Champions (H 365): +0.0013 (−0.0008 to +0.0034); teams (H 180): +0.00003 (−0.00015 to +0.00021); secondaries also null. Slopes barely persist between 2022–23 and 2024–25 (champions r .13, teams .26, players .10). Checks: control LL within protocol tolerance, earlier-day lookup reviewed, ruff, pytest. Limits: reused retrospective test; no trading check.
+
 ## 2026-10-20 — Executor accepts Kalshi starts within two hours
 
 After the name fix, Dplus–G2 and T1–LØS failed `fixture_start_mismatch`: Kalshi lists both an hour before Leaguepedia, as for all seven Worlds Oct 23 fixtures and ~100 fixtures in the log. `kalshi.START_TOLERANCE` (2 h) now bounds the gap for fixtures and live-map parent series; routes carry `first_start` (the earlier start) and `plan_order` drops pregame routes at or after it, including the pre-POST recheck; fee changes are covered through our start plus 2 h. Checks: execution tests (four new/changed fail without the change), full pytest, ruff, package build; read-only public resolve of the three current alerts (Dplus–G2, T1–LØS now resolve, cutoff 20:00Z/22:00Z). Limit: a genuine reschedule under two hours is treated as the same fixture.
