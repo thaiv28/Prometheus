@@ -65,7 +65,7 @@ def known_start(game_id, timelines):
     if path.exists():
         saved = json.loads(path.read_text())
         if saved.get("start") is not None:
-            return when({"rfc460Timestamp": saved["start"]}), saved["blue_id"]
+            return when({"rfc460Timestamp": saved["start"]}), saved.get("blue_id")
     return None, None
 
 
@@ -77,6 +77,10 @@ def collect_game(game, timelines):
     if start is None:
         start, blue_id = find_start(game_id)
         start_source = "searched"
+    if blue_id is None:
+        # Older timeline files have no blue_id; the feed's own metadata does.
+        meta = (first or {}).get("gameMetadata") or {}
+        blue_id = (meta.get("blueTeamMetadata") or {}).get("esportsTeamId")
     result = dict(
         game,
         blue_id=blue_id,

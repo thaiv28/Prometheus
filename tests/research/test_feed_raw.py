@@ -238,3 +238,19 @@ def test_main_exit_codes(
         else f"{prefix}: mock failure. Saved maps are kept.\n"
     )
     assert capsys.readouterr().out == expected
+
+
+def test_old_timeline_without_blue_id_uses_feed_metadata(monkeypatch, tmp_path):
+    (tmp_path / "games").mkdir()
+    (tmp_path / "games" / "a.json").write_text(json.dumps({"start": START_ISO}))
+    first = dict(
+        window(), gameMetadata={"blueTeamMetadata": {"esportsTeamId": "meta-blue"}}
+    )
+    monkeypatch.setattr(
+        feed_raw,
+        "fetch",
+        lambda endpoint, game_id, at=None: first if at is None else window("finished"),
+    )
+    result = feed_raw.collect_game(GAME, tmp_path)
+    assert result["start_source"] == "feed_timelines"
+    assert result["blue_id"] == "meta-blue"
