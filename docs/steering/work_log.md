@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-21 — Raw feed collector for participant data
+
+Added resumable `feed_raw.py`: saves full window and details JSON (initial window plus minute samples and a final 30-second probe) as atomic gzip files per map, reusing saved timeline starts. Role gold/CS/XP research needs participant fields; the earlier collector kept only team totals. Wrapper accepts `COLLECTOR`, with its default unchanged. Added mocked tests for starts, payload preservation, sampling boundaries, gzip/resume, shard/split parity, status and exit codes. Checks: targeted pytest 23 passed (0.05 s); full pytest 997 passed, 2 skipped (34.29 s, existing core-count warning); ruff format/check, `bash -n scripts/research/feed_timelines_collect.sh` and diff whitespace passed. `uv run` panicked in sandbox system-configuration; used `uv run --no-sync`. Collection itself not yet run; no API calls. No jobs added; Actions timing unmeasured.
+
 ## 2026-10-20 — Executor accepts Kalshi starts within two hours
 
 After the name fix, Dplus–G2 and T1–LØS failed `fixture_start_mismatch`: Kalshi lists both an hour before Leaguepedia, as for all seven Worlds Oct 23 fixtures and ~100 fixtures in the log. `kalshi.START_TOLERANCE` (2 h) now bounds the gap for fixtures and live-map parent series; routes carry `first_start` (the earlier start) and `plan_order` drops pregame routes at or after it, including the pre-POST recheck; fee changes are covered through our start plus 2 h. Checks: execution tests (four new/changed fail without the change), full pytest, ruff, package build; read-only public resolve of the three current alerts (Dplus–G2, T1–LØS now resolve, cutoff 20:00Z/22:00Z). Limit: a genuine reschedule under two hours is treated as the same fixture.

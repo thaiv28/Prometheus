@@ -7,6 +7,8 @@
 #   bash scripts/research/feed_timelines_collect.sh [out] [shards] [shard index ...]
 # EXTRA: more collect arguments, e.g. EXTRA="--split 1/4" to share a slow
 # shard's missing maps among runs.
+# PYTHON: an interpreter command (default: uv run --quiet python).
+# COLLECTOR: collector script (default: scripts/research/feed_timelines.py).
 set -u
 cd "$(dirname "$0")/../.."
 out=${1:-data/feed_timelines}
@@ -19,8 +21,7 @@ for i in $which; do
     log="$out/collect_$i.log"
     refused_at=-1
     while true; do
-      # PYTHON: an interpreter command (default: uv run python).
-      caffeinate -i ${PYTHON:-uv run --quiet python} scripts/research/feed_timelines.py collect \
+      caffeinate -i ${PYTHON:-uv run --quiet python} "${COLLECTOR:-scripts/research/feed_timelines.py}" collect \
         --shard "$i/$shards" --out "$out" ${EXTRA:-} >>"$log" 2>&1
       code=$?
       if [ "$code" -eq 4 ]; then
