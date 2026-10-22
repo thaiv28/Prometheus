@@ -254,3 +254,24 @@ def test_old_timeline_without_blue_id_uses_feed_metadata(monkeypatch, tmp_path):
     result = feed_raw.collect_game(GAME, tmp_path)
     assert result["start_source"] == "feed_timelines"
     assert result["blue_id"] == "meta-blue"
+
+
+def test_fetch_retries_unreachable(monkeypatch):
+    attempts = []
+
+    def get(url):
+        attempts.append(url)
+        if len(attempts) < 3:
+            raise feed_raw.Unreachable("timed out")
+        return {"frames": []}
+
+    monkeypatch.setattr(feed_raw, "get", get)
+    monkeypatch.setattr(feed_raw.time, "sleep", lambda s: None)
+    assert feed_raw.fetch(feed_raw.WINDOW, "a") == {"frames": []}
+    assert len(attempts) == 3
+    attempts.clear()
+    monkeypatch.setattr(
+        feed_raw, "get", lambda url: (_ for _ in ()).throw(feed_raw.Unreachable("x"))
+    )
+    with pytest.raises(feed_raw.Unreachable):
+        feed_raw.fetch(feed_raw.WINDOW, "a")

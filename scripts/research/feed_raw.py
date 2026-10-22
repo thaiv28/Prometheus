@@ -28,6 +28,7 @@ import json
 import os
 import random
 import sys
+import time
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlencode
@@ -47,6 +48,8 @@ from feed_timelines import (
     when,
 )
 
+RETRIES = 3
+RETRY_PAUSE = 5  # seconds, times the attempt number
 DETAILS = "https://feed.lolesports.com/livestats/v1/details/{}"
 OUT = ROOT / "data" / "feed_raw"
 TIMELINES = ROOT / "data" / "feed_timelines"
@@ -57,7 +60,15 @@ def fetch(url_template, game_id, at=None):
     if at is not None:
         at = at.replace(microsecond=0) - timedelta(seconds=at.second % 10)
         query = "?" + urlencode({"startingTime": at.strftime("%Y-%m-%dT%H:%M:%SZ")})
-    return get(url_template.format(game_id) + query)
+    url = url_template.format(game_id) + query
+    # A slow or dropped request is retried before the run gives up the map.
+    for attempt in range(RETRIES):
+        try:
+            return get(url)
+        except Unreachable:
+            if attempt == RETRIES - 1:
+                raise
+            time.sleep(RETRY_PAUSE * (attempt + 1))
 
 
 def known_start(game_id, timelines):
