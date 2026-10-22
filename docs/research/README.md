@@ -1,5 +1,7 @@
 # Research
 
+- [Role gold/level/CS leads](live_role_leads.md) (2026-10-22): primary fails, ΔLL +0.000623 (+0.000230 to +0.001030); level improves descriptively, other candidates inconclusive or worse. Retrospective; research only, nothing adopted.
+
 - **[More Elo offset evidence](elo_offsets.md) (2026-10-19), not adopted.** Team-only links improve cross-league loss but regress within-other Elo; level bias remains. Calibration removal is inconclusive; removing the move-down bonus fails. Transfer evidence fails the training guard.
 
 - **Elo's forecast curve (2026-10-19), not adopted.** [One Elo scale](elo_one_scale.md) (tier K and offset share) and the exploratory [win-scale follow-up](elo_win_scale.md): Elo's expected score is compressed about 1.5× because of the game-length score; calibrating it costs .003–.02 log loss, so the fitted curves stay.

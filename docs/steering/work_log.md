@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-22 — Research: role gold/level/CS leads in the live model
+
+Research only. [Fixed study](../research/live_role_leads.md) uses `data/feed_raw`: 8,469 joined maps, 270,225 exact matches, no nearest/unknown rows; all 123,954 test rows have roles. Candidates add role gold (primary), level, CS, level/CS totals, or all gaps, each with time interactions, to deployed objectives + momentum. Control LL 0.465625. Primary ΔLL +0.000623 (95% series CI +0.000230 to +0.001030): FAIL. Other All ΔLL: level −0.001134, CS +0.000766, totals −0.000509, all +0.000436; descriptive only, none adopted. Checks: study completed (606 s; cached rerun 40 s), seven synthetic tests, full pytest (981 passed, 2 skipped), ruff format/check, links and report budget. Limits: retrospective test previously viewed; gold overlaps existing team lead; no trading check. No production changes or commits.
+
 ## 2026-10-20 — Executor accepts Kalshi starts within two hours
 
 After the name fix, Dplus–G2 and T1–LØS failed `fixture_start_mismatch`: Kalshi lists both an hour before Leaguepedia, as for all seven Worlds Oct 23 fixtures and ~100 fixtures in the log. `kalshi.START_TOLERANCE` (2 h) now bounds the gap for fixtures and live-map parent series; routes carry `first_start` (the earlier start) and `plan_order` drops pregame routes at or after it, including the pre-POST recheck; fee changes are covered through our start plus 2 h. Checks: execution tests (four new/changed fail without the change), full pytest, ruff, package build; read-only public resolve of the three current alerts (Dplus–G2, T1–LØS now resolve, cutoff 20:00Z/22:00Z). Limit: a genuine reschedule under two hours is treated as the same fixture.
