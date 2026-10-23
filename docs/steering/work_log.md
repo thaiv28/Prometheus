@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-23 — Research: alive players, Elder/soul and items in the live model
+
+Research only; [fixed study](../research/live_state.md), control LL 0.465625. All ΔLL [95% series CI]: **alive PASS** −0.000823 [−0.001065, −0.000591] (30+ minutes −0.0071, rows with a dead player −0.0031, no slice worse); alive_respawn −0.000731 (upper −0.00048 misses the −0.0005 bar); elder +0.000119, items +0.000119, combined −0.000557 [−0.000884, −0.000236], all FAIL; soul_true identical to the deployed flag. Coverage: all 123,954 test rows. Fixed after the first run: levels 19–20 (raised cap) had zeroed whole rows; they now use the level-18 timer. Item data: Data Dragon `item.json` for 69 patches in `data/ddragon/items/`. Checks: 22 targeted tests, full pytest, ruff, study run (667 s). Not yet run: live benchmark and trading check.
+
 ## 2026-10-22 — Research: live benchmark and trading check of role level leads
 
 Research only. Fixed level candidate (five role level gaps plus ×time) checked on the pinned 1,666 maps and the trading study; [report](../research/live_role_levels_check.md). Verdict FAIL: live All ΔLL -0.000685 (-0.001909 to +0.000503), not significant; compare_benchmarks exit 0. Trading blend All -0.000601 (-0.001439 to +0.000274), no slice worse; paper ROI +7.57% current (257 bets) vs +5.35% level (277). 52,892 state calls all matched raw levels. Both arms use research refits (max 0.044 from deployed p: Elo inputs and the calibration set changed since the deployed fit). Checks: 14 targeted tests, ruff, role-leads report rerun identical, live_trading.md unchanged. No production change.
@@ -17,6 +21,7 @@ After the name fix, Dplus–G2 and T1–LØS failed `fixture_start_mismatch`: Ka
 ## 2026-10-20 — Executor matches Kalshi team names by fold
 
 Live ledger: Worlds alerts were skipped as `fixture_team_mismatch` because Kalshi writes "Dplus KIA" and "LOS" while the executor took only exact names or explicit aliases; alerts already fold names, so issues posted. `alert_contract.fold` (moved from `schedule.py`, which re-imports it) now ships in the Lambda; `Kalshi.canonical` maps a name to the one fixture team with an identical fold. Checks: new resolve tests (fail without the fix), execution/schedule tests, full pytest, ruff, package build; read-only public resolve of the real Dplus–G2, T1–LØS and Galions–Solary events. Limit: Dplus–G2 and T1–LØS now fail `fixture_start_mismatch`: all seven Worlds Oct 23 fixtures have Leaguepedia starts differing from Kalshi's (~100 such fixtures in the log overall); not changed here.
+
 ## 2026-10-19 — More evidence for Elo league offsets
 
 [Research](../research/elo_offsets.md) selected through 2021: team-only non-international cross-league links .5, compensated transfers .02/20 games; now replay defaults. Held-out cross-league log loss −.012435 (series CI −.016476 to −.008520), others within noise; level-bias RMS .430785→.317342. Calibration removal inconclusive; move-down bonus still needed. Refitted six forecast coefficients (≤1.6% movement), 12 Form coefficients and 95 league slopes; exact deltas in report. Rebuilt DB; regenerated forecast/season reports; offline site build and Elo/FORGE HTML/JSON spot-check passed. Checks: pytest 968 passed, 2 skipped; ruff format/check. New default test <.005s locally; Actions cost unmeasured. Limits: market and native guards judged by PR check; calibration frozen on old offsets; historical holdouts previously viewed; out-of-year refits aren’t chronological deployment.
@@ -36,27 +41,3 @@ Hourly/dispatched prices renders Predictions, monthly results and call performan
 ## 2026-10-19 — Fresh calls, part 2: finished maps from the live worker; refreshed calls on the page
 
 Worker records each settled map in `maps.json` (winner, players from the collector's last frame, length only when `find_start` found the start and it is 15–75 minutes), uploads it, and dispatches `prices.yml` (5-minute debounce; token from SSM). The refresh adds worker maps (precedence: scoreboard, worker, schedule); worker league labels map to ours (`WLDs` → Worlds). `kalshi.json` carries each unstarted call, which `predictions.js` applies. Checks: pytest 926 passed, 2 skipped; JS tests 23 passed; ruff; `record_map` on the backed-up KC v MVK match (players exact; map 1 length dropped because the worker joined late); headless Chrome at 1440 and 390 px. Copy review: PASS (Predictions, home fixtures; only new text is the tooltip's "results through …"). Limits: dispatch needs the token, SSM grant and live-stack deploy; no live match run yet.
-
-## 2026-10-19 — Fresh calls, part 1: resume Elo with Leaguepedia results hourly
-
-`EloState` makes the replay resumable (rebuilt Elo tables identical row for row). Publish saves the state (3.1 MB, ~11 s); the hourly job's new step replays Leaguepedia games Oracle's Elixir lacks (each matched to an OE game of the same pair within 3 hours, or applied) and refreshes unstarted calls; Form stays frozen, `data_through` stays the OE date. Real run: 31 games applied, 37 known, 6 calls changed, 13 s. Justified by measured lag (+0.0039 series log loss a day); same-day games alone are within noise (−0.0010, −0.0024 to +0.0003) after fixing a leak in the first research run (own games dated before the start). Checks: pytest, ruff. Limits: not yet run in CI.
-
-## 2026-10-19 — Call staleness measured
-
-`scripts/research/call_staleness.py` on the published prediction log: of 74 settled calls frozen at the start (since Oct 4), 40 used data one day old and 34 two to four days old (Oracle's Elixir lag). Rebuilding 4,201 settled logged series with older ratings than the backtest's day-before: one more day +0.0039 series log loss (+0.0007 to +0.0074), two +0.0053, seven +0.0134; international (155) within noise. So the backtest and market report flatter published calls, and fresher results (Leaguepedia before Oracle's Elixir) are worth about .004 a day of lag. Same-day results are not measured. Research only; no published change.
-
-## 2026-10-19 — Series-clustered forecast intervals, forward holdout, addition/removal rules
-
-Forecast report/dumps and PR comparisons now resample whole series; dumps carry series/ISO dates, with head metadata supporting older bases. Forward rows from 2026-10-20 are unguarded. Rules require ≥0.0005 log-loss gain for additions and upper CI <+0.0005 for removals. Clustering barely widens intervals (~2 games a series; domestic FORGE vs Elo −0.0028 to −0.0009 both ways), so game-level intervals were not the problem. Report runtime: 37.80 s before, 28.33 s after (local, no CI work added). Checks: report, unchanged `--check-weights`, dump/self-comparison (exit 0), pytest (902 passed, 2 skipped), ruff format/check, diff whitespace. Limit: research scripts in `scripts/research` retain game-level intervals.
-
-## 2026-10-19 — Elo/forecast review added to Future work
-
-Docs only, base `1057307`. Reviewed every Elo and forecast assumption against the code, the research reports and the literature (Glicko, TrueSkill 2, Elo++, dynamic Bradley-Terry, forecast combination). Added one ordered Future work item to `current_state.md`: evaluation rules (series-clustered bootstrap, non-inferiority for removals, minimum gain, forward holdout), call staleness, one rating scale with league offsets fixed at the source, fast/slow Elo in place of Form, and a dynamic Bradley-Terry ceiling. Checks: `pytest tests/test_steering.py`.
-
-## 2026-10-19 — Live benchmark refresh: first CI runs, seed fix
-
-First dispatch of `live-bench.yml` failed: the hand seed was made with macOS `tar`, whose AppleDouble `._*.json` files broke JSON reads on Linux. Reseeded with `COPYFILE_DISABLE=1 tar --no-xattrs` (checked with Python `tarfile`: no metadata entries) and fixed the seed commands in `deployment.md`. Second run (39327787116) passed in 10 min: Riot's feed served the GitHub runner without refusals (14 new maps, 81 s), `--build-data` took 7.9 min (CPU-bound; it re-reduces every map, so it grows with the data), state synced to S3, and `live-bench-data-63ee7c2a…` (2.2 MB) cached: 1,772 maps / 823 series, up from 1,666 / 813. Limit: no PR has read the cached entry yet.
-
-## 2026-10-19 — Weekly live benchmark data refresh in CI
-
-New `live-bench.yml` (Mondays, main only, read-only contents; commits nothing): restores the feed timelines and Kalshi tapes from `s3://…/prometheus/live-bench/`, collects new feed maps in four shards, runs `--build-data --refresh-markets`, syncs grown state back and saves `live-bench-data-<hash>` to the Actions cache. `benchmarks.yml` restores that one entry for both sides (in the markets dump key); the release pin stays as fallback. `feed_timelines.py schedule` stops paging at saved matches. Cost: state 7.4 MB + 56 MB compressed (13 s to tar locally); ~17 s a map, ~100 maps a week; no time added to publish, PR checks or hourly jobs. Checks: full suite 894 passed, 2 skipped; ruff; YAML parses. Limits: not yet run in CI (needs merge, S3 seed, a dispatch); Riot may refuse GitHub runners; CI build time unmeasured.

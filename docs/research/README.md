@@ -1,5 +1,7 @@
 # Research
 
+- [Alive players, Elder/soul and items](live_state.md) (2026-10-23): **alive passes**, ΔLL −0.0008 (−0.0011 to −0.0006), −0.0071 after 30 minutes; Elder, items and combined fail; true soul equals the deployed flag. Retrospective; live benchmark and trading check pending.
+
 - [Role gold/level/CS leads](live_role_leads.md) (2026-10-22): primary fails, ΔLL +0.000623 (+0.000230 to +0.001030); level improves descriptively, other candidates inconclusive or worse. Retrospective; [level confirmation](live_role_levels_check.md): FAIL (live gain includes zero). Research only, nothing adopted.
 
 - **[More Elo offset evidence](elo_offsets.md) (2026-10-19), not adopted.** Team-only links improve cross-league loss but regress within-other Elo; level bias remains. Calibration removal is inconclusive; removing the move-down bonus fails. Transfer evidence fails the training guard.
