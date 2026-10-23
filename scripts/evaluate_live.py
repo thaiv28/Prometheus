@@ -361,9 +361,9 @@ def cost_to_back(tp, at, side, stale=BET_STALE):
     return float(before["cost"].iloc[-1])
 
 
-def market_state(tp, source):
-    """Kalshi at one feed sample (see MARKET_FIELDS); our call arrives at +LAG."""
-    at = source + pd.Timedelta(seconds=LAG)
+def market_state(tp, source, lag=LAG):
+    """Kalshi at one feed sample (see MARKET_FIELDS); our call arrives at +lag."""
+    at = source + pd.Timedelta(seconds=lag)
     costs = [cost_to_back(tp, at, s, stale=SPREAD_STALE) for s in (0, 1)]
     quiet = quiet_for(tp, at)
     return [
@@ -513,7 +513,7 @@ def build_premaps(matcher, events, cutoff, fetch=True, db=DB_PATH):
     return out, counts
 
 
-def build_data(refresh_markets=False):
+def build_data(refresh_markets=False, lag=LAG, out=DATA):
     """Reduce feed timelines and Kalshi trade tapes to the benchmark's data."""
     if refresh_markets:
         sys.path.insert(0, str(ROOT / "scripts"))
@@ -600,7 +600,7 @@ def build_data(refresh_markets=False):
                     "state": s.get("state"),
                     "flat": bool(s.get("flat")),
                     "teams": [_team_stats(s, side) for side in sides],
-                    "market": market_state(tp, source),
+                    "market": market_state(tp, source, lag=lag),
                 }
             )
         maps.append(
@@ -616,7 +616,7 @@ def build_data(refresh_markets=False):
                 "won0": bool(won0),
                 # For the series shift once the live calls carry it.
                 "score_before": score_before(hist, oe, start),
-                "pregame_market": market_state(tp, start),
+                "pregame_market": market_state(tp, start, lag=lag),
                 "samples": samples,
             }
         )
@@ -627,19 +627,17 @@ def build_data(refresh_markets=False):
     premaps, premap_counts = build_premaps(matcher, events, cutoff)
     data = {
         "built": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
-        "lag": LAG,
+        "lag": lag,
         "fields": {"teams": STATS, "market": MARKET_FIELDS, "premap": PREMAP_FIELDS},
         "counts": counts,
         "premap_counts": premap_counts,
         "maps": maps,
         "premaps": premaps,
     }
-    DATA.parent.mkdir(parents=True, exist_ok=True)
-    with gzip.open(DATA, "wt") as f:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(out, "wt") as f:
         json.dump(data, f, separators=(",", ":"))
-    _log(
-        f"{counts}\n{premap_counts}\nwrote {DATA} ({DATA.stat().st_size / 1e6:.1f} MB)"
-    )
+    _log(f"{counts}\n{premap_counts}\nwrote {out} ({out.stat().st_size / 1e6:.1f} MB)")
     return data
 
 
@@ -1289,10 +1287,11 @@ def main():
     parser.add_argument("--publish-data", action="store_true")
     parser.add_argument("--fetch-data", action="store_true")
     parser.add_argument("--data", type=Path, default=DATA)
+    parser.add_argument("--lag", type=int, default=LAG)
     parser.add_argument("--model", type=Path, default=timeline.MODEL_PATH)
     args = parser.parse_args()
     if args.build_data:
-        build_data(args.refresh_markets)
+        build_data(args.refresh_markets, lag=args.lag, out=args.data)
     if args.publish_data:
         publish_data()
     if args.fetch_data:

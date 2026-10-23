@@ -424,3 +424,15 @@ def test_cli_model_used_for_both_replays_and_dump(monkeypatch, tmp_path):
     monkeypatch.setattr(el, "write_dump", dump)
     el.main()
     assert seen == [("live", path), ("pre", path), ("dump", path)]
+
+
+def test_market_state_parameter_moves_arrival_five_seconds():
+    tp = el.tape(
+        _event(), {"M-T1": [_trade(21, 0.6, "yes"), _trade(26, 0.7, "yes")]}, True
+    )
+    a = dict(zip(el.MARKET_FIELDS, el.market_state(tp, T0)))
+    b = dict(zip(el.MARKET_FIELDS, el.market_state(tp, T0, lag=26)))
+    assert a["p_lag"] == 0.6
+    assert b["p_lag"] == 0.7
+    assert a["n_21"] == 1
+    assert b["n_21"] == 2

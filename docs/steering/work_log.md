@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-23 — Live-map delay and fight-veto research; markout script
+
+Research only (`docs/research/live_latency.md`). Production newest-frame age is 22–26 s (median, two maps; ~20 s Riot floor); the replay assumes 21 s. `evaluate_live.py --build-data --lag N --data PATH` builds at another delay. Lag 26 vs 21 (1,772 maps, 30 s rule): 171 vs 183 bets, +8.6% vs +21.3% ROI; paired −1.4¢/map (−3.5 to +0.6), includes zero. Fixed fight/objective veto: −2.0¢/map (−4.0 to −0.2); the 71 bets it removed had +48.7% ROI and +3.9¢ CLV, so no veto. New `scripts/live_markouts.py` reads backed-up candidates (30/60/120 s quote markouts). Checks: ruff; full pytest; both builds and the report run locally. No production, CI or pin change. Limits: reused history, minute samples, tape costs.
+
 ## 2026-10-23 — Live-map signals for best-of-one matches
 
 Zero live-map signals since 2026-10-19: no tracked map had a KXLOLMAP market (Worlds Swiss Bo1s; EMEA Masters maps 1–4 on 10-22 never tracked because Riot feeds returned 404s). Bo1s now use the KXLOLGAME event as the map event; observations carry best_of. The executor verifies no KXLOLMAP-…-1 event exists before trading. The series cap shares the pre-match SERIES# reservation. Unarmed maps journal a deduplicated reason in trading/decisions.jsonl, already backed up by backup.sh. Checks: ruff format/check; targeted pytest (308 passed, 2 skipped, 1.09s); full pytest (1,023 passed, 2 skipped, 10.01s); diff whitespace. Used the existing environment with sync disabled and this worktree on PYTHONPATH after uv sync crashed. Limit: deciding maps still unsupported; the worker needs a restart and the executor deploys on merge.
