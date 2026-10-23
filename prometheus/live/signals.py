@@ -69,6 +69,7 @@ def observation(game, page, at):
         "international": game.mapping["league"] in {*INTERNATIONAL_LEAGUES, "WLDs"}
         or homes[0] != homes[1],
         "map_number": game.number,
+        "best_of": game.mapping["best_of"],
         "event_ticker": game.signal_event,
         "series_event_ticker": game.signal_series,
     }
@@ -164,24 +165,37 @@ class Signals:
         game.signal_tickers = {}
         by_ticker = {m["ticker"]: m for m in markets}
         own, series = by_ticker.get(game.ticker), by_ticker.get(game.series_ticker)
-        if not own or not series:
+        bo1 = not own and game.mapping["best_of"] == 1
+        if not own and not bo1:
+            game.signal_skip = "no_map_market"
             return
+        if not series:
+            game.signal_skip = "no_series_market"
+            return
+        if bo1:
+            own = series
         hits = [m for m in markets if m.get("event_ticker") == own["event_ticker"]]
         if len(hits) != 2:
+            game.signal_skip = "event_market_count"
             return
         teams = game.mapping["teams"]
         for m in hits:
             rule = RULES.match(m.get("rules_primary", ""))
-            if not rule or int(rule["map"] or 0) != game.number:
+            number = int(rule["map"]) if rule and rule["map"] else None
+            if not rule or number != (None if bo1 else game.number):
+                game.signal_skip = "market_rule_mismatch"
                 return
             sides = [
                 i for i, team in enumerate(teams) if known(rule["side"], names(team))
             ]
             if len(sides) != 1:
+                game.signal_skip = "market_side_mismatch"
                 return
             game.signal_tickers[m["ticker"]] = sides[0]
         if sorted(game.signal_tickers.values()) != [0, 1]:
+            game.signal_skip = "market_side_mismatch"
             return
+        game.signal_skip = None
         game.signal_event, game.signal_series = (
             own["event_ticker"],
             series["event_ticker"],
@@ -203,9 +217,12 @@ class Signals:
                 self.outbox.deliver(path, candidate)
                 delivered.write_text(now)
             return
-        if not getattr(game, "signal_event", None):
-            return
         try:
+            if not getattr(game, "signal_event", None):
+                raise ValueError(
+                    "signal_markets_unavailable:"
+                    + (getattr(game, "signal_skip", None) or "not_discovered")
+                )
             if fresh_model:
                 self.observations[game.id] = observation(game, page, now)
             current = self.observations.get(game.id)
