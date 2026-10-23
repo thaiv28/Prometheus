@@ -107,15 +107,17 @@
     const g = m.game || {};
     const t = g.teams || [];
     const call = L.summaryCall(g);
-    const q = g.market ? L.quoteAt([g.market], Infinity) : null;
-    const p = call ? L.in100(call.p) : null;
+    const waiting = m.status === "waiting";
+    const series = m.series || {};
+    const q = waiting ? (series.kalshi ? L.quoteAt([series.kalshi], Infinity) : null) : g.market ? L.quoteAt([g.market], Infinity) : null;
+    const p = waiting ? L.in100(series.ours) : call ? L.in100(call.p) : null;
     const fav = p == null ? 0 : p > 50 ? 1 : p < 50 ? 2 : 0;
     // Team names are the row's links, so the match opens from the keyboard too.
     const team = (i) => h("a", { class: "lm-name", href: watchUrl(m), title: (m.teams[i] && m.teams[i].name) || "" }, (m.teams[i] && m.teams[i].name) || "?");
     const clock = m.status === "waiting" ? "Waiting" : g.ended_at ? "Ended" : L.clock(g.clock ?? g.clock_estimate) ?? "—";
     const bar = h("span", { class: "fx-bar", style: `--p:${p ?? 50}` }, q ? h("span", { class: "fx-mkt", style: `--m:${L.in100(q.mid)}` }) : null);
     if (p == null) bar.classList.add("is-empty");
-    bar.title = [call ? `Ours ${p}–${100 - p}, ${call.note}` : "No call yet", q ? `Kalshi ${L.in100(q.mid)}–${100 - L.in100(q.mid)}` : "No Kalshi price"].join("; ");
+    bar.title = [p != null ? `Ours ${p}–${100 - p}, ${waiting ? "series" : call.note}` : "No call yet", q ? `Kalshi ${L.in100(q.mid)}–${100 - L.in100(q.mid)}` : "No Kalshi price"].join("; ");
     const stats = [
       ["Gold", L.goldLeader(t, m.teams)],
       ["Kills", L.pair(t[0] && t[0].kills, t[1] && t[1].kills)],
@@ -137,12 +139,13 @@
       h("td", { class: "num lm-series", title: m.best_of ? `Best of ${m.best_of}` : "" }, score),
       ...stats.map(statCell),
     );
-    // Phones: one line of figures under the match.
-    const line = h("tr", { class: "lm-line" }, h("td", { colspan: "14" },
+    // Phones: one line of figures under the match (only Kalshi before it starts).
+    const kalshi = q ? [h("span", { class: "lm-k" }, "Kalshi"), ` ${L.in100(q.mid)}`] : [];
+    const line = h("tr", { class: "lm-line" }, h("td", { colspan: "14" }, ...(waiting ? kalshi : [
       h("span", { class: "lm-k" }, "Series"), ` ${score}`,
-      ...(q ? [" · ", h("span", { class: "lm-k" }, "Kalshi"), ` ${L.in100(q.mid)}`] : []),
-      ...stats.flatMap(([k, v]) => [" · ", h("span", { class: "lm-k" }, k), " ", v ?? "—"])));
-    const body = h("tbody", { class: "lm-match", "data-league": m.league }, main, m.status === "waiting" ? null : line);
+      ...(q ? [" · ", ...kalshi] : []),
+      ...stats.flatMap(([k, v]) => [" · ", h("span", { class: "lm-k" }, k), " ", v ?? "—"])])));
+    const body = h("tbody", { class: "lm-match", "data-league": m.league }, main, waiting && !q ? null : line);
     body.addEventListener("click", (e) => { if (!e.target.closest("a")) location.href = watchUrl(m); });
     return body;
   }

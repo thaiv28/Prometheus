@@ -208,6 +208,19 @@ def mapping_for(event, catalog, aliases):
     }
 
 
+def decided(match):
+    """Whether a Riot match has a winner (getLive can list it for hours after)."""
+    best_of = (match.get("strategy") or {}).get("count")
+    return any(
+        (t.get("result") or {}).get("outcome") in {"win", "loss"}
+        or (
+            best_of is not None
+            and ((t.get("result") or {}).get("gameWins") or 0) >= best_of // 2 + 1
+        )
+        for t in match.get("teams") or []
+    )
+
+
 def waiting_pages(events, catalog, aliases, at, tracked=(), failed=()):
     """Due Riot fixtures while this worker is on; same IDs as getLive.
 
@@ -215,7 +228,14 @@ def waiting_pages(events, catalog, aliases, at, tracked=(), failed=()):
     those unknown, and never replace a tracked map (including between maps).
     """
     now = timestamp(at)
-    pages = []
+    pages = {}
+    # A league plays one match at a time; a decided one stays tracked a while.
+    tracked_leagues = {
+        e.get("league", {}).get("slug")
+        for e in events
+        if ((e.get("match") or {}).get("id") or e.get("id")) in tracked
+        and not decided(e.get("match") or {})
+    }
     seen = set(tracked)
     # A failed/skipped active map is unavailable, never a pre-match fallback.
     # getSchedule lacks games, so exclude its duplicate using getLive first.
@@ -238,6 +258,8 @@ def waiting_pages(events, catalog, aliases, at, tracked=(), failed=()):
         ):
             continue
         try:
+            if decided(match) or event["league"]["slug"] in tracked_leagues:
+                continue
             if (
                 not -240 * 60
                 <= (timestamp(event["startTime"]) - now).total_seconds()
@@ -245,7 +267,11 @@ def waiting_pages(events, catalog, aliases, at, tracked=(), failed=()):
             ):
                 continue
             teams = [
-                {"name": resolve_team(t, catalog, aliases), "code": t.get("code")}
+                {
+                    "name": resolve_team(t, catalog, aliases),
+                    "code": t.get("code"),
+                    "riot_name": t.get("name"),
+                }
                 for t in match["teams"]
             ]
             if (
@@ -255,32 +281,36 @@ def waiting_pages(events, catalog, aliases, at, tracked=(), failed=()):
             ):
                 continue
             league = event["league"]
-            pages.append(
-                {
-                    "schema": 1,
-                    "published_at": at,
-                    "status": "waiting",
-                    "note": None,
-                    "match": {
-                        "id": mid,
-                        "league": LEAGUES.get(league["slug"], league["name"]),
-                        "event": " ".join(
-                            filter(None, [league["name"], event.get("blockName")])
-                        ),
-                        "best_of": match.get("strategy", {}).get("count"),
-                        "teams": teams,
-                        "score": None,
-                        "series": {},
-                        "maps": [],
-                    },
-                    "game": None,
-                    "live_state_verified": False,
-                }
-            )
+            slug = league["slug"]
+            if slug in pages and timestamp(event["startTime"]) >= timestamp(
+                pages[slug]["match"]["start"]
+            ):
+                continue
+            pages[slug] = {
+                "schema": 1,
+                "published_at": at,
+                "status": "waiting",
+                "note": None,
+                "match": {
+                    "id": mid,
+                    "start": event["startTime"],
+                    "league": LEAGUES.get(league["slug"], league["name"]),
+                    "event": " ".join(
+                        filter(None, [league["name"], event.get("blockName")])
+                    ),
+                    "best_of": match.get("strategy", {}).get("count"),
+                    "teams": teams,
+                    "score": None,
+                    "series": {},
+                    "maps": [],
+                },
+                "game": None,
+                "live_state_verified": False,
+            }
             seen.add(mid)
         except (ValueError, KeyError, TypeError):
             continue
-    return pages
+    return list(pages.values())
 
 
 def settle_map(ticker, number, results_path, out):
@@ -573,6 +603,50 @@ def forge_for(args, mapping, start_time):
         p_series=forge["p_series"],
     )
     return forge
+
+
+def waiting_mapping(page):
+    match = page["match"]
+    return dict(
+        match_id=match["id"],
+        **{key: match[key] for key in ("league", "event", "best_of", "teams")},
+    )
+
+
+def fill_waiting(page, args, ticker=None):
+    """Use the same FORGE cache and series quote history as the tracked map."""
+    match = page["match"]
+    forge = (
+        forge_for(args, waiting_mapping(page), match["start"]) if args.forge else None
+    )
+    series = {}
+    if forge:
+        series = {
+            "ours": series_chance(
+                forge["p_game"], match["best_of"], forge["rho"], [0, 0], None
+            ),
+            "by": "FORGE",
+            "kalshi": None,
+            "kalshi_url": None,
+        }
+    if ticker:
+        rows = Game.quotes(args.root / match["id"] / "series_quotes.jsonl")
+        if rows:
+            if not series:
+                series = {"ours": None, "by": "FORGE"}
+            series.update(kalshi=rows[-1], kalshi_url=MATCH_URL)
+    match["series"] = series
+
+
+def poll_waiting_quote(root, mid, ticker, out):
+    """Append a public series book to the match's shared quote history."""
+    _, book = fetch_json(f"{KALSHI}/markets/{ticker}/orderbook", out)
+    q = quote(book or {}, utc_now())
+    if q:
+        path = root / mid / "series_quotes.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a") as f:
+            f.write(json.dumps(dict(q, ticker=ticker, **book_levels(book))) + "\n")
 
 
 def publish_s3(page_out, uri):
@@ -1259,6 +1333,9 @@ def run(args):
     events, last_active = None, time.monotonic()
     scheduled = []
     waiting_ids = set()
+    waiting_tickers, waiting_discovered, waiting_polled = {}, {}, {}
+    last_pending = []
+    waiting_seq = 0
     feed_polled = {}
     kalshi = True
     last_ratings_refresh = float("-inf")
@@ -1482,8 +1559,18 @@ def run(args):
                             g.mapping["score"] = mapping_score(event)
                     if g.forge is None and args.forge:
                         g.forge = forge_for(args, g.mapping, g.start_time)
+                waiting_due = [
+                    p
+                    for p in last_pending
+                    if p["match"]["id"]
+                    not in {g.mapping["match_id"] for g in games.values()}
+                    and not waiting_tickers.get(p["match"]["id"])
+                    and cycle - waiting_discovered.get(p["match"]["id"], -float("inf"))
+                    >= 300
+                ]
                 if kalshi and (
-                    any(
+                    waiting_due
+                    or any(
                         g.ticker is None or g.series_ticker is None
                         for g in games.values()
                     )
@@ -1498,6 +1585,21 @@ def run(args):
                             )
                             markets += (payload or {}).get("markets", [])
                         pre.match(markets)
+                        for page in waiting_due:
+                            mid = page["match"]["id"]
+                            waiting_discovered[mid] = cycle
+                            waiting_tickers[mid] = contract(
+                                markets,
+                                waiting_mapping(page),
+                                None,
+                                page["match"]["start"],
+                            )
+                            if waiting_tickers[mid]:
+                                log(
+                                    "kalshi_series_waiting",
+                                    match=mid,
+                                    ticker=waiting_tickers[mid],
+                                )
                         for g in games.values():
                             if not g.start_time:
                                 continue
@@ -1606,7 +1708,38 @@ def run(args):
             for mid in waiting_ids - current_waiting - tracked:
                 (args.page_out / f"{mid}.json").unlink(missing_ok=True)
             for page in pending:
-                write_atomic(args.page_out / f"{page['match']['id']}.json", page)
+                mid = page["match"]["id"]
+                ticker = waiting_tickers.get(mid) if kalshi else None
+                try:
+                    if (
+                        ticker
+                        and cycle - waiting_polled.get(mid, -float("inf"))
+                        >= args.interval
+                    ):
+                        waiting_polled[mid] = cycle
+                        waiting_seq += 1
+                        out = (
+                            args.root
+                            / mid
+                            / "waiting_book"
+                            / f"{waiting_seq}_{datetime.now(UTC):%H%M%S}"
+                        )
+                        poll_waiting_quote(args.root, mid, ticker, out)
+                except Stop as error:
+                    kalshi = False
+                    ticker = None
+                    log("kalshi_stopped", reason=str(error))
+                except (ValueError, OSError) as error:
+                    log("waiting_quote_failed", match=mid, reason=str(error))
+                try:
+                    fill_waiting(page, args, ticker)
+                except (ValueError, OSError) as error:
+                    log("waiting_quote_failed", match=mid, reason=str(error))
+                write_atomic(args.page_out / f"{mid}.json", page)
+            for cache in (waiting_tickers, waiting_discovered, waiting_polled):
+                for mid in set(cache) - current_waiting - tracked:
+                    del cache[mid]
+            last_pending = pending
             waiting_ids = current_waiting
             count, changed = write_index(args.page_out, utc_now())
             if args.s3 and (games or changed or lifecycle_changed):

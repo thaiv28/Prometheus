@@ -328,6 +328,7 @@ def summary(page):
     return {
         **{k: match[k] for k in ("id", "league", "event", "best_of", "teams", "score")},
         "start": match.get("start"),
+        "series": match.get("series") or {},
         "url": f"live/{match['id']}.json",
         "status": page["status"],
         "game": None
