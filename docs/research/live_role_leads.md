@@ -73,7 +73,8 @@ Primary standardized logistic coefficients before Platt calibration:
 | gold_support | +0.239983 |
 | gold_support_time | -0.058869 |
 
-Limits: retrospective; July-2025+ test outcomes were viewed by earlier studies. Participant gold overlaps team gold lead already in the model. No trading check; no production change.
+Limits: retrospective; July-2025+ test outcomes were viewed by earlier studies. Participant gold overlaps team gold lead already in the model. No trading check in this study; no production change.
+[Level confirmation](live_role_levels_check.md): FAIL overall; research only.
 
 Reproduce:
 ```bash

@@ -177,17 +177,14 @@ def compact_ci(result):
     return f"{result['delta']:+.6f}[{lo:+.6f},{hi:+.6f}]"
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--rebuild", action="store_true")
-    args = parser.parse_args()
-    started = time.monotonic()
+def prepared_frames(rebuild=False):
+    """Prepare the fixed feed partitions, objectives, momentum and role gaps."""
     OUT.mkdir(parents=True, exist_ok=True)
     parts = partitions(Path("data/feed_timelines"), Path("data/gol_training"))
     objectives = objective_rows(parts["joined"])
     cache = OUT / "role_rows.csv.gz"
     count_path = OUT / "role_rows_counts.json"
-    if cache.exists() and not args.rebuild:
+    if cache.exists() and not rebuild:
         roles = pd.read_csv(cache, float_precision="round_trip")
         coverage = json.loads(count_path.read_text())
         print(f"Cached role coverage: {coverage}", flush=True)
@@ -211,7 +208,18 @@ def main():
         frame["cs_sum"] = frame[GAPS[10:]].sum(axis=1)
         for col in GAPS + CANDIDATES["totals"]:
             frame[f"{col}_time"] = frame[col] * frame.time
-    train, calibration, test = frames
+    frames[2].attrs["coverage"] = coverage
+    return tuple(frames)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--rebuild", action="store_true")
+    args = parser.parse_args()
+    started = time.monotonic()
+    OUT.mkdir(parents=True, exist_ok=True)
+    train, calibration, test = prepared_frames(args.rebuild)
+    coverage = test.attrs["coverage"].copy()
     test = test[test.seconds <= 2400].copy()
     control = score(fit(train, calibration, STATE_FEATURES), test, STATE_FEATURES)
     control_metrics = metrics(test, control)

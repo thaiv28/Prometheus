@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-22 — Research: live benchmark and trading check of role level leads
+
+Research only. Fixed level candidate (five role level gaps plus ×time) checked on the pinned 1,666 maps and the trading study; [report](../research/live_role_levels_check.md). Verdict FAIL: live All ΔLL -0.000685 (-0.001909 to +0.000503), not significant; compare_benchmarks exit 0. Trading blend All -0.000601 (-0.001439 to +0.000274), no slice worse; paper ROI +7.57% current (257 bets) vs +5.35% level (277). 52,892 state calls all matched raw levels. Both arms use research refits (max 0.044 from deployed p: Elo inputs and the calibration set changed since the deployed fit). Checks: 14 targeted tests, ruff, role-leads report rerun identical, live_trading.md unchanged. No production change.
+
 ## 2026-10-22 — Research: role gold/level/CS leads in the live model
 
 Research only. [Fixed study](../research/live_role_leads.md) uses `data/feed_raw`: 8,469 joined maps, 270,225 exact matches, no nearest/unknown rows; all 123,954 test rows have roles. Candidates add role gold (primary), level, CS, level/CS totals, or all gaps, each with time interactions, to deployed objectives + momentum. Control LL 0.465625. Primary ΔLL +0.000623 (95% series CI +0.000230 to +0.001030): FAIL. Other All ΔLL: level −0.001134, CS +0.000766, totals −0.000509, all +0.000436; descriptive only, none adopted. Checks: study completed (606 s; cached rerun 40 s), seven synthetic tests, full pytest (981 passed, 2 skipped), ruff format/check, links and report budget. Limits: retrospective test previously viewed; gold overlaps existing team lead; no trading check. No production changes or commits.
