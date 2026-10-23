@@ -67,6 +67,25 @@ class MappingTest(unittest.TestCase):
             resolve_team({"id": "x", "name": "?", "slug": "?"}, CATALOG, {})
         )
 
+    def test_resolves_riot_spellings_by_fold(self):
+        catalog = [
+            {"n": "Gen.G", "s": "gen-g"},
+            {"n": "Gen.G Scholars", "s": "gen-g-scholars"},
+            {"n": "Dplus Kia", "s": "dplus-kia"},
+            {"n": "LØS", "s": "l-s"},
+            {"n": "Rare Atom", "s": "rare-atom"},
+            {"n": "Rare Atom Gaming", "s": "rare-atom-gaming"},
+        ]
+        for riot, ours in [
+            ({"name": "Gen.G Esports", "slug": "geng"}, "Gen.G"),
+            ({"name": "Dplus KIA", "slug": "dwg-kia"}, "Dplus Kia"),
+            ({"name": "LOS", "slug": "los"}, "LØS"),
+            ({"name": "RARE ATOM GAMING"}, "Rare Atom Gaming"),  # exact fold first
+        ]:
+            self.assertEqual(resolve_team(riot, catalog, {}), ours)
+        # Two catalog teams only differ by the suffix: no guess.
+        self.assertIsNone(resolve_team({"name": "Rare Atom Esports"}, catalog, {}))
+
     def test_mapping_from_live_event(self):
         m = mapping_for(event(), CATALOG, {})
         self.assertEqual([t["name"] for t in m["teams"]], ["Karmine Corp", "Cloud9"])

@@ -27,6 +27,7 @@ from types import SimpleNamespace
 from urllib.parse import urlencode
 
 from .. import DB_PATH
+from ..alert_contract import fold
 from .collector import Collector
 from .feed import timestamp
 from .kalshi import (
@@ -63,6 +64,8 @@ LEAGUES = {
     "lcp": "LCP",
     "cblol-brazil": "CBLOL",
 }
+# Trailing words Riot adds to some teams' names (folded).
+ORG_SUFFIX = re.compile(r"( (e ?sports|gaming))+$")
 QUERY_LAG = 30  # the feed rejects windows ending under 20 s ago (HTTP 400)
 FRESH = 60  # seconds a match file stays in the index without a new write
 # Exit status after Riot refused access or rate-limited us: the systemd unit
@@ -105,7 +108,14 @@ def resolve_team(team, catalog, aliases):
     if team.get("name") in names:
         return team["name"]
     slugs = [t["n"] for t in catalog if team.get("slug") and t.get("s") == team["slug"]]
-    return slugs[0] if len(slugs) == 1 else None
+    if len(slugs) == 1:
+        return slugs[0]
+    # Riot's spelling of a catalog name: "Dplus KIA", "LOS" (LØS), "Gen.G Esports".
+    for key in (fold, lambda name: ORG_SUFFIX.sub("", fold(name))):
+        matches = {t["n"] for t in catalog if key(t["n"]) == key(team.get("name", ""))}
+        if len(matches) == 1:
+            return matches.pop()
+    return None
 
 
 def live_events(payload):
