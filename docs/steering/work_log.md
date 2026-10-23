@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-23 — Live service matches Riot team names by fold
+
+Gen.G v IG (Worlds, 17:00Z) never reached the live page: the worker skipped it with `no Prometheus name for Gen.G Esports`. `resolve_team` took only an exact name, a unique slug or an alias, so Riot's `Gen.G Esports`, `Dplus KIA` and `LOS` (LØS) failed. It now also takes the one catalog team with the same `alert_contract.fold`, then the same fold without a trailing "Esports"/"Gaming"; ties still return None. `team_aliases.json` stays empty. Checks: reproduced the skip by running the service locally on the live game; all 25 named Worlds teams in Riot's `getTeams` resolve against the published `teams.json` (3 misses before); new resolver test; full pytest; ruff. Limit: the worker takes code only on its 6-hour refresh or a reboot.
+
 ## 2026-10-20 — Executor decides on every fixture; fill issues
 
 The publish and hourly jobs now save an `execution_candidate` on every eligible upcoming fixture (alert eligibility minus edge, lead and same-run price), whatever `KALSHI_ALERTS` says. The Lambda reads candidates under 3h old instead of saved alerts and prices both sides now, after one bulk Kalshi market call screens them. No alert-cost cap, alert-age or 6h rule; vetoes, fees, Kelly, caps, the one-buy-per-fixture rule and the start cutoff stay. Fills open a best-effort issue in the private `thaiv28/prometheus-trades` repo (token in Secrets Manager). Public alert issues stopped; `alerts.html` stays. Implemented by Codex. Checks: ruff; full pytest; package build. Limits: needs infra PR #22 (1-minute schedule, token access); buying up to start was unproven in the timing backtest (PR #111); untested against live Kalshi/GitHub.
