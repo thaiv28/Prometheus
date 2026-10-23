@@ -5,13 +5,16 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
+from prometheus.live.page import summary
 from prometheus.live.service import (
     Game,
     feed_sides,
+    fill_waiting,
     live_events,
     mapping_for,
     patch_snapshot,
     pin_order,
+    poll_waiting_quote,
     resolve_team,
     waiting_pages,
     write_index,
@@ -205,6 +208,105 @@ class WaitingTest(unittest.TestCase):
             waiting_pages([self.fixture(), live], CATALOG, {}, self.now, failed={"g4"}),
             [],
         )
+
+    def test_decided_fixture_is_dropped(self):
+        for result in ({"gameWins": 1}, {"outcome": "win"}, {"outcome": "loss"}):
+            e = self.fixture(state="inProgress")
+            e["match"]["strategy"]["count"] = 1
+            for team in e["match"]["teams"]:
+                team["result"] = {}
+            e["match"]["teams"][0]["result"] = result
+            with self.subTest(result=result):
+                self.assertEqual(waiting_pages([e], CATALOG, {}, self.now), [])
+
+    def test_missing_best_of_does_not_decide_from_wins(self):
+        e = self.fixture()
+        e["match"].pop("strategy")
+        self.assertEqual(len(waiting_pages([e], CATALOG, {}, self.now)), 1)
+
+    def test_earliest_per_league_and_input_order_breaks_ties(self):
+        later = self.fixture()
+        later["match"]["id"] = "later"
+        earlier = self.fixture(self.now)
+        tie = self.fixture(self.now)
+        tie["match"]["id"] = "tie"
+        other = self.fixture()
+        other["match"]["id"] = "other"
+        other["league"] = {"slug": "lck", "name": "LCK"}
+        pages = waiting_pages([later, earlier, tie, other], CATALOG, {}, self.now)
+        self.assertEqual([p["match"]["id"] for p in pages], ["m1", "other"])
+
+    def test_tracked_match_excludes_whole_league(self):
+        live = event()
+        live["id"] = "tracked"
+        self.assertEqual(
+            waiting_pages([self.fixture(), live], CATALOG, {}, self.now, {"tracked"}),
+            [],
+        )
+        # A decided series stays tracked for a while; the next match still waits.
+        live["match"]["teams"][1]["result"]["gameWins"] = 3
+        (page,) = waiting_pages(
+            [self.fixture(), live], CATALOG, {}, self.now, {"tracked"}
+        )
+        self.assertEqual(page["status"], "waiting")
+
+    def test_start_and_riot_names_are_preserved(self):
+        e = self.fixture()
+        page = waiting_pages([e], CATALOG, {}, self.now)[0]
+        self.assertEqual(page["match"]["start"], e["startTime"])
+        self.assertEqual(
+            page["match"]["teams"],
+            [
+                {"name": t["name"], "code": t["code"], "riot_name": t["name"]}
+                for t in e["match"]["teams"]
+            ],
+        )
+
+    def test_waiting_odds_share_forge_cache_and_last_series_quote(self):
+        with tempfile.TemporaryDirectory() as d:
+            args = mock.Mock(root=Path(d), forge=True)
+            args.ratings.forge.return_value = {"p_game": 0.7, "rho": 0, "p_series": 0.7}
+            e = self.fixture()
+            e["match"]["strategy"]["count"] = 1
+            for team in e["match"]["teams"]:
+                team["result"] = {}
+            page = waiting_pages([e], CATALOG, {}, self.now)[0]
+            book = {
+                "orderbook_fp": {
+                    "yes_dollars": [["0.60", "2"]],
+                    "no_dollars": [["0.35", "3"]],
+                }
+            }
+            with mock.patch(
+                "prometheus.live.service.fetch_json", return_value=({}, book)
+            ) as fetch:
+                poll_waiting_quote(args.root, "m1", "SERIES", args.root / "book")
+                fetch.assert_called_once()
+            path = args.root / "m1" / "series_quotes.jsonl"
+            with path.open("a") as f:
+                f.write(
+                    json.dumps(
+                        {"at": self.now, "bid": 0.61, "ask": 0.66, "ticker": "SERIES"}
+                    )
+                    + "\n"
+                )
+            fill_waiting(page, args, "SERIES")
+            series = page["match"]["series"]
+            self.assertAlmostEqual(series["ours"], 0.7, places=5)
+            self.assertEqual(
+                series["kalshi"], {"at": self.now, "bid": 0.61, "ask": 0.66}
+            )
+            self.assertTrue(series["kalshi_url"])
+            # The index row (Predictions' Live now) carries the same odds.
+            self.assertEqual(summary(page)["series"], series)
+            self.assertTrue((args.root / "m1" / "forge.json").exists())
+            fill_waiting(page, args, "SERIES")
+            args.ratings.forge.assert_called_once()
+            args.forge = False
+            fill_waiting(page, args, "SERIES")
+            self.assertIsNone(page["match"]["series"]["ours"])
+            fill_waiting(page, args)
+            self.assertEqual(page["match"]["series"], {})
 
     def test_late_match_stays_waiting_with_same_id(self):
         (page,) = waiting_pages(

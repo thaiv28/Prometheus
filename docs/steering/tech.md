@@ -376,7 +376,7 @@ Single-threaded `python -m prometheus.live.service --fetch [--s3 s3://<bucket>/c
 
 ### Waiting fixtures, lifecycle and cadence
 
-`service.waiting_pages` selects known Riot `getSchedule` fixtures in −4h/+75min once/discovery, carrying Riot IDs into tracking. `status: waiting`, `game: null` survives `page.summary`; tracked games win, also waiting without observations. Files refresh each cycle, removed on expiry/completion/discovery failure.
+`service.waiting_pages` keeps the earliest undecided fixture/league in −4h/+75min, excluding leagues with an undecided tracked match. Pages carry start and FORGE/Kalshi series odds via `forge.json`/`series_quotes.jsonl`; books poll once/interval, misses retry every five minutes; excluded files disappear.
 
 Optional scheduled `start` flows through pages/summaries. Live Coming up hides canonical pair matches (either order; start±12h when present) only for `live`/`between_games`; older workers omit start. Hiding persists per page session after completion, including empty days/section. Watch retains whole-section idle behavior. Seven-day `output/live/lifecycle.json` uses existing schedule/discovery/scores; completion survives empty indexes/shutdown. Completed recordings link Watch until daily archive replaces rows.
 

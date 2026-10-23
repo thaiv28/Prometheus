@@ -260,6 +260,10 @@
   const list = $("match-list");
   let lastStrip = null;
   function chipNumbers(m) {
+    if (m.status === "waiting") {
+      const s = m.series || {};
+      return { clock: "Waiting", p: s.ours ?? null, q: s.kalshi ? L.quoteAt([s.kalshi], Infinity) : null, score: m.score };
+    }
     const cur = state && state.match && state.match.id === m.id ? L.release(state, Infinity) : null;
     if (m.id === matchId && cur && cur.game) {
       const g = cur.game;
@@ -470,7 +474,6 @@
     };
     const waiting = v.status === "waiting";
     $("odds").tBodies[1].hidden = waiting && !g;
-    $("odds").tBodies[2].hidden = waiting && !g;
     $("odds").tBodies[0].hidden = waiting;
     $("odds").tBodies[0].replaceChildren(...(over ? final() : group(at ? `Live · ${at}` : "Live", [
       oddsRow("Ours", "", call && call.p, { cls: "odds-ours" }),
@@ -482,6 +485,7 @@
     ]));
     // The series: our FORGE call and Kalshi's, under its score.
     const s = m.series || {};
+    $("odds").tBodies[2].hidden = waiting && !g && s.ours == null && !s.kalshi;
     const sq = s.kalshi ? L.quoteAt([s.kalshi], Infinity) : null;
     const score = Array.isArray(m.score) ? ` ${m.score[0]}–${m.score[1]}` : "";
     $("odds").tBodies[2].replaceChildren(...group(`Series${score}`, [
