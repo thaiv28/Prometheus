@@ -170,7 +170,29 @@ class Kalshi:
         from prometheus import live_map
 
         is_map = alert.get("kind") == live_map.VERSION
-        series_ticker = "KXLOLMAP" if is_map else "KXLOLGAME"
+        bo1 = (
+            is_map
+            and alert["event_ticker"] == alert["series_id"]
+            and alert["event_ticker"].startswith("KXLOLGAME-")
+        )
+        if bo1:
+            if (
+                alert.get("live", {}).get("observation", {}).get("best_of") != 1
+                or type(alert.get("map_number")) is not int
+                or alert["map_number"] != 1
+            ):
+                raise ValueError("invalid_live_market_identity")
+            probe = "KXLOLMAP-" + alert["event_ticker"][len("KXLOLGAME-") :] + "-1"
+            try:
+                self.request("GET", f"/events/{urllib.parse.quote(probe, safe='')}")
+            except LookupError as error:
+                if str(error) != "exchange_not_found":
+                    raise ValueError("live_bo1_unverified") from None
+            except Exception:
+                raise ValueError("live_bo1_unverified") from None
+            else:
+                raise ValueError("live_bo1_map_market_exists")
+        series_ticker = "KXLOLMAP" if is_map and not bo1 else "KXLOLGAME"
         ticker = urllib.parse.quote(alert["event_ticker"], safe="")
         response = self.request("GET", f"/events/{ticker}", with_nested_markets="true")
         event = response["event"]
@@ -233,12 +255,12 @@ class Kalshi:
             raise ValueError("ambiguous_outcomes")
         parsed, first_start = [], timestamp(alert["start"])
         for market in markets:
-            rules = (MAP_RULES if is_map else RULES).match(
+            rules = (MAP_RULES if is_map and not bo1 else RULES).match(
                 market.get("rules_primary", "")
             )
             if (
                 not rules
-                or (is_map and int(rules["map"]) != alert["map_number"])
+                or (is_map and not bo1 and int(rules["map"]) != alert["map_number"])
                 or market.get("market_type") != "binary"
                 or market.get("event_ticker") != alert["event_ticker"]
                 or decimal(market.get("notional_value_dollars", "0")) != 1
@@ -264,7 +286,7 @@ class Kalshi:
             parsed.append((market, side))
         if {side for _, side in parsed} != set(alert["teams"]):
             raise ValueError("duplicate_or_missing_outcome")
-        if is_map:
+        if is_map and not bo1:
             parent = self.request(
                 "GET",
                 f"/events/{urllib.parse.quote(alert['series_id'], safe='')}",

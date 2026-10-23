@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-23 — Live-map signals for best-of-one matches
+
+Zero live-map signals since 2026-10-19: no tracked map had a KXLOLMAP market (Worlds Swiss Bo1s; EMEA Masters maps 1–4 on 10-22 never tracked because Riot feeds returned 404s). Bo1s now use the KXLOLGAME event as the map event; observations carry best_of. The executor verifies no KXLOLMAP-…-1 event exists before trading. The series cap shares the pre-match SERIES# reservation. Unarmed maps journal a deduplicated reason in trading/decisions.jsonl, already backed up by backup.sh. Checks: ruff format/check; targeted pytest (308 passed, 2 skipped, 1.09s); full pytest (1,023 passed, 2 skipped, 10.01s); diff whitespace. Used the existing environment with sync disabled and this worktree on PYTHONPATH after uv sync crashed. Limit: deciding maps still unsupported; the worker needs a restart and the executor deploys on merge.
+
 ## 2026-10-23 — Live waiting rows: next match only, with odds
 
 At 18:00Z Live showed three waiting Worlds Bo1s: IG v GEN (decided; Riot still listed it in progress), HLE v TES and BLG v MKOI (inside the 75-min lead). Waiting now keeps the earliest undecided fixture per league, none while that league has an undecided tracked match. Rows and the index carry start and series odds: FORGE from the shared `forge.json`, Kalshi from the shared `series_quotes.jsonl` (one public orderbook read per interval; missing contracts retried every five minutes). Watch shows the Series group while waiting. Checks: ruff; full pytest; Node tests; local worker run on Riot/Kalshi (one row, HLE v TES, FORGE 72, Kalshi 77–78); Predictions and Watch screenshots at 1440 and 390 px, no overflow. Copy review: PASS (Live now, phone line, Watch odds; no new strings beyond the bar tooltip's "series"; phone line drops empty stats while waiting). Worker gets it on refresh/restart.

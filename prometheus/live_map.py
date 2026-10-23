@@ -340,11 +340,22 @@ def validate(proposal_value, config, at):
         or (now - timestamp(saved["observation"]["received_at"])).total_seconds() > 15
     ):
         raise ValueError("live_signal_stale")
+    event, series, number = (
+        proposal_value["event_ticker"],
+        proposal_value["series_id"],
+        proposal_value["map_number"],
+    )
+    map_identity = event.startswith("KXLOLMAP-") and series.startswith("KXLOLGAME-")
+    bo1_identity = (
+        saved["observation"].get("best_of") == 1
+        and number == 1
+        and event == series
+        and event.startswith("KXLOLGAME-")
+    )
     if (
-        not proposal_value["event_ticker"].startswith("KXLOLMAP-")
-        or not proposal_value["series_id"].startswith("KXLOLGAME-")
-        or type(proposal_value["map_number"]) is not int
-        or not 1 <= proposal_value["map_number"] <= 9
+        type(number) is not int
+        or not 1 <= number <= 9
+        or not (map_identity or bo1_identity)
     ):
         raise ValueError("invalid_live_market_identity")
     return expected

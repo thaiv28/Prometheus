@@ -234,7 +234,8 @@ def test_map_entry_is_capped_fenced_and_uncertain_response_never_reissued():
     assert ledger.get("demo", "ACCOUNT")["held"] == account["held"]
 
 
-def test_series_reservation_counts_existing_pregame_and_survives_race():
+@pytest.mark.parametrize("bo1", [False, True])
+def test_series_reservation_counts_existing_pregame_and_survives_race(bo1):
     from test_execution import saved
 
     _, api, ledger, execute = harness()
@@ -246,7 +247,8 @@ def test_series_reservation_counts_existing_pregame_and_survives_race():
     plan = plan_order(saved(), routes, cfg, Decimal(100), NOW)
     row = ledger.reserve(plan, cfg, Decimal(100))
     assert row is not None
-    assert execute([signal()])["submitted"] == 0
+    candidate = bo1_signal() if bo1 else signal()
+    assert execute([candidate])["submitted"] == 0
     assert not api.calls
     # Two planners see the same account. Actual transaction admits only one.
     _, api, ledger, _ = harness()
@@ -629,7 +631,11 @@ def test_private_worker_observation_keeps_unshifted_model_and_exact_input_parity
         timeline=(model, [{"elo": 1500, "as_of": "2026-10-14 00:00:00"}] * 2),
         start={"source_at": frames[0]["source_at"]},
         forge={"homes": ["LCK", "LCK"]},
-        mapping={"teams": [{"name": "A"}, {"name": "B"}], "league": "LCK"},
+        mapping={
+            "teams": [{"name": "A"}, {"name": "B"}],
+            "league": "LCK",
+            "best_of": 3,
+        },
         start_time=observation()["start"],
         number=1,
         signal_event="KXLOLMAP-F",
@@ -637,6 +643,7 @@ def test_private_worker_observation_keeps_unshifted_model_and_exact_input_parity
     )
     page = {"status": "live", "game": {"blue": 0, "frames": frames}}
     o = collect(game, page, NOW.isoformat())
+    assert o["best_of"] == 3
     assert o["inputs"]["momentum"] == 0
     assert live_map.raw_probability(o) == pytest.approx(predict(model, **o["inputs"]))
     assert page["game"]["frames"][-1]["clock_estimate"] == 600
@@ -783,3 +790,182 @@ def test_emergency_off_controls_survive_malformed_live_map_configuration(broken)
     assert Config.parse(parameter.value).mode == "off"
     control.set_live_map_mode(parameter, "/config", "off", now=NOW)
     assert parameter.value["live_maps"]["mode"] == "off"
+
+
+def bo1_signal(best_of=1, map_number=1):
+    o = observation()
+    o.update(best_of=best_of, map_number=map_number, event_ticker="KXLOLGAME-F")
+    return live_map.proposal(o, tape(), book(), NOW.isoformat(), fee)
+
+
+class Bo1PublicClient(LivePublicClient):
+    probe_error = "exchange_not_found"
+
+    def __init__(self):
+        super().__init__()
+        self.books = {
+            k.replace("KXLOLMAP", "KXLOLGAME"): v for k, v in self.books.items()
+        }
+        self.bo1_calls = []
+
+    def request(self, method, path, body=None, **query):
+        self.bo1_calls.append(path)
+        if path == "/events/KXLOLMAP-F-1":
+            if self.probe_error is None:
+                return {"event": {"event_ticker": "KXLOLMAP-F-1"}}
+            if self.probe_error == "exchange_not_found":
+                raise LookupError(self.probe_error)
+            raise RuntimeError(self.probe_error)
+        return super().request(method, path, body, **query)
+
+
+def test_bo1_validates_and_resolves_series_markets_with_one_parent_read():
+    candidate = bo1_signal()
+    cfg = Config.parse(config())
+    assert live_map.canonical(
+        live_map.validate(candidate, cfg, NOW.isoformat())
+    ) == live_map.canonical(candidate)
+    api = Bo1PublicClient()
+    routes = api.resolve(candidate, NOW, cfg)
+    assert len(routes) == 2
+    assert all(Decimal(r["live_probability"]) > Decimal(".55") for r in routes)
+    assert api.bo1_calls.count("/events/KXLOLGAME-F") == 1
+    assert "/series/KXLOLGAME" in api.bo1_calls
+    assert "/events/KXLOLMAP-F-1" in api.bo1_calls
+
+
+@pytest.mark.parametrize("best_of,number", [(3, 1), (1, 2)])
+def test_bo1_identity_rejects_longer_series_or_second_map(best_of, number):
+    candidate = bo1_signal(best_of, number)
+    with pytest.raises(ValueError, match="invalid_live_market_identity"):
+        live_map.validate(candidate, Config.parse(config()), NOW.isoformat())
+    with pytest.raises(ValueError, match="invalid_live_market_identity"):
+        Bo1PublicClient().resolve(candidate, NOW, Config.parse(config()))
+
+
+@pytest.mark.parametrize(
+    "error,reason",
+    [
+        (None, "live_bo1_map_market_exists"),
+        ("exchange_http_500", "live_bo1_unverified"),
+        ("exchange_transport_uncertain", "live_bo1_unverified"),
+    ],
+)
+def test_bo1_probe_fails_closed_before_books(error, reason):
+    api = Bo1PublicClient()
+    api.probe_error = error
+    with pytest.raises(ValueError, match=reason):
+        api.resolve(bo1_signal(), NOW, Config.parse(config()))
+    assert not any(path.endswith("/orderbook") for path in api.bo1_calls)
+
+
+def worker_game(tmp_path, best_of=1):
+    return SimpleNamespace(
+        id="g",
+        dir=tmp_path,
+        ticker=None,
+        series_ticker="KXLOLGAME-F-A",
+        number=1,
+        mapping={"best_of": best_of, "teams": [{"name": "A"}, {"name": "B"}]},
+    )
+
+
+def test_worker_discovers_bo1_but_not_deciding_map(tmp_path):
+    from prometheus.live.signals import Signals
+
+    markets = Bo1PublicClient().parent["markets"]
+    game = worker_game(tmp_path)
+    Signals.discover(game, markets)
+    assert game.signal_event == game.signal_series == "KXLOLGAME-F"
+    assert game.signal_tickers == {"KXLOLGAME-F-A": 0, "KXLOLGAME-F-B": 1}
+    assert game.signal_skip is None
+    game.mapping["best_of"] = 3
+    Signals.discover(game, markets)
+    assert game.signal_event is None
+    assert game.signal_skip == "no_map_market"
+
+
+@pytest.mark.parametrize("reason", ["no_map_market", None])
+def test_worker_journals_unarmed_reason_once(tmp_path, reason):
+    from prometheus.live.signals import Signals
+
+    game = worker_game(tmp_path)
+    game.signal_skip = reason
+    observer = Signals(lambda *_: pytest.fail("unarmed game must not fetch"))
+    observer.poll(game, {}, fresh_model=True)
+    observer.poll(game, {}, fresh_model=True)
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "trading/decisions.jsonl").read_text().splitlines()
+    ]
+    assert len(rows) == 1
+    assert rows[0]["reason"] == "signal_markets_unavailable:" + (
+        reason or "not_discovered"
+    )
+
+
+@pytest.mark.parametrize(
+    "best_of,has_map,expected", [(1, False, True), (3, False, False), (1, True, False)]
+)
+def test_bo1_series_quote_supplies_fresh_signal_book(
+    tmp_path, monkeypatch, best_of, has_map, expected
+):
+    from prometheus.live import service
+
+    game = worker_game(tmp_path, best_of)
+    game.request_dir = lambda _: tmp_path
+    game.latest_signal_book = None
+    if has_map:
+        game.ticker = "KXLOLMAP-F-A"
+    monkeypatch.setattr(service, "utc_now", lambda: NOW.isoformat())
+    monkeypatch.setattr(
+        service,
+        "fetch_json",
+        lambda *_: (
+            {"headers": {"Date": "Thu, 15 Oct 2026 12:00:00 GMT"}},
+            {
+                "orderbook_fp": {
+                    "yes_dollars": [[".48", "10"]],
+                    "no_dollars": [[".50", "10"]],
+                }
+            },
+        ),
+    )
+    path = tmp_path / "series_quotes.jsonl"
+    service.Game.poll_quote(game, game.series_ticker, path)
+    assert (game.latest_signal_book is not None) is expected
+    assert json.loads(path.read_text())["ticker"] == game.series_ticker
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "no_series_market",
+        "event_market_count",
+        "market_rule_mismatch",
+        "market_side_mismatch",
+        "duplicate_side",
+    ],
+)
+def test_worker_discovery_reports_each_failure(tmp_path, failure):
+    from prometheus.live.signals import Signals
+
+    game = worker_game(tmp_path)
+    markets = Bo1PublicClient().parent["markets"]
+    if failure == "no_series_market":
+        markets = []
+    elif failure == "event_market_count":
+        markets.pop()
+    elif failure == "market_rule_mismatch":
+        markets[1]["rules_primary"] = markets[1]["rules_primary"].replace(
+            "wins the", "wins game 1 in the"
+        )
+    else:
+        markets[1]["rules_primary"] = markets[1]["rules_primary"].replace(
+            "If B", "If A" if failure == "duplicate_side" else "If C"
+        )
+    Signals.discover(game, markets)
+    assert game.signal_event is None
+    assert game.signal_skip == (
+        "market_side_mismatch" if failure == "duplicate_side" else failure
+    )

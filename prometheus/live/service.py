@@ -742,6 +742,7 @@ class Game:
         self.mapping, self.id = mapping, game["id"]
         self.number, self.start_time = game["number"], start_time
         self.latest_signal_book = None
+        self.signal_skip = None
         self.ticker = self.series_ticker = self.forge = self.page_out = None
         self.dir = root / mapping["match_id"] / self.id
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -920,7 +921,11 @@ class Game:
         out = self.request_dir("book")
         record, book = fetch_json(f"{KALSHI}/markets/{ticker}/orderbook", out)
         q = quote(book or {}, utc_now())
-        if ticker == self.ticker:
+        if ticker == self.ticker or (
+            self.mapping["best_of"] == 1
+            and not self.ticker
+            and ticker == self.series_ticker
+        ):
             self.latest_signal_book = None
             headers = record.get("headers") or {}
             # Trading also needs a current, uncached exchange response.
