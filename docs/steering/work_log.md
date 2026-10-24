@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-23 — Live feed polls on the window boundary; recorded-page guard
+
+Feed windows start on 10 s boundaries 30 s back, so the newest frame's age is ~20.6 s plus the poll's offset into the cycle (BLG v MKOI: 20.6 s at +0 s rising to 29.8 s at +9 s; median 25.6 s). The worker now polls once per 10 s slot, 0.5 s after it opens (`feed_slot`), and wakes for it: ~5 s fresher on average, no extra requests (`--interval` must be 10, 20 or 30). After a restart the old code wrote BLG v MKOI's waiting page over its recorded map page (restored from `map1.json`); `without_recorded` now skips waiting pages for matches whose file holds frames. Checks: new timing and guard tests; cadence test on slot-aligned clock; full pytest; ruff. Limit: alignment unmeasured live.
+
 ## 2026-10-23 — Live-map delay and fight-veto research; markout script
 
 Research only (`docs/research/live_latency.md`). Production newest-frame age is 22–26 s (median, two maps; ~20 s Riot floor); the replay assumes 21 s. `evaluate_live.py --build-data --lag N --data PATH` builds at another delay. Lag 26 vs 21 (1,772 maps, 30 s rule): 171 vs 183 bets, +8.6% vs +21.3% ROI; paired −1.4¢/map (−3.5 to +0.6), includes zero. Fixed fight/objective veto: −2.0¢/map (−4.0 to −0.2); the 71 bets it removed had +48.7% ROI and +3.9¢ CLV, so no veto. New `scripts/live_markouts.py` reads backed-up candidates (30/60/120 s quote markouts). Checks: ruff; full pytest; both builds and the report run locally. No production, CI or pin change. Limits: reused history, minute samples, tape costs.

@@ -9,14 +9,17 @@ from prometheus.live.page import summary
 from prometheus.live.service import (
     Game,
     feed_sides,
+    feed_slot,
     fill_waiting,
     live_events,
     mapping_for,
+    next_feed_slot,
     patch_snapshot,
     pin_order,
     poll_waiting_quote,
     resolve_team,
     waiting_pages,
+    without_recorded,
     write_index,
 )
 from prometheus.live.start import find_start
@@ -49,6 +52,31 @@ def event(state="inProgress"):
             "games": [{"id": "g4", "number": 4}, {"id": "g5", "number": 5}],
         },
     }
+
+
+class FeedTimingTest(unittest.TestCase):
+    def test_one_poll_per_slot_just_after_the_window_opens(self):
+        # 1000.4 is before the slot opening at 1000.5; 1009.9 is in it.
+        self.assertEqual(feed_slot(1000.4, 10), feed_slot(999.0, 10))
+        self.assertEqual(feed_slot(1000.5, 10), feed_slot(1009.9, 10))
+        self.assertNotEqual(feed_slot(1009.9, 10), feed_slot(1010.6, 10))
+        self.assertAlmostEqual(next_feed_slot(1003.0, 10), 7.5)
+        self.assertAlmostEqual(next_feed_slot(1000.4, 10), 0.1)
+
+
+class RecordedGuardTest(unittest.TestCase):
+    def test_waiting_page_never_replaces_a_recorded_map(self):
+        with tempfile.TemporaryDirectory() as d:
+            root, cache = Path(d), {}
+            pages = [{"match": {"id": m}} for m in ("rec", "wait", "new")]
+            (root / "rec.json").write_text(json.dumps({"game": {"frames": [{}]}}))
+            (root / "wait.json").write_text(json.dumps({"game": None}))
+            kept = without_recorded(pages, root, cache)
+            self.assertEqual([p["match"]["id"] for p in kept], ["wait", "new"])
+            # Cached by mtime: an unchanged recorded file isn't parsed again.
+            with mock.patch.object(Path, "read_text", side_effect=AssertionError):
+                kept = without_recorded(pages[:1], root, cache)
+            self.assertEqual(kept, [])
 
 
 class MappingTest(unittest.TestCase):
@@ -605,7 +633,8 @@ class FastQuotesTest(unittest.TestCase):
                 s3=None,
                 idle_exit=None,
             )
-            clock = [100.0]
+            # Cycles at 100.5 ... 110.5: feed slots open at 100.5 and 110.5.
+            clock = [100.5]
 
             def sleep(seconds):
                 clock[0] += seconds
@@ -628,6 +657,7 @@ class FastQuotesTest(unittest.TestCase):
                 mock.patch.object(
                     service.time, "monotonic", side_effect=lambda: clock[0]
                 ),
+                mock.patch.object(service.time, "time", side_effect=lambda: clock[0]),
                 mock.patch.object(service.time, "sleep", side_effect=sleep),
             ):
                 self.assertEqual(service.run(args), service.REFUSED)
