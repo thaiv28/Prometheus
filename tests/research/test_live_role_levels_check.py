@@ -75,3 +75,54 @@ def test_substitution_requires_exact_unique_keys(kind):
         rows = pd.concat([rows, rows.iloc[1:2]])
     with pytest.raises((AssertionError, pd.errors.MergeError)):
         study.substitute(rows, probs, "level")
+
+
+def test_alive_raw_frame():
+    frame = {
+        f"{side}Team": {
+            "participants": [
+                {
+                    "currentHealth": 100 if side == "red" or i else 0,
+                    "maxHealth": 100,
+                    "level": 12,
+                }
+                for i in range(5)
+            ]
+        }
+        for side in ("blue", "red")
+    }
+    assert study.alive_feature((frame, None, None)) == {"alive": -1}
+    import copy
+
+    for key, value in (
+        ("currentHealth", None),
+        ("currentHealth", "100"),
+        ("currentHealth", float("nan")),
+        ("maxHealth", 0),
+        ("level", 0),
+        ("level", 21),
+    ):
+        invalid = copy.deepcopy(frame)
+        invalid["blueTeam"]["participants"][0][key] = value
+        assert study.alive_feature((invalid, None, None)) is None
+    frame["redTeam"]["participants"].pop()
+    assert study.alive_feature((frame, None, None)) is None
+    assert study.alive_feature(None) is None
+
+
+def test_level_candidate_constants_unchanged():
+    cols, out, report = study.candidate_config("level")
+    assert cols == [
+        c
+        for role in ("top", "jungle", "mid", "bottom", "support")
+        for c in (f"level_{role}", f"level_{role}_time")
+    ]
+    assert out == Path("data/research/live_role_levels")
+    assert report == Path("docs/research/live_role_levels_check.md")
+
+
+def test_deployed_arm_preserves_replay_probabilities():
+    original = calls()
+    pd.testing.assert_frame_equal(
+        study.substitute(original, predictions(), "deployed"), original
+    )

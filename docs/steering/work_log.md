@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-23 — Research: live benchmark and trading check of players alive
+
+Research only; [confirmation](../research/live_alive_check.md) **FAIL**. A (alive−research control): live All +0.000142 [−0.000585,+0.000950], comparator exit 0; trading blend −0.000427 [−0.000692,−0.000170]; gates FAIL/PASS/PASS. B (alive−deployed): live +0.000950 [−0.000088,+0.002062], exit 1 (mid worse); blend −0.000042 [−0.000724,+0.000603], LEC +0.001828 [+0.000334,+0.003255]; all gates FAIL. Parity max |Δp|=0.0443195411; 52,892/52,892 calls matched. ROI/bets: control 7.57%/257, alive 7.15%/264, deployed 11.72%/260. Alive run 187 s; three trading arms run once. Checks: 25 targeted tests; full pytest (1,006 passed, two skipped); ruff format/check; level rerun report byte-identical; live_trading.md unchanged. Plain uv panics in sandbox; used --no-sync. Retrospective overlap, non-executable trade prices, no forward holdout; no runtime input or CI work added.
+
 ## 2026-10-23 — Research: alive players, Elder/soul and items in the live model
 
 Research only; [fixed study](../research/live_state.md), control LL 0.465625. All ΔLL [95% series CI]: **alive PASS** −0.000823 [−0.001065, −0.000591] (30+ minutes −0.0071, rows with a dead player −0.0031, no slice worse); alive_respawn −0.000731 (upper −0.00048 misses the −0.0005 bar); elder +0.000119, items +0.000119, combined −0.000557 [−0.000884, −0.000236], all FAIL; soul_true identical to the deployed flag. Coverage: all 123,954 test rows. Fixed after the first run: levels 19–20 (raised cap) had zeroed whole rows; they now use the level-18 timer. Item data: Data Dragon `item.json` for 69 patches in `data/ddragon/items/`. Checks: 22 targeted tests, full pytest, ruff, study run (667 s). Not yet run: live benchmark and trading check.

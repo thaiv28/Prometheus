@@ -1,5 +1,6 @@
 """Fixed confirmation of role level gaps on the pinned live and trading studies."""
 
+import argparse
 import contextlib
 import hashlib
 import io
@@ -20,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 import compare_benchmarks as cb
 import evaluate_live as el
+import live_state as state_study
 import live_trading as trading
 
 from prometheus.live import timeline
@@ -28,6 +30,44 @@ OUT = Path("data/research/live_role_levels")
 REPORT = Path("docs/research/live_role_levels_check.md")
 LEVEL_COLS = [c for col in CANDIDATES["level"] for c in (col, f"{col}_time")]
 KEY = ["game", "minute"]
+ALIVE_COLS = ["alive", "alive_time"]
+
+
+def candidate_config(candidate):
+    if candidate == "level":
+        return (
+            LEVEL_COLS,
+            Path("data/research/live_role_levels"),
+            Path("docs/research/live_role_levels_check.md"),
+        )
+    return (
+        ALIVE_COLS,
+        Path("data/research/live_alive"),
+        Path("docs/research/live_alive_check.md"),
+    )
+
+
+def alive_feature(window):
+    """Alive gap from the first raw window frame; invalid health/levels fall back."""
+    if window is None:
+        return None
+    frame = window[0]
+    counts = []
+    for side in ("blue", "red"):
+        people = frame.get(f"{side}Team", {}).get("participants", [])
+        if len(people) != 5:
+            return None
+        for person in people:
+            if any(
+                not isinstance(person.get(k), (int, float))
+                or not np.isfinite(person[k])
+                for k in ("currentHealth", "maxHealth", "level")
+            ):
+                return None
+            if person["maxHealth"] <= 0 or not 1 <= person["level"] <= 20:
+                return None
+        counts.append(sum(p["currentHealth"] > 0 for p in people))
+    return {"alive": counts[0] - counts[1]}
 
 
 def match_raw(windows, target):
@@ -53,6 +93,8 @@ def candidate_probabilities(control, blue_probability, blue, matched):
 
 def substitute(calls, probabilities, arm):
     """Replace only in-game probabilities, requiring identical unique call keys."""
+    if arm == "deployed":
+        return calls.copy()
     live = calls.loc[~calls.pregame, KEY]
     paired = live.merge(
         probabilities[KEY + [arm]],
@@ -70,7 +112,8 @@ def substitute(calls, probabilities, arm):
     return out
 
 
-def benchmark_predictions(data, db, model, control, level):
+def benchmark_predictions(data, db, model, control, level, candidate="level"):
+    columns, _, _ = candidate_config(candidate)
     hist = el.team_history(sorted({n for m in data["maps"] for n in m["teams"]}), db)
     elo = el.EloBefore(hist)
     records, designs = [], []
@@ -86,7 +129,12 @@ def benchmark_predictions(data, db, model, control, level):
             start=m["start"],
             include_inputs=True,
         )
-        windows = raw_windows(Path("data/feed_raw/games") / f"{m['game']}.json.gz")
+        raw_path = Path("data/feed_raw/games") / f"{m['game']}.json.gz"
+        windows = (
+            raw_windows(raw_path)
+            if candidate == "level"
+            else state_study.raw_frames(raw_path)
+        )
         offsets = {s["t"] for s in m["samples"]}
         for call in calls:
             offset = round(
@@ -98,6 +146,8 @@ def benchmark_predictions(data, db, model, control, level):
             gaps = (
                 match_raw(windows, pd.Timestamp(call["source_at"])) if state else None
             )
+            if candidate == "alive":
+                gaps = alive_feature(gaps)
             record = {
                 "game": m["game"],
                 "minute": call["minute"],
@@ -113,7 +163,7 @@ def benchmark_predictions(data, db, model, control, level):
                         timeline.state_features(**call["inputs"]),
                     )
                 )
-                for col in CANDIDATES["level"]:
+                for col in CANDIDATES["level"] if candidate == "level" else ["alive"]:
                     design[col] = gaps[col] if gaps is not None else 0.0
                     design[f"{col}_time"] = design[col] * design["time"]
                 design["row"] = len(records)
@@ -133,10 +183,10 @@ def benchmark_predictions(data, db, model, control, level):
     probabilities["control"] = probabilities.deployed
     if not parity:
         probabilities.loc[indices, "control"] = research
-    probabilities["level"] = probabilities.control
-    probabilities.loc[indices, "level"] = candidate_probabilities(
+    probabilities[candidate] = probabilities.control
+    probabilities.loc[indices, candidate] = candidate_probabilities(
         probabilities.loc[indices, "control"].to_numpy(),
-        score(level, design, timeline.STATE_FEATURES + LEVEL_COLS),
+        score(level, design, timeline.STATE_FEATURES + columns),
         probabilities.loc[indices, "blue"].to_numpy(),
         probabilities.loc[indices, "matched"].to_numpy(),
     )
@@ -226,7 +276,223 @@ def formatted(result):
     return f"{result['delta']:+.6f} [{lo:+.6f}, {hi:+.6f}]"
 
 
+def comparison(base, head, model):
+    command = [
+        "uv",
+        "run",
+        "--no-sync",
+        "python",
+        "scripts/compare_benchmarks.py",
+        str(base),
+        str(head),
+    ]
+    compared = subprocess.run(command, capture_output=True, text=True)
+    (OUT / f"compare_{base.name}.log").write_text(compared.stdout + compared.stderr)
+    sections, _ = cb.compare_dirs(base, head)
+    dump = pd.read_csv(base / "live/calls.csv.gz")
+    dump = dump[dump.start > el.fit_through(model)]
+    live = {}
+    for row in dict(sections)["Live"]:
+        band = row["name"].removeprefix("log loss, ").rsplit(" (", 1)[0]
+        mask = (
+            dump.checkpoint.ge(0)
+            if band == "all"
+            else dump.checkpoint.isin(cb.LIVE_BANDS[band])
+        )
+        live[band] = {
+            "delta": row["diff"],
+            "interval": [row["lo"], row["hi"]],
+            "maps": int(dump.loc[mask, "game"].nunique()),
+        }
+    return live, compared.returncode
+
+
+def trading_comparison(current, candidate):
+    paired = current.merge(
+        candidate,
+        on=KEY,
+        suffixes=("_control", "_level"),
+        validate="one_to_one",
+        how="outer",
+        indicator=True,
+    )
+    assert paired._merge.eq("both").all()
+    for column in ("won", "series", "league"):
+        assert paired[f"{column}_control"].equals(paired[f"{column}_level"])
+    results = {
+        "Model All": paired_loss(paired, "p"),
+        "Blend All": paired_loss(paired, "blend"),
+    }
+    for label, lo, hi in (("5–10", 5, 10), ("10–20", 10, 20), ("20–30", 20, 30)):
+        mask = paired.minute.ge(lo) & (
+            paired.minute.le(hi) if hi == 30 else paired.minute.lt(hi)
+        )
+        results[f"Blend {label}"] = paired_loss(paired[mask], "blend")
+    for league, group in paired.groupby("league_control"):
+        if group.game.nunique() >= 100:
+            results[f"Blend {league}"] = paired_loss(group, "blend")
+    return results
+
+
+def alive_main():
+    started = time.monotonic()
+    OUT.mkdir(parents=True, exist_ok=True)
+    model_bytes = timeline.MODEL_PATH.read_bytes()
+    data_path = Path("data/live_bench/live_maps.json.gz")
+    assert hashlib.sha256(data_path.read_bytes()).hexdigest() == trading.PIN
+    train, calibration, test = prepared_frames()
+    n_feed = sum(test.attrs["coverage"][k] for k in ("exact", "nearest", "unknown"))
+    states = pd.read_csv(
+        state_study.OUT / "state_rows.csv.gz", float_precision="round_trip"
+    )
+    train, calibration = (
+        state_study.attach(f, states, n_feed) for f in (train, calibration)
+    )
+    for frame in (train, calibration):
+        frame["alive_time"] = frame.alive * frame.time
+    print("Fitting fixed control/alive", flush=True)
+    control = fit(train, calibration, timeline.STATE_FEATURES)
+    alive = fit(train, calibration, state_study.candidate_columns("alive"))
+    data = el.load_data(data_path)
+    model = json.loads(model_bytes)
+    probabilities, parity, counts = benchmark_predictions(
+        data, Path("db/prometheus.db"), model, control, alive, "alive"
+    )
+    print(f"Parity: {parity}; counts: {counts}", flush=True)
+    original_replay = el.replay
+    calls, skipped = original_replay(data)
+    pre = el.replay_premaps(data)
+    candidate_path = OUT / "candidate.json"
+    candidate_path.write_text(
+        json.dumps({**model, "fit_through": el.fit_through(model)}) + "\n"
+    )
+    for arm in ("control", "alive", "deployed"):
+        el.write_dump(
+            substitute(calls, probabilities, arm),
+            OUT / arm / "live",
+            model_path=candidate_path if arm == "alive" else timeline.MODEL_PATH,
+            pre=pre,
+        )
+    comparisons = {}
+    for label, base in (("A", "control"), ("B", "deployed")):
+        live, code = comparison(OUT / base, OUT / "alive", model)
+        comparisons[label] = {"base": base, "live": live, "compare_exit": code}
+        print(
+            f"{label}: Live All {formatted(live['all'])}; compare exit {code}",
+            flush=True,
+        )
+    arms, roi = {}, {}
+    for arm in ("control", "alive", "deployed"):
+        print(f"Trading {arm}", flush=True)
+        arms[arm], roi[arm] = run_trading(probabilities, arm, original_replay)
+    for result in comparisons.values():
+        live = result["live"]
+        results = trading_comparison(arms[result["base"]], arms["alive"])
+        parts = {
+            "a": bool(
+                live["all"]["interval"][1] < 0 and live["all"]["delta"] <= -0.0005
+            ),
+            "b": result["compare_exit"] == 0,
+            "c": bool(
+                results["Blend All"]["delta"] < 0
+                and not any(
+                    r["interval"][0] > 0
+                    for k, r in results.items()
+                    if k.startswith("Blend")
+                )
+            ),
+        }
+        result.update(
+            trading=results,
+            parts=parts,
+            verdict="PASS" if all(parts.values()) else "FAIL",
+        )
+    verdict = (
+        "PASS" if all(r["verdict"] == "PASS" for r in comparisons.values()) else "FAIL"
+    )
+    summary = {
+        "verdict": verdict,
+        "parity": parity,
+        "counts": counts,
+        "skipped_elo": skipped,
+        "comparisons": comparisons,
+        "roi": roi,
+        "input_sha256": trading.PIN,
+        "model_sha256": hashlib.sha256(model_bytes).hexdigest(),
+        "seconds": time.monotonic() - started,
+    }
+    assert timeline.MODEL_PATH.read_bytes() == model_bytes
+    (OUT / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    lines = [
+        f"**{verdict}: players-alive confirmation; research only.**",
+        "",
+        "# Players-alive confirmation",
+        "",
+        "Fixed candidate: deployed 20 inputs plus blue-minus-red players alive and alive ×time. Cached live_state rows, original train/calibration split, C=1, map weights and Platt fit. Pinned 1,666-map input; verdict rules fixed before results.",
+        "",
+        f"Parity max |Δp|={parity['max_abs_difference']:.9g}. Research control differs from deployed because Elo inputs and the calibration set changed since the deployed fit. Objectives/momentum use deployed inputs. Blue probabilities convert to teams[0]. Nearest raw first-window-frame timestamp within 2 seconds; invalid health/levels or unsupported calls retain research control. Deployed uses unmodified replay probabilities.",
+        "",
+        f"Calls {counts['calls']}; state-model {counts['state_model']}; matched {counts['matched']}; fallback {counts['fallback']}; Elo-skipped maps {skipped}. Pregame/pre-map unchanged.",
+        "",
+        "ΔLL=alive−comparison; 95% whole-series bootstrap. Live uses benchmark checkpoints, fit-date filter and bootstrap. Trading averages calls per map (2,000 draws, seed 42); bands [5,10), [10,20), [20,30]; leagues ≥100 maps. Monthly blends refit on earlier settled series. Each trading arm runs once.",
+        "",
+    ]
+    for label, result in comparisons.items():
+        lines += [
+            f"## {label}: {'Feature effect: alive vs research control' if label == 'A' else 'Ship decision: alive vs deployed'}",
+            "",
+            "| Live band | Maps | ΔLL [95% CI] |",
+            "|---|---:|---|",
+        ]
+        lines += [
+            f"| {band} | {r['maps']} | {formatted(r)} |"
+            for band, r in result["live"].items()
+        ]
+        lines += ["", "| Trading measure | ΔLL [95% CI] |", "|---|---|"]
+        lines += [
+            f"| {name} | {formatted(r)} |" for name, r in result["trading"].items()
+        ]
+        lines += [
+            "",
+            f"{result['verdict']}: "
+            + "; ".join(
+                f"({part}) {'PASS' if passed else 'FAIL'}"
+                for part, passed in result["parts"].items()
+            )
+            + f". compare_benchmarks exit {result['compare_exit']}.",
+            "",
+        ]
+    lines += [
+        "Primary paper ROI per $1 entry: "
+        + "; ".join(
+            f"{arm} {r['roi']:+.2%} ({r['bets']} bets)" for arm, r in roi.items()
+        )
+        + ".",
+        "",
+        "Fixed gates: (a) live All upper <0 and point ≤−0.0005; (b) comparator exit 0; (c) trading blend All point <0 and no reported blend slice lower >0. Overall requires A and B. Logs/summary: `data/research/live_alive/`.",
+        "",
+        "Limits: alive was the one passing candidate of six in live_state; the 2026 benchmark overlaps the study test period; trade prices are not executable asks; no forward holdout. Paper ROI and historical blend refits do not establish executable profitability. No production change.",
+        "",
+        "Reproduce:",
+        "```bash",
+        "OPENBLAS_NUM_THREADS=4 PYTHONPATH=$PWD uv run python scripts/research/live_role_levels_check.py --candidate alive",
+        "```",
+        "",
+    ]
+    report = "\n".join(lines)
+    assert len(report.split()) < 700
+    REPORT.write_text(report)
+    print(f"{verdict}: wrote {REPORT}; {summary['seconds']:.1f}s", flush=True)
+
+
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--candidate", choices=("level", "alive"), default="level")
+    args = parser.parse_args()
+    global OUT, REPORT
+    _, OUT, REPORT = candidate_config(args.candidate)
+    if args.candidate == "alive":
+        return alive_main()
     started = time.monotonic()
     OUT.mkdir(parents=True, exist_ok=True)
     model_bytes = timeline.MODEL_PATH.read_bytes()

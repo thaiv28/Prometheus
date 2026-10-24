@@ -82,3 +82,5 @@ Reproduce:
 ```bash
 OPENBLAS_NUM_THREADS=4 PYTHONPATH=$PWD uv run python scripts/research/live_state.py
 ```
+
+[Players-alive confirmation](live_alive_check.md): **overall FAIL** on the pinned live benchmark and trading study; research only.

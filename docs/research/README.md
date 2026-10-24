@@ -1,6 +1,6 @@
 # Research
 
-- [Alive players, Elder/soul and items](live_state.md) (2026-10-23): **alive passes**, ΔLL −0.0008 (−0.0011 to −0.0006), −0.0071 after 30 minutes; Elder, items and combined fail; true soul equals the deployed flag. Retrospective; live benchmark and trading check pending.
+- [Alive players, Elder/soul and items](live_state.md) (2026-10-23): **alive passes**, ΔLL −0.0008 (−0.0011 to −0.0006), −0.0071 after 30 minutes; Elder, items and combined fail; true soul equals the deployed flag. [Confirmation](live_alive_check.md) **FAIL**: live gain unconfirmed versus research control; deployed comparison worsens mid-game live and LEC trading blend.
 
 - [Role gold/level/CS leads](live_role_leads.md) (2026-10-22): primary fails, ΔLL +0.000623 (+0.000230 to +0.001030); level improves descriptively, other candidates inconclusive or worse. Retrospective; [level confirmation](live_role_levels_check.md): FAIL (live gain includes zero). Research only, nothing adopted.
 
