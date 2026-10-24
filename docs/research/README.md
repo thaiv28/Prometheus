@@ -1,5 +1,7 @@
 # Research
 
+- [Live-map delay and fight-veto research](live_latency.md) (2026-10-23): fixed lag and post-event entry comparisons; offline candidate markouts. Changed no published metric or production behaviour.
+
 - **[More Elo offset evidence](elo_offsets.md) (2026-10-19), not adopted.** Team-only links improve cross-league loss but regress within-other Elo; level bias remains. Calibration removal is inconclusive; removing the move-down bonus fails. Transfer evidence fails the training guard.
 
 - **Elo's forecast curve (2026-10-19), not adopted.** [One Elo scale](elo_one_scale.md) (tier K and offset share) and the exploratory [win-scale follow-up](elo_win_scale.md): Elo's expected score is compressed about 1.5× because of the game-length score; calibrating it costs .003–.02 log loss, so the fitted curves stay.
