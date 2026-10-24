@@ -15,8 +15,8 @@
 | Path | Purpose |
 |---|---|
 | `prometheus/` | Python metrics and data access. |
-| `prometheus/types.py` | Column-name authority: enums `Metric`, `League`, `ScoreCols` and feature lists including `GLORY_FEATURES`. |
-| `prometheus/matches.py` | Raw-SQL stats/`matches` joins. |
+| `prometheus/types.py` | Column enums and feature lists. |
+| `prometheus/matches.py` | Raw-SQL stats joins. |
 | `prometheus/regression.py` | GLORY: `StandardScaler` + `LinearRegression`, target win. |
 | `prometheus/ranking.py` | `get_glory_ranking()`: yearly models, team-season scores and z-scores; published `opponent_adjusted="record"`, retired `"elo"` GLORY+. |
 | `prometheus/season.py` | Record and Luck season stats. |
@@ -25,12 +25,14 @@
 | `prometheus/elo.py` | Team/player game-length Elo bootstrap and queries for forecasts, rankings and site. |
 | `prometheus/schedule.py`, `team_aliases.json` | Leaguepedia schedule, name matching, odds, S3-backed `data/predictions.json` and scorecard. |
 | `prometheus/live/archive.py`, `scripts/live_archive.sh`, `prometheus/site/live_results.py` | Compact `*.min.json` backups restored for linked results and per-series figures. |
-| `prometheus/live/`, `deploy/live/`, `scripts/live_data.py` | Live discovery, feed, clock, models, FORGE, Kalshi and `output/live/`; EC2 installation, refresh and systemd units. |
+| `prometheus/live/`, `deploy/live/`, `scripts/live_data.py` | Live feed, forecasts, Kalshi, pages and EC2 service. |
+| `scripts/live_markouts.py` | Offline candidate quote markouts. |
+| `scripts/research/live_latency.py` | Offline lag/veto study; `docs/research/live_latency.md`. |
 | `prometheus/aura.py`, `scripts/evaluate_aura.py` | AURA player season stat; `season_aura`; report `docs/aura_report.md`. |
 | `prometheus/gamelog.py`, `scripts/export_market_prices.py` | Series game logs, pre-game calls, `data/market_prices.json` and prediction-log prices; `site.gamelogs.add_game_logs` JSON. |
 | `prometheus/main.py` | Typer `prometheus` CLI. |
-| `scripts/NNN_*.sql\|py` | DB steps run numerically by `setup_db.sh`. |
-| `scripts/download_data.py` | Oracle’s Elixir Google Drive CSV downloads; current year or `--full`; replace only with newer games. |
+| `scripts/NNN_*.sql\|py` | Ordered DB build steps. |
+| `scripts/download_data.py` | Oracle’s Elixir CSVs; current year/`--full`; newer files only. |
 | `scripts/prediction_log.sh` | S3 log restore/save: fail except missing object, reject shrinking logs; `--if-unchanged` prevents concurrent overwrites. |
 | `scripts/build_site.py`, `prometheus/site/` | Load once, ordered site parts; `site/config.py` registries, columns, paths/limits; modules read patched config paths at call time. |
 | `prometheus/player_tables.py` | Lazy shared `PlayerTables` reads and pandas joins for AURA, Elo history and player logs. |
