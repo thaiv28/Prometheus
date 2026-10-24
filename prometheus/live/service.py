@@ -67,6 +67,7 @@ LEAGUES = {
 # Trailing words Riot adds to some teams' names (folded).
 ORG_SUFFIX = re.compile(r"( (e ?sports|gaming))+$")
 QUERY_LAG = 30  # the feed rejects windows ending under 20 s ago (HTTP 400)
+FEED_PHASE = 0.5  # seconds after a 10 s boundary to poll the feed
 FRESH = 60  # seconds a match file stays in the index without a new write
 # Exit status after Riot refused access or rate-limited us: the systemd unit
 # doesn't restart on it (no retrying into a block).
@@ -647,6 +648,49 @@ def poll_waiting_quote(root, mid, ticker, out):
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a") as f:
             f.write(json.dumps(dict(q, ticker=ticker, **book_levels(book))) + "\n")
+
+
+def feed_slot(now, interval):
+    """The feed window a poll at `now` (epoch seconds) reads.
+
+    Windows start on 10 s boundaries 30 s back, so the newest frame is about
+    20.6 s old just after a boundary and 29.6 s old just before the next
+    (BLG v MKOI, 2026-10-23). Polling once per slot, FEED_PHASE after it opens,
+    keeps it near the floor without extra requests.
+    """
+    return int((now - FEED_PHASE) // interval)
+
+
+def next_feed_slot(now, interval):
+    """Seconds until the next feed slot opens."""
+    return (feed_slot(now, interval) + 1) * interval + FEED_PHASE - now
+
+
+def without_recorded(pages, page_dir, cache):
+    """Drop waiting pages whose match file already holds a recorded map.
+
+    After a restart nothing is tracked, and getLive can list a decided series
+    (or one between maps) as in progress: its waiting page would overwrite the
+    last map's page. `cache` maps a path to (mtime, recorded).
+    """
+    kept = []
+    for page in pages:
+        path = page_dir / f"{page['match']['id']}.json"
+        try:
+            mtime = path.stat().st_mtime
+        except FileNotFoundError:
+            kept.append(page)
+            continue
+        if cache.get(path, (None,))[0] != mtime:
+            try:
+                saved = json.loads(path.read_text())
+                recorded = bool((saved.get("game") or {}).get("frames"))
+            except (ValueError, OSError):
+                recorded = False
+            cache[path] = (mtime, recorded)
+        if not cache[path][1]:
+            kept.append(page)
+    return kept
 
 
 def publish_s3(page_out, uri):
@@ -1341,7 +1385,7 @@ def run(args):
     waiting_tickers, waiting_discovered, waiting_polled = {}, {}, {}
     last_pending = []
     waiting_seq = 0
-    feed_polled = {}
+    feed_polled, recorded_cache = {}, {}
     kalshi = True
     last_ratings_refresh = float("-inf")
     try:
@@ -1655,7 +1699,7 @@ def run(args):
                         log("kalshi_stopped", reason=str(error))
                     except (ValueError, OSError) as error:
                         log("quote_failed", game=gid, reason=str(error))
-                feed_due = cycle - feed_polled.get(gid, -float("inf")) >= args.interval
+                feed_due = feed_slot(time.time(), args.interval) != feed_polled.get(gid)
                 if feed_due and (kalshi or game.number in game.results()):
                     try:
                         game.settle()
@@ -1667,7 +1711,7 @@ def run(args):
                 try:
                     path = args.page_out / f"{game.mapping['match_id']}.json"
                     if feed_due or not path.exists():
-                        feed_polled[gid] = cycle
+                        feed_polled[gid] = feed_slot(time.time(), args.interval)
                         if game.state != "finished":
                             game.poll()
                         # Stamp after polling; receipts must not be in the future.
@@ -1709,6 +1753,7 @@ def run(args):
                 tracked,
                 set(failed) | skip,
             )
+            pending = without_recorded(pending, args.page_out, recorded_cache)
             current_waiting = {p["match"]["id"] for p in pending}
             for mid in waiting_ids - current_waiting - tracked:
                 (args.page_out / f"{mid}.json").unlink(missing_ok=True)
@@ -1762,7 +1807,11 @@ def run(args):
             interval = (
                 QUOTE_INTERVAL if (games or pre.maps) and kalshi else args.interval
             )
-            time.sleep(max(0, interval - (time.monotonic() - cycle)))
+            wait = interval - (time.monotonic() - cycle)
+            if games:
+                # Wake just after the feed's next window opens (see feed_slot).
+                wait = min(wait, next_feed_slot(time.time(), args.interval))
+            time.sleep(max(0, wait))
     except Stop as error:
         log("stopped", reason=str(error))
         return REFUSED
@@ -1849,8 +1898,8 @@ def main():
     args = parser.parse_args()
     if not args.fetch:
         parser.error("network requires --fetch")
-    if not 10 <= args.interval <= 30 or args.discover_interval < 30:
-        parser.error("interval 10..30 s; discovery at least every 30 s")
+    if args.interval not in (10, 20, 30) or args.discover_interval < 30:
+        parser.error("interval 10, 20 or 30 s; discovery at least every 30 s")
     if bool(args.signal_bucket) != bool(args.signal_queue) or (
         args.signal_bucket and not args.live_map_signals
     ):

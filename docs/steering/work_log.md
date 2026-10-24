@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-23 — Live feed polls on the window boundary; recorded-page guard
+
+Feed windows start on 10 s boundaries 30 s back, so the newest frame's age is ~20.6 s plus the poll's offset into the cycle (BLG v MKOI: 20.6 s at +0 s rising to 29.8 s at +9 s; median 25.6 s). The worker now polls once per 10 s slot, 0.5 s after it opens (`feed_slot`), and wakes for it: ~5 s fresher on average, no extra requests (`--interval` must be 10, 20 or 30). After a restart the old code wrote BLG v MKOI's waiting page over its recorded map page (restored from `map1.json`); `without_recorded` now skips waiting pages for matches whose file holds frames. Checks: new timing and guard tests; cadence test on slot-aligned clock; full pytest; ruff. Limit: alignment unmeasured live.
+
 ## 2026-10-23 — Live-map signals for best-of-one matches
 
 Zero live-map signals since 2026-10-19: no tracked map had a KXLOLMAP market (Worlds Swiss Bo1s; EMEA Masters maps 1–4 on 10-22 never tracked because Riot feeds returned 404s). Bo1s now use the KXLOLGAME event as the map event; observations carry best_of. The executor verifies no KXLOLMAP-…-1 event exists before trading. The series cap shares the pre-match SERIES# reservation. Unarmed maps journal a deduplicated reason in trading/decisions.jsonl, already backed up by backup.sh. Checks: ruff format/check; targeted pytest (308 passed, 2 skipped, 1.09s); full pytest (1,023 passed, 2 skipped, 10.01s); diff whitespace. Used the existing environment with sync disabled and this worktree on PYTHONPATH after uv sync crashed. Limit: deciding maps still unsupported; the worker needs a restart and the executor deploys on merge.
