@@ -14,26 +14,30 @@ def log(event, **fields):
     print(json.dumps(dict(event=event, **fields)), flush=True)
 
 
-def upload_maps(match_dir, match_id):
+def upload_maps(match_dir, match_id, page_path=None):
     bucket = os.environ.get("ARTIFACTS_BUCKET")
     if not bucket:
         return
-    try:
-        subprocess.run(
-            [
-                "aws",
-                "s3",
-                "cp",
-                str(match_dir / "maps.json"),
-                f"s3://{bucket}/prometheus/live/{match_id}/maps.json",
-                "--only-show-errors",
-            ],
-            check=True,
-            capture_output=True,
-            timeout=30,
-        )
-    except Exception as exc:
-        log("maps_upload_failed", reason=str(exc))
+    files = [(match_dir / name, name) for name in ("maps.json", "results.json")]
+    if page_path is not None and page_path.exists():
+        files.append((page_path, f"pages/{page_path.name}"))
+    for source, key in files:
+        try:
+            subprocess.run(
+                [
+                    "aws",
+                    "s3",
+                    "cp",
+                    str(source),
+                    f"s3://{bucket}/prometheus/live/{match_id}/{key}",
+                    "--only-show-errors",
+                ],
+                check=True,
+                capture_output=True,
+                timeout=30,
+            )
+        except Exception as exc:
+            log("maps_upload_failed", file=key, reason=str(exc))
 
 
 def dispatch_prices(now):

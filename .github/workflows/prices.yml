@@ -26,6 +26,7 @@ jobs:
       BUCKET: ${{ vars.DEPLOYMENT_BUCKET }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      CAN_USE_AWS: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' }}
     steps:
       - uses: actions/checkout@v7
       # The publish workflow restores the prediction log, rebuilds for several
@@ -82,6 +83,12 @@ jobs:
         id: save_prediction_log
         if: steps.busy.outputs.busy == 'false'
         run: bash scripts/prediction_log.sh save --if-unchanged
+      - name: Restore live results
+        if: steps.busy.outputs.busy == 'false' && steps.save_prediction_log.outputs.saved == 'true' && env.BUCKET != '' && env.CAN_USE_AWS == 'true'
+        continue-on-error: true
+        env:
+          LIVE_BACKUP: s3://${{ vars.DATA_BACKUP_BUCKET }}/prometheus/live
+        run: bash scripts/live_archive.sh
       - name: Render Predictions pages
         if: steps.busy.outputs.busy == 'false' && steps.save_prediction_log.outputs.saved == 'true' && env.BUCKET != ''
         run: uv run python scripts/render_predictions.py --log data/predictions.json --out output-prices/site --summary "$RUNNER_TEMP/refresh_summary.json"
