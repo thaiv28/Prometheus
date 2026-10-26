@@ -75,6 +75,11 @@ class Config:
                 raise ValueError("max_contracts must be an integer")
             if not 0 < decimal(value["kelly_fraction"]) <= 1:
                 raise ValueError("kelly_fraction must be inside (0, 1]")
+            if (
+                "series_fraction" in value
+                and not 0 < decimal(value["series_fraction"]) <= 1
+            ):
+                raise ValueError("series_fraction must be inside (0, 1]")
         # Emergency global OFF must remain writable even with malformed map settings.
         if mode == "off":
             return cls(mode, value)
@@ -92,9 +97,6 @@ class Config:
             ):
                 if not 0 < decimal(maps[field]) <= decimal(upper):
                     raise ValueError("invalid_live_map_risk_limit")
-            # The strategy's own money: it can never lose more than this.
-            if decimal(maps["budget_usd"]) <= 0:
-                raise ValueError("invalid_live_map_budget")
         return cls(mode, value)
 
     from_dict = parse
@@ -159,19 +161,6 @@ def validate_alert(alert, config, now):
             raise ValueError("invalid_probability_or_price")
 
 
-def map_budget(config, row):
-    """Live maps' remaining money: budget + their realized profit - their held."""
-    row = row or {}
-    held, realized = decimal(row.get("held", 0)), decimal(row.get("realized", 0))
-    return {
-        "map_held": held,
-        "map_realized": realized,
-        "map_budget_available": decimal(config.raw["live_maps"]["budget_usd"])
-        + realized
-        - held,
-    }
-
-
 def plan_order(
     alert, routes, config, balance, now, account=None, committed=ZERO, exposure=ZERO
 ):
@@ -205,13 +194,14 @@ def plan_order(
         config.number("daily_budget_usd") - committed,
         effective,
     )
+    if "series_fraction" in config.raw:
+        budget = min(budget, decimal(account["series_room"]))
     if is_map:
         # Free capital is conservative: existing commitments reduce the cap base.
         budget = min(
             budget,
             capital * decimal(config.raw["live_maps"]["map_fraction"]),
             decimal(account["series_available"]),
-            decimal(account["map_budget_available"]),
         )
     if effective <= 0 or budget <= 0:
         raise ValueError("bankroll_or_spending_cap_exhausted")
@@ -276,6 +266,18 @@ def plan_order(
         key=lambda x: (-decimal(x[2]["expected_log_growth"]), x[0], x[1]["ticker"]),
     )
     count = decimal(sizing["count"])
+    if is_map:
+        target = count
+        held_contracts = decimal(account.get("held_contracts", 0))
+        count = (target - held_contracts).quantize(QUANTITY_STEP, rounding=ROUND_FLOOR)
+        if count < QUANTITY_STEP:
+            raise ValueError("existing_position_covers_target")
+        sizing = {
+            **sizing,
+            "target_count": f"{target:.2f}",
+            "held_contracts": str(held_contracts),
+            "count": f"{count:.2f}",
+        }
     client_id = str(
         uuid.uuid5(
             uuid.NAMESPACE_URL, f"prometheus:{config.mode}:{alert['fixture_id']}"
@@ -303,14 +305,6 @@ def plan_order(
             "bankroll_usd": str(capital),
             "effective_bankroll_usd": str(effective),
             "unit_cost_bound": str(price + unit_fee),
-            **(
-                {
-                    "map_held_before": str(account["map_held"]),
-                    "map_realized_before": str(account["map_realized"]),
-                }
-                if is_map
-                else {}
-            ),
             **sizing,
         },
         "request": {
@@ -611,19 +605,42 @@ def run(
             validate_alert(alert, config, checked)
             account = ledger.get(config.mode, "ACCOUNT") or {}
             day = ledger.get(config.mode, f"DAY#{checked.date().isoformat()}") or {}
-            if alert.get("kind") == live_map.VERSION:
-                series = ledger.get(config.mode, f"MAPSERIES#{alert['series_id']}")
-                series_cap = max(
+            is_map = alert.get("kind") == live_map.VERSION
+            event = alert["series_id"] if is_map else alert["event_ticker"]
+            capital = (
+                config.number("starting_bankroll_usd")
+                + decimal(account.get("realized", 0))
+                - decimal(account.get("held", 0))
+            )
+            if "series_fraction" in config.raw:
+                series_total = sum(
+                    (
+                        decimal(
+                            (ledger.get(config.mode, f"{prefix}#{event}") or {}).get(
+                                "held", 0
+                            )
+                        )
+                        for prefix in ("SERIES", "MAPSERIES")
+                    ),
                     ZERO,
-                    config.number("starting_bankroll_usd")
-                    + decimal(account.get("realized", 0))
-                    - decimal(account.get("held", 0)),
-                ) * decimal(config.raw["live_maps"]["series_fraction"])
+                )
+                account = {
+                    **account,
+                    "series_room": config.number("series_fraction") * capital
+                    - series_total,
+                }
+            if is_map:
+                series = ledger.get(config.mode, f"MAPSERIES#{alert['series_id']}")
+                series_cap = max(ZERO, capital) * decimal(
+                    config.raw["live_maps"]["series_fraction"]
+                )
                 account = {
                     **account,
                     "series_available": series_cap
                     - decimal((series or {}).get("held", 0)),
-                    **map_budget(config, ledger.get(config.mode, "LIVE_MAPS")),
+                    "held_contracts": ledger.held_contracts(
+                        config.mode, event, alert["backed_team"]
+                    ),
                 }
                 reserve_config = Config.parse(
                     {**reserve_config.raw, "live_series_cap_usd": str(series_cap)}

@@ -76,6 +76,8 @@ REFUSED = 3
 # Exit status after --idle-exit minutes with no live game: the unit backs up the
 # evidence and powers the worker off until the schedule starts it again.
 IDLE = 4
+RESTART_FOR_UPDATE = 5
+RESTART_FLAG = Path(os.environ.get("APP_ROOT", "/srv/prometheus-live")) / "restart"
 QUOTE_INTERVAL = 2  # seconds; independent of the Riot feed cadence
 SERIES_SHOWN = 30  # minutes a decided series stays on the live pages
 # A recorded map length outside this range (seconds) is dropped as implausible.
@@ -1868,6 +1870,12 @@ def run(args):
             if args.s3 and (games or changed or lifecycle_changed):
                 publish_s3(args.page_out, args.s3)
             log("cycle", tracked=len(games), published=count)
+            if RESTART_FLAG.exists() and not any(
+                game.state == "live" for game in games.values()
+            ):
+                log("restart_for_update")
+                RESTART_FLAG.unlink()
+                return RESTART_FOR_UPDATE
             # Activity is a map not yet over; getLive can list a decided match for hours.
             if pending or any(g.state != "finished" for g in games.values()):
                 last_active = time.monotonic()

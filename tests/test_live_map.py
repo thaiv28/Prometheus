@@ -37,7 +37,6 @@ def config(mode="demo", map_mode="live"):
             "kelly_fraction": ".25",
             "map_fraction": ".01",
             "series_fraction": ".02",
-            "budget_usd": "15",
         },
     )
 
@@ -275,21 +274,20 @@ def test_map_event_fence_blocks_another_fixture_for_same_event():
 
 
 def test_map_series_reservation_survives_race():
-    from prometheus.execution.core import map_budget, plan_order
+    from prometheus.execution.core import plan_order
 
     _, api, ledger, _ = harness()
     cfg = Config.parse(config())
-    account = {"series_available": ".75", **map_budget(cfg, None)}
+    account = {"series_available": ".75"}
     first = plan_order(signal(), api.routes, cfg, Decimal(100), NOW, account)
     second = copy.deepcopy(first)
     second["alert"]["fixture_id"] = "second"
     second["alert"]["event_ticker"] = "KXLOLMAP-G"
     second["client_order_id"] = "second"
-    # Refresh the map-budget/account snapshots so only the series cap rejects it.
+    # Refresh the account snapshot so only the series cap rejects it.
     amount = Decimal(first["held"])
     assert 2 * amount > Decimal(".75")
     second["sizing"]["held_before"] = str(amount)
-    second["sizing"]["map_held_before"] = str(amount)
     reserve = Config.parse({**cfg.raw, "live_series_cap_usd": ".75"})
     assert ledger.reserve(first, reserve, Decimal(100))
     assert ledger.reserve(second, reserve, Decimal(100)) is None
@@ -311,11 +309,11 @@ def test_second_map_is_sized_to_remaining_map_series_cap():
 
 
 def test_old_map_intent_without_series_key_releases_original_series_row():
-    from prometheus.execution.core import map_budget, plan_order
+    from prometheus.execution.core import plan_order
 
     _, api, ledger, _ = harness()
     cfg = Config.parse(config())
-    account = {"series_available": "1", **map_budget(cfg, None)}
+    account = {"series_available": "1"}
     plan = plan_order(signal(), api.routes, cfg, Decimal(100), NOW, account)
     del plan["series_key"]
     row = ledger.reserve(plan, cfg, Decimal(100))
@@ -452,7 +450,10 @@ def test_outbox_persists_before_queueing_and_reuses_immutable_bytes(tmp_path):
         box.deliver(path, signal())
 
 
-def test_queue_shadow_path_does_not_load_credentials_or_call_orders(monkeypatch):
+@pytest.mark.parametrize("position", ["none", "covered", "series_cap"])
+def test_queue_shadow_path_does_not_load_credentials_or_call_orders(
+    monkeypatch, position
+):
     content = live_map.canonical(signal())
     digest = hashlib.sha256(content).hexdigest()
     pointer = {"key": live_map.PREFIX + digest + ".json", "sha256": digest}
@@ -464,6 +465,41 @@ def test_queue_shadow_path_does_not_load_credentials_or_call_orders(monkeypatch)
     }
     db = AtomicDynamo()
     parameter = Parameter(config(map_mode="shadow"))
+    if position == "covered":
+        db.put_item(
+            Item=_item(
+                {
+                    "pk": "ENV#demo",
+                    "sk": "ACTIVE#pregame",
+                    "intent_key": "INTENT#pregame",
+                }
+            )
+        )
+        db.put_item(
+            Item=_item(
+                {
+                    "pk": "ENV#demo",
+                    "sk": "INTENT#pregame",
+                    "revision": 0,
+                    "payload": json.dumps(
+                        {
+                            "status": "filled",
+                            "series_id": "KXLOLGAME-F",
+                            "alert": {"backed_team": "A"},
+                            "order": {"fill_count_fp": "4.60"},
+                        }
+                    ),
+                }
+            )
+        )
+    elif position == "series_cap":
+        parameter.value["series_fraction"] = ".10"
+        for sk, held in (
+            ("ACCOUNT", "5"),
+            ("SERIES#KXLOLGAME-F", "3.9"),
+            ("MAPSERIES#KXLOLGAME-F", ".5"),
+        ):
+            db.put_item(Item=_item({"pk": "ENV#demo", "sk": sk, "held": Decimal(held)}))
     monkeypatch.setenv("EXECUTION_CONFIG_PARAMETER", "/config")
     monkeypatch.setenv("EXECUTION_TABLE", "private")
     monkeypatch.setenv("PREDICTIONS_BUCKET", "private")
@@ -489,8 +525,18 @@ def test_queue_shadow_path_does_not_load_credentials_or_call_orders(monkeypatch)
         "batchItemFailures": []
     }
     row = DynamoLedger("private", db).get("shadow", "MAP#KXLOLMAP-F")
-    assert "proposed IOC" in json.loads(row["payload"])["assumption"]
-    assert DynamoLedger("private", db).get("demo", "ACCOUNT") is None
+    if position == "covered":
+        assert row is None
+        assert "existing_position_covers_target" in [
+            _decode(v).get("reason") for v in db.data.values()
+        ]
+    else:
+        payload = json.loads(row["payload"])
+        assert "proposed IOC" in payload["assumption"]
+        if position == "series_cap":
+            assert 0 < Decimal(payload["plan"]["held"]) <= Decimal(".10")
+        else:
+            assert DynamoLedger("private", db).get("demo", "ACCOUNT") is None
     record["eventSourceARN"] = "foreign"
     assert live_handler.handle({"Records": [record]}, aws, {}) == {
         "batchItemFailures": []
@@ -525,56 +571,56 @@ def test_separate_live_map_activation_requires_verified_runtime_and_explicit_lim
     bad["live_maps"]["kelly_fraction"] = "1"
     with pytest.raises(ValueError, match="risk_limit"):
         Config.parse(bad)
-    for budget in ("0", None):
-        bad = config()
-        bad["live_maps"]["budget_usd"] = budget
-        if budget is None:
-            del bad["live_maps"]["budget_usd"]
-        with pytest.raises((ValueError, KeyError)):
-            Config.parse(bad)
+    for budget in ("0", "invalid", None):
+        value = config()
+        value["live_maps"]["budget_usd"] = budget
+        assert Config.parse(value)
+    assert Config.parse(config())  # No strategy budget required.
 
 
-def test_map_budget_caps_live_map_losses_and_orders():
-    client, api, ledger, execute = harness()
-
-    def maps(**values):
-        client.put_item(Item=_item({"pk": "ENV#demo", "sk": "LIVE_MAPS", **values}))
-
-    # $14.90 already lost on maps: the order shrinks to the $0.10 left.
-    maps(realized=Decimal("-14.90"))
+def test_old_map_budget_does_not_limit_new_reservations():
+    client, _, ledger, execute = harness()
+    client.put_item(
+        Item=_item({"pk": "ENV#demo", "sk": "LIVE_MAPS", "realized": Decimal("-15")})
+    )
     assert execute([signal()])["submitted"] == 1
-    held = ledger.get("demo", "LIVE_MAPS")["held"]
-    assert Decimal(0) < held <= Decimal(".10")
-    assert ledger.get("demo", "ACCOUNT")["held"] == held
-    # The whole $15 lost: no further map order, whatever the shared bankroll.
-    client, api, ledger, execute = harness()
-    maps(realized=Decimal("-15"))
-    assert execute([signal()])["submitted"] == 0
-    assert not api.calls and ledger.get("demo", "ACCOUNT") is None
-    reasons = [_decode(v).get("reason") for v in client.data.values()]
-    assert "bankroll_or_spending_cap_exhausted" in reasons
+    assert ledger.get("demo", "LIVE_MAPS") == {
+        "pk": "ENV#demo",
+        "sk": "LIVE_MAPS",
+        "realized": Decimal("-15"),
+    }
+    row = ledger.pending()[0]
+    assert "map_held_before" not in row["sizing"]
+    assert "map_realized_before" not in row["sizing"]
 
 
-def test_map_budget_reservation_is_atomic():
-    from prometheus.execution.core import map_budget, plan_order
+def test_legacy_map_budget_still_releases_and_realizes_profit():
+    from prometheus.execution.core import plan_order
 
-    _, api, ledger, _ = harness()
+    client, api, ledger, _ = harness()
     cfg = Config.parse(config())
-    account = {"series_available": "1", **map_budget(cfg, None)}
-    first = plan_order(signal(), api.routes, cfg, Decimal(100), NOW, account)
-    second = copy.deepcopy(first)
-    second["alert"]["fixture_id"] = "second"
-    second["alert"]["event_ticker"] = "KXLOLMAP-G"
-    second["client_order_id"] = "second"
-    second["series_id"] = "KXLOLGAME-G"
-    second["series_key"] = "MAPSERIES#KXLOLGAME-G"
-    # Both planned from the same LIVE_MAPS state; only the first may reserve.
-    assert ledger.reserve(first, cfg, Decimal(100))
-    assert ledger.reserve(second, cfg, Decimal(100)) is None
-    small = Config.parse({**config(), "live_maps": {**config()["live_maps"]}})
-    small.raw["live_maps"]["budget_usd"] = "0.01"
-    _, api, ledger, _ = harness()
-    assert ledger.reserve(first, small, Decimal(100)) is None
+    plan = plan_order(
+        signal(), api.routes, cfg, Decimal(100), NOW, {"series_available": "1"}
+    )
+    plan["sizing"].update(map_held_before="0", map_realized_before="0")
+    row = ledger.reserve(plan, cfg, Decimal(100))
+    assert ledger.get("demo", "LIVE_MAPS") is None
+    # Old reservations already wrote this row before the budget was retired.
+    client.put_item(
+        Item=_item({"pk": "ENV#demo", "sk": "LIVE_MAPS", "held": Decimal(row["held"])})
+    )
+    ledger.replace(
+        row,
+        {
+            **row,
+            "status": "settled",
+            "held": "0",
+            "committed": ".25",
+            "realized_profit": ".75",
+        },
+    )
+    maps = ledger.get("demo", "LIVE_MAPS")
+    assert maps["held"] == 0 and maps["realized"] == Decimal(".75")
 
 
 def test_transport_template_is_disabled_and_has_no_credentials_or_public_writes():
@@ -609,6 +655,7 @@ def test_map_partial_fill_settlement_releases_map_series_once():
     ]
     assert execute([])["reconciled"] == 1
     assert ledger.get("demo", "MAPSERIES#KXLOLGAME-F")["held"] == Decimal(".26")
+    assert ledger.held_contracts("demo", "KXLOLGAME-F", "A") == Decimal(".50")
     api.settlement_rows = [
         {
             "ticker": "KXLOLMAP-F-A",
@@ -621,8 +668,8 @@ def test_map_partial_fill_settlement_releases_map_series_once():
     assert execute([])["reconciled"] == 1
     assert ledger.get("demo", "MAPSERIES#KXLOLGAME-F")["held"] == 0
     assert ledger.get("demo", "ACCOUNT")["realized"] == Decimal(".24")
-    maps = ledger.get("demo", "LIVE_MAPS")
-    assert maps["held"] == 0 and maps["realized"] == Decimal(".24")
+    assert ledger.held_contracts("demo", "KXLOLGAME-F", "A") == 0
+    assert ledger.get("demo", "LIVE_MAPS") is None
     execute([])
     assert ledger.get("demo", "ACCOUNT")["realized"] == Decimal(".24")
     execute([signal()])
@@ -885,8 +932,9 @@ class Bo1PublicClient(LivePublicClient):
         return super().request(method, path, body, **query)
 
 
+@pytest.mark.parametrize("covers_target", [False, True])
 def test_live_map_end_to_end_through_queue_with_pregame_position(
-    monkeypatch, tmp_path, capsys
+    monkeypatch, tmp_path, capsys, covers_target
 ):
     from test_execution import saved
 
@@ -914,7 +962,16 @@ def test_live_map_end_to_end_through_queue_with_pregame_position(
     ledger = DynamoLedger("private", db)
     cfg = Config.parse(config())
     pregame_plan = plan_order(saved(), Exchange().routes, cfg, Decimal(60), NOW)
-    assert ledger.reserve(pregame_plan, cfg, Decimal(60)) is not None
+    pregame_row = ledger.reserve(pregame_plan, cfg, Decimal(60))
+    assert pregame_row is not None
+    ledger.replace(
+        pregame_row,
+        {
+            **pregame_row,
+            "status": "filled",
+            "order": {"fill_count_fp": "4.60" if covers_target else "0.10"},
+        },
+    )
     pregame = ledger.get("demo", "SERIES#KXLOLGAME-F")
     capital = (
         cfg.number("starting_bankroll_usd") - ledger.get("demo", "ACCOUNT")["held"]
@@ -1025,6 +1082,11 @@ def test_live_map_end_to_end_through_queue_with_pregame_position(
         "batchItemFailures": []
     }
     skips = [_decode(row) for (_, sk), row in db.data.items() if sk.startswith("SKIP#")]
+    if covers_target:
+        assert [row["reason"] for row in skips] == ["existing_position_covers_target"]
+        assert not posts
+        assert ledger.get("demo", "MAPEVENT#KXLOLGAME-F") is None
+        return
     assert not skips, skips
     logged = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
     assert logged["event"] == "live_map" and logged["outcome"] == "run"
@@ -1247,3 +1309,97 @@ def test_live_source_start_tolerance(hours, passes):
     else:
         with pytest.raises(ValueError, match=r"^live_source_before_start$"):
             live_map.validate_observation(o, NOW.isoformat())
+
+
+@pytest.mark.parametrize(
+    "target,team,expected", [(4, "A", None), (6, "A", "1.40"), (6, "B", "6.00")]
+)
+def test_map_buys_only_target_minus_same_team_pregame_fills(target, team, expected):
+    from test_execution import saved
+
+    from prometheus.execution.core import plan_order
+
+    value = {**config(), "starting_bankroll_usd": "500", "max_contracts": 6}
+    _, api, ledger, execute = harness(value)
+    cfg = Config.parse(value)
+    plan = plan_order(
+        saved(backed_team=team), Exchange().routes, cfg, Decimal(100), NOW
+    )
+    row = ledger.reserve(plan, cfg, Decimal(100))
+    ledger.replace(
+        row,
+        {
+            **row,
+            "status": "filled",
+            "held": "2.76",
+            "committed": "2.76",
+            "order": {"fill_count_fp": "4.60"},
+            "fills": [{"fill_id": "pregame-fill", "count_fp": "4.60"}],
+        },
+    )
+    # Fills are evidence pointers after replace; the order count survives.
+    assert isinstance(ledger.pending()[0]["fills"], dict)
+    api.routes[0]["quantity"] = str(target)
+    result = execute([signal()])
+    if expected is None:
+        assert result["skipped"] == 1 and not api.calls
+        assert ledger.get("demo", "MAPSERIES#KXLOLGAME-F") is None
+        assert "existing_position_covers_target" in [
+            _decode(v).get("reason") for v in ledger.client.data.values()
+        ]
+    else:
+        assert result["submitted"] == 1
+        assert api.calls[0]["count"] == expected
+        row = next(
+            r for r in ledger.pending() if r["alert"].get("kind") == live_map.VERSION
+        )
+        assert row["sizing"]["target_count"] == f"{target:.2f}"
+        assert Decimal(row["sizing"]["held_contracts"]) == (
+            Decimal("4.6") if team == "A" else 0
+        )
+        assert Decimal(row["held"]) == Decimal(expected) * Decimal(
+            row["sizing"]["unit_cost_bound"]
+        )
+
+
+@pytest.mark.parametrize("is_map", [False, True])
+@pytest.mark.parametrize("cap_state", ["shrinks", "blocks", "absent"])
+def test_global_series_cap_sums_pregame_and_map_costs(is_map, cap_state):
+    from test_execution import saved
+
+    value = config()
+    if cap_state != "absent":
+        value["series_fraction"] = ".10"
+    client, api, ledger, execute = harness(value)
+    for sk, held in (
+        ("ACCOUNT", "5"),
+        ("SERIES#KXLOLGAME-F", "4.1" if cap_state == "blocks" else "3.9"),
+        ("MAPSERIES#KXLOLGAME-F", ".5"),
+    ):
+        client.put_item(Item=_item({"pk": "ENV#demo", "sk": sk, "held": Decimal(held)}))
+    candidate = signal() if is_map else saved()
+    result = execute([candidate])
+    if cap_state == "blocks":
+        assert result["skipped"] == 1 and not api.calls
+    else:
+        assert result["submitted"] == 1
+        row = ledger.pending()[0]
+        if cap_state == "shrinks":
+            assert 0 < Decimal(row["held"]) <= Decimal(".10")
+        else:
+            assert Decimal(row["held"]) > Decimal(".10")
+
+
+@pytest.mark.parametrize("fraction", ["0", "-.1", "1.01", "NaN", "Infinity"])
+def test_invalid_global_series_fraction(fraction):
+    with pytest.raises(ValueError):
+        Config.parse({**config(), "series_fraction": fraction})
+
+
+def test_global_series_fraction_can_be_saved_through_control():
+    parameter = Parameter({**config(), "mode": "off"})
+    assert control.configure(parameter, "/config", {"series_fraction": ".10"})[
+        "updated_fields"
+    ] == ["series_fraction"]
+    assert parameter.value["series_fraction"] == ".10"
+    assert Config.parse({**config(), "series_fraction": "1"})
