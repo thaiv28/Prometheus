@@ -21,6 +21,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from prometheus.alert_contract import fold
+from prometheus.live_map import START_TOLERANCE
 
 from .core import decimal, fee_bound, timestamp
 
@@ -29,9 +30,6 @@ ROOTS = {
     "live": "https://external-api.kalshi.com",
 }
 PATH = "/trade-api/v2"
-# Leaguepedia and Kalshi often list one fixture up to an hour or two apart
-# (all of Worlds 2026's Oct 23 day). Teams and the event ticker still pin it.
-START_TOLERANCE = dt.timedelta(hours=2)
 MAP_RULES = re.compile(
     r"^If (?P<side>.+?) wins game (?P<map>\d+) in the (?P<event>.+): (?P<team1>.+?) vs\.? (?P<team2>.+?) "
     r"League of Legends match originally scheduled for (?P<day>\w{3} \d{1,2}, \d{4})"

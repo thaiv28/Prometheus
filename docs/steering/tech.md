@@ -25,7 +25,7 @@
 | `prometheus/elo.py` | Team/player game-length Elo bootstrap and queries for forecasts, rankings and site. |
 | `prometheus/schedule.py`, `team_aliases.json` | Leaguepedia schedule, name matching, odds, S3-backed `data/predictions.json` and scorecard. |
 | `prometheus/live/archive.py`, `scripts/live_archive.sh`, `prometheus/site/live_results.py` | Compact `*.min.json` backups restored for linked results and per-series figures. |
-| `prometheus/live/`, `deploy/live/`, `scripts/live_data.py` | Live feed, forecasts, Kalshi, pages and EC2 service. |
+| `prometheus/live/`, `deploy/live/`, `scripts/live_data.py` | Feed, forecasts, Kalshi, pages, EC2; `deploy/live/cloudwatch-agent.json` ships logs. |
 | `scripts/live_markouts.py` | Offline candidate quote markouts. |
 | `scripts/research/live_latency.py` | Offline lag/veto study; `docs/research/live_latency.md`. |
 | `prometheus/aura.py`, `scripts/evaluate_aura.py` | AURA player season stat; `season_aura`; report `docs/aura_report.md`. |

@@ -306,7 +306,14 @@ class Signals:
             with (directory / "decisions.jsonl").open("a") as file:
                 file.write(
                     json.dumps(
-                        {"at": now, "reason": reason, "source_at": journal_key[-1]}
+                        {
+                            "at": now,
+                            "reason": reason,
+                            "source_at": journal_key[-1],
+                            "match": game.mapping["match_id"],
+                            "game": game.id,
+                            "map": game.number,
+                        }
                     )
                     + "\n"
                 )

@@ -66,7 +66,8 @@ LEAGUES = {
 }
 # Trailing words Riot adds to some teams' names (folded).
 ORG_SUFFIX = re.compile(r"( (e ?sports|gaming))+$")
-QUERY_LAG = 30  # the feed rejects windows ending under 20 s ago (HTTP 400)
+QUERY_LAG = 30  # initial lag; back off when Riot holds a feed back longer
+LOG_FILE = None
 FEED_PHASE = 0.5  # seconds after a 10 s boundary to poll the feed
 FRESH = 60  # seconds a match file stays in the index without a new write
 # Exit status after Riot refused access or rate-limited us: the systemd unit
@@ -86,15 +87,58 @@ class Stop(Exception):
 
 
 def log(event, **fields):
-    print(json.dumps(dict(at=utc_now(), event=event, **fields)), flush=True)
+    line = json.dumps(dict(at=utc_now(), event=event, **fields))
+    print(line, flush=True)
+    if LOG_FILE is not None and event != "cycle":
+        with LOG_FILE.open("a") as file:
+            file.write(line + "\n")
+
+
+class TooRecent(ValueError):
+    """Riot has not released this feed window yet."""
+
+
+class FeedLag:
+    def __init__(self):
+        self.lags = {}
+        self.successes = {}
+
+    def lag(self, game_id):
+        return self.lags.get(game_id, QUERY_LAG)
+
+    def change(self, game_id, lag):
+        self.successes[game_id] = 0
+        if lag != self.lag(game_id):
+            self.lags[game_id] = lag
+            log("feed_lag", game=game_id, lag=lag)
+
+    def too_recent(self, game_id):
+        self.change(game_id, min(600, self.lag(game_id) * 2))
+
+    def ok(self, game_id):
+        self.successes[game_id] = self.successes.get(game_id, 0) + 1
+        if self.successes[game_id] >= 30 and self.lag(game_id) > QUERY_LAG:
+            self.change(game_id, max(QUERY_LAG, self.lag(game_id) // 2))
+
+
+FEED_LAG = FeedLag()
+
+
+def expire_failed(failed, failed_at, now):
+    for gid in list(failed):
+        if now - failed_at[gid] >= 300:
+            del failed[gid]
+            del failed_at[gid]
 
 
 def fetch_json(url, out):
-    """One request; [] payload on 204; Stop on 403/429; ValueError otherwise."""
+    """One request; None on 204; TooRecent on 400; Stop on 401/403/429."""
     record = probe(url, out)[0]
     status = record.get("http_status")
     if status in {401, 403, 429}:
         raise Stop(f"HTTP {status} from {url}")
+    if status == 400:
+        raise TooRecent(f"HTTP {status} {record.get('error', '')}".strip())
     if status == 204:
         return record, None
     if status != 200 or record.get("parse_error"):
@@ -135,7 +179,9 @@ def feed_sides(game, out):
     stats, never finishes and leaves no snapshot.
     """
     try:
-        query = datetime.now(UTC).replace(microsecond=0) - timedelta(seconds=QUERY_LAG)
+        query = datetime.now(UTC).replace(microsecond=0) - timedelta(
+            seconds=FEED_LAG.lag(game["id"])
+        )
         query -= timedelta(seconds=query.second % 10)
         _, payload = fetch_json(
             WINDOW.format(
@@ -144,9 +190,15 @@ def feed_sides(game, out):
             ),
             out,
         )
+    except TooRecent:
+        FEED_LAG.too_recent(game["id"])
+        return None
     except ValueError as error:
+        FEED_LAG.successes[game["id"]] = 0
         log("sides_failed", game=game["id"], reason=str(error))
         return None
+    if payload is not None:
+        FEED_LAG.ok(game["id"])
     metadata = (payload or {}).get("gameMetadata") or {}
     ids = {
         side: (metadata.get(f"{side}TeamMetadata") or {}).get("esportsTeamId")
@@ -785,6 +837,7 @@ class Game:
     ):
         self.mapping, self.id = mapping, game["id"]
         self.number, self.start_time = game["number"], start_time
+        self.feed_failures = 0
         self.latest_signal_book = None
         self.signal_skip = None
         self.ticker = self.series_ticker = self.forge = self.page_out = None
@@ -940,9 +993,25 @@ class Game:
     def poll(self):
         now = datetime.now(UTC)
         self.collector.process({"action": "tick", "at": now.isoformat()})
-        query = now.replace(microsecond=0) - timedelta(seconds=QUERY_LAG)
+        query = now.replace(microsecond=0) - timedelta(seconds=FEED_LAG.lag(self.id))
         query -= timedelta(seconds=query.second % 10)
-        out, record, payload = self.window(query)
+        try:
+            out, record, payload = self.window(query)
+        except TooRecent:
+            FEED_LAG.too_recent(self.id)
+            return
+        except ValueError as error:
+            FEED_LAG.successes[self.id] = 0
+            self.feed_failures += 1
+            log(
+                "feed_failed", game=self.id, reason=str(error), count=self.feed_failures
+            )
+            if self.feed_failures >= 30:
+                raise
+            return
+        self.feed_failures = 0
+        if payload is not None:
+            FEED_LAG.ok(self.id)
         if payload is None:
             return  # no content yet: draft or loading
         self.collector.process(
@@ -1369,6 +1438,7 @@ def run(args):
         gid, path, session = spec.split(":", 2)
         adopt[gid] = (Path(path), session)
     games, failed, last_discovery = {}, {}, 0.0
+    failed_at = {}
     pre = PreMaps(args.root)
     signals = None
     if getattr(args, "live_map_signals", False):
@@ -1398,6 +1468,7 @@ def run(args):
             lifecycle_changed = False
             if cycle - last_discovery >= args.discover_interval:
                 last_discovery = cycle
+                expire_failed(failed, failed_at, cycle)
                 stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
                 try:
                     _, payload = fetch_json(GETLIVE, args.root / "discovery" / stamp)
@@ -1509,6 +1580,7 @@ def run(args):
                             )
                         except (ValueError, KeyError, sqlite3.Error) as error:
                             failed[gid] = str(error)
+                            failed_at[gid] = time.monotonic()
                             log("skipped", game=gid, reason=str(error))
                 for event in events or []:
                     for game in event["match"]["games"]:
@@ -1740,6 +1812,7 @@ def run(args):
                     sqlite3.Error,
                 ) as error:
                     failed[gid] = str(error)
+                    failed_at[gid] = time.monotonic()
                     games.pop(gid).close()
                     log("game_failed", game=gid, reason=str(error))
             update_observed(args.page_out, games.values(), utc_now())
@@ -1836,6 +1909,7 @@ ROOT = HERE.parents[1]
 
 
 def main():
+    global LOG_FILE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--root", type=Path, default=ROOT / "data" / "live", help="Evidence directory"
@@ -1896,6 +1970,8 @@ def main():
     )
     parser.add_argument("--fetch", action="store_true")
     args = parser.parse_args()
+    LOG_FILE = args.root / "worker.jsonl"
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     if not args.fetch:
         parser.error("network requires --fetch")
     if args.interval not in (10, 20, 30) or args.discover_interval < 30:

@@ -61,6 +61,7 @@ policy change if the account profile changes.
 2. It reads both contracts' recent trades (two additional bounded GETs per
    eligible quote cycle), requires complete pagination, and checks the existing
    first-team book. Candidate/skip evidence stays in `data/live/.../trading/`.
+   Journal lines carry match/game/map and ship to `/thaiv/prometheus/live/decisions`.
 3. The candidate is written locally once, uploaded to the existing **private**
    artifacts bucket at `prometheus/live-trading/signals/<sha256>.json` with
    If-None-Match, then an SQS pointer is sent. Delivery retries reuse the same
