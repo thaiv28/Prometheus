@@ -27,6 +27,7 @@
 - [Conditional objective gains](cand_followups.md) and [role leads phase A](cand_role_leads.md): original draft and momentum add to objectives; role gold/CS/XP add to gold+Elo on exact checkpoints. Retrospective, no runtime change.
 
 - [Live anchor and calibration](live_anchor.md): FORGE + series-shift pregame beats the v1 pre-map call; FORGE anchor and raw calibration rejected; nothing deployed.
+- [Live offset](live_offset.md): FORGE as a fixed in-game offset helps the first 20 minutes but loses after 30, half from dropping maps without FORGE; refit on all maps still loses after 30; rejected.
 - [Live model candidate review](live_candidates.md): objectives, draft, per-map Elo, momentum and calibration; retrospective research, no model deployed.
 
 Finished research that changed no published metric: in-game snapshots, champions and matchups, snapshot and visible-input Elo, gol.gg objectives, Elo margins of victory and league moves. Each report below sits in this folder; the scripts are in `scripts/research/`. Moved here from `docs/steering/tech.md` on 2026-10-08 so agents don't read it before every task.
