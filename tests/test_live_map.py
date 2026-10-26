@@ -227,7 +227,7 @@ def test_map_entry_is_capped_fenced_and_uncertain_response_never_reissued():
     assert execute([signal()])["errors"] == 1
     account = ledger.get("demo", "ACCOUNT")
     assert Decimal("0") < account["held"] <= Decimal(".50")
-    assert ledger.get("demo", "SERIES#KXLOLGAME-F")["held"] == account["held"]
+    assert ledger.get("demo", "MAPSERIES#KXLOLGAME-F")["held"] == account["held"]
     api.invisible = True
     assert execute([signal()])["submitted"] == 0
     assert len(api.calls) == 1
@@ -235,32 +235,93 @@ def test_map_entry_is_capped_fenced_and_uncertain_response_never_reissued():
 
 
 @pytest.mark.parametrize("bo1", [False, True])
-def test_series_reservation_counts_existing_pregame_and_survives_race(bo1):
+def test_map_reservation_ignores_pregame_event_and_series_exposure(bo1):
     from test_execution import saved
+
+    from prometheus.execution.core import plan_order
 
     _, api, ledger, execute = harness()
     cfg = Config.parse(config())
-    # Existing pregame exposure is above the live strategy's 2% series cap.
-    from prometheus.execution.core import map_budget, plan_order
-
-    routes = copy.deepcopy(api.routes)
-    plan = plan_order(saved(), routes, cfg, Decimal(100), NOW)
+    plan = plan_order(saved(), api.routes, cfg, Decimal(100), NOW)
     row = ledger.reserve(plan, cfg, Decimal(100))
     assert row is not None
+    pregame = ledger.get("demo", "SERIES#KXLOLGAME-F")
+    assert pregame["held"] > Decimal("1")
+    assert ledger.get("demo", "EVENT#KXLOLGAME-F")
     candidate = bo1_signal() if bo1 else signal()
+    assert execute([candidate])["submitted"] == 1
+    assert len(api.calls) == 1
+    assert ledger.get("demo", f"MAPEVENT#{candidate['event_ticker']}")
+    assert ledger.get("demo", "MAPSERIES#KXLOLGAME-F")["held"] > 0
+    assert ledger.get("demo", "SERIES#KXLOLGAME-F") == pregame
+
+
+def test_map_event_fence_blocks_another_fixture_for_same_event():
+    client, api, ledger, execute = harness()
+    candidate = signal()
+    assert execute([candidate])["submitted"] == 1
+    o = observation()
+    o["map_number"] = 2
+    candidate = live_map.proposal(o, tape(), book(), NOW.isoformat(), fee)
+    assert ledger.get("demo", f"FIXTURE#{candidate['fixture_id']}") is None
+    assert ledger.seen(candidate, "demo")
     assert execute([candidate])["submitted"] == 0
-    assert not api.calls
-    # Two planners see the same account. Actual transaction admits only one.
+    assert len(api.calls) == 1
+    assert "duplicate_fixture_or_event" in [
+        _decode(row).get("reason") for row in client.data.values()
+    ]
+
+
+def test_map_series_reservation_survives_race():
+    from prometheus.execution.core import map_budget, plan_order
+
     _, api, ledger, _ = harness()
-    account = {"series_available": "1", **map_budget(cfg, None)}
+    cfg = Config.parse(config())
+    account = {"series_available": ".75", **map_budget(cfg, None)}
     first = plan_order(signal(), api.routes, cfg, Decimal(100), NOW, account)
     second = copy.deepcopy(first)
     second["alert"]["fixture_id"] = "second"
     second["alert"]["event_ticker"] = "KXLOLMAP-G"
     second["client_order_id"] = "second"
-    reserve = Config.parse({**cfg.raw, "live_series_cap_usd": "1"})
+    # Refresh the map-budget/account snapshots so only the series cap rejects it.
+    amount = Decimal(first["held"])
+    assert 2 * amount > Decimal(".75")
+    second["sizing"]["held_before"] = str(amount)
+    second["sizing"]["map_held_before"] = str(amount)
+    reserve = Config.parse({**cfg.raw, "live_series_cap_usd": ".75"})
     assert ledger.reserve(first, reserve, Decimal(100))
     assert ledger.reserve(second, reserve, Decimal(100)) is None
+    assert ledger.get("demo", "MAPSERIES#KXLOLGAME-F")["held"] == amount
+
+
+def test_second_map_is_sized_to_remaining_map_series_cap():
+    _, api, ledger, execute = harness()
+    api.invisible = True
+    assert execute([signal()])["submitted"] == 1
+    first = ledger.get("demo", "MAPSERIES#KXLOLGAME-F")["held"]
+    o = observation()
+    o.update(map_number=2, event_ticker="KXLOLMAP-G")
+    second = live_map.proposal(o, tape(), book(), NOW.isoformat(), fee)
+    assert execute([second])["submitted"] == 1
+    total = ledger.get("demo", "MAPSERIES#KXLOLGAME-F")["held"]
+    assert 0 < total - first < first
+    assert total <= (Decimal(50) - first) * Decimal(".02")
+
+
+def test_old_map_intent_without_series_key_releases_original_series_row():
+    from prometheus.execution.core import map_budget, plan_order
+
+    _, api, ledger, _ = harness()
+    cfg = Config.parse(config())
+    account = {"series_available": "1", **map_budget(cfg, None)}
+    plan = plan_order(signal(), api.routes, cfg, Decimal(100), NOW, account)
+    del plan["series_key"]
+    row = ledger.reserve(plan, cfg, Decimal(100))
+    assert row is not None
+    assert ledger.get("demo", "SERIES#KXLOLGAME-F")["held"] > 0
+    ledger.abort(row, "configuration_changed")
+    assert ledger.get("demo", "SERIES#KXLOLGAME-F")["held"] == 0
+    assert ledger.get("demo", "MAPSERIES#KXLOLGAME-F") is None
 
 
 def test_map_pause_and_personal_vetoes_cannot_submit():
@@ -504,6 +565,7 @@ def test_map_budget_reservation_is_atomic():
     second["alert"]["event_ticker"] = "KXLOLMAP-G"
     second["client_order_id"] = "second"
     second["series_id"] = "KXLOLGAME-G"
+    second["series_key"] = "MAPSERIES#KXLOLGAME-G"
     # Both planned from the same LIVE_MAPS state; only the first may reserve.
     assert ledger.reserve(first, cfg, Decimal(100))
     assert ledger.reserve(second, cfg, Decimal(100)) is None
@@ -527,7 +589,7 @@ def test_transport_template_is_disabled_and_has_no_credentials_or_public_writes(
     assert "s3:DeleteObject" not in json.dumps(template)
 
 
-def test_map_partial_fill_settlement_releases_shared_series_once():
+def test_map_partial_fill_settlement_releases_map_series_once():
     _, api, ledger, execute = harness()
     execute([signal()])
     api.orders[0].update(fill_count_fp=".50", status="canceled")
@@ -544,7 +606,7 @@ def test_map_partial_fill_settlement_releases_shared_series_once():
         }
     ]
     assert execute([])["reconciled"] == 1
-    assert ledger.get("demo", "SERIES#KXLOLGAME-F")["held"] == Decimal(".26")
+    assert ledger.get("demo", "MAPSERIES#KXLOLGAME-F")["held"] == Decimal(".26")
     api.settlement_rows = [
         {
             "ticker": "KXLOLMAP-F-A",
@@ -555,7 +617,7 @@ def test_map_partial_fill_settlement_releases_shared_series_once():
         }
     ]
     assert execute([])["reconciled"] == 1
-    assert ledger.get("demo", "SERIES#KXLOLGAME-F")["held"] == 0
+    assert ledger.get("demo", "MAPSERIES#KXLOLGAME-F")["held"] == 0
     assert ledger.get("demo", "ACCOUNT")["realized"] == Decimal(".24")
     maps = ledger.get("demo", "LIVE_MAPS")
     assert maps["held"] == 0 and maps["realized"] == Decimal(".24")
@@ -578,7 +640,7 @@ def test_map_freshness_and_pause_rechecked_after_claim():
     assert execute([signal()])["submitted"] == 0
     assert not api.calls and not ledger.pending()
     assert ledger.get("demo", "ACCOUNT")["held"] == 0
-    assert ledger.get("demo", "SERIES#KXLOLGAME-F")["held"] == 0
+    assert ledger.get("demo", "MAPSERIES#KXLOLGAME-F")["held"] == 0
 
 
 def test_valid_personal_vetoes_are_preserved_for_map_strategy():

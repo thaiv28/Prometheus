@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-26 — Live maps no longer blocked by pregame fences
+
+Both live candidates so far (DK v G2 10-23, DK at 25¢ vs 34% model; G2 v TES 10-25, TES at 42¢ vs 52%) were rejected: same-side pregame orders held their Bo1 event fences, and pregame held ($4.09, $2.48) exceeded the shared ~$0.93 2% series cap. It would also have blocked Bo3/Bo5 maps. Maps now use MAPEVENT#/MAPSERIES# (shadow sizing too); pregame unchanged apart from storing series_key; old intents release against SERIES#. Checks: ruff; tests for the Bo1 collision, map fence, MAPSERIES# cap and release, legacy release; full pytest (1,037 passed, 2 skipped). Limit: correlated exposure (the live prior reuses the pregame rating) is bounded only by map/series/budget caps; executor redeploys on merge.
+
 ## 2026-10-23 — Live feed polls on the window boundary; recorded-page guard
 
 Feed windows start on 10 s boundaries 30 s back, so the newest frame's age is ~20.6 s plus the poll's offset into the cycle (BLG v MKOI: 20.6 s at +0 s rising to 29.8 s at +9 s; median 25.6 s). The worker now polls once per 10 s slot, 0.5 s after it opens (`feed_slot`), and wakes for it: ~5 s fresher on average, no extra requests (`--interval` must be 10, 20 or 30). After a restart the old code wrote BLG v MKOI's waiting page over its recorded map page (restored from `map1.json`); `without_recorded` now skips waiting pages for matches whose file holds frames. Checks: new timing and guard tests; cadence test on slot-aligned clock; full pytest; ruff. Limit: alignment unmeasured live.

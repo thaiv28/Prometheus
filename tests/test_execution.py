@@ -358,6 +358,7 @@ def test_intent_precedes_submission_and_v2_body():
 
     def submit(body):
         assert ledger.pending()[0]["status"] == "submitting"
+        assert ledger.pending()[0]["series_key"] == "SERIES#KXLOLGAME-F"
         assert held(ledger) == Decimal("4.9959")
         assert body["side"] == "bid"
         assert body["price"] == "0.6000" and body["count"] == "7.93"
