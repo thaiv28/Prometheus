@@ -1,5 +1,7 @@
 # Research
 
+- [Pregame sizing and live overlap](pregame_sizing.md): Kelly/cap backtest and same-side live-map exposure evidence (2026-10-26).
+
 - [Live-map delay and fight-veto research](live_latency.md) (2026-10-23): fixed lag and post-event entry comparisons; offline candidate markouts. Changed no published metric or production behaviour.
 
 - **[More Elo offset evidence](elo_offsets.md) (2026-10-19), not adopted.** Team-only links improve cross-league loss but regress within-other Elo; level bias remains. Calibration removal is inconclusive; removing the move-down bonus fails. Transfer evidence fails the training guard.

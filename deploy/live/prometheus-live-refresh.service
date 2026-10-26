@@ -8,7 +8,6 @@ Type=oneshot
 User=prometheus
 EnvironmentFile=/etc/prometheus-live.env
 ExecStart=/bin/bash /srv/prometheus-live/app/deploy/live/refresh.sh
-# Root, as systemd's "+": queue a restart only when the refresh changed something.
-# The publisher is ordered After this unit; waiting for its restart here deadlocks.
-ExecStartPost=+/bin/bash -c 'if [ -e /srv/prometheus-live/restart ]; then rm /srv/prometheus-live/restart; systemctl --no-block try-restart prometheus-live.service; fi'
+# Root removes an idle worker's update flag; active workers consume it between live games.
+ExecStartPost=+/bin/bash -c 'if [ -e /srv/prometheus-live/restart ] && ! systemctl is-active --quiet prometheus-live.service; then rm /srv/prometheus-live/restart; fi'
 TimeoutStartSec=1800

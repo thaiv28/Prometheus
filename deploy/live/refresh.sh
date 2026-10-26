@@ -3,7 +3,7 @@
 # the service user: the newest main, its dependencies, the ratings file the
 # publish build leaves in the artifacts bucket and the site's team catalog. Backs
 # up the live evidence first (backup.sh). Touches $APP_ROOT/restart when the code or the data
-# changed, so the unit restarts the service only then.
+# changed; the worker restarts once no tracked game is live.
 set -euo pipefail
 # shellcheck source=/dev/null
 source /etc/prometheus-live.env

@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-26 — Shared capital, series cap, position-aware live maps, idle-only restarts
+
+Removed the map budget; pregame and live maps share free capital. Optional global `series_fraction` caps combined held cost; live targets subtract same-team active filled contracts across strategies. Existing map-only caps and legacy budget releases remain. Refresh flags wait until no tracked game is live; worker exit 5 requests systemd restart. Root `deploy/live/install.sh` must run once for the unit change. Added [sizing evidence](../research/pregame_sizing.md) and its CSV-driven script. Checks: ruff format/check; full pytest (1,082 passed, 2 skipped); feed/steering checks (21 passed); research script --help; bash -n; diff --check. Regression checks add no CI job/build step; Actions timing unmeasured. Limit: the global series cap is not enforced atomically across concurrent pregame and map reservations. No SSM values changed; 10% awaits configuration.
+
 ## 2026-10-26 — Live model: fixed FORGE offset tested, rejected
 
 Branch `live-offset`, base `1a74d73`. `scripts/research/live_offset.py` ([report](../research/live_offset.md)); viewed test split. D enters logit(FORGE) as an offset (calls start at the pre-map call), fits its fade, drops Elo and calibration: −0.0024 (−0.0062 to +0.0011), 0–20 min better, 30+ worse (+0.0072): FAIL. Diagnosis: production refit on D's maps loses the same at 30+; Elo, calibration and prior source don't matter, the 1,237 dropped maps without FORGE do. F (all maps, Elo prior where FORGE is missing): −0.0008 (−0.0035 to +0.0019), ECE 0.0194 → 0.0086, 30+ still worse (+0.0030, +0.0006 to +0.0054): FAIL; FORGE maps −0.0037 (significant). No runtime change. Checks: ruff, full pytest.

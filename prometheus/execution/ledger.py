@@ -60,9 +60,10 @@ class DynamoLedger:
         )
         return _decode(result["Item"]) if result.get("Item") else None
 
-    def pending(self):
+    def pending(self, environment=None):
         result = []
-        for environment in ("demo", "live"):
+        environments = (environment,) if environment else ("demo", "live")
+        for environment in environments:
             query = {
                 "TableName": self.table,
                 "KeyConditionExpression": "pk = :pk AND begins_with(sk, :prefix)",
@@ -86,6 +87,26 @@ class DynamoLedger:
                     break
                 query["ExclusiveStartKey"] = page["LastEvaluatedKey"]
         return result
+
+    def held_contracts(self, environment, series_id, team):
+        """Filled, unsettled contracts backing this team across all strategies."""
+        total = Decimal(0)
+        for row in self.pending(environment):
+            if (
+                row.get("series_id") != series_id
+                or row["alert"].get("backed_team") != team
+            ):
+                continue
+            # Reconcile preserves the exchange count when fills become evidence pointers.
+            order = row.get("order") or {}
+            if "fill_count_fp" in order:
+                total += decimal(order["fill_count_fp"])
+            else:
+                total += sum(
+                    (decimal(fill["count_fp"]) for fill in row.get("fills", [])),
+                    Decimal(0),
+                )
+        return total
 
     def reserve(self, plan, config, balance):
         env = plan["environment"]
@@ -156,32 +177,6 @@ class DynamoLedger:
                     {":amount": amount, ":available": cap_value - amount}
                 )
             transactions.append({"Update": update})
-        if "map_held_before" in sizing:
-            # Live maps' own budget; the observed held/realized must be unchanged.
-            held = decimal(sizing["map_held_before"])
-            realized = decimal(sizing["map_realized_before"])
-            budget = decimal(config.raw["live_maps"]["budget_usd"])
-            if amount > budget + realized - held:
-                return None
-            values = {":amount": amount}
-            matches = []
-            for name, expected in (("held", held), ("realized", realized)):
-                values[f":expected_{name}"] = expected
-                match = f"{name} = :expected_{name}"
-                if expected == 0:
-                    match = f"(attribute_not_exists({name}) OR {match})"
-                matches.append(match)
-            transactions.append(
-                {
-                    "Update": {
-                        "TableName": self.table,
-                        "Key": _item(self.key(env, "LIVE_MAPS")),
-                        "UpdateExpression": "ADD held :amount",
-                        "ConditionExpression": " AND ".join(matches),
-                        "ExpressionAttributeValues": _item(values),
-                    }
-                }
-            )
         for sk in fence_keys(plan["alert"]):
             transactions.append(
                 {

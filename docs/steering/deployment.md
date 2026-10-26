@@ -95,7 +95,7 @@ The live pages' files (`current/live/index.json`, one per match, `<match>/map<n>
 - **Host:** stack `ThaivPrometheusLive` in the infrastructure repo (**Deploy Prometheus Live** workflow, `diff` then `deploy`): one `t4g.micro` (Amazon Linux 2023, 20 GB encrypted gp3, IMDSv2), its own public subnet, no inbound rules, shell through SSM Session Manager only. Its role can write and delete under the site bucket's `current/live/`, read `current/teams.json`, read `s3://$DATA_BACKUP_BUCKET/prometheus/live-inputs/` and write `.../prometheus/live/`. User data writes `/etc/prometheus-live.env`, clones this repo into `/srv/prometheus-live/app` and runs `deploy/live/install.sh`. About $1.60 a month for its disk plus about $0.013 an hour while on (instance and public IPv4).
 - **On only around matches:** the service exits with status 4 after 90 minutes with no live game (`--idle-exit 90`); the unit then backs up and powers the instance off. The hourly prices job's **Wake the live worker** step (`scripts/live_wake.py`, needs the repository variable `LIVE_WORKER_INSTANCE_ID`, the stack's `WorkerInstanceId` output) starts it when the prediction log has a match the live feed carries (Worlds, MSI, FST, LCK, LPL, LEC, LCS, CBLOL, LCP, VCS, EM, LCKC) starting within 75 minutes or started within 4 hours without a result. The shared deployment role may start this one instance and nothing else. A match missing from the log, or one starting more than about an hour after the last hourly run, starts late.
 - **Service:** `prometheus-live.service` runs `python -m prometheus.live.service --fetch --idle-exit 90 --s3 s3://$SITE_BUCKET/current/live` as user `prometheus`. While a game is tracked (or the index changed) it mirrors `output/live/` with `aws s3 sync --delete` and `Cache-Control: max-age=1`; the distribution's `CachingOptimized` policy (min TTL 1 s) honours it, so no extra behaviour or invalidation is needed. It restarts after a crash (60 s), never after exit 3 (Riot refused access or rate-limited it; the instance stays on for a look) or 4. Logs: `journalctl -u prometheus-live`. `install.sh` installs the CloudWatch agent: decisions go to `/thaiv/prometheus/live/decisions`, worker events (except cycles) to `/thaiv/prometheus/live/worker`, with a stream per instance. The infrastructure stack owns both groups and 30-day retention. Existing instances need `install.sh` rerun once as root via SSM.
-- **Refresh:** `prometheus-live-refresh.timer` 30 s after boot and every 6 hours runs `refresh.sh`: `backup.sh`, reset to `origin/main`, `uv sync --frozen --no-dev`, the ratings file and the site's `teams.json`; the service restarts only when any of them changed.
+- **Refresh:** `prometheus-live-refresh.timer` 30 s after boot and every 6 hours runs `refresh.sh`: `backup.sh`, reset to `origin/main`, `uv sync --frozen --no-dev`, the ratings file and the site's `teams.json`; changes leave a restart flag; the worker exits 5 only when no tracked game is live, then systemd restarts it after 60 s. Rerun root `deploy/live/install.sh` once to install the refresh unit.
 - **Ratings:** the publish build on main runs `scripts/export_live_inputs.py` (FORGE's rating fields and the in-game model's Elo for every team, about 0.6 MB) and uploads it to `s3://$DATA_BACKUP_BUCKET/prometheus/live-inputs/live_inputs.json`. Publish also uploads `elo_state.json.gz` (3,144,414 bytes; 13.02 s locally) beside it for hourly calls. The worker never loads the database. Every five minutes, file-backed ratings check `live_inputs_fresh.json` in the same S3 prefix (`ARTIFACTS_BUCKET`): atomically adopt only a newer `generated_at` with the same `data_through`, then reload on the next ratings read. Failures leave current inputs intact. The six-hour refresh still fetches the published base.
 - **Finished maps:** `maps.json` is uploaded immediately to `s3://$ARTIFACTS_BUCKET/prometheus/live/<match>/maps.json`, then dispatches `prices.yml` (debounced 5 minutes). The token comes from SSM SecureString `/thaiv/prometheus/live/prices-dispatch-token`: a fine-grained token with Actions: write on this repository only. The worker role needs `ssm:GetParameter` on it, granted in the infrastructure repo. Without it, dispatch is skipped; the hourly run still picks up maps.
 - **Backup:** `backup.sh` (every refresh and every stop) syncs to `s3://$DATA_BACKUP_BUCKET/prometheus/live/<match>/`: `results.json`, `calls.jsonl`, `forge.json`, `series_quotes.jsonl`, each map's `pre_quotes.jsonl` (Kalshi's book during its draft and loading screen), each finished map's `archive.tar.gz` and its page file (`pages/map<n>.json`). A game still in progress is backed up when it finishes. Locally: `scripts/live_data.py pull` (needs read access to the bucket).
@@ -176,7 +176,7 @@ ship through the existing main-branch worker refresh. No infrastructure,
 IAM, credentials, SSM trading settings or order-execution artifact changes.
 The stopped worker must be started and allowed to register with SSM; then
 `systemctl start prometheus-live-refresh.service` runs backup, fetch, dependency
-sync and ratings refresh, and restarts the service if the code changed. Verify
+sync and ratings refresh, and flags an idle-only restart if inputs changed. Verify
 its deployed git SHA, packaged model hash, selected default model schema and
 systemd service health. Publishing the static site alone does not refresh a
 running worker until its next timer.
@@ -233,14 +233,14 @@ path install this private observation mode.
 
 ### Refresh unit ordering (2026-10-18)
 
-`prometheus-live-refresh.service` queues `systemctl --no-block try-restart`
-in its post-step. A synchronous restart deadlocks with the publisher's `After`
-order; this was observed during the model rollout and in prior boot logs.
-When changing a unit, install its reviewed file under `/etc/systemd/system/`
-and run `systemctl daemon-reload`; a code refresh alone does not replace unit
-files. For an already deadlocked old post-step, terminate only its control
-process, then run the corrected refresh and let the queued publisher restart
-finish before checking health. Do not wait for the old 30-minute timeout.
+`prometheus-live-refresh.service` leaves the restart flag while the publisher is
+active; an inactive publisher's flag is removed because its next start loads new
+code. Each worker cycle consumes the flag only when no tracked game is live,
+logs `restart_for_update` and exits 5. `Restart=on-failure` restarts it after 60 s;
+exit statuses 3 (refused access) and 4 (idle shutdown) retain their meanings.
+Rerun `deploy/live/install.sh` as root once: refresh alone does not replace unit
+files. The install reloads systemd. No synchronous restart waits on the publisher's
+`After` ordering.
 
 Rollout verified on worker `i-026b4649ad0e7dd80`: main release `f522db3`,
 model `objectives-momentum-2026-10-17`, SHA256
@@ -269,7 +269,7 @@ Bo1 signals use the KXLOLGAME event; the executor requires a not-found response 
 
 The executor zip includes stdlib `live/draft.py` only because `live/timeline.py`
 imports it; draft v2's model and blend are not packaged (the trading benchmark
-failed, see [evidence](../research/live_map_draft_trading.md)). Live maps need an
-explicit `live_maps.budget_usd` before shadow or live mode; the ledger's
-`ENV#<mode> / LIVE_MAPS` row (held, realized) enforces it. No new table, IAM or
+failed, see [evidence](../research/live_map_draft_trading.md)). Live maps now share ACCOUNT capital with pregame; no separate budget is required.
+The optional global `series_fraction` cap is configured separately; deployments
+do not change SSM values. No new table, IAM or
 CI step. Nothing was deployed or activated.

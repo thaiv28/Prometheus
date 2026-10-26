@@ -173,9 +173,12 @@ def test_cloudwatch_log_config():
 @pytest.mark.parametrize(
     "failures,error", [(1, service.TooRecent), (1, ValueError), (30, ValueError)]
 )
+@pytest.mark.parametrize("restart", [False, True])
 def test_run_keeps_transient_games_and_rediscovers_failed_games(
-    tmp_path, monkeypatch, lag, failures, error
+    tmp_path, monkeypatch, lag, failures, error, restart
 ):
+    restart_flag = tmp_path / "restart"
+    monkeypatch.setattr(service, "RESTART_FLAG", restart_flag)
     (tmp_path / "teams.json").write_text("[]")
     game = mock.Mock()
     game.id, game.number, game.state = "g", 1, "live"
@@ -249,11 +252,21 @@ def test_run_keeps_transient_games_and_rediscovers_failed_games(
 
     def sleep(seconds):
         clock[0] += seconds
-        if clock[0] >= 850:
+        if restart and clock[0] >= 850:
+            if restart_flag.exists():
+                # At least one complete cycle with a live game kept the flag.
+                game.state = "finished"
+            else:
+                restart_flag.touch()
+        elif clock[0] >= 850:
             raise service.Stop("test complete")
 
     monkeypatch.setattr(service.time, "sleep", sleep)
-    assert service.run(args) == service.REFUSED
+    expected = service.RESTART_FOR_UPDATE if restart else service.REFUSED
+    assert service.run(args) == expected
+    assert not restart_flag.exists()
+    if restart:
+        assert mock.call("restart_for_update") in logger.call_args_list
     failed = [c for c in logger.call_args_list if c.args[0] == "game_failed"]
     assert len(failed) == (1 if failures == 30 else 0)
     assert constructor.call_count == (2 if failures == 30 else 1)
@@ -262,3 +275,21 @@ def test_run_keeps_transient_games_and_rediscovers_failed_games(
         # Discovery retries at its first cycle after the 300-second cooldown.
         assert 300 <= attempts[30] - attempts[29] < 360
         assert any("g" in c.args[-1] for c in waiting.call_args_list)
+
+
+def test_refresh_leaves_active_worker_update_flag():
+    deploy = Path(__file__).resolve().parents[2] / "deploy/live"
+    refresh = (deploy / "prometheus-live-refresh.service").read_text()
+    post = next(
+        line for line in refresh.splitlines() if line.startswith("ExecStartPost=")
+    )
+    assert (
+        "[ -e /srv/prometheus-live/restart ] && ! systemctl is-active --quiet prometheus-live.service"
+        in post
+    )
+    assert "then rm /srv/prometheus-live/restart; fi" in post
+    assert "try-restart" not in post
+    worker = (deploy / "prometheus-live.service").read_text()
+    assert "Restart=on-failure" in worker
+    assert "RestartSec=60" in worker
+    assert "RestartPreventExitStatus=3 4\n" in worker

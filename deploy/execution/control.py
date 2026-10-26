@@ -10,6 +10,7 @@ FIELDS = frozenset(
         "live_maps",
         "starting_bankroll_usd",
         "kelly_fraction",
+        "series_fraction",
         "order_budget_usd",
         "fixture_budget_usd",
         "daily_budget_usd",

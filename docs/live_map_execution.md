@@ -92,31 +92,30 @@ verified game clock, change public model probabilities.
 its activation epoch also gate real orders. Global off prevents all new orders.
 A deployment cannot enable this strategy.
 
-Limits are explicit: live-map Kelly fraction <=0.25, map outlay fraction <=0.01,
-series outlay fraction <=0.02. Smaller values are supported. Global cash,
-fee precision, order/fixture/day/exposure caps also apply. Sizing uses the
-**one** seed and ACCOUNT record shared with pregame execution.
+Pregame and live maps use one shared free capital pool: starting bankroll +
+ACCOUNT.realized − ACCOUNT.held. Pregame retains global Kelly; live-map Kelly
+fraction <=0.25, per-map outlay <=1% and map-series outlay <=2% of free capital.
+Smaller nested fractions are supported. Global cash, fee precision,
+order/fixture/day/exposure caps also apply; there is no separate live-map budget.
+Optional global `series_fraction` caps combined pregame `SERIES#` and map
+`MAPSERIES#` held cost for the same KXLOLGAME event against free capital.
+Absent this key, that cross-strategy cap does not apply. The approved 10% value
+will be saved separately through the configuration workflow.
 
-Live maps also have their own required budget, `budget_usd` ($15 intended).
-The ledger's `LIVE_MAPS` row holds their open cost and realized profit; an order
-must fit in budget + realized − held, reserved atomically with ACCOUNT. Total
-live-map loss can never exceed the budget, and profit extends it. When it is
-spent, map orders skip (`bankroll_or_spending_cap_exhausted`); pregame is
-unaffected. To change it, turn global execution off and save a new `live_maps`
-object (the existing `LIVE_MAPS` row is kept, so past losses still count).
-Fraction caps use free capital (seed + verified realized profit - held), which
-is more conservative than the historical cost-valued-equity simulation.
+A map order buys its current sized target minus filled contracts backing the
+same team on the same series event, across all active pregame and map intents.
+For example, 4.6 pregame contracts cover any map target <=4.6; a target of 6
+buys only 1.4. Other-team holdings are ignored. Less than 0.01 remaining contracts
+skips with `existing_position_covers_target`.
 
-Pregame orders keep `FIXTURE#`, `EVENT#` and `SERIES#` reservations. The exchange
-check rejecting an existing position on the fixture’s own tickers applies only
-to pregame; map orders may add to it (positions still count toward account exposure).
-Map orders use `FIXTURE#` for the physical map, `MAPEVENT#` for the exchange event and
-`MAPSERIES#` for map-only series held cost, checked against the 2% series cap.
-Reservations and releases/partial fills/settlements update held cost atomically
-alongside ACCOUNT, DAY and intent. A pregame position on the same series or Bo1
-event no longer blocks a map order. Combined pregame and map exposure on one
-outcome is bounded by the account/exposure caps and the $15 live-map budget.
-Old intents without `series_key` still release against `SERIES#`.
+Pregame keeps `FIXTURE#`, `EVENT#` and `SERIES#` reservations. Maps use physical-map
+`FIXTURE#`, exchange `MAPEVENT#` and map-only `MAPSERIES#` fences. The pregame-only
+exchange fixture-position check still counts positions toward account exposure.
+Reservations, partial fills and settlements update held cost atomically alongside
+ACCOUNT, DAY and intent; the optional combined series cap is checked before
+reservation, not atomically across concurrent pregame and map orders. Legacy
+intents with `map_held_before` still release their `LIVE_MAPS` accounting; new
+reservations do not write it. Old intents without `series_key` release `SERIES#`.
 The existing Cloud9 and international anti-North-America vetoes apply.
 
 Shadow mode uses public Kalshi endpoints only. It records the first proposed IOC
@@ -159,13 +158,13 @@ commitments; it is observational validation rather than a simulated portfolio.
 
    ```json
    {
+     "series_fraction": "0.10",
      "live_maps": {
        "mode": "off",
        "queue_arn": "arn:aws:sqs:us-west-2:ACCOUNT:QUEUE",
        "kelly_fraction": "0.25",
        "map_fraction": "0.01",
-       "series_fraction": "0.02",
-       "budget_usd": "15"
+       "series_fraction": "0.02"
      }
    }
    ```

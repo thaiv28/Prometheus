@@ -12,7 +12,6 @@ from prometheus.execution.core import (
     ZERO,
     Config,
     decimal,
-    map_budget,
     plan_order,
     run,
     validate_alert,
@@ -117,8 +116,20 @@ def handle(event, clients, aliases):
                 account = {
                     **account,
                     "series_available": cap - decimal(series.get("held", 0)),
-                    **map_budget(config, ledger.get(source_environment, "LIVE_MAPS")),
+                    "held_contracts": ledger.held_contracts(
+                        source_environment, alert["series_id"], alert["backed_team"]
+                    ),
                 }
+                if "series_fraction" in config.raw:
+                    pregame_series = (
+                        ledger.get(source_environment, f"SERIES#{alert['series_id']}")
+                        or {}
+                    )
+                    account["series_room"] = (
+                        config.number("series_fraction") * capital
+                        - decimal(series.get("held", 0))
+                        - decimal(pregame_series.get("held", 0))
+                    )
                 day = (
                     ledger.get(source_environment, f"DAY#{checked.date().isoformat()}")
                     or {}
