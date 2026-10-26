@@ -9,7 +9,17 @@ import hashlib
 import json
 from decimal import Decimal
 
+from prometheus import live_map
+
 from .core import decimal
+
+
+def fence_keys(alert):
+    event_prefix = "MAPEVENT" if alert.get("kind") == live_map.VERSION else "EVENT"
+    return [
+        f"FIXTURE#{alert['fixture_id']}",
+        f"{event_prefix}#{alert['event_ticker']}",
+    ]
 
 
 def _item(value):
@@ -127,7 +137,11 @@ class DynamoLedger:
             cap_value = config.raw.get("live_series_cap_usd")
             update = {
                 "TableName": self.table,
-                "Key": _item(self.key(env, f"SERIES#{plan['series_id']}")),
+                "Key": _item(
+                    self.key(
+                        env, plan.get("series_key") or f"SERIES#{plan['series_id']}"
+                    )
+                ),
                 "UpdateExpression": "ADD held :amount",
                 "ExpressionAttributeValues": _item({":amount": amount}),
             }
@@ -168,10 +182,7 @@ class DynamoLedger:
                     }
                 }
             )
-        for sk in (
-            f"FIXTURE#{plan['alert']['fixture_id']}",
-            f"EVENT#{plan['alert']['event_ticker']}",
-        ):
+        for sk in fence_keys(plan["alert"]):
             transactions.append(
                 {
                     "Put": {
@@ -284,7 +295,11 @@ class DynamoLedger:
                         "Update": {
                             "TableName": self.table,
                             "Key": _item(
-                                self.key(env, f"SERIES#{previous['series_id']}")
+                                self.key(
+                                    env,
+                                    previous.get("series_key")
+                                    or f"SERIES#{previous['series_id']}",
+                                )
                             ),
                             "UpdateExpression": "ADD held :delta",
                             "ExpressionAttributeValues": _item({":delta": delta}),
@@ -329,10 +344,7 @@ class DynamoLedger:
         return row
 
     def seen(self, alert, environment):
-        return (
-            self.get(environment, f"FIXTURE#{alert['fixture_id']}") is not None
-            or self.get(environment, f"EVENT#{alert['event_ticker']}") is not None
-        )
+        return any(self.get(environment, sk) is not None for sk in fence_keys(alert))
 
     def evidence(self, row, kind, values):
         for value in values:

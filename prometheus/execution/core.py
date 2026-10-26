@@ -285,6 +285,11 @@ def plan_order(
         "alert": copy.deepcopy(alert),
         "environment": config.mode,
         "series_id": alert["series_id"] if is_map else alert["event_ticker"],
+        "series_key": (
+            f"MAPSERIES#{alert['series_id']}"
+            if is_map
+            else f"SERIES#{alert['event_ticker']}"
+        ),
         "client_order_id": client_id,
         "route": copy.deepcopy(route),
         "execution_probability": str(probability),
@@ -607,13 +612,7 @@ def run(
             account = ledger.get(config.mode, "ACCOUNT") or {}
             day = ledger.get(config.mode, f"DAY#{checked.date().isoformat()}") or {}
             if alert.get("kind") == live_map.VERSION:
-                series = ledger.get(config.mode, f"SERIES#{alert['series_id']}")
-                if (
-                    series is None
-                    and ledger.get(config.mode, f"EVENT#{alert['series_id']}")
-                    is not None
-                ):
-                    raise ValueError("legacy_series_reservation_untracked")
+                series = ledger.get(config.mode, f"MAPSERIES#{alert['series_id']}")
                 series_cap = max(
                     ZERO,
                     config.number("starting_bankroll_usd")

@@ -104,12 +104,14 @@ object (the existing `LIVE_MAPS` row is kept, so past losses still count).
 Fraction caps use free capital (seed + verified realized profit - held), which
 is more conservative than the historical cost-valued-equity simulation.
 
-New pregame and map orders atomically maintain `SERIES#<KXLOLGAME event>` held
-exposure alongside ACCOUNT, DAY, intent and duplicate fences. Map reservations
-also check the series cap. Releases/partial fills/settlements update that row in
-the same revision-checked transaction. If an old pregame event fence exists
-without a tracked series record, map execution skips rather than guessing its
-exposure. Old intents without series metadata retain their original reconciliation.
+Pregame orders keep `FIXTURE#`, `EVENT#` and `SERIES#` reservations. Map orders
+use `FIXTURE#` for the physical map, `MAPEVENT#` for the exchange event and
+`MAPSERIES#` for map-only series held cost, checked against the 2% series cap.
+Reservations and releases/partial fills/settlements update held cost atomically
+alongside ACCOUNT, DAY and intent. A pregame position on the same series or Bo1
+event no longer blocks a map order. Combined pregame and map exposure on one
+outcome is bounded by the account/exposure caps and the $15 live-map budget.
+Old intents without `series_key` still release against `SERIES#`.
 The existing Cloud9 and international anti-North-America vetoes apply.
 
 Shadow mode uses public Kalshi endpoints only. It records the first proposed IOC

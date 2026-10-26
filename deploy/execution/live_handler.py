@@ -89,7 +89,8 @@ def handle(event, clients, aliases):
                 )
                 account = ledger.get(source_environment, "ACCOUNT") or {}
                 series = (
-                    ledger.get(source_environment, f"SERIES#{alert['series_id']}") or {}
+                    ledger.get(source_environment, f"MAPSERIES#{alert['series_id']}")
+                    or {}
                 )
                 capital = (
                     config.number("starting_bankroll_usd")
