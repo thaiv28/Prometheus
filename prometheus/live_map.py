@@ -11,6 +11,7 @@ import math
 from functools import lru_cache
 from pathlib import Path
 
+START_TOLERANCE = dt.timedelta(hours=2)
 VERSION = "live-map-30s-v1"
 PREFIX = "prometheus/live-trading/signals/"
 MODEL = Path(__file__).with_name("live") / "time_model_objectives_v1.json"
@@ -194,7 +195,9 @@ def validate_observation(observation, at):
     ):
         raise ValueError("live_feed_stale")
     start = timestamp(observation["start"])
-    if start >= source or any(
+    if start - START_TOLERANCE >= source:
+        raise ValueError("live_source_before_start")
+    if any(
         timestamp(t) >= start.replace(hour=0, minute=0, second=0, microsecond=0)
         for t in observation["rating_as_of"]
     ):

@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# One-time setup of the live worker, run as root by the instance's user data
-# (project-platform-infrastructure, ThaivPrometheusLive) after it cloned this repo
-# into $APP_ROOT/app. Safe to rerun. Reads /etc/prometheus-live.env.
+# Rerunnable root setup: live worker and CloudWatch agent; reads /etc/prometheus-live.env.
 set -euo pipefail
 # shellcheck source=/dev/null
 source /etc/prometheus-live.env
@@ -14,6 +12,10 @@ install -m 644 "$app/prometheus-live.service" /etc/systemd/system/
 install -m 644 "$app/prometheus-live-refresh.service" /etc/systemd/system/
 install -m 644 "$app/prometheus-live-refresh.timer" /etc/systemd/system/
 systemctl daemon-reload
+
+rpm -q amazon-cloudwatch-agent >/dev/null 2>&1 || dnf install -y amazon-cloudwatch-agent
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s -c "file:$app/cloudwatch-agent.json"
 
 # The first refresh syncs dependencies and fetches the database and team catalog;
 # the service needs both before it can start.

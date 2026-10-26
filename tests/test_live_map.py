@@ -732,6 +732,8 @@ def test_worker_records_first_candidate_then_only_retries_same_bytes(
     monkeypatch.setattr(signals, "datetime", Frozen)
     game = SimpleNamespace(
         id="g",
+        number=1,
+        mapping={"match_id": "m"},
         dir=tmp_path,
         signal_event="KXLOLMAP-F",
         signal_tickers={"MAP-A": 0, "MAP-B": 1},
@@ -1085,7 +1087,11 @@ def worker_game(tmp_path, best_of=1):
         ticker=None,
         series_ticker="KXLOLGAME-F-A",
         number=1,
-        mapping={"best_of": best_of, "teams": [{"name": "A"}, {"name": "B"}]},
+        mapping={
+            "match_id": "m",
+            "best_of": best_of,
+            "teams": [{"name": "A"}, {"name": "B"}],
+        },
     )
 
 
@@ -1118,6 +1124,11 @@ def test_worker_journals_unarmed_reason_once(tmp_path, reason):
         for line in (tmp_path / "trading/decisions.jsonl").read_text().splitlines()
     ]
     assert len(rows) == 1
+    assert (rows[0]["match"], rows[0]["game"], rows[0]["map"]) == (
+        game.mapping["match_id"],
+        game.id,
+        game.number,
+    )
     assert rows[0]["reason"] == "signal_markets_unavailable:" + (
         reason or "not_discovered"
     )
@@ -1223,3 +1234,16 @@ def test_pause_without_game_start_fails_closed():
     _, frames = pause_frames([100] * 60)
     with pytest.raises(ValueError, match="live_game_start_unknown"):
         paused(frames, None)
+
+
+@pytest.mark.parametrize("hours,passes", [(1, True), (2, False), (3, False)])
+def test_live_source_start_tolerance(hours, passes):
+    o = observation()
+    o["start"] = (
+        live_map.timestamp(o["source_at"]) + dt.timedelta(hours=hours)
+    ).isoformat()
+    if passes:
+        assert 0 < live_map.validate_observation(o, NOW.isoformat()) < 1
+    else:
+        with pytest.raises(ValueError, match=r"^live_source_before_start$"):
+            live_map.validate_observation(o, NOW.isoformat())
