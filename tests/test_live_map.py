@@ -5,6 +5,8 @@ import datetime as dt
 import hashlib
 import io
 import json
+import urllib.error
+import urllib.parse
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -18,7 +20,7 @@ from test_execution_runner import Parameter
 from deploy.execution import control, live_handler
 from prometheus import live_map
 from prometheus.execution.core import Config, fee_bound, run
-from prometheus.execution.kalshi import PublicKalshi
+from prometheus.execution.kalshi import PATH, Kalshi, PublicKalshi
 from prometheus.execution.ledger import DynamoLedger, _decode, _item
 from prometheus.live.signals import Outbox
 
@@ -881,6 +883,161 @@ class Bo1PublicClient(LivePublicClient):
         return super().request(method, path, body, **query)
 
 
+def test_live_map_end_to_end_through_queue_with_pregame_position(
+    monkeypatch, tmp_path, capsys
+):
+    from test_execution import saved
+
+    from prometheus.execution.core import plan_order
+
+    candidate = bo1_signal()
+    path = tmp_path / "signal.json"
+    path.write_bytes(live_map.canonical(candidate))
+    uploads, messages = [], []
+    Outbox(
+        SimpleNamespace(put_object=lambda **kw: uploads.append(kw)),
+        SimpleNamespace(send_message=lambda **kw: messages.append(kw)),
+        "private",
+        "queue",
+    ).deliver(path, candidate)
+    assert len(uploads) == len(messages) == 1
+    record = {
+        "messageId": "one",
+        "eventSource": "aws:sqs",
+        "eventSourceARN": config()["live_maps"]["queue_arn"],
+        "body": messages[0]["MessageBody"],
+    }
+
+    db = AtomicDynamo()
+    ledger = DynamoLedger("private", db)
+    cfg = Config.parse(config())
+    pregame_plan = plan_order(saved(), Exchange().routes, cfg, Decimal(60), NOW)
+    assert ledger.reserve(pregame_plan, cfg, Decimal(60)) is not None
+    pregame = ledger.get("demo", "SERIES#KXLOLGAME-F")
+    capital = (
+        cfg.number("starting_bankroll_usd") - ledger.get("demo", "ACCOUNT")["held"]
+    )
+    assert pregame["held"] > capital * Decimal(cfg.raw["live_maps"]["series_fraction"])
+    assert ledger.get("demo", "EVENT#KXLOLGAME-F")
+
+    public = Bo1PublicClient()
+    posts = []
+    orders = {}
+    backed_ticker = f"KXLOLGAME-F-{candidate['backed_team']}"
+
+    def http_open(request, timeout):
+        assert timeout == 10
+        url = urllib.parse.urlsplit(request.full_url)
+        endpoint = url.path.removeprefix(PATH)
+        query = dict(urllib.parse.parse_qsl(url.query))
+        body = json.loads(request.data) if request.data else None
+        if endpoint == "/portfolio/balance":
+            result = {"balance_dollars": "60"}
+        elif endpoint == "/portfolio/positions":
+            result = {
+                "market_positions": [
+                    {
+                        "ticker": backed_ticker,
+                        "market_exposure_dollars": str(pregame["held"]),
+                    },
+                    {"ticker": "unrelated", "market_exposure_dollars": "-1.20"},
+                ]
+            }
+        elif endpoint == "/portfolio/events/orders" and request.method == "POST":
+            posts.append(body)
+            order = {
+                **body,
+                "order_id": "filled-map",
+                "status": "executed",
+                "book_side": body["side"],
+                "fill_count_fp": body["count"],
+                "remaining_count_fp": "0.00",
+            }
+            orders[order["order_id"]] = order
+            result = {**order, "fill_count": body["count"], "remaining_count": "0.00"}
+        elif endpoint == "/portfolio/orders":
+            result = {
+                "orders": []
+                if query.get("status") == "resting"
+                else list(orders.values())
+            }
+        elif endpoint.startswith("/portfolio/orders/"):
+            result = {"order": orders[endpoint.rsplit("/", 1)[1]]}
+        else:
+            try:
+                result = public.request(request.method, endpoint, body, **query)
+            except LookupError:
+                raise urllib.error.HTTPError(
+                    request.full_url, 404, "missing", {}, None
+                ) from None
+        response = io.BytesIO(json.dumps(result).encode())
+        response.headers = {"Date": "Thu, 15 Oct 2026 12:00:00 GMT"}
+        return response
+
+    class Client(Bo1PublicClient):
+        request = Kalshi.request
+
+        def __init__(self, environment, *_args, canonical_aliases=None):
+            super().__init__()
+            self.environment = environment
+            self.aliases = canonical_aliases or {}
+            self.opener = SimpleNamespace(open=http_open)
+
+        def headers(self, method, path):
+            return {}
+
+    class Frozen:
+        @staticmethod
+        def now(*_):
+            return NOW
+
+    for key, value in {
+        "EXECUTION_CONFIG_PARAMETER": "/config",
+        "EXECUTION_TABLE": "private",
+        "PREDICTIONS_BUCKET": "private",
+        "DEMO_SECRET_ARN": "demo-secret",
+    }.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr(
+        live_handler, "dt", SimpleNamespace(datetime=Frozen, UTC=dt.UTC)
+    )
+    monkeypatch.setattr(live_handler, "Kalshi", Client)
+
+    def get_object(**kw):
+        assert kw == {"Bucket": uploads[0]["Bucket"], "Key": uploads[0]["Key"]}
+        return {"Body": io.BytesIO(uploads[0]["Body"])}
+
+    aws = {
+        "ssm": Parameter(config()),
+        "s3": SimpleNamespace(get_object=get_object),
+        "dynamodb": db,
+        "secretsmanager": SimpleNamespace(
+            get_secret_value=lambda **_: {
+                "SecretString": json.dumps(
+                    {"key_id": "test", "private_key_pem": "test"}
+                )
+            }
+        ),
+    }
+    assert live_handler.handle({"Records": [record]}, aws, {}) == {
+        "batchItemFailures": []
+    }
+    skips = [_decode(row) for (_, sk), row in db.data.items() if sk.startswith("SKIP#")]
+    assert not skips, skips
+    logged = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert logged["event"] == "live_map" and logged["outcome"] == "run"
+    assert logged["result"]["submitted"] == 1 and logged["reason"] is None
+    assert len(posts) == 1
+    assert posts[0]["ticker"] == backed_ticker
+    assert ledger.get("demo", "MAPEVENT#KXLOLGAME-F")
+    assert ledger.get("demo", "MAPSERIES#KXLOLGAME-F")["held"] > 0
+    assert ledger.get("demo", "SERIES#KXLOLGAME-F") == pregame
+    assert live_handler.handle({"Records": [record]}, aws, {}) == {
+        "batchItemFailures": []
+    }
+    assert len(posts) == 1
+
+
 def test_bo1_validates_and_resolves_series_markets_with_one_parent_read():
     candidate = bo1_signal()
     cfg = Config.parse(config())
@@ -1031,3 +1188,38 @@ def test_worker_discovery_reports_each_failure(tmp_path, failure):
     assert game.signal_skip == (
         "market_side_mismatch" if failure == "duplicate_side" else failure
     )
+
+
+def pause_frames(golds, start_offset=600, spacing=0.17):
+    begin = NOW - dt.timedelta(seconds=start_offset)
+    return begin.isoformat(), [
+        {
+            "source_at": (NOW + dt.timedelta(seconds=i * spacing)).isoformat(),
+            "teams": [{"gold": g}, {"gold": 0}],
+        }
+        for i, g in enumerate(golds)
+    ]
+
+
+@pytest.mark.parametrize(
+    "golds,start_offset,expected",
+    [
+        ([100 + i // 6 for i in range(60)], 600, False),  # gold ticks each ~1 s
+        ([100] * 60, 600, True),  # ten seconds unchanged: a pause
+        ([100] * 60, 60, False),  # passive gold not started yet
+        ([100] * 20, 600, False),  # under five seconds of frames
+    ],
+)
+def test_pause_needs_ten_seconds_of_unchanged_gold(golds, start_offset, expected):
+    from prometheus.live.signals import paused
+
+    start, frames = pause_frames(golds, start_offset)
+    assert paused(frames, start) is expected
+
+
+def test_pause_without_game_start_fails_closed():
+    from prometheus.live.signals import paused
+
+    _, frames = pause_frames([100] * 60)
+    with pytest.raises(ValueError, match="live_game_start_unknown"):
+        paused(frames, None)

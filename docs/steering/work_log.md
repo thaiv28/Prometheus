@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-26 — Live maps: pregame positions, pause check, executor log
+
+BLG v KC 18:20Z: KC (18¢ ask, 30.7% blended) skipped with `existing_fixture_exposure`; pregame KC held the same Bo1 tickers (PR #123 fixed only ledger fences). That exchange check is now pregame-only; positions still count toward exposure. The worker's `flat` compared the last two frames (0.17 s apart), rejecting 81% of BLG v KC polls as paused; it now needs ten seconds of unchanged gold after two minutes, as `feed_timelines.py` defines it for the benchmark. The live handler prints one JSON line per signal (outcome, reason) to CloudWatch. New end-to-end test (outbox → SQS pointer → handler → real Kalshi over faked HTTP → ledger with a pregame position) failed before the fix. Checks: ruff; pause and log tests; full pytest 1,044 passed, 2 skipped. Limit: one candidate per map; worker needs a restart.
+
 ## 2026-10-26 — Live maps no longer blocked by pregame fences
 
 Both live candidates so far (DK v G2 10-23, DK at 25¢ vs 34% model; G2 v TES 10-25, TES at 42¢ vs 52%) were rejected: same-side pregame orders held their Bo1 event fences, and pregame held ($4.09, $2.48) exceeded the shared ~$0.93 2% series cap. It would also have blocked Bo3/Bo5 maps. Maps now use MAPEVENT#/MAPSERIES# (shadow sizing too); pregame unchanged apart from storing series_key; old intents release against SERIES#. Checks: ruff; tests for the Bo1 collision, map fence, MAPSERIES# cap and release, legacy release; full pytest (1,037 passed, 2 skipped). Limit: correlated exposure (the live prior reuses the pregame rating) is bounded only by map/series/budget caps; executor redeploys on merge.

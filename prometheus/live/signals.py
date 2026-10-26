@@ -26,6 +26,39 @@ def rating_time(value):
     return parsed.astimezone(UTC).isoformat()
 
 
+PAUSE_WINDOW = 10  # seconds of frames that must share one gold total
+PAUSE_SPAN = 5  # the window must cover at least this many seconds
+PAUSE_AFTER = 120  # passive gold starts about a minute in
+
+
+def paused(frames, start):
+    """True when the last ten seconds of frames kept one combined gold total.
+
+    Matches the benchmark's `flat` (scripts/research/feed_timelines.py): frames
+    arrive every ~0.2 s and gold updates less often, so comparing only the last
+    two frames marked ~80% of running samples as paused.
+    """
+
+    if not start:
+        raise ValueError("live_game_start_unknown")
+
+    def when(frame):
+        return datetime.fromisoformat(frame["source_at"].replace("Z", "+00:00"))
+
+    last = when(frames[-1])
+    window = [f for f in frames if (last - when(f)).total_seconds() <= PAUSE_WINDOW]
+    first = when(window[0])
+    return (
+        len(window) > 1
+        and len({sum(t["gold"] for t in f["teams"]) for f in window}) == 1
+        and (
+            first - datetime.fromisoformat(start.replace("Z", "+00:00"))
+        ).total_seconds()
+        > PAUSE_AFTER
+        and (last - first).total_seconds() >= PAUSE_SPAN
+    )
+
+
 def observation(game, page, at):
     if (
         not game.timeline
@@ -63,8 +96,7 @@ def observation(game, page, at):
         "received_at": frame["actual_received_at"],
         "calculated_at": at,
         "start": game.start_time,
-        "flat": sum(t["gold"] for t in frame["teams"])
-        == sum(t["gold"] for t in frames[-2]["teams"]),
+        "flat": paused(frames, game.start["source_at"]),
         "team_homes": dict(zip(teams, homes)),
         "international": game.mapping["league"] in {*INTERNATIONAL_LEAGUES, "WLDs"}
         or homes[0] != homes[1],

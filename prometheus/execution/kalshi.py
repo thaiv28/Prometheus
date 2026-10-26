@@ -318,6 +318,7 @@ class Kalshi:
             if parent_sides != set(alert["teams"]):
                 raise ValueError("live_series_identity_mismatch")
         self._fixture_tickers = {market["ticker"] for market, _ in parsed}
+        self._map_alert = is_map
         routes = []
         mids, quote_times = [], []
         live_book = None
@@ -474,10 +475,11 @@ class Kalshi:
 
         Our own filled exposure is counted again by the ledger until settlement;
         this intentionally errs toward smaller spending. No accountwide cancel.
+        Map orders may add to their own tickers (our pregame bet); ledger fences prevent duplicate map orders.
         """
         positions = self.pages("/portfolio/positions", "market_positions", subaccount=0)
         fixture_tickers = getattr(self, "_fixture_tickers", set())
-        if any(
+        if not getattr(self, "_map_alert", False) and any(
             p["ticker"] in fixture_tickers
             and decimal(p["market_exposure_dollars"]) != 0
             for p in positions
