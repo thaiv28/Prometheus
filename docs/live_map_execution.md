@@ -28,7 +28,7 @@ objective/momentum model only. [Evidence](research/live_map_draft_trading.md).
 - At least two distinct trades in the previous 30 seconds, price range <=1 cent,
   latest trade <=10 seconds old. This does not require a trade at each end of
   the window. Both team contracts are read, normalized, deduplicated and sorted.
-- Valid objectives, changing gold totals, exact identities and a current book.
+- Valid objectives, no pause (ten seconds of unchanged gold after two minutes), exact identities and a current book.
   Receipt <=15s, source <=45s, model calculation <=8s, book <=3s; future or
   inconsistent timestamps fail closed. Signals expire eight seconds after
   selection. These are initial engineering limits, not backtest-tuned values.
@@ -75,6 +75,8 @@ policy change if the account profile changes.
    model-age, blend, direction and edge checks using current data. Side changes,
    stale books, missing counters or unknown fee schedules skip the entry.
 6. Live submission uses the existing atomic reserve/claim/IOC/reconcile path.
+   The handler prints one `{"event": "live_map", ...}` JSON line per signal
+   (outcome, result, skip reason) to the executor's CloudWatch log group.
    The ordinary five-minute schedule still reconciles positions; queue entries
    skip that potentially slow scan. Both triggers retain existing reserved
    concurrency and the ledger's independent concurrency protection.
@@ -104,8 +106,10 @@ object (the existing `LIVE_MAPS` row is kept, so past losses still count).
 Fraction caps use free capital (seed + verified realized profit - held), which
 is more conservative than the historical cost-valued-equity simulation.
 
-Pregame orders keep `FIXTURE#`, `EVENT#` and `SERIES#` reservations. Map orders
-use `FIXTURE#` for the physical map, `MAPEVENT#` for the exchange event and
+Pregame orders keep `FIXTURE#`, `EVENT#` and `SERIES#` reservations. The exchange
+check rejecting an existing position on the fixture’s own tickers applies only
+to pregame; map orders may add to it (positions still count toward account exposure).
+Map orders use `FIXTURE#` for the physical map, `MAPEVENT#` for the exchange event and
 `MAPSERIES#` for map-only series held cost, checked against the 2% series cap.
 Reservations and releases/partial fills/settlements update held cost atomically
 alongside ACCOUNT, DAY and intent. A pregame position on the same series or Bo1

@@ -344,6 +344,29 @@ def test_whole_account_unsettled_positions_and_unrelated_resting_orders_are_coun
     assert api.exposure() == Decimal("7.20")
 
 
+def test_fixture_positions_block_pregame_but_count_toward_map_exposure():
+    api = object.__new__(Kalshi)
+    api._fixture_tickers = {"KXLOLGAME-F-A"}
+
+    def pages(path, field, **query):
+        if path == "/portfolio/positions":
+            return [
+                {"ticker": "KXLOLGAME-F-A", "market_exposure_dollars": "4.20"},
+                {"ticker": "unrelated", "market_exposure_dollars": "-1.20"},
+            ]
+        return []
+
+    api.pages = pages
+    # Legacy/unresolved clients and explicitly pregame clients both fail closed.
+    with pytest.raises(ValueError, match=r"^existing_fixture_exposure$"):
+        api.exposure()
+    api._map_alert = False
+    with pytest.raises(ValueError, match=r"^existing_fixture_exposure$"):
+        api.exposure()
+    api._map_alert = True
+    assert api.exposure() == Decimal("5.40")
+
+
 def test_fills_preserve_actual_fees_and_deduplicate_current_historical_overlap():
     api = object.__new__(Kalshi)
     row = {"fill_id": "f", "fee_cost": ".02", "order_id": "o"}

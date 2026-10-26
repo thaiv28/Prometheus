@@ -23,6 +23,20 @@ from prometheus.execution.ledger import DynamoLedger
 MAX_SIGNAL_BYTES = 128 * 1024
 
 
+def log(alert, outcome, **fields):
+    """One JSON line per signal in CloudWatch: the decision without a ledger scan."""
+    keys = ("alert_id", "event_ticker", "map_number", "backed_team", "original_ask")
+    print(
+        json.dumps(
+            {"event": "live_map", "outcome": outcome}
+            | {k: alert.get(k) for k in keys}
+            | fields,
+            default=str,
+        ),
+        flush=True,
+    )
+
+
 def handle(event, clients, aliases):
     def configuration():
         value = json.loads(
@@ -156,8 +170,12 @@ def handle(event, clients, aliases):
             )
             if result["errors"]:
                 failures.append({"itemIdentifier": record["messageId"]})
+            identity = hashlib.sha256(str(alert["alert_id"]).encode()).hexdigest()
+            skip = ledger.get(config.mode, f"SKIP#{identity}") or {}
+            log(alert, "run", result=result, reason=skip.get("reason"))
         except (ValueError, KeyError, TypeError, ArithmeticError) as error:
             # Malformed/expired entries are terminal; preserve private skip evidence.
+            log(alert, "skipped", reason=str(error))
             ledger.skip(
                 alert,
                 "shadow"
@@ -166,6 +184,7 @@ def handle(event, clients, aliases):
                 str(error),
                 dt.datetime.now(dt.UTC),
             )
-        except Exception:
+        except Exception as error:
+            log(alert, "failed", reason=type(error).__name__)
             failures.append({"itemIdentifier": record["messageId"]})
     return {"batchItemFailures": failures}
