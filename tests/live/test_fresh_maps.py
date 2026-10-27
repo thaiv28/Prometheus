@@ -72,10 +72,19 @@ def game(tmp_path, monkeypatch):
         },
         id="game",
         number=1,
+        snapshot_path=lambda: directory.parent / "pages" / "map1.json",
+        results=lambda: {
+            int(n): r
+            for n, r in json.loads(
+                (directory.parent / "results.json").read_text()
+            ).items()
+        },
     )
 
 
 def test_record_map_and_restart(game):
+    game.snapshot_path().parent.mkdir()
+    game.snapshot_path().write_text("{}")
     game.state, game.ticker, game.series_ticker = "finished", None, None
     game.results = lambda: {1: {"winner": 0}}
     service.Game.settle(game)
@@ -89,7 +98,9 @@ def test_record_map_and_restart(game):
     original = path.read_bytes()
     service.Game.settle(game)
     assert path.read_bytes() == original
-    service.upload_maps.assert_called_once_with(game.dir.parent, "match")
+    service.upload_maps.assert_called_once_with(
+        game.dir.parent, "match", game.snapshot_path()
+    )
     service.dispatch_prices.assert_called_once()
 
 
@@ -197,7 +208,7 @@ def test_http_failure_and_upload(dispatch, monkeypatch, tmp_path):
     command = Mock(side_effect=OSError("aws missing"))
     monkeypatch.setattr(notify.subprocess, "run", command)
     notify.upload_maps(tmp_path, "match")
-    assert command.call_args.args[0] == [
+    assert command.call_args_list[0].args[0] == [
         "aws",
         "s3",
         "cp",
@@ -205,6 +216,71 @@ def test_http_failure_and_upload(dispatch, monkeypatch, tmp_path):
         "s3://bucket/prometheus/live/match/maps.json",
         "--only-show-errors",
     ]
+    assert command.call_count == 2  # a failed maps upload doesn't skip results
+
+
+def test_snapshot_uploads_before_dispatch(game, monkeypatch):
+    monkeypatch.setenv("ARTIFACTS_BUCKET", "bucket")
+    events = []
+
+    def upload(command, **kwargs):
+        source = command[3]
+        events.append(command[4])
+        assert service.Path(source).exists()
+        assert kwargs["check"] and kwargs["timeout"] == 30
+
+    monkeypatch.setattr(notify.subprocess, "run", upload)
+    monkeypatch.setattr(service, "upload_maps", notify.upload_maps)
+    monkeypatch.setattr(
+        service, "dispatch_prices", lambda now: events.append("dispatch")
+    )
+    game.page = lambda *a, **kw: {"final": False}
+    service.record_map(game)
+    assert "dispatch" not in events  # snapshot isn't written yet
+    events.clear()
+    service.Game.write_snapshot(game, {})
+    assert events == [
+        "s3://bucket/prometheus/live/match/maps.json",
+        "s3://bucket/prometheus/live/match/results.json",
+        "s3://bucket/prometheus/live/match/pages/map1.json",
+        "dispatch",
+    ]
+    assert json.loads(game.snapshot_path().read_text())["final"]
+    events.clear()
+    service.Game.write_snapshot(game, {})
+    assert not events  # repeated finished polls don't upload again
+
+
+def test_existing_snapshot_uploads_before_dispatch(game, monkeypatch):
+    monkeypatch.setenv("ARTIFACTS_BUCKET", "bucket")
+    game.snapshot_path().parent.mkdir()
+    game.snapshot_path().write_text("{}")
+    events = []
+    monkeypatch.setattr(
+        notify.subprocess, "run", lambda command, **kw: events.append(command[4])
+    )
+    monkeypatch.setattr(service, "upload_maps", notify.upload_maps)
+    monkeypatch.setattr(
+        service, "dispatch_prices", lambda now: events.append("dispatch")
+    )
+    service.record_map(game)
+    assert events[-2:] == [
+        "s3://bucket/prometheus/live/match/pages/map1.json",
+        "dispatch",
+    ]
+
+
+def test_unsettled_snapshot_does_not_debounce_settlement(game):
+    game.page = lambda *a, **kw: {"final": False}
+    game.results = lambda: {}
+    service.Game.write_snapshot(game, {})
+    service.dispatch_prices.assert_not_called()
+    service.upload_maps.reset_mock()
+    service.record_map(game)  # late settlement, after the final page was written
+    service.upload_maps.assert_called_once_with(
+        game.dir.parent, "match", game.snapshot_path()
+    )
+    service.dispatch_prices.assert_called_once()
 
 
 @pytest.mark.parametrize(

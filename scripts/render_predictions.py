@@ -8,6 +8,8 @@ import urllib.request
 from pathlib import Path
 
 from prometheus import markets, schedule
+from prometheus.site import config as site_config
+from prometheus.site import live_results
 from prometheus.site.predictions import render_from_log
 
 SITE = "https://prometheus.thaiv.dev/"
@@ -24,20 +26,43 @@ def run(log_path, out_dir, summary_path=None, now=None):
             with urllib.request.urlopen(request, timeout=30) as response:
                 artifacts[name] = json.load(response)
         slugs = {team["n"]: team["s"] for team in artifacts["teams.json"]}
+        log = schedule.load_log(log_path)
+        links = dict(artifacts["series-links.json"])
+        months = []
+        try:
+            archive = live_results.load_archive()
+            if archive:
+                series = live_results.series_view(log, archive, set(slugs.values()))
+                months = live_results.month_views(series)
+                links.update(
+                    {
+                        s["match_id"]: s["id"]
+                        for s in series
+                        if s["match_id"] is not None
+                    }
+                )
+        except Exception as exc:
+            print(f"Live results not loaded ({exc}); using published links.")
         coverage = None
         if summary_path and Path(summary_path).exists():
             summary = json.loads(Path(summary_path).read_text())
             coverage = {key: summary[key] for key in ("matched", "matches")}
         with tempfile.TemporaryDirectory() as staging:
             render_from_log(
-                schedule.load_log(log_path),
+                log,
                 artifacts["backtest.json"],
                 set(slugs.values()),
-                artifacts["series-links.json"],
+                links,
                 coverage,
                 now or datetime.datetime.now(datetime.UTC),
                 staging,
             )
+            previous = site_config.OUTPUT_DIR
+            try:
+                site_config.OUTPUT_DIR = staging
+                live_results.render_live_results(months)
+            finally:
+                site_config.OUTPUT_DIR = previous
             for source in Path(staging).rglob("*.html"):
                 target = Path(out_dir) / source.relative_to(staging)
                 target.parent.mkdir(parents=True, exist_ok=True)

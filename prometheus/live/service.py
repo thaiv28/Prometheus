@@ -481,8 +481,18 @@ def record_map(game):
             "recorded_at": utc_now(),
         }
         write_atomic(path, maps)
-        upload_maps(game.dir.parent, mapping["match_id"])
-        dispatch_prices(datetime.now(UTC))
+        page = (
+            game.snapshot_path()
+            if hasattr(game, "snapshot_path")
+            else ROOT
+            / "output"
+            / "live"
+            / mapping["match_id"]
+            / f"map{game.number}.json"
+        )
+        upload_maps(game.dir.parent, mapping["match_id"], page)
+        if page.exists():
+            dispatch_prices(datetime.now(UTC))
     except Exception as error:
         log("record_map_failed", game=game.id, reason=str(error))
 
@@ -1240,6 +1250,11 @@ class Game:
         page["final"] = True
         self.snapshot_path().parent.mkdir(parents=True, exist_ok=True)
         write_atomic(self.snapshot_path(), page)
+        if not getattr(self, "_snapshot_notified", False):
+            upload_maps(self.dir.parent, self.mapping["match_id"], self.snapshot_path())
+            if self.number in self.results():
+                dispatch_prices(datetime.now(UTC))
+            self._snapshot_notified = True
 
     def journal(self, page):
         """Append each newly published call (map and series) as it was made."""

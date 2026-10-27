@@ -7,6 +7,7 @@ import io
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -147,11 +148,42 @@ def test_fetch_failure_writes_nothing(tmp_path, monkeypatch, failed):
     assert len(calls) == len(set(calls))
 
 
-def test_script_fetches_once_and_uses_summary(tmp_path, monkeypatch):
+@pytest.mark.parametrize("archive", ["absent", "broken", "present"])
+def test_script_fetches_once_and_uses_summary(tmp_path, monkeypatch, archive):
     render = script("render_predictions")
+    monkeypatch.setattr(config, "ROOT_DIR", str(tmp_path))
+    if archive == "broken":
+        monkeypatch.setattr(
+            render.live_results,
+            "load_archive",
+            Mock(side_effect=OSError("unavailable")),
+        )
+    elif archive == "present":
+        folder = tmp_path / "data/live/new-series/pages"
+        folder.mkdir(parents=True)
+        (folder / "map1.min.json").write_text(
+            json.dumps(
+                {
+                    "match": {
+                        "id": "new-series",
+                        "teams": ["A", "B"],
+                        "league": "LCK",
+                        "best_of": 3,
+                    },
+                    "number": 1,
+                    "start_at": "2026-10-18T10:00Z",
+                    "ended_at": "2026-10-18T10:30Z",
+                    "winner": 0,
+                    "length": 1800,
+                    "calls": [[60, 0.6], [1800, 1]],
+                    "gold": [[60, 0], [1800, 10000]],
+                    "market": [],
+                }
+            )
+        )
     artifacts = {
         "teams.json": [{"n": "A", "s": "a"}, {"n": "B", "s": "b"}],
-        "series-links.json": {"old": "series-one"},
+        "series-links.json": {"old": "series-one", "saved": "saved-series"},
         "backtest.json": {"matches": []},
     }
     calls = []
@@ -170,8 +202,22 @@ def test_script_fetches_once_and_uses_summary(tmp_path, monkeypatch):
     assert render.run(log_path, out, summary, NOW)
     assert calls == list(artifacts)
     assert (out / "predictions.html").exists()
-    assert sorted(p.relative_to(out).as_posix() for p in out.rglob("*.html")) == [
+    assert "live-results/saved-series.html" in (out / "predictions.html").read_text()
+    expected = [
         "call-performance.html",
         "predictions.html",
         "results/2026-10.html",
     ]
+    if archive == "present":
+        expected += ["live-results/new-series.html", "live-results/2026-10.html"]
+        assert "live-results/new-series.html" in (out / "predictions.html").read_text()
+        assert (
+            "../live-results/new-series.html"
+            in (out / "results/2026-10.html").read_text()
+        )
+        assert "<svg" in (out / "live-results/new-series.html").read_text()
+    else:
+        assert "live-results/series-one.html" in (out / "predictions.html").read_text()
+    assert sorted(p.relative_to(out).as_posix() for p in out.rglob("*.*")) == sorted(
+        expected
+    )
