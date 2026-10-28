@@ -94,8 +94,8 @@ A deployment cannot enable this strategy.
 
 Pregame and live maps use one shared free capital pool: starting bankroll +
 ACCOUNT.realized − ACCOUNT.held. Pregame retains global Kelly; live-map Kelly
-fraction <=0.25, per-map outlay <=1% and map-series outlay <=2% of free capital.
-Smaller nested fractions are supported. Global cash, fee precision,
+fraction <=1, per-map outlay <=5% and map-series outlay <=10% of free capital
+(configured 2026-10-28: full Kelly, 5%, 10%; was quarter, 1%, 2%). Global cash, fee precision,
 order/fixture/day/exposure caps also apply; there is no separate live-map budget.
 Optional global `series_fraction` caps combined pregame `SERIES#` and map
 `MAPSERIES#` held cost for the same KXLOLGAME event against free capital.

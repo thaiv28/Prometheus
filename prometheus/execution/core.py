@@ -91,9 +91,9 @@ class Config:
             if not str(maps["queue_arn"]).startswith("arn:aws:sqs:"):
                 raise ValueError("invalid_live_queue")
             for field, upper in (
-                ("kelly_fraction", ".25"),
-                ("map_fraction", ".01"),
-                ("series_fraction", ".02"),
+                ("kelly_fraction", "1"),
+                ("map_fraction", ".05"),
+                ("series_fraction", ".10"),
             ):
                 if not 0 < decimal(maps[field]) <= decimal(upper):
                     raise ValueError("invalid_live_map_risk_limit")
