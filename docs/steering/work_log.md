@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-28 — Live table: start time for waiting matches
+
+Branch `waiting-start`, base `main`. Predictions page Table I caption drops the match count and "updated N s ago"; it keeps "Matches in progress." plus the stalled/unreachable warnings. A row waiting for its first map shows the start time in Pacific time (`2:00 AM PDT`) under "Waiting". Checks: pytest (1,087 passed, 2 skipped), ruff check, `node --check`, JS tests. Not checked against a live feed. Copy review: PASS (Table I caption cut to its heading; warnings kept as material caveats).
+
 ## 2026-10-26 — Result rows link to series pages minutes after a map
 
 Branch `result-links`, base `origin/main`. Worker uploads maps, results and final pages before dispatch; unsettled snapshots preserve settlement's debounce. Prices restores archives, overlays local links and stages live-results HTML with Predictions/Results; missing/broken archives retain fetched links. Figures embed SVG. Checks: pytest 1,065 passed, 2 skipped (10.14 s); ruff format/check and diff --check passed. Local filesystem-backed S3 shim: `live_archive.sh` 0.770 s new map, 0.093 s cached (one map, cached series record). Warm render medians, five runs: absent 0.0037 s, restored 0.0057 s (+0.0020 s). Added cost enables prompt links without full builds. AWS/API latency and Actions timing unmeasured. Copy review: PASS (no copy changed).

@@ -75,6 +75,7 @@
     const s = Math.max(0, Math.round(ms / 1000));
     return s < 90 ? `${s} s ago` : `${Math.round(s / 60)} min ago`;
   };
+  const startFormat = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles", timeZoneName: "short" });
   const muted = (text) => h("span", { class: "muted" }, text);
 
   // Rows are rebuilt on each read; the status line also every second.
@@ -89,8 +90,8 @@
     root.hidden = !n;
     const stale = failed || (n > 0 && age > STALE_MS);
     $("matches-caption").textContent = [
-      n ? `${n === 1 ? "One match" : `${n} matches`} ${matches.every((m) => m.status === "waiting") ? "waiting" : matches.some((m) => m.status === "waiting") ? "live or waiting" : "in progress"}` : "Matches in progress",
-      failed ? "; feed unreachable." : stale ? `; stalled, last update ${ago(age)}.` : n ? `, updated ${ago(age)}.` : ".",
+      "Matches in progress",
+      failed ? "; feed unreachable." : stale ? `; stalled, last update ${ago(age)}.` : ".",
       index.note ? ` ${index.note}` : "",
     ].join("");
     $("matches-cap").classList.toggle("is-stale", stale);
@@ -128,7 +129,7 @@
     const statCell = ([, v], i) => h("td", { class: `num lm-stat${i >= 2 ? " lm-wide" : ""}` }, v ?? muted("—"));
     const score = Array.isArray(m.score) ? `${m.score[0]}–${m.score[1]}` : "—";
     const main = h("tr", { class: "lm" },
-      h("td", { class: "lm-clock" }, h("span", { class: "lm-time" }, clock), h("span", { class: "lm-map" }, m.status === "waiting" ? "" : `Map ${g.number ?? "?"}`)),
+      h("td", { class: "lm-clock" }, h("span", { class: "lm-time" }, clock), h("span", { class: "lm-map" }, waiting ? (m.start && !(m.score || []).some((x) => x > 0) ? startFormat.format(new Date(m.start)) : "") : `Map ${g.number ?? "?"}`)),
       h("td", { class: "lm-league wide-only" }, h("span", { class: "league", "data-league": m.league }, h("span", { class: "league-mark", "aria-hidden": "true" }), m.league)),
       h("td", { class: `lm-team lm-team--1${fav === 1 ? " fav" : ""}` }, team(0)),
       h("td", { class: `num lm-p${fav === 1 ? " fav" : ""}` }, p == null ? muted("—") : String(p)),
