@@ -103,6 +103,27 @@ def test_attach_prices_skips_thin_quotes_far_starts_maps_and_started_matches():
     assert started["m"]["market"] == {"p": 0.5}
 
 
+def test_attach_prices_takes_a_lone_market_a_day_off():
+    # Kalshi listed a match at the right time on the next day.
+    book = [
+        _open("Cupid", "Cupid", "Fuego", 0.6, 0.62, when="Oct 7, 2026 at 4:00 PM EDT")
+    ]
+    log = {"m": _entry()}
+    assert markets.attach_prices(log, book, lambda n: n, NOW) == 1
+    second = _open(
+        "Cupid",
+        "Cupid",
+        "Fuego",
+        0.6,
+        0.62,
+        when="Oct 5, 2026 at 4:00 PM EDT",
+        event="E2",
+    )
+    assert (
+        markets.attach_prices({"m": _entry()}, [*book, second], lambda n: n, NOW) == 0
+    )
+
+
 def test_attach_prices_needs_both_teams_matched():
     book = [_open("Cupid", "Cupid", "Somebody", 0.6, 0.62)]
     log = {"m": _entry()}

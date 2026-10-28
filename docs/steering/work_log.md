@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-28 — Kalshi markets listed a day off still match
+
+Branch `kalshi-day`, base `main`. Kalshi listed T1 v MKOI (Worlds, 28 Oct 4 PM EDT) as 29 Oct, so the live worker's exact-date `contract()` and the static page's 18-hour `MATCH_WINDOW` both skipped it. `contract()` now falls back to a lone event a day either side when none is on the date; `attach_prices`/`backfill_prices` take a lone market within 18h + `DAY_SLIP` (1 day) when none is within 18h. Ambiguous fallbacks give nothing. Pregame and live trading use the same `contract()`. Checked: the fix matches the real open T1 v MKOI series and map 1–2 markets. Checks: pytest (1,089 passed, 2 skipped), ruff format/check. No forecast or benchmark input changed; no CI cost. Copy review: PASS (no copy changed).
+
 ## 2026-10-28 — Live table: start time for waiting matches
 
 Branch `waiting-start`, base `main`. Predictions page Table I caption drops the match count and "updated N s ago"; it keeps "Matches in progress." plus the stalled/unreachable warnings. A row waiting for its first map shows the start time in Pacific time (`2:00 AM PDT`) under "Waiting". Checks: pytest (1,087 passed, 2 skipped), ruff check, `node --check`, JS tests. Not checked against a live feed. Copy review: PASS (Table I caption cut to its heading; warnings kept as material caveats).

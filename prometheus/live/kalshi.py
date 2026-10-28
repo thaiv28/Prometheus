@@ -2,13 +2,14 @@
 
 A contract matches a game only on its rules text: the two team names (exact, or
 through the market benchmark's `MARKET_ALIASES`, Kalshi's name -> ours), the map
-number and the match's scheduled US Eastern date. Several matching events
-for one map are ambiguous and give no contract. Quotes are for YES on the
+number and the match's scheduled US Eastern date (or, with no event on that
+date, a day either side: Kalshi sometimes lists the wrong day). Several matching
+events for one map are ambiguous and give no contract. Quotes are for YES on the
 match's first team: bid is the best YES bid, ask is 1 minus the best NO bid.
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from ..markets import MARKET_ALIASES
@@ -35,10 +36,11 @@ def known(name, team_names):
     return name in team_names or MARKET_ALIASES.get(name) in team_names
 
 
-def scheduled_day(start_time):
-    """Event start as Kalshi writes it: 'Oct 15, 2026' in US Eastern time."""
+def scheduled_day(start_time, shift=0):
+    """Event start as Kalshi writes it: 'Oct 15, 2026' in US Eastern time,
+    `shift` days on."""
     t = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-    t = t.astimezone(ZoneInfo("America/New_York"))
+    t = t.astimezone(ZoneInfo("America/New_York")) + timedelta(days=shift)
     return f"{t.strftime('%b')} {t.day}, {t.year}"
 
 
@@ -47,11 +49,15 @@ def contract(markets, mapping, game_number, start_time):
     None, the series), or None."""
     first, second = (names(t) for t in mapping["teams"])
     day = scheduled_day(start_time)
-    hits = {}
+    slipped = {scheduled_day(start_time, -1), scheduled_day(start_time, 1)}
+    exact, near = {}, {}
     for market in markets:
         rule = RULES.match(market.get("rules_primary", ""))
         number = int(rule["map"]) if rule and rule["map"] else None
-        if not rule or number != game_number or rule["day"] != day:
+        if not rule or number != game_number:
+            continue
+        hits = exact if rule["day"] == day else near if rule["day"] in slipped else None
+        if hits is None:
             continue
         pair = (rule["team1"], rule["team2"])
         if not any(known(n, first) for n in pair) or not any(
@@ -60,6 +66,7 @@ def contract(markets, mapping, game_number, start_time):
             continue
         if known(rule["side"], first):
             hits.setdefault(market["event_ticker"], []).append(market["ticker"])
+    hits = exact or near
     if len(hits) != 1:
         return None
     (tickers,) = hits.values()

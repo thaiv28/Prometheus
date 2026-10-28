@@ -40,7 +40,21 @@ class ContractTest(unittest.TestCase):
     def test_wrong_map_or_day_gives_none(self):
         self.assertIsNone(contract(self.markets, {"teams": TEAMS}, 5, self.start))
         self.assertIsNone(
-            contract(self.markets, {"teams": TEAMS}, 4, "2026-10-16T18:00:00Z")
+            contract(self.markets, {"teams": TEAMS}, 4, "2026-10-17T18:00:00Z")
+        )
+
+    def test_a_lone_event_a_day_off_matches_but_the_exact_day_wins(self):
+        # Kalshi listed T1 vs MKOI (Oct 28, 4 PM EDT) as Oct 29.
+        self.assertEqual(
+            contract(self.markets, {"teams": TEAMS}, 4, "2026-10-16T18:00:00Z"),
+            "E4-Karmine Corp",
+        )
+        exact = [market("Karmine Corp", day="Oct 16, 2026", event="E4x")]
+        self.assertEqual(
+            contract(
+                [*self.markets, *exact], {"teams": TEAMS}, 4, "2026-10-16T18:00:00Z"
+            ),
+            "E4x-Karmine Corp",
         )
 
     def test_two_events_for_one_map_are_ambiguous(self):

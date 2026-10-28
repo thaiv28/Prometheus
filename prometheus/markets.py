@@ -33,6 +33,9 @@ MAX_SPREAD = 0.10
 # Kalshi's start time and Leaguepedia's can disagree (a moved match, a day-only
 # start); a market matches a logged match between the same teams this close.
 MATCH_WINDOW = datetime.timedelta(hours=18)
+# Kalshi sometimes lists the right time on the wrong day; with nothing in
+# `MATCH_WINDOW`, a lone event between the teams up to a day further off matches.
+DAY_SLIP = datetime.timedelta(days=1)
 # The paper bets on the Predictions page buy at the last price read at least this
 # long before the start, as the backtest's betting section does.
 BET_LEAD = datetime.timedelta(hours=12)
@@ -359,13 +362,24 @@ def _parse_start(value):
     )
 
 
+def _nearest(options, start):
+    """The (row, ours) whose start is nearest `start` within `MATCH_WINDOW`, else
+    the only one within `MATCH_WINDOW + DAY_SLIP`, else None."""
+    gaps = [(abs(row["start"] - start), row, ours) for row, ours in options]
+    near = [g for g in gaps if g[0] <= MATCH_WINDOW]
+    if near:
+        return min(near, key=lambda x: x[0])[1:]
+    slipped = [g for g in gaps if g[0] <= MATCH_WINDOW + DAY_SLIP]
+    return slipped[0][1:] if len(slipped) == 1 else None
+
+
 def attach_prices(log, markets, match_team, now):
     """Store the market's chance on every logged match that hasn't started, in place.
 
     `markets` are Kalshi's open series markets; `match_team` resolves Kalshi team
     names to ours (`schedule.TeamMatcher` with `MARKET_ALIASES`). A logged match
     takes the market between the same two teams whose start is nearest within
-    `MATCH_WINDOW`. The entry gets `market`: {"p": team1's chance, "spread",
+    `MATCH_WINDOW` (or a lone one a `DAY_SLIP` further off). The entry gets `market`: {"p": team1's chance, "spread",
     "ask1"/"ask2" (what a contract on each team costs now, `buy_costs`), "at"
     (when the price was read), "ticker"}. A match without a usable quote keeps
     the price it had. While the start is at least `BET_LEAD` away, the read is
@@ -386,16 +400,13 @@ def attach_prices(log, markets, match_team, now):
     for entry in log.values():
         if not entry.get("matched") or entry["start"] <= now_s:
             continue
-        options = by_pair.get(frozenset((entry["ours1"], entry["ours2"])), [])
         start = _parse_start(entry["start"])
-        near = [
-            (abs(row["start"] - start), row, ours)
-            for row, ours in options
-            if abs(row["start"] - start) <= MATCH_WINDOW
-        ]
-        if not near:
+        hit = _nearest(
+            by_pair.get(frozenset((entry["ours1"], entry["ours2"])), []), start
+        )
+        if hit is None:
             continue
-        _, row, ours = min(near, key=lambda x: x[0])
+        row, ours = hit
         team1 = row["team1"] if ours[0] == entry["ours1"] else row["team2"]
         p, spread = chance_now(row, team1)
         if p is None:
@@ -448,16 +459,12 @@ def backfill_prices(log, rows, match_team, price_at, now, bet_at=None):
         if entry.get("market") and (bet_at is None or entry.get("market_12h")):
             continue
         start = _parse_start(entry["start"])
-        near = [
-            (abs(row["start"] - start), row, ours)
-            for row, ours in by_pair.get(
-                frozenset((entry["ours1"], entry["ours2"])), []
-            )
-            if abs(row["start"] - start) <= MATCH_WINDOW
-        ]
-        if not near:
+        hit = _nearest(
+            by_pair.get(frozenset((entry["ours1"], entry["ours2"])), []), start
+        )
+        if hit is None:
             continue
-        _, row, ours = min(near, key=lambda x: x[0])
+        row, ours = hit
         team1 = row["team1"] if ours[0] == entry["ours1"] else row["team2"]
         done = False
         quote = None if entry.get("market") else price_at(row, team1, start)
