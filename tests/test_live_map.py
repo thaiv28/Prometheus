@@ -567,10 +567,20 @@ def test_separate_live_map_activation_requires_verified_runtime_and_explicit_lim
     assert parameter.value["live_maps"]["mode"] == "off"
     with pytest.raises(ValueError):
         control.configure(parameter, "/config", {"live_maps": {"mode": "live"}})
-    bad = config()
-    bad["live_maps"]["kelly_fraction"] = "1"
-    with pytest.raises(ValueError, match="risk_limit"):
-        Config.parse(bad)
+    for field, value in (
+        ("kelly_fraction", "1.01"),
+        ("map_fraction", ".051"),
+        ("series_fraction", ".11"),
+    ):
+        bad = config()
+        bad["live_maps"][field] = value
+        with pytest.raises(ValueError, match="risk_limit"):
+            Config.parse(bad)
+    widest = config()
+    widest["live_maps"].update(
+        kelly_fraction="1", map_fraction=".05", series_fraction=".10"
+    )
+    assert Config.parse(widest)
     for budget in ("0", "invalid", None):
         value = config()
         value["live_maps"]["budget_usd"] = budget
