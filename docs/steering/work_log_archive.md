@@ -2,6 +2,30 @@
 
 Older entries moved from `work_log.md`, newest first. Add nothing here by hand.
 
+## 2026-10-23 — Live-map delay and fight-veto research; markout script
+
+Research only (`docs/research/live_latency.md`). Production newest-frame age is 22–26 s (median, two maps; ~20 s Riot floor); the replay assumes 21 s. `evaluate_live.py --build-data --lag N --data PATH` builds at another delay. Lag 26 vs 21 (1,772 maps, 30 s rule): 171 vs 183 bets, +8.6% vs +21.3% ROI; paired −1.4¢/map (−3.5 to +0.6), includes zero. Fixed fight/objective veto: −2.0¢/map (−4.0 to −0.2); the 71 bets it removed had +48.7% ROI and +3.9¢ CLV, so no veto. New `scripts/live_markouts.py` reads backed-up candidates (30/60/120 s quote markouts). Checks: ruff; full pytest; both builds and the report run locally. No production, CI or pin change. Limits: reused history, minute samples, tape costs.
+
+## 2026-10-23 — Live-map signals for best-of-one matches
+
+Zero live-map signals since 2026-10-19: no tracked map had a KXLOLMAP market (Worlds Swiss Bo1s; EMEA Masters maps 1–4 on 10-22 never tracked because Riot feeds returned 404s). Bo1s now use the KXLOLGAME event as the map event; observations carry best_of. The executor verifies no KXLOLMAP-…-1 event exists before trading. The series cap shares the pre-match SERIES# reservation. Unarmed maps journal a deduplicated reason in trading/decisions.jsonl, already backed up by backup.sh. Checks: ruff format/check; targeted pytest (308 passed, 2 skipped, 1.09s); full pytest (1,023 passed, 2 skipped, 10.01s); diff whitespace. Used the existing environment with sync disabled and this worktree on PYTHONPATH after uv sync crashed. Limit: deciding maps still unsupported; the worker needs a restart and the executor deploys on merge.
+
+## 2026-10-23 — Live waiting rows: next match only, with odds
+
+At 18:00Z Live showed three waiting Worlds Bo1s: IG v GEN (decided; Riot still listed it in progress), HLE v TES and BLG v MKOI (inside the 75-min lead). Waiting now keeps the earliest undecided fixture per league, none while that league has an undecided tracked match. Rows and the index carry start and series odds: FORGE from the shared `forge.json`, Kalshi from the shared `series_quotes.jsonl` (one public orderbook read per interval; missing contracts retried every five minutes). Watch shows the Series group while waiting. Checks: ruff; full pytest; Node tests; local worker run on Riot/Kalshi (one row, HLE v TES, FORGE 72, Kalshi 77–78); Predictions and Watch screenshots at 1440 and 390 px, no overflow. Copy review: PASS (Live now, phone line, Watch odds; no new strings beyond the bar tooltip's "series"; phone line drops empty stats while waiting). Worker gets it on refresh/restart.
+
+## 2026-10-23 — Live service matches Riot team names by fold
+
+Gen.G v IG (Worlds, 17:00Z) never reached the live page: the worker skipped it with `no Prometheus name for Gen.G Esports`. `resolve_team` took only an exact name, a unique slug or an alias, so Riot's `Gen.G Esports`, `Dplus KIA` and `LOS` (LØS) failed. It now also takes the one catalog team with the same `alert_contract.fold`, then the same fold without a trailing "Esports"/"Gaming"; ties still return None. `team_aliases.json` stays empty. Checks: reproduced the skip by running the service locally on the live game; all 25 named Worlds teams in Riot's `getTeams` resolve against the published `teams.json` (3 misses before); new resolver test; full pytest; ruff. Limit: the worker takes code only on its 6-hour refresh or a reboot.
+
+## 2026-10-20 — Executor decides on every fixture; fill issues
+
+The publish and hourly jobs now save an `execution_candidate` on every eligible upcoming fixture (alert eligibility minus edge, lead and same-run price), whatever `KALSHI_ALERTS` says. The Lambda reads candidates under 3h old instead of saved alerts and prices both sides now, after one bulk Kalshi market call screens them. No alert-cost cap, alert-age or 6h rule; vetoes, fees, Kelly, caps, the one-buy-per-fixture rule and the start cutoff stay. Fills open a best-effort issue in the private `thaiv28/prometheus-trades` repo (token in Secrets Manager). Public alert issues stopped; `alerts.html` stays. Implemented by Codex. Checks: ruff; full pytest; package build. Limits: needs infra PR #22 (1-minute schedule, token access); buying up to start was unproven in the timing backtest (PR #111); untested against live Kalshi/GitHub.
+
+## 2026-10-20 — Executor accepts Kalshi starts within two hours
+
+After the name fix, Dplus–G2 and T1–LØS failed `fixture_start_mismatch`: Kalshi lists both an hour before Leaguepedia, as for all seven Worlds Oct 23 fixtures and ~100 fixtures in the log. `kalshi.START_TOLERANCE` (2 h) now bounds the gap for fixtures and live-map parent series; routes carry `first_start` (the earlier start) and `plan_order` drops pregame routes at or after it, including the pre-POST recheck; fee changes are covered through our start plus 2 h. Checks: execution tests (four new/changed fail without the change), full pytest, ruff, package build; read-only public resolve of the three current alerts (Dplus–G2, T1–LØS now resolve, cutoff 20:00Z/22:00Z). Limit: a genuine reschedule under two hours is treated as the same fixture.
+
 ## 2026-10-20 — Executor matches Kalshi team names by fold
 
 Live ledger: Worlds alerts were skipped as `fixture_team_mismatch` because Kalshi writes "Dplus KIA" and "LOS" while the executor took only exact names or explicit aliases; alerts already fold names, so issues posted. `alert_contract.fold` (moved from `schedule.py`, which re-imports it) now ships in the Lambda; `Kalshi.canonical` maps a name to the one fixture team with an identical fold. Checks: new resolve tests (fail without the fix), execution/schedule tests, full pytest, ruff, package build; read-only public resolve of the real Dplus–G2, T1–LØS and Galions–Solary events. Limit: Dplus–G2 and T1–LØS now fail `fixture_start_mismatch`: all seven Worlds Oct 23 fixtures have Leaguepedia starts differing from Kalshi's (~100 such fixtures in the log overall); not changed here.
