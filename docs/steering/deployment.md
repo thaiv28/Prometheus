@@ -139,6 +139,8 @@ Manual `.github/workflows/kalshi-execution-control.yml` exposes off/demo/live th
 
 Candidate execution requires an infra PR for a 1-minute schedule (currently 5 minutes), Secrets Manager read permission and Lambda env `GITHUB_ISSUES_SECRET_ID` / `GITHUB_ISSUES_REPO` (default `thaiv28/prometheus-trades`). The raw GitHub token belongs in `prometheus/execution/github-issues`, rotated yearly. Missing secret env disables private fill issues; read/post failures never fail trading. Public issue-post steps and their write permission are removed; public alert recording/history remain.
 
+Secrets are cached for an hour per warm container (`handler.cached_secret`), so KMS requests stay within the free tier at the 1-minute schedule.
+
 ### Blended policy release (deployed 2026-10-16)
 
 The Lambda package now includes stdlib `market_blend.py` and its fitted JSON artifact. The reviewed blended/Kelly runtime is now version-pinned and deployed through main publish `38988256036`. The independent schedule/credential/storage boundaries remain; mode was last verified off. Alerts/page signals include Cloud9 and anti-NA international signals; the private executor vetoes these. A zero `min_after_fee_edge` is supported but still requires strictly positive net edge under conservative execution fees. Existing off/demo/live controls and spending caps remain.
