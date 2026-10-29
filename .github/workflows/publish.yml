@@ -218,6 +218,11 @@ jobs:
         with:
           path: data/raw
           key: oracles-elixir-day-${{ steps.day.outputs.day }}
+      - name: Restore game feeds
+        if: env.CAN_USE_AWS == 'true'
+        env:
+          DATA_BACKUP_BUCKET: ${{ vars.DATA_BACKUP_BUCKET }}
+        run: bash scripts/game_feeds.sh restore
       # The prediction log (every call saved before its match, and the results) lives
       # in the backup bucket; a build without it (PRs, first run) starts a new one
       # with a 30-day reconstructed backfill. Any S3 error other than a missing file

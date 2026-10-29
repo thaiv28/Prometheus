@@ -41,6 +41,25 @@ def refresh_blends(clients, games):
     return rejected
 
 
+# Warm containers reuse secrets for an hour: each Secrets Manager read is a KMS
+# request, and a read every minute ran past KMS's 20,000 free monthly requests.
+SECRET_TTL_SECONDS = 3600
+_secrets = {}
+
+
+def cached_secret(client, secret_id, clock=time.monotonic):
+    """SecretString for `secret_id`; failures are never cached.
+
+    Keyed by secret ID only: the handler makes new boto3 clients per invocation.
+    """
+    hit = _secrets.get(secret_id)
+    if hit and clock() - hit[0] < SECRET_TTL_SECONDS:
+        return hit[1]
+    value = client.get_secret_value(SecretId=secret_id)["SecretString"]
+    _secrets[secret_id] = (clock(), value)
+    return value
+
+
 def handler(event, context, *, clients=None):
     # boto3 is supplied by Lambda, not a normal site dependency.
     if clients is None:
@@ -64,9 +83,7 @@ def handler(event, context, *, clients=None):
 
         def notify(row):
             try:
-                token = clients["secretsmanager"].get_secret_value(SecretId=secret_id)[
-                    "SecretString"
-                ]
+                token = cached_secret(clients["secretsmanager"], secret_id)
                 return github_issue(
                     token,
                     os.environ.get("GITHUB_ISSUES_REPO", "thaiv28/prometheus-trades"),
@@ -90,10 +107,12 @@ def handler(event, context, *, clients=None):
     def api(environment):
         if environment in apis:
             return apis[environment]
-        secret = clients["secretsmanager"].get_secret_value(
-            SecretId=os.environ[f"{environment.upper()}_SECRET_ARN"]
+        credentials = json.loads(
+            cached_secret(
+                clients["secretsmanager"],
+                os.environ[f"{environment.upper()}_SECRET_ARN"],
+            )
         )
-        credentials = json.loads(secret["SecretString"])
         apis[environment] = Kalshi(
             environment,
             credentials["key_id"],

@@ -284,6 +284,9 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 ### Predictions page
 - Predictions: title and freeze lede with a Record link; hidden-until-active Live now register (Table I); filters and Coming up (Table II); compact Results for seven days (Table III), download and month links. Record and Kalshi comparison are Tables I–II on Call performance; existing edge tables follow as III–IV. The method stays in the duel tooltip and notes.
 
+### Other games
+- Game pages reuse the fixture register with a Tier column, a Live now score table, Coming up without Blend, recent results and monthly archives. Tier marks use default ink; filters and local times follow Predictions.
+
 ### Market Blend methodology
 
 `market-blend.html` uses the existing Almanac headings and prose widths. Short estimate, signal and evidence sections; native disclosure holds formula, fit protocol and current coefficients. Linked from Blend, Predictions notes and Call performance. Keep the replay/profitability caveat; no new tokens or ranking page. Kelly copy describes capped bets without specifying order granularity; exact execution precision belongs in the execution guide.

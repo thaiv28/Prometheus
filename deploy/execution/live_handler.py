@@ -159,10 +159,13 @@ def handle(event, clients, aliases):
                 continue
 
             def api_factory(environment):
+                from deploy.execution.handler import cached_secret
+
                 credentials = json.loads(
-                    clients["secretsmanager"].get_secret_value(
-                        SecretId=os.environ[f"{environment.upper()}_SECRET_ARN"]
-                    )["SecretString"]
+                    cached_secret(
+                        clients["secretsmanager"],
+                        os.environ[f"{environment.upper()}_SECRET_ARN"],
+                    )
                 )
                 return Kalshi(
                     environment,

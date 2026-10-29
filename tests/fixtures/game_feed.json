@@ -1,0 +1,121 @@
+{
+  "version": 1,
+  "game": "valorant",
+  "name": "Valorant",
+  "model": "Player round Elo",
+  "generated": "2026-10-29T18:00Z",
+  "data_through": "2026-10-28",
+  "source": {
+    "name": "Liquipedia",
+    "url": "https://liquipedia.net/valorant/",
+    "license": "CC BY-SA 3.0"
+  },
+  "sections": [
+    {
+      "key": "VCT",
+      "label": "VCT",
+      "major": true
+    },
+    {
+      "key": "Other",
+      "label": "Other",
+      "major": false
+    }
+  ],
+  "matches": [
+    {
+      "match_id": "up2",
+      "start": "2026-10-31T10:00Z",
+      "status": "upcoming",
+      "section": "Other",
+      "event": "Test Cup",
+      "best_of": null,
+      "name1": "Nova & Co",
+      "name2": "A Team",
+      "p_game": 0.5512,
+      "p_series": 0.5803,
+      "reconstructed": false,
+      "score1": null,
+      "score2": null,
+      "winner": null,
+      "url": "https://example.com/up2",
+      "market": null
+    },
+    {
+      "match_id": "final-old",
+      "start": "2026-09-15T10:00Z",
+      "status": "final",
+      "section": "VCT",
+      "event": "Test Cup",
+      "best_of": 3,
+      "name1": "Nova & Co",
+      "name2": "A Team",
+      "p_game": 0.5512,
+      "p_series": 0.5803,
+      "reconstructed": true,
+      "score1": 2,
+      "score2": 0,
+      "winner": 1,
+      "url": "https://example.com/final-old",
+      "market": null
+    },
+    {
+      "match_id": "live1",
+      "start": "2026-10-29T17:00Z",
+      "status": "live",
+      "section": "VCT",
+      "event": "Test Cup",
+      "best_of": 3,
+      "name1": "Nova & Co",
+      "name2": "A Team",
+      "p_game": 0.5512,
+      "p_series": 0.5803,
+      "reconstructed": false,
+      "score1": 1,
+      "score2": 0,
+      "winner": null,
+      "url": "https://example.com/live1",
+      "market": null
+    },
+    {
+      "match_id": "up1",
+      "start": "2026-10-30T09:00Z",
+      "status": "upcoming",
+      "section": "VCT",
+      "event": "Test Cup",
+      "best_of": 3,
+      "name1": "Nova & Co",
+      "name2": "A Team",
+      "p_game": 0.5512,
+      "p_series": 0.5803,
+      "reconstructed": false,
+      "score1": null,
+      "score2": null,
+      "winner": null,
+      "url": "https://example.com/up1",
+      "market": {
+        "p": 0.62,
+        "at": "2026-10-29T18:00Z",
+        "url": "https://kalshi.com/test"
+      }
+    },
+    {
+      "match_id": "final-new",
+      "start": "2026-10-28T09:00Z",
+      "status": "final",
+      "section": "Other",
+      "event": "Test Cup",
+      "best_of": 3,
+      "name1": "Nova & Co",
+      "name2": "A Team",
+      "p_game": 0.5512,
+      "p_series": 0.5803,
+      "reconstructed": false,
+      "score1": 1,
+      "score2": 1,
+      "winner": null,
+      "url": "https://example.com/final-new",
+      "market": null
+    }
+  ]
+}

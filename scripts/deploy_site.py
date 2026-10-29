@@ -100,12 +100,12 @@ def read_manifest(bucket):
     return json.loads(text) if text.strip() else None
 
 
-def upload_files(output, bucket, paths, dry_run):
+def upload_files(output, bucket, paths, dry_run, *, prefix=SITE_PREFIX, header=None):
     """Copy `paths` (relative to output) into a staging tree and upload it, one
     `aws s3 cp --recursive` per Cache-Control value."""
     groups = {}
     for rel in paths:
-        groups.setdefault(cache_control(rel), []).append(rel)
+        groups.setdefault(header or cache_control(rel), []).append(rel)
     for header, group in sorted(groups.items(), key=lambda g: g[0] or ""):
         with tempfile.TemporaryDirectory() as staging:
             for rel in group:
@@ -119,7 +119,7 @@ def upload_files(output, bucket, paths, dry_run):
                 "s3",
                 "cp",
                 staging,
-                f"s3://{bucket}/{SITE_PREFIX}",
+                f"s3://{bucket}/{prefix}",
                 "--recursive",
                 "--only-show-errors",
                 *(["--cache-control", header] if header else []),
@@ -127,10 +127,10 @@ def upload_files(output, bucket, paths, dry_run):
             )
 
 
-def delete_keys(bucket, paths, dry_run):
+def delete_keys(bucket, paths, dry_run, *, prefix=SITE_PREFIX):
     for start in range(0, len(paths), 1000):
         chunk = paths[start : start + 1000]
-        objects = [{"Key": f"{SITE_PREFIX}/{p}"} for p in chunk]
+        objects = [{"Key": f"{prefix}/{p}"} for p in chunk]
         aws(
             "s3api",
             "delete-objects",
