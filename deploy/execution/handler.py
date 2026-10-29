@@ -76,15 +76,26 @@ def handler(event, context, *, clients=None):
     from prometheus.execution.core import Config, run
     from prometheus.execution.kalshi import Kalshi
     from prometheus.execution.ledger import DynamoLedger
-    from prometheus.execution.notify import github_issue
+    from prometheus.execution.notify import close_issue, github_issue
 
-    notify = None
+    notify = close = None
     if secret_id := os.environ.get("GITHUB_ISSUES_SECRET_ID"):
 
         def notify(row):
             try:
                 token = cached_secret(clients["secretsmanager"], secret_id)
                 return github_issue(
+                    token,
+                    os.environ.get("GITHUB_ISSUES_REPO", "thaiv28/prometheus-trades"),
+                    row,
+                )
+            except Exception:
+                return False
+
+        def close(row):
+            try:
+                token = cached_secret(clients["secretsmanager"], secret_id)
+                return close_issue(
                     token,
                     os.environ.get("GITHUB_ISSUES_REPO", "thaiv28/prometheus-trades"),
                     row,
@@ -160,7 +171,7 @@ def handler(event, context, *, clients=None):
                     if code not in {"NoSuchKey", "404"}:
                         source_failed = True
     ledger = DynamoLedger(os.environ["EXECUTION_TABLE"], clients["dynamodb"])
-    result = run(proposals, configuration, ledger, api, notify=notify)
+    result = run(proposals, configuration, ledger, api, notify=notify, close=close)
     if blend_rejected:
         result["blend_rejected"] = blend_rejected
     # Only aggregate counters reach function logs/response. Detailed account,

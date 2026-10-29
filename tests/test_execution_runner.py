@@ -150,8 +150,8 @@ def test_active_runner_reads_exact_private_source_and_lazily_own_environment(
         lambda mode, key, pem, canonical_aliases: (mode, key, pem, canonical_aliases),
     )
 
-    def run(proposals, configuration, private_ledger, api, *, notify):
-        assert notify is None
+    def run(proposals, configuration, private_ledger, api, *, notify, close):
+        assert notify is None and close is None
         assert len(proposals) == 2 and proposals[0]["probability"] == "0.7"
         assert proposals[0]["kind"] == "candidate-v1"
         assert configuration() == {"mode": "demo"}
@@ -244,15 +244,17 @@ def test_github_notifier_lazily_reads_raw_string_secret(monkeypatch, fails):
         return True
 
     monkeypatch.setattr(notifications, "github_issue", issue)
+    monkeypatch.setattr(notifications, "close_issue", issue)
 
-    def run(*args, notify):
+    def run(*args, notify, close):
         assert used == []
         assert notify({"test": True}) is (not fails)
+        assert close({"test": True}) is (not fails)
         return {"errors": 0}
 
     monkeypatch.setattr(core, "run", run)
     handler.handler({}, None, clients=aws)
-    assert used == [{"SecretId": "issues-secret"}]
+    assert used == [{"SecretId": "issues-secret"}] * (2 if fails else 1)
 
 
 def test_cached_secret_reuses_reads_for_an_hour_and_never_caches_failures():
