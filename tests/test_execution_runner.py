@@ -25,6 +25,16 @@ def load(name):
 control, handler = load("control"), load("handler")
 
 
+@pytest.fixture(autouse=True)
+def fresh_secret_cache():
+    handler._secrets.clear()
+    try:
+        from deploy.execution import handler as packaged
+    except ImportError:  # only importable from the Lambda package root
+        return
+    packaged._secrets.clear()
+
+
 class Parameter:
     def __init__(self, value):
         self.value = value
@@ -258,6 +268,8 @@ def test_cached_secret_reuses_reads_for_an_hour_and_never_caches_failures():
     client = SimpleNamespace(get_secret_value=read)
     clock = lambda: now[0]
     assert handler.cached_secret(client, "key", clock) == "value-1"
+    # A new client (as each invocation makes) still hits the cache.
+    client = SimpleNamespace(get_secret_value=read)
     now[0] = handler.SECRET_TTL_SECONDS - 1
     assert handler.cached_secret(client, "key", clock) == "value-1"
     now[0] = handler.SECRET_TTL_SECONDS + 1

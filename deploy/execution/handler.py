@@ -16,13 +16,15 @@ _secrets = {}
 
 
 def cached_secret(client, secret_id, clock=time.monotonic):
-    """SecretString for `secret_id`; failures are never cached."""
-    key = (id(client), secret_id)
-    hit = _secrets.get(key)
+    """SecretString for `secret_id`; failures are never cached.
+
+    Keyed by secret ID only: the handler makes new boto3 clients per invocation.
+    """
+    hit = _secrets.get(secret_id)
     if hit and clock() - hit[0] < SECRET_TTL_SECONDS:
         return hit[1]
     value = client.get_secret_value(SecretId=secret_id)["SecretString"]
-    _secrets[key] = (clock(), value)
+    _secrets[secret_id] = (clock(), value)
     return value
 
 
