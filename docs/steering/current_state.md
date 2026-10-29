@@ -4,7 +4,7 @@ Code baseline; read `db/prometheus.db` or the live site for current rankings. Ev
 
 ## Working
 
-- **Other games:** local version-1 JSON feeds render game predictions, live scores, monthly results and downloads with tier filters. Feeds are local only and absent from the publish job.
+- **Other games:** local version-1 JSON feeds render game predictions, live scores, monthly results and downloads with tier filters. DB-free `games.yml` restores S3 feeds and uploads by hash; publish restores the same feeds for navigation. GitHub execution and external dispatch remain unverified.
 
 - **Fresh calls:** hourly prices resumes published Elo with Leaguepedia and worker maps; the worker uploads finished maps and dispatches prices (five-minute debounce). Hourly runs also render Predictions/results and feed refreshed live ratings every five minutes. Registers, head-to-head and home ratings use an hourly build-matched overlay; Form and OE dates stay intact. Fake-based checks cover the handoff; live token/SSM grant and deploy pending.
 
@@ -45,7 +45,7 @@ Code baseline; read `db/prometheus.db` or the live site for current rankings. Ev
 
 ## Future work
 
-- **Other games:** publish model-repo feeds to S3 and render them in CI; add pre-series trading in the trading Lambda; refresh model DBs and feeds as soon as a series ends.
+- **Other games:** add pre-series trading in the trading Lambda; refresh model DBs and feeds as soon as a series ends.
 
 - Deciding maps (Bo3 map 3, Bo5 map 5): trade the KXLOLGAME market when the series is level
 

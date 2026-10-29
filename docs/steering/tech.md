@@ -52,6 +52,8 @@
 | `prometheus/props_live.py`, `prometheus/site/props.py`, `scripts/update_props.py` | Props page/results, build `props-dist.json`, hourly DB-free pricing, frozen calls and `props-lines.json`. |
 | `scripts/evaluate_season_stats.py` | Split-half reliability, games to 0.5 and same-season fit; `docs/season_stats_report.md`. |
 | `prometheus/site/games.py` | Game-feed loading/views/navigation/rendering. |
+| `scripts/game_feeds.sh`, `scripts/render_games.py` | Nonfatal S3 feed restore; DB-free Other games render. |
+| `scripts/deploy_games.py`, `.github/workflows/games.yml` | Hash uploads to `current/other/`, separate `deploy/other-manifest.json`; dispatched/hourly. |
 | `templates/game.html.j2`, `templates/game_results.html.j2` | Game/monthly fixture registers. |
 | `tests/test_games.py`, `tests/fixtures/game_feed.json` | Offline feed checks. |
 | `templates/*.html.j2` | Templates, `_marks`/`_entry` macros; column-config rankings. |
@@ -59,13 +61,13 @@
 | `PRODUCT.md`, `.impeccable/surfaces/` | Product and visual direction contract; read before UI work. |
 | `tests/` | Mocked unit, in-memory integration, sample/full-DB `e2e`, and Node `js/` tests. |
 
-**Build cost.** `get_glory_ranking()` fits per year/call. `build_site.py` shares `load_glory_games()` (`games=`) across GLORY variants/Luck, Record (`record=`), and `PlayerTables` across player Elo/AURA/logs. Reads, Form states, AURA fits, logs and ~7,000 pages dominate builds.
+**Build cost.** Per-year GLORY fits, reads, Form, AURA, logs and ~7,000 pages dominate. Build shares `load_glory_games()` (`games=`), Record (`record=`), and `PlayerTables` across player Elo/AURA/logs.
 
-`main` loads once, then renders site modules in order. Tests patch `prometheus.site.config.OUTPUT_DIR`/`PREDICTIONS_LOG` at call time. `_marks` supplies fixture/league macros; `_entry` navigation/logs.
+Tests patch `prometheus.site.config.OUTPUT_DIR`/`PREDICTIONS_LOG`. `_marks`: fixture/league macros; `_entry`: navigation/logs.
 
 ## Game feeds
 
-`data/games/*.json` (`PROMETHEUS_GAME_FEEDS` override) supplies version-1 feeds. Missing folders/invalid files warn and skip. Outputs: Other games menu, `other/<game>.html` (`games/` holds the game logs), `<game>/<YYYY-MM>.html`, `<game>.json`. CI publishing remains pending.
+`data/games/*.json` (`PROMETHEUS_GAME_FEEDS` override): version-1 feeds; invalid/missing warn/skip. Outputs: navigation, `other/{<game>.html,<game>/<YYYY-MM>.html,<game>.json}`. Publish restores feeds; DB-free `games.yml` restores/renders/uploads `other/`.
 
 Top-level: `version`, `game` (slug), `name`, `model`, `generated`, `data_through`, `source` (`name`, `url`, nullable `license`), ordered `sections` (`key`, `label`, `major`), `matches`. UTC times: `%Y-%m-%dT%H:%MZ`; data-through: date.
 

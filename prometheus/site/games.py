@@ -141,6 +141,7 @@ def game_view(feed, now):
 
 def render_game_pages(feeds, now):
     """Write each game's predictions, monthly results and downloadable feed."""
+    pages = 0
     folder = Path(site_config.OUTPUT_DIR) / "other"
     for feed in feeds:
         view = game_view(feed, now)
@@ -152,6 +153,7 @@ def render_game_pages(feeds, now):
         )
         write(folder / f"{game}.json", json.dumps(feed, ensure_ascii=False))
         months = view["months"]
+        pages += 1 + len(months)
         for i, month in enumerate(months):
             write(
                 folder / game / f"{month['key']}.html",
@@ -163,6 +165,7 @@ def render_game_pages(feeds, now):
                     **context,
                 ),
             )
+    return pages
 
 
 def nav_group(feeds):
@@ -178,3 +181,11 @@ def nav_group(feeds):
             for f in feeds
         ],
     }
+
+
+def install_nav(feeds):
+    """Install feed navigation without mutating the base site's groups."""
+    env.globals["nav"] = [
+        *site_config.NAV,
+        *([nav_group(feeds)] if feeds else []),
+    ]

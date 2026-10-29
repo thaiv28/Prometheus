@@ -386,10 +386,7 @@ def props_page(fc: Forecasts, teams, pl) -> None:
 
 def main():
     feeds = games.load_feeds()
-    env.globals["nav"] = [
-        *site_config.NAV,
-        *([games.nav_group(feeds)] if feeds else []),
-    ]
+    games.install_nav(feeds)
     os.makedirs(site_config.OUTPUT_DIR, exist_ok=True)
     copy_static()
     last_update = datetime.datetime.now().strftime("%B %-d, %Y")

@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-29 — Other games CI publishing
+
+Branch `game-feed`, building on phase 1 HEAD. Added DB-free `games.yml` (model-job dispatch/hourly backup), nonfatal `game_feeds.sh` restore, `render_games.py`, shared navigation installation and `deploy_games.py`. Inputs: backup bucket `{cs2-model,valorant-model}/feed/{cs2,valorant}.json.gz`; outputs: site `current/other/`, hash manifest `deploy/other-manifest.json`, 60-second cache. Publish restores the same feeds. Real-feed render: cs2 + valorant, 22 HTML pages, 7.136 s (previously no standalone job); added CI cost keeps calls fresh without a full build. Checks: pytest (1,104 passed, 2 skipped), ruff format/check, bash syntax, diff check; seven new tests: 1.04 s including startup. Limits: not run on GitHub yet; depends on model repos' `feed.yml` and cron-job.org dispatch; S3 timing and deployment unverified offline. No UI/copy changes.
+
 ## 2026-10-29 — Generic game-feed predictions and results
 
 Branch `game-feed`, base `main`. Added an Other games menu and pages `other/<game>.html` (with monthly results and a JSON download) rendered from `data/games/*.json` feeds (`PROMETHEUS_GAME_FEEDS` override), written by cs2-model and valorant-model `export`. `games/` already holds the game logs, so pages live under `other/`. The fixture register gains Tier/filter labels, unknown best-of and optional Blend; League pages render byte-identically. Invalid feeds warn and skip; no feeds means no menu. Feeds are local only. Cost: full build 78 s with both real feeds; game pages alone 5 ms per fixture feed. CS2 month pages run to 3.7 MB (all tiers). Checks: pytest (1,097 passed), ruff, `node --check`, JS tests, full build, desktop/phone screenshots. Copy review: PASS (game page, month page: lede, captions, notes, empty states; already minimal, nothing cut).
