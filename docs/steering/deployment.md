@@ -123,9 +123,9 @@ The live pages' files (`current/live/index.json`, one per match, `<match>/map<n>
 
 ## Other games (`.github/workflows/games.yml`)
 
-Main-only, DB-free. cs2-model/valorant-model `feed.yml` dispatch after exports (~10 minutes) via fine-grained `PROMETHEUS_DISPATCH_TOKEN` stored there; hourly :27 backup. Depends on model feeds and cron-job.org dispatch.
+Main-only, DB-free. Dispatched by cs2-model/valorant-model `feed.yml` (~10 minutes, `PROMETHEUS_DISPATCH_TOKEN`); hourly :27 backup.
 
-`game_feeds.sh restore` reads backup-bucket `<prefix>/feed/<slug>.json.gz` (`cs2:cs2-model`, `valorant:valorant-model`); errors skip. `render_games.py` renders; `deploy_games.py` uploads hash-changed files to `current/other/`, with manifest `deploy/other-manifest.json` removed before changes, saved after success. HTML/JSON: `public, max-age=60`; no invalidation. Publish also restores feeds for headers and writes `other/`; newer content wins within one cycle. PRs skip restore. Uses publish's role/buckets; summaries report restore/render/uploads.
+`game_feeds.sh restore` reads backup-bucket `<prefix>/feed/<slug>.json.gz` (`cs2:cs2-model`, `valorant:valorant-model`); errors skip. `render_games.py` renders; `deploy_games.py` uploads hash-changed files to `current/other/`, with manifest `deploy/other-manifest.json` removed before changes, saved after success. HTML/JSON: `public, max-age=60`; no invalidation. Publish also restores feeds and writes `other/`; newer content wins. PRs skip restore. Uses publish's role/buckets.
 
 ## International calibration artifact (release 2026-10-15)
 
@@ -144,6 +144,8 @@ Merged infrastructure PR #16 provisions only `ThaivPrometheusExecution`, separat
 Manual `.github/workflows/kalshi-execution-control.yml` exposes off/demo/live through a dedicated main-branch OIDC role limited to the one SSM configuration parameter; it cannot read API credentials or write the ledger. Mode changes renew the activation epoch; candidate forecast timestamps are independent of activation. Initial configuration is off with no budgets; active modes require explicit complete limits. No execution dependency or trading network request is added to site-build/hourly jobs. The existing check job runs two signing tests with the isolated pinned dependency only when execution files change (local warm run 0.723 s); normal tests cover the remaining mocked execution paths. The original execution-only rollout deployed off from merged app `eb11b9e` and infra `349a744`; the live credential is now installed in Secrets Manager and demo remains empty. Two real off invocations passed (zero submissions/errors), and the GitHub control variables are configured. The rollout fixes unquoted `off`/mode dropdown values after GitHub rejected the original choice. User elected to skip demo after code/test review. Live authentication passed a local GET-only balance check; order endpoints were prohibited and account values suppressed. That initial release stayed off pending sizing and explicit limits; the completed runtime/settings rollout is recorded below. Follow the [execution guide](../kalshi_execution.md).
 
 Candidate execution requires an infra PR for a 1-minute schedule (currently 5 minutes), Secrets Manager read permission and Lambda env `GITHUB_ISSUES_SECRET_ID` / `GITHUB_ISSUES_REPO` (default `thaiv28/prometheus-trades`). The raw GitHub token belongs in `prometheus/execution/github-issues`, rotated yearly. Missing secret env disables private fill issues; read/post failures never fail trading. Public issue-post steps and their write permission are removed; public alert recording/history remain.
+
+Secrets are cached for an hour per warm container (`handler.cached_secret`), so KMS requests stay within the free tier at the 1-minute schedule.
 
 ### Blended policy release (deployed 2026-10-16)
 

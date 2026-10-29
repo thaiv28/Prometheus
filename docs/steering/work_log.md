@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-29 — Executor caches its Kalshi key for an hour
+
+Branch `secret-cache`, base `main`. The 1-minute execution Lambda read its Kalshi key (and the fill-issue token) from Secrets Manager on every live invocation; each read is a KMS request, which reached 18,271 of KMS's 20,000 free monthly requests on 2026-10-29 (`aws freetier get-free-tier-usage`). `handler.cached_secret` keeps each secret for an hour in a warm container, keyed by secret ID because each invocation makes new boto3 clients (failures are never cached); the live-map handler uses it too. Expected: a few hundred KMS requests a month instead of ~43,000. A rotated key takes effect within an hour. Checks: pytest (execution tests and full suite), ruff. No schedule, IAM or config change; ships through the usual execution release.
+
 ## 2026-10-29 — Other games CI publishing
 
 Branch `game-feed`, building on phase 1 HEAD. Added DB-free `games.yml` (model-job dispatch/hourly backup), nonfatal `game_feeds.sh` restore, `render_games.py`, shared navigation installation and `deploy_games.py`. Inputs: backup bucket `{cs2-model,valorant-model}/feed/{cs2,valorant}.json.gz`; outputs: site `current/other/`, hash manifest `deploy/other-manifest.json`, 60-second cache. Publish restores the same feeds. Real-feed render: cs2 + valorant, 22 HTML pages, 7.136 s (previously no standalone job); added CI cost keeps calls fresh without a full build. Checks: pytest (1,104 passed, 2 skipped), ruff format/check, bash syntax, diff check; seven new tests: 1.04 s including startup. Limits: not run on GitHub yet; depends on model repos' `feed.yml` and cron-job.org dispatch; S3 timing and deployment unverified offline. No UI/copy changes.
