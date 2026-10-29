@@ -753,7 +753,7 @@ def test_midnight_between_reservation_and_post_aborts_daily_spending():
 
 
 def candidate_api(api):
-    api.canonical = lambda name, teams: name
+    api.canonical = lambda name, teams, game="lol": name
     api.open_markets = lambda: {
         "KXLOLGAME-F": [
             {"yes_sub_title": "A", "yes_bid": ".58", "yes_ask": ".60"},

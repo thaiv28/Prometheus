@@ -13,6 +13,11 @@ mkdir -p "$stage/prometheus" "$stage/deploy/execution"
 cp "$root/prometheus/__init__.py" "$root/prometheus/alert_contract.py" "$stage/prometheus/"
 cp "$root/prometheus/market_blend.py" "$root/prometheus/market_blend.json" "$stage/prometheus/"
 cp "$root/prometheus/live_map.py" "$root/prometheus/live_map_blend.json" "$stage/prometheus/"
+mkdir -p "$stage/prometheus/game_blends"
+for artifact in "$root"/prometheus/game_blends/*.json; do
+  [ -f "$artifact" ] || continue
+  cp "$artifact" "$stage/prometheus/game_blends/"
+done
 mkdir -p "$stage/prometheus/live"
 for name in __init__.py feed.py draft.py timeline.py time_model_objectives_v1.json time_model_v1.json; do
   cp "$root/prometheus/live/$name" "$stage/prometheus/live/"

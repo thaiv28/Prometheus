@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 
 from prometheus import live_map, market_blend
-from prometheus.alert_contract import CANDIDATE_KIND, TRADE_GROUPS, trade_veto
+from prometheus.alert_contract import CANDIDATE_KIND, GAMES, TRADE_GROUPS, trade_veto
 from prometheus.execution.sizing import QUANTITY_STEP, kelly_order
 
 ZERO = Decimal(0)
@@ -41,6 +41,12 @@ class Config:
     @classmethod
     def parse(cls, value):
         value = copy.deepcopy(value)
+        games = value.get("games", {})
+        if not isinstance(games, dict) or any(
+            key not in {"cs2", "valorant"} or not isinstance(enabled, bool)
+            for key, enabled in games.items()
+        ):
+            raise ValueError("invalid games configuration")
         mode = value.get("mode", "off")
         if mode not in {"off", "demo", "live"}:
             raise ValueError("invalid execution mode")
@@ -124,6 +130,9 @@ def fee_bound(price, count, rate, precision):
 
 
 def validate_alert(alert, config, now):
+    game = alert.get("game", "lol")
+    if game != "lol" and config.raw.get("games", {}).get(game) is not True:
+        raise ValueError("game_disabled")
     if alert.get("kind") == live_map.VERSION:
         if alert.get("schema_version") != 1 or alert.get("group") != "live-map":
             raise ValueError("unsupported_live_alert")
@@ -472,7 +481,12 @@ def prefilter(proposals, quotes, now, config, canonical):
                 continue
             sides = {}
             for market in markets:
-                name = canonical(market["yes_sub_title"], proposal["teams"])
+                game = proposal.get("game", "lol")
+                name = (
+                    canonical(market["yes_sub_title"], proposal["teams"])
+                    if game == "lol"
+                    else canonical(market["yes_sub_title"], proposal["teams"], game)
+                )
                 bid, ask = decimal(market["yes_bid"]), decimal(market["yes_ask"])
                 if (
                     name in sides
@@ -559,9 +573,15 @@ def run(
     if candidates:
         try:
             api = api_for(config.mode)
-            screened = prefilter(
-                candidates, api.open_markets(), now, config, api.canonical
+            series = tuple(
+                sorted({GAMES[a.get("game", "lol")]["series"] for a in candidates})
             )
+            quotes = (
+                api.open_markets()
+                if series == ("KXLOLGAME",)
+                else api.open_markets(series)
+            )
+            screened = prefilter(candidates, quotes, now, config, api.canonical)
         except Exception:
             result["errors"] += 1
             screened = []

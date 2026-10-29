@@ -90,6 +90,23 @@ def handler(event, context, *, clients=None):
         except Exception:
             # Source outages must not prevent cancellation/fill reconciliation.
             source_failed = True
+        if any(initial.get("games", {}).values()):
+            for key in os.environ.get("GAME_CANDIDATE_KEYS", "").split(","):
+                if not (key := key.strip()):
+                    continue
+                try:
+                    source = clients["s3"].get_object(
+                        Bucket=os.environ["PREDICTIONS_BUCKET"], Key=key
+                    )
+                    proposals.extend(
+                        saved_candidates(
+                            json.loads(source["Body"].read()), dt.datetime.now(dt.UTC)
+                        )
+                    )
+                except Exception as error:
+                    code = getattr(error, "response", {}).get("Error", {}).get("Code")
+                    if code not in {"NoSuchKey", "404"}:
+                        source_failed = True
     ledger = DynamoLedger(os.environ["EXECUTION_TABLE"], clients["dynamodb"])
     result = run(proposals, configuration, ledger, api, notify=notify)
     # Only aggregate counters reach function logs/response. Detailed account,

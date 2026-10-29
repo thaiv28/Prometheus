@@ -1,0 +1,16 @@
+{
+  "version": "game-blend-v1",
+  "game": "valorant",
+  "series_ticker": "KXVALORANTGAME",
+  "clip": 0.01,
+  "protocol": "Synthetic execution fixture; not production coefficients.",
+  "snapshots": [
+    {
+      "available_from": "2026-02-01T00:00:00+00:00",
+      "trained_through": "2026-01-31T21:00:00+00:00",
+      "training_series": 412,
+      "market_slope": 1.02,
+      "gap_slope": 0.4
+    }
+  ]
+}

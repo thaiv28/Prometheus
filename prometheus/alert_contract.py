@@ -12,6 +12,13 @@ from decimal import Decimal, InvalidOperation
 
 from prometheus import market_blend
 
+GAMES = {
+    "lol": {"series": "KXLOLGAME", "rules_word": "League of Legends"},
+    "cs2": {"series": "KXCS2GAME", "rules_word": "CS2"},
+    "valorant": {"series": "KXVALORANTGAME", "rules_word": "Valorant"},
+}
+GAME_GROUPS = {"cs2-series": "cs2", "valorant-domestic": "valorant"}
+
 SCHEMA_VERSION = 1
 CANDIDATE_KIND = "candidate-v1"
 CANDIDATE_KEY = "execution_candidate"
@@ -25,9 +32,12 @@ GROUPS = frozenset(
         "mixed-international",
         "minor-international",
         "other-cross-league",
+        "cs2-series",
+        "valorant-domestic",
+        "valorant-international",
     )
 )
-TRADE_GROUPS = GROUPS - {"other-cross-league"}
+TRADE_GROUPS = GROUPS - {"other-cross-league", "valorant-international"}
 
 
 # Letters that Unicode doesn't split into a base letter and an accent.
@@ -50,11 +60,15 @@ def trade_veto(alert):
         folded = "".join(c for c in team.casefold() if c.isalnum())
         if folded == "c9" or folded.startswith("cloud9"):
             return "cloud9_fixture"
-    if alert.get("international") or alert.get("group") in {
-        "major-international",
-        "mixed-international",
-        "minor-international",
-    }:
+    if alert.get("game", "lol") == "lol" and (
+        alert.get("international")
+        or alert.get("group")
+        in {
+            "major-international",
+            "mixed-international",
+            "minor-international",
+        }
+    ):
         homes = alert.get("team_homes") or {}
         if any(not homes.get(team) for team in teams):
             return "missing_international_home_leagues"
@@ -197,9 +211,6 @@ def candidate(entry, now_s, group, international):
 
 def saved_candidates(document, now):
     """Two backed-side proposals from fresh private forecast records."""
-    snap = market_blend.snapshot(now)
-    if snap is None:
-        return []
     entries = document.get("matches", []) if isinstance(document, dict) else document
     if isinstance(entries, dict):
         entries = list(entries.values())
@@ -209,6 +220,20 @@ def saved_candidates(document, now):
     for entry in entries:
         try:
             saved = entry[CANDIDATE_KEY]
+            game = saved.get("game", "lol")
+            if game not in GAMES:
+                continue
+            if saved["group"] in GAME_GROUPS:
+                if (
+                    game != GAME_GROUPS[saved["group"]]
+                    or saved.get("series_ticker") != GAMES[game]["series"]
+                ):
+                    continue
+            elif game != "lol":
+                continue
+            snap = market_blend.snapshot(now, game)
+            if snap is None:
+                continue
             teams = saved["teams"]
             when = dt.datetime.fromisoformat(saved["at"].replace("Z", "+00:00"))
             start = dt.datetime.fromisoformat(saved["start"].replace("Z", "+00:00"))
@@ -254,11 +279,17 @@ def saved_candidates(document, now):
                                 "provenance",
                             )
                         },
+                        **(
+                            {"game": game, "series_ticker": saved["series_ticker"]}
+                            if game != "lol"
+                            else {}
+                        ),
                         "alert_at": saved["at"],
                         "backed_team": backed,
                         "probability": str(raw[backed]),
                         "trading": {
-                            "version": market_blend.VERSION,
+                            "version": market_blend.load(game)["version"],
+                            **({"game": game} if game != "lol" else {}),
                             "policy": market_blend.POLICY,
                             "model": snap["available_from"],
                             **{

@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-29 — CS2 and domestic Valorant series execution prepared
+
+Branch `game-trading`, base `main`. Lambda accepts private CS2/domestic Valorant series candidates keyed by Kalshi names, blends current mids with frozen per-game coefficients (`prometheus/game_blends/`, copied from the model repos' `blend_artifact.json`; clip 0.01), then uses shared fees, Kelly, caps and ledger fences. League output is regression-pinned; League team aliases apply only to League ("DRX" → "Kiwoom DRX" would block Valorant DRX). Games start off: execution off → Configure `games` → mode on. `GAME_CANDIDATE_KEYS` (infra PR #25) names `cs2-model/feed/candidates.json`, `valorant-model/feed/candidates.json`. Valorant international never trades; Cloud9 veto stays universal. Checks: pytest (1,150 passed), ruff; real candidates give 62 CS2 / 6 Valorant proposals; blend matches the model repos' formula; read-only `PublicKalshi.resolve` on 11 live events: 6 resolved, 5 had no two-sided quote, none failed identity checks.
+
 ## 2026-10-28 — Raised trading limits from a 2027 sizing simulation
 
 Branch `map-caps`, base `main`. A scratch Monte Carlo (46 weeks; pregame picks and live 30 s-stability bets bootstrapped by week) ranked 90 configs with fills 1¢ worse. Best downside/median: pregame full Kelly, 10% series cap, live maps full Kelly at 5% map/10% series, $250 order/$1k exposure/$2k day: median $13.3k from $50, 10th percentile $1.1k, 1% below seed; old config median $1.7k, 7% below seed. Applied in SSM (off → configure → live): $250 order/fixture, $1k exposure, $2k day. Live-map validator maxima raised to Kelly 1, 5% map, 10% series; values applied after deploy. Checks: pytest, ruff. Limits: edges selected on the same history; live edge priced from tapes; book depth for $250 orders unmodelled.

@@ -20,7 +20,7 @@ import urllib.request
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from prometheus.alert_contract import fold
+from prometheus.alert_contract import GAMES, fold
 from prometheus.live_map import START_TOLERANCE
 
 from .core import decimal, fee_bound, timestamp
@@ -40,6 +40,16 @@ RULES = re.compile(
     r"League of Legends match originally scheduled for (?P<day>\w{3} \d{1,2}, \d{4})"
     r" at (?P<time>\d{1,2}:\d{2} [AP]M) E[DS]T"
 )
+
+
+GAME_RULES = {
+    game: RULES
+    if game == "lol"
+    else re.compile(
+        RULES.pattern.replace("League of Legends", re.escape(meta["rules_word"]))
+    )
+    for game, meta in GAMES.items()
+}
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -137,37 +147,44 @@ class Kalshi:
             seen.add(cursor)
         raise ValueError("pagination_limit_exceeded")
 
-    def open_markets(self):
+    def open_markets(self, series_tickers=("KXLOLGAME",)):
         grouped = {}
-        for market in self.pages(
-            "/markets", "markets", series_ticker="KXLOLGAME", status="open"
-        ):
-            grouped.setdefault(market["event_ticker"], []).append(
-                {
-                    "ticker": market["ticker"],
-                    "yes_sub_title": market.get("yes_sub_title"),
-                    **{
-                        name: decimal(market[name + "_dollars"])
-                        if market.get(name + "_dollars") is not None
-                        else None
-                        for name in ("yes_bid", "yes_ask")
-                    },
-                }
-            )
+        for series_ticker in series_tickers:
+            for market in self.pages(
+                "/markets", "markets", series_ticker=series_ticker, status="open"
+            ):
+                grouped.setdefault(market["event_ticker"], []).append(
+                    {
+                        "ticker": market["ticker"],
+                        "yes_sub_title": market.get("yes_sub_title"),
+                        **{
+                            name: decimal(market[name + "_dollars"])
+                            if market.get(name + "_dollars") is not None
+                            else None
+                            for name in ("yes_bid", "yes_ask")
+                        },
+                    }
+                )
         return grouped
 
-    def canonical(self, name, teams):
+    def canonical(self, name, teams, game="lol"):
         # An explicit alias, else the one fixture team whose folded name (case,
         # accents, punctuation) is identical: "Dplus KIA" -> "Dplus Kia", "LOS"
-        # -> "LØS". No substring or similarity matching.
-        name = self.aliases.get(name.strip(), name.strip())
+        # -> "LØS". No substring or similarity matching. The aliases are League
+        # names ("DRX" -> "Kiwoom DRX"); other games' teams are Kalshi's own names.
+        name = name.strip()
+        if game == "lol":
+            name = self.aliases.get(name, name)
         matches = [team for team in teams if fold(team) == fold(name)]
         return matches[0] if len(matches) == 1 else name
 
     def resolve(self, alert, now, config):
         from prometheus import live_map
 
+        game = alert.get("game", "lol")
         is_map = alert.get("kind") == live_map.VERSION
+        if is_map and game != "lol":
+            raise ValueError("unsupported_game_live_map")
         bo1 = (
             is_map
             and alert["event_ticker"] == alert["series_id"]
@@ -190,7 +207,7 @@ class Kalshi:
                 raise ValueError("live_bo1_unverified") from None
             else:
                 raise ValueError("live_bo1_map_market_exists")
-        series_ticker = "KXLOLMAP" if is_map and not bo1 else "KXLOLGAME"
+        series_ticker = "KXLOLMAP" if is_map and not bo1 else GAMES[game]["series"]
         ticker = urllib.parse.quote(alert["event_ticker"], safe="")
         response = self.request("GET", f"/events/{ticker}", with_nested_markets="true")
         event = response["event"]
@@ -253,7 +270,7 @@ class Kalshi:
             raise ValueError("ambiguous_outcomes")
         parsed, first_start = [], timestamp(alert["start"])
         for market in markets:
-            rules = (MAP_RULES if is_map and not bo1 else RULES).match(
+            rules = (MAP_RULES if is_map and not bo1 else GAME_RULES[game]).match(
                 market.get("rules_primary", "")
             )
             if (
@@ -265,10 +282,10 @@ class Kalshi:
             ):
                 raise ValueError("unsupported_or_ambiguous_market")
             teams = {
-                self.canonical(rules[name], alert["teams"])
+                self.canonical(rules[name], alert["teams"], game)
                 for name in ("team1", "team2")
             }
-            side = self.canonical(rules["side"], alert["teams"])
+            side = self.canonical(rules["side"], alert["teams"], game)
             when = dt.datetime.strptime(
                 f"{rules['day']} {rules['time']}", "%b %d, %Y %I:%M %p"
             ).replace(tzinfo=ZoneInfo("America/New_York"))
@@ -279,7 +296,10 @@ class Kalshi:
             if abs(starts - timestamp(alert["start"])) > START_TOLERANCE:
                 raise ValueError("fixture_start_mismatch")
             first_start = min(first_start, starts)
-            if self.canonical(market.get("yes_sub_title", ""), alert["teams"]) != side:
+            if (
+                self.canonical(market.get("yes_sub_title", ""), alert["teams"], game)
+                != side
+            ):
                 raise ValueError("outcome_label_mismatch")
             parsed.append((market, side))
         if {side for _, side in parsed} != set(alert["teams"]):
