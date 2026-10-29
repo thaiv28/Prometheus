@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-29 — Generic game-feed predictions and results
+
+Branch `game-feed`, base `main`. Added an Other games menu and pages `other/<game>.html` (with monthly results and a JSON download) rendered from `data/games/*.json` feeds (`PROMETHEUS_GAME_FEEDS` override), written by cs2-model and valorant-model `export`. `games/` already holds the game logs, so pages live under `other/`. The fixture register gains Tier/filter labels, unknown best-of and optional Blend; League pages render byte-identically. Invalid feeds warn and skip; no feeds means no menu. Feeds are local only. Cost: full build 78 s with both real feeds; game pages alone 5 ms per fixture feed. CS2 month pages run to 3.7 MB (all tiers). Checks: pytest (1,097 passed), ruff, `node --check`, JS tests, full build, desktop/phone screenshots. Copy review: PASS (game page, month page: lede, captions, notes, empty states; already minimal, nothing cut).
+
 ## 2026-10-28 — Raised trading limits from a 2027 sizing simulation
 
 Branch `map-caps`, base `main`. A scratch Monte Carlo (46 weeks; pregame picks and live 30 s-stability bets bootstrapped by week) ranked 90 configs with fills 1¢ worse. Best downside/median: pregame full Kelly, 10% series cap, live maps full Kelly at 5% map/10% series, $250 order/$1k exposure/$2k day: median $13.3k from $50, 10th percentile $1.1k, 1% below seed; old config median $1.7k, 7% below seed. Applied in SSM (off → configure → live): $250 order/fixture, $1k exposure, $2k day. Live-map validator maxima raised to Kelly 1, 5% map, 10% series; values applied after deploy. Checks: pytest, ruff. Limits: edges selected on the same history; live edge priced from tapes; book depth for $250 orders unmodelled.
