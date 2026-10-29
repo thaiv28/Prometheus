@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-29 — Executor caches its Kalshi key for an hour
+
+Branch `secret-cache`, base `main`. The 1-minute execution Lambda read its Kalshi key (and the fill-issue token) from Secrets Manager on every live invocation; each read is a KMS request, which reached 18,271 of KMS's 20,000 free monthly requests on 2026-10-29 (`aws freetier get-free-tier-usage`). `handler.cached_secret` keeps each secret for an hour in a warm container (failures are never cached); the live-map handler uses it too. Expected: a few hundred KMS requests a month instead of ~43,000. A rotated key takes effect within an hour. Checks: pytest (execution tests and full suite), ruff. No schedule, IAM or config change; ships through the usual execution release.
+
 ## 2026-10-28 — Raised trading limits from a 2027 sizing simulation
 
 Branch `map-caps`, base `main`. A scratch Monte Carlo (46 weeks; pregame picks and live 30 s-stability bets bootstrapped by week) ranked 90 configs with fills 1¢ worse. Best downside/median: pregame full Kelly, 10% series cap, live maps full Kelly at 5% map/10% series, $250 order/$1k exposure/$2k day: median $13.3k from $50, 10th percentile $1.1k, 1% below seed; old config median $1.7k, 7% below seed. Applied in SSM (off → configure → live): $250 order/fixture, $1k exposure, $2k day. Live-map validator maxima raised to Kelly 1, 5% map, 10% series; values applied after deploy. Checks: pytest, ruff. Limits: edges selected on the same history; live edge priced from tapes; book depth for $250 orders unmodelled.
