@@ -15,12 +15,12 @@
       {{ filter_line(view) }}
 
       {% if view.live %}
-      <section class="fixtures-block" aria-labelledby="live-heading">
+      {#- Hidden whenever the filters leave nothing live, as on the LoL page. #}
+      <section class="fixtures-block" aria-labelledby="live-heading" data-section-for="live">
         <div class="block-head"><h2 id="live-heading">Live now</h2></div>
         <figure class="register-figure" aria-labelledby="live-cap">
           <figcaption id="live-cap" class="table-caption">Table I. <span class="count" data-count-for="live" aria-live="polite"></span></figcaption>
           <div class="table-scroll">{{ fixtures(view.live, results=True, compact=True, id='live', lg_label='Tier') }}</div>
-          <p class="empty fx-empty" data-empty-for="live" hidden>No matches fit these filters.</p>
         </figure>
       </section>
       {% endif %}

@@ -245,6 +245,8 @@ def build_state(state, rows, mapping, at, preview=False):
         )
     frames.sort(key=lambda f: timestamp(f["at"]))
     reason = None
+    # Riot repeats one frozen frame through a pause, so its age says nothing.
+    paused = bool(state.get("paused"))
     last = state.get("last_good")
     age = (now - timestamp(last["source_timestamp"])).total_seconds() if last else None
     quality.update(
@@ -269,13 +271,19 @@ def build_state(state, rows, mapping, at, preview=False):
         reason = "Research feed unavailable: " + state["unavailable_reason"]
     elif not last or not frames:
         reason = "No usable observation for the selected map."
-    elif age is None or age < 0 or age > selection["max_age_seconds"]:
+    elif age is None or age < 0 or (age > selection["max_age_seconds"] and not paused):
         reason = "Research observations are stale or have invalid source timing."
     finished = bool(state.get("window") and state["window"]["finished"])
     return {
         "schema": 1,
         "published_at": at,
-        "status": "unavailable" if reason else "between_games" if finished else "live",
+        "status": "unavailable"
+        if reason
+        else "between_games"
+        if finished
+        else "paused"
+        if paused
+        else "live",
         "note": reason
         or "RESEARCH PREVIEW — unverified game state; no model calls or market quotes.",
         "match": {
@@ -383,7 +391,7 @@ def build_page(collector, mapping, catalog, at, timeline=None):
     ]
     if timeline:
         attach_timeline(page, *timeline)
-    if page["status"] == "live":
+    if page["status"] in {"live", "paused"}:
         page["note"] = "Research preview."
     return page
 
