@@ -5,11 +5,20 @@ import datetime as dt
 import io
 import json
 import math
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from test_execution import NOW, candidate_api, candidate_proposal, harness, settings
+from test_execution import (
+    NOW,
+    candidate_api,
+    candidate_proposal,
+    fill,
+    harness,
+    saved,
+    settings,
+)
 from test_execution_api import PublicClient, config
 from test_execution_runner import Parameter, clients, control, handler
 
@@ -17,6 +26,7 @@ from prometheus import alert_contract as ac
 from prometheus import market_blend as mb
 from prometheus.execution import core
 from prometheus.execution.kalshi import Kalshi
+from prometheus.execution.ledger import _item
 
 FIXTURES = Path(__file__).with_name("fixtures")
 
@@ -24,6 +34,7 @@ FIXTURES = Path(__file__).with_name("fixtures")
 @pytest.fixture
 def game_artifacts(monkeypatch):
     monkeypatch.setattr(mb, "GAME_PATH", FIXTURES / "game_blends")
+    monkeypatch.setattr(mb, "_INSTALLED", {})
     mb.load.cache_clear()
     yield
     mb.load.cache_clear()
@@ -92,7 +103,13 @@ def test_game_candidates_and_frozen_clipping(game_artifacts, game):
             estimate = mb.estimate(raw, market, NOW, game=game)
             assert estimate["probability"] == pytest.approx(expected)
             assert estimate["game"] == game
-        core.validate_alert(p, core.Config.parse(settings(games={game: True})), NOW)
+        core.validate_alert(
+            p,
+            core.Config.parse(
+                settings(games={game: {"enabled": True, "starting_bankroll_usd": "50"}})
+            ),
+            NOW,
+        )
         with pytest.raises(ValueError, match=r"^game_disabled$"):
             core.validate_alert(p, core.Config.parse(settings()), NOW)
         with pytest.raises(ValueError, match="unknown trading snapshot"):
@@ -218,13 +235,30 @@ def test_invalid_game_config(games, mode):
 
 def test_game_configure_requires_off_and_preserves_other_settings():
     parameter = Parameter(settings(mode="off"))
-    control.configure(parameter, "/config", {"games": {"cs2": True, "valorant": False}})
+    control.configure(
+        parameter,
+        "/config",
+        {
+            "games": {
+                "cs2": {"enabled": True, "starting_bankroll_usd": "50"},
+                "valorant": {"enabled": False},
+            }
+        },
+    )
     assert parameter.value == settings(
-        mode="off", games={"cs2": True, "valorant": False}
+        mode="off",
+        games={
+            "cs2": {"enabled": True, "starting_bankroll_usd": "50"},
+            "valorant": {"enabled": False},
+        },
     )
     parameter.value["mode"] = "live"
     with pytest.raises(ValueError, match="off"):
-        control.configure(parameter, "/config", {"games": {"valorant": True}})
+        control.configure(
+            parameter,
+            "/config",
+            {"games": {"valorant": {"enabled": True, "starting_bankroll_usd": "50"}}},
+        )
 
 
 def test_game_veto_keeps_cloud9_but_ignores_home_leagues():
@@ -247,7 +281,9 @@ def test_game_veto_keeps_cloud9_but_ignores_home_leagues():
 
 @pytest.mark.parametrize("enabled", [False, True])
 def test_game_bulk_selection_and_shared_execution(game_artifacts, enabled):
-    _, api, ledger, execute = harness(settings(games={"cs2": enabled}))
+    _, api, ledger, execute = harness(
+        settings(games={"cs2": {"enabled": enabled, "starting_bankroll_usd": "50"}})
+    )
     candidate_api(api)
     quotes = api.open_markets()
     calls = []
@@ -346,12 +382,20 @@ def test_open_markets_reads_each_series_and_merges_events():
 @pytest.mark.parametrize(
     "mode,games,keys",
     [
-        ("off", {"cs2": True}, "cs2.json"),
+        ("off", {"cs2": {"enabled": True, "starting_bankroll_usd": "50"}}, "cs2.json"),
         ("demo", {}, "cs2.json"),
-        ("demo", {"cs2": False}, "cs2.json"),
-        ("demo", {"cs2": True}, ""),
-        ("demo", {"cs2": True}, " cs2.json, valorant.json, "),
-        ("demo", {"valorant": True}, "cs2.json,valorant.json"),
+        ("demo", {"cs2": {"enabled": False}}, "cs2.json"),
+        ("demo", {"cs2": {"enabled": True, "starting_bankroll_usd": "50"}}, ""),
+        (
+            "demo",
+            {"cs2": {"enabled": True, "starting_bankroll_usd": "50"}},
+            " cs2.json, valorant.json, ",
+        ),
+        (
+            "demo",
+            {"valorant": {"enabled": True, "starting_bankroll_usd": "50"}},
+            "cs2.json,valorant.json",
+        ),
     ],
 )
 def test_handler_game_sources_are_opt_in(monkeypatch, mode, games, keys):
@@ -377,7 +421,7 @@ def test_handler_game_sources_are_opt_in(monkeypatch, mode, games, keys):
     monkeypatch.setattr(core, "run", run)
     handler.handler({}, None, clients=aws)
     expected = [] if mode == "off" else ["private-log.json"]
-    if mode != "off" and any(games.values()):
+    if mode != "off" and any(g["enabled"] for g in games.values()):
         expected += [k.strip() for k in keys.split(",") if k.strip()]
     assert adapted == expected
     assert reads == [{"Bucket": "private-backup", "Key": k} for k in expected]
@@ -388,7 +432,10 @@ def test_handler_game_sources_are_opt_in(monkeypatch, mode, games, keys):
     "error", ["NoSuchKey", "404", "AccessDenied", "bad-json", "transport"]
 )
 def test_handler_game_source_errors_still_reconcile(monkeypatch, error):
-    aws, _ = clients(monkeypatch, settings(games={"cs2": True}))
+    aws, _ = clients(
+        monkeypatch,
+        settings(games={"cs2": {"enabled": True, "starting_bankroll_usd": "50"}}),
+    )
     monkeypatch.setenv("GAME_CANDIDATE_KEYS", "missing.json,next.json")
     reads, ran = [], []
 
@@ -427,3 +474,288 @@ def test_league_aliases_never_rename_other_games_teams():
     teams = ["DRX", "Paper Rex"]
     assert api.canonical("DRX", teams, "valorant") == "DRX"
     assert api.canonical("DRX", ["Kiwoom DRX", "T1"]) == "Kiwoom DRX"
+
+
+@pytest.mark.parametrize("bankroll", [None, "0", "-1", "NaN", "Infinity", "bad", True])
+def test_enabled_game_requires_positive_bankroll(bankroll):
+    game = {"enabled": True}
+    if bankroll is not None:
+        game["starting_bankroll_usd"] = bankroll
+    with pytest.raises(ValueError, match="games"):
+        core.Config.parse(settings(games={"cs2": game}))
+    assert core.Config.parse(settings(mode="off", games={"cs2": game})).mode == "off"
+    assert core.Config.parse(settings(games={"cs2": {"enabled": False}}))
+
+
+@pytest.mark.parametrize("game", [{}, {"enabled": 1}, {"enabled": False, "typo": 1}])
+def test_game_config_rejects_missing_enabled_and_unknown_fields(game):
+    with pytest.raises(ValueError, match="games"):
+        core.Config.parse(settings(games={"cs2": game}))
+
+
+def game_settings(**changes):
+    return settings(
+        games={"cs2": {"enabled": True, "starting_bankroll_usd": "50"}},
+        order_budget_usd="1000",
+        fixture_budget_usd="1000",
+        daily_budget_usd="1000",
+        max_exposure_usd="1000",
+        max_contracts=1000,
+        **changes,
+    )
+
+
+def test_game_losses_stop_at_own_bankroll_and_leave_league_untouched():
+    client, api, ledger, execute = harness(game_settings(starting_bankroll_usd="10000"))
+    league = {
+        "pk": "ENV#demo",
+        "sk": "ACCOUNT",
+        "held": Decimal(7),
+        "realized": Decimal(12),
+    }
+    client.put_item(Item=_item(league))
+    api.cash = "1000"
+    api.routes[0]["quantity"] = "1000"
+    losses = Decimal(0)
+    for index in range(100):
+        proposal = saved(
+            game="cs2",
+            group="cs2-series",
+            probability=".99",
+            fixture_id=f"cs2-{index}",
+            event_ticker=f"KXCS2GAME-{index}",
+        )
+        result = execute([proposal])
+        assert result["errors"] == 0
+        if not result["submitted"]:
+            break
+        row = ledger.pending()[0]
+        assert row["account"] == "ACCOUNT#cs2"
+        account = ledger.get("demo", "ACCOUNT#cs2")
+        assert account["held"] <= 50 + account.get("realized", 0)
+        count = row["request"]["count"]
+        fees = Decimal(row["held"]) - Decimal(".60") * Decimal(count)
+        api.orders = [api.orders[-1]]
+        fill(api, count=count, price=".60", fee=str(fees))
+        # First reconcile actual fills, then verify a losing settlement.
+        api.settlement_rows = []
+        assert execute([])["reconciled"] == 1
+        assert ledger.get("demo", "ACCOUNT#cs2")["held"] <= 50 - losses
+        api.settlement_rows = [
+            {
+                "ticker": row["request"]["ticker"],
+                "yes_count_fp": count,
+                "market_result": "no",
+                "revenue": 0,
+            }
+        ]
+        assert execute([])["reconciled"] == 1
+        losses += Decimal(row["held"])
+        account = ledger.get("demo", "ACCOUNT#cs2")
+        assert account["held"] == 0
+        assert account["realized"] == -losses >= -50
+        assert ledger.get("demo", "ACCOUNT") == league
+    else:
+        pytest.fail("Losing game must stop placing orders")
+    assert index > 1 and losses > 49
+    assert ledger.get("demo", "ACCOUNT") == league
+    cfg = core.Config.parse(game_settings())
+    with pytest.raises(ValueError, match="exhausted"):
+        core.plan_order(
+            proposal, api.routes, cfg, Decimal(1000), NOW, {"realized": -50}
+        )
+
+
+def test_game_reserve_checks_cap_and_both_account_snapshots():
+    client, api, ledger, _ = harness(game_settings())
+    cfg = core.Config.parse(game_settings())
+    proposal = saved(game="cs2", group="cs2-series")
+    plan = core.plan_order(proposal, api.routes, cfg, Decimal(100), NOW)
+    assert ledger.reserve(plan, cfg, Decimal(100))
+    other = copy.deepcopy(plan)
+    other["alert"].update(fixture_id="other", event_ticker="other")
+    assert ledger.reserve(other, cfg, Decimal(100)) is None
+    account = ledger.get("demo", "ACCOUNT#cs2")
+    other["sizing"].update(held_before=str(account["held"]), realized_before="1")
+    assert ledger.reserve(other, cfg, Decimal(100)) is None
+    # A matching held snapshot still cannot reserve more than seed plus realized.
+    account = ledger.get("demo", "ACCOUNT#cs2")
+    account["realized"] = Decimal(-49)
+    client.put_item(Item=_item(account))
+    other["sizing"].update(held_before=str(account["held"]), realized_before="-49")
+    assert ledger.reserve(other, cfg, Decimal(100)) is None
+    assert ledger.get("demo", "ACCOUNT") is None
+
+
+@pytest.mark.parametrize("game", ["lol", "cs2"])
+def test_total_held_balance_and_exposure_guard(game):
+    _, api, _, _ = harness()
+    cfg = core.Config.parse(game_settings())
+    proposal = saved(
+        game=game, group="cs2-series" if game == "cs2" else "minor-domestic"
+    )
+    for account, balance, exposure in [
+        ({"held": 0, "total_held": 95}, 100, 0),
+        ({"held": 0, "total_held": 990}, 2000, 10),
+    ]:
+        with pytest.raises(ValueError, match="exhausted"):
+            core.plan_order(
+                proposal,
+                api.routes,
+                cfg,
+                Decimal(balance),
+                NOW,
+                account,
+                exposure=exposure,
+            )
+
+
+def refit():
+    data = copy.deepcopy(mb.load("cs2"))
+    data["snapshots"].append(
+        {
+            **data["snapshots"][-1],
+            "available_from": "2026-11-01T00:00:00+00:00",
+            "trained_through": "2026-10-31T00:00:00+00:00",
+            "market_slope": 1.2,
+            "gap_slope": 0.4,
+            "training_series": 400,
+        }
+    )
+    return data
+
+
+def test_append_only_blend_install_updates_all_readers(game_artifacts):
+    league = copy.deepcopy(mb.load())
+    old = copy.deepcopy(mb.load("cs2"))
+    data = refit()
+    assert mb.install("cs2", json.dumps(data).encode())
+    assert mb.load("cs2") == data
+    assert mb.snapshot(NOW, "cs2") == old["snapshots"][-1]
+    estimate = mb.estimate(0.8, 0.6, "2026-11-02", "cs2")
+    assert estimate["model"] == data["snapshots"][-1]["available_from"]
+    assert mb.refresh(estimate, 0.6) == estimate["probability"]
+    data["snapshots"][-1]["market_slope"] = 99
+    assert mb.load("cs2")["snapshots"][-1]["market_slope"] == 1.2
+    assert not mb.install("lol", league)
+    assert mb.load() == league
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "old",
+        "removed",
+        "earlier",
+        "clip",
+        "game",
+        "version",
+        "series_ticker",
+        "invalid",
+        "market_low",
+        "market_high",
+        "gap_low",
+        "gap_high",
+        "too_few",
+        "noncausal",
+        "nan",
+    ],
+)
+def test_blend_install_rejection_retains_last_good(game_artifacts, mutation):
+    base = refit()
+    added = base["snapshots"].pop()
+    assert mb.install("cs2", base)
+    good = copy.deepcopy(mb.load("cs2"))
+    data = refit()
+    if mutation == "old":
+        data["snapshots"][0]["gap_slope"] += 0.01
+    elif mutation == "removed":
+        data["snapshots"].pop(0)
+    elif mutation == "earlier":
+        data["snapshots"].reverse()
+    elif mutation in {"clip", "game", "version", "series_ticker"}:
+        data[mutation] = 0.02 if mutation == "clip" else "wrong"
+    elif mutation == "invalid":
+        data = b"invalid json"
+    else:
+        key, value = {
+            "market_low": ("market_slope", 0.199),
+            "market_high": ("market_slope", 3.01),
+            "gap_low": ("gap_slope", -1.01),
+            "gap_high": ("gap_slope", 2.01),
+            "too_few": ("training_series", 299),
+            "nan": ("market_slope", float("nan")),
+            "noncausal": ("trained_through", "2026-12-01T00:00:00+00:00"),
+        }[mutation]
+        data["snapshots"][-1][key] = value
+    if mutation in {"old", "removed"}:
+        # Months already in force are kept as loaded; only the new month is added.
+        assert mb.install("cs2", data)
+        assert mb.load("cs2")["snapshots"] == [*good["snapshots"], added]
+        return
+    assert not mb.install("cs2", data)
+    assert mb.load("cs2") == good
+
+
+@pytest.mark.parametrize("response", ["valid", "invalid", "NoSuchKey", "404"])
+def test_handler_hourly_game_refits_and_missing_objects(
+    game_artifacts, monkeypatch, response
+):
+    aws, _ = clients(monkeypatch, game_settings())
+    monkeypatch.setenv(
+        "GAME_BLEND_KEYS",
+        "cs2:cs2-model/feed/blend_artifact.json,valorant:valorant-model/feed/blend_artifact.json",
+    )
+    monkeypatch.setattr(handler, "_BLEND_CHECKED", {})
+    clock = [100.0]
+    monkeypatch.setattr(handler.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(core, "run", lambda *a, **kw: {"errors": 0})
+    reads = []
+    data = refit()
+
+    class Missing(Exception):
+        def __init__(self):
+            self.response = {"Error": {"Code": response}}
+
+    def read(**kw):
+        if kw["Key"] == "private-log.json":
+            return {"Body": io.BytesIO(b'{"matches": []}')}
+        reads.append(kw["Key"])
+        if response in {"NoSuchKey", "404"}:
+            raise Missing()
+        return {
+            "Body": io.BytesIO(
+                json.dumps(data).encode() if response == "valid" else b"invalid"
+            )
+        }
+
+    aws["s3"] = SimpleNamespace(get_object=read)
+    for offset, expected in [(0, 1), (3599, 1), (3600, 2)]:
+        clock[0] = 100 + offset
+        result = handler.handler({}, None, clients=aws)
+        assert len(reads) == expected
+        assert result.get("blend_rejected", 0) == int(
+            response == "invalid" and offset != 3599
+        )
+    if response == "valid":
+        assert mb.load("cs2") == data
+
+
+@pytest.mark.parametrize("game", ["lol", "cs2"])
+def test_runner_counts_other_games_held_even_when_disabled(game):
+    client, api, ledger, execute = harness(game_settings())
+    client.put_item(
+        Item=_item(
+            {
+                "pk": "ENV#demo",
+                "sk": "ACCOUNT#valorant",
+                "held": Decimal(95),
+            }
+        )
+    )
+    result = execute(
+        [saved(game=game, group="cs2-series" if game == "cs2" else "minor-domestic")]
+    )
+    assert result["submitted"] == 0 and result["skipped"] == 1
+    assert result["errors"] == 0
+    assert api.calls == [] and ledger.pending() == []

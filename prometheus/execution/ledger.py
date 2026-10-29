@@ -115,12 +115,18 @@ class DynamoLedger:
             config.number("max_exposure_usd"),
             balance - config.number("min_balance_usd"),
         )
+        account_key = plan.get("account", "ACCOUNT")
+        game = plan["alert"].get("game", "lol")
+        starting = (
+            config.number("starting_bankroll_usd")
+            if game == "lol"
+            else decimal(config.raw["games"][game]["starting_bankroll_usd"])
+        )
         sizing = plan.get("sizing") or {}
         if sizing.get("method") == "kelly-v1":
             cap = min(
                 cap,
-                config.number("starting_bankroll_usd")
-                + decimal(sizing["realized_before"]),
+                starting + decimal(sizing["realized_before"]),
             )
         if amount > cap or amount > config.number("daily_budget_usd"):
             return None
@@ -128,12 +134,12 @@ class DynamoLedger:
         row["revision"] = 0
         transactions = []
         for sk, field, limit in (
-            ("ACCOUNT", "held", cap),
+            (account_key, "held", cap),
             (f"DAY#{plan['day']}", "committed", config.number("daily_budget_usd")),
         ):
             condition = f"attribute_not_exists({field}) OR {field} <= :available"
             values = {":amount": amount, ":available": limit - amount}
-            if sk == "ACCOUNT" and sizing.get("method") == "kelly-v1":
+            if sk == account_key and sizing.get("method") == "kelly-v1":
                 condition = f"({condition})"
                 for name in ("held", "realized"):
                     expected = decimal(sizing[f"{name}_before"])
@@ -258,12 +264,16 @@ class DynamoLedger:
                 }
             }
         ]
-        for sk, field in (("ACCOUNT", "held"), (f"DAY#{previous['day']}", "committed")):
+        account_key = previous.get("account", "ACCOUNT")
+        for sk, field in (
+            (account_key, "held"),
+            (f"DAY#{previous['day']}", "committed"),
+        ):
             delta = decimal(row[field]) - decimal(previous[field])
             profit_delta = (
                 decimal(row.get("realized_profit", 0))
                 - decimal(previous.get("realized_profit", 0))
-                if sk == "ACCOUNT"
+                if sk == account_key
                 else Decimal(0)
             )
             if delta or profit_delta:
