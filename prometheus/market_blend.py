@@ -4,6 +4,7 @@ FORGE/Elo probabilities stay independent. Each dated snapshot uses only older
 completed series; no snapshot means no trading estimate, never a raw fallback.
 """
 
+import copy
 import datetime as dt
 import json
 import math
@@ -12,7 +13,10 @@ from pathlib import Path
 
 VERSION = "market-blend-v1"
 POLICY = "blended-net-v1"
+GAME_VERSION = "game-blend-v1"
+GAME_PATH = Path(__file__).with_name("game_blends")
 PATH = Path(__file__).with_name("market_blend.json")
+_INSTALLED = {}
 
 
 def timestamp(value):
@@ -30,10 +34,19 @@ def valid_probability(value):
     return isinstance(value, (int, float)) and math.isfinite(value) and 0 < value < 1
 
 
-@lru_cache(maxsize=1)
-def load():
-    data = json.loads(PATH.read_text())
-    if data.get("version") != VERSION:
+def _validate(game, data):
+    from prometheus.alert_contract import GAMES
+
+    if game not in GAMES:
+        raise ValueError("unsupported game")
+    if game != "lol" and (
+        data.get("game") != game
+        or data.get("series_ticker") != GAMES[game]["series"]
+        or not isinstance(data.get("clip"), float)
+        or not 0 < data["clip"] < 0.5
+    ):
+        raise ValueError("invalid game blend artifact")
+    if data.get("version") != (VERSION if game == "lol" else GAME_VERSION):
         raise ValueError("unsupported market blend artifact")
     previous = ""
     for model in data["snapshots"]:
@@ -50,20 +63,76 @@ def load():
     return data
 
 
-def snapshot(at):
-    when = timestamp(at).isoformat()
-    return next(
-        (m for m in reversed(load()["snapshots"]) if m["available_from"] <= when), None
+@lru_cache(maxsize=4)
+def load(game="lol"):
+    if game in _INSTALLED:
+        return _INSTALLED[game]
+    if game not in {"lol", "cs2", "valorant"}:
+        raise ValueError("unsupported game")
+    return _validate(
+        game,
+        json.loads((PATH if game == "lol" else GAME_PATH / f"{game}.json").read_text()),
     )
 
 
-def combine(raw, market, model):
+def install(game, data):
+    """Install a validated append-only game refit; failures retain current models."""
+    if game not in {"cs2", "valorant"}:
+        return False
+    try:
+        if isinstance(data, (str, bytes, bytearray)):
+            data = json.loads(data)
+        candidate = _validate(game, copy.deepcopy(data))
+        packaged = _validate(game, json.loads((GAME_PATH / f"{game}.json").read_text()))
+        if any(
+            candidate.get(key) != packaged.get(key)
+            for key in ("version", "game", "series_ticker", "clip")
+        ):
+            return False
+        # Snapshots already in force never change: a refit recomputed over all
+        # data can nudge past months (late links), so keep the loaded ones and
+        # append only months after the last loaded snapshot.
+        old = (_INSTALLED.get(game) or packaged)["snapshots"]
+        added = [
+            m
+            for m in candidate["snapshots"]
+            if m["available_from"] > old[-1]["available_from"]
+        ]
+        for model in added:
+            if not (
+                0.2 <= model["market_slope"] <= 3
+                and -1 <= model["gap_slope"] <= 2
+                and model["training_series"] >= 300
+            ):
+                return False
+        candidate = _validate(game, {**packaged, "snapshots": [*old, *added]})
+    except (ValueError, TypeError, KeyError, AttributeError, ArithmeticError, OSError):
+        return False
+    _INSTALLED[game] = candidate
+    load.cache_clear()
+    return True
+
+
+def snapshot(at, game="lol"):
+    try:
+        data = load(game)
+    except FileNotFoundError:
+        if game == "lol":
+            raise
+        return None
+    when = timestamp(at).isoformat()
+    return next(
+        (m for m in reversed(data["snapshots"]) if m["available_from"] <= when), None
+    )
+
+
+def combine(raw, market, model, clip=1e-6):
     if not valid_probability(raw) or not valid_probability(market):
         return None
 
     # Match the research clipping/coefficients exactly, preserving team symmetry.
     def logit(p):
-        p = min(1 - 1e-6, max(1e-6, p))
+        p = min(1 - clip, max(clip, p))
         return math.log(p / (1 - p))
 
     z = model["market_slope"] * logit(market) + model["gap_slope"] * (
@@ -72,12 +141,16 @@ def combine(raw, market, model):
     return 1 / (1 + math.exp(-z)) if z >= 0 else math.exp(z) / (1 + math.exp(z))
 
 
-def estimate(raw, market, at):
-    model = snapshot(at)
-    if model is None or (p := combine(raw, market, model)) is None:
+def estimate(raw, market, at, game="lol"):
+    model = snapshot(at, game)
+    if model is None:
+        return None
+    data = load(game)
+    if (p := combine(raw, market, model, data.get("clip", 1e-6))) is None:
         return None
     return {
-        "version": VERSION,
+        "version": data["version"],
+        **({"game": game} if game != "lol" else {}),
         "policy": POLICY,
         "model": model["available_from"],
         "trained_through": model["trained_through"],
@@ -91,10 +164,15 @@ def estimate(raw, market, at):
 
 def refresh(saved, market):
     """Update only market input to the exact frozen, backed-side model."""
-    if saved.get("version") != VERSION or saved.get("policy") != POLICY:
+    game = saved.get("game", "lol")
+    if (
+        saved.get("version") != (VERSION if game == "lol" else GAME_VERSION)
+        or saved.get("policy") != POLICY
+    ):
         raise ValueError("unsupported trading forecast")
+    data = load(game)
     model = next(
-        (m for m in load()["snapshots"] if m["available_from"] == saved.get("model")),
+        (m for m in data["snapshots"] if m["available_from"] == saved.get("model")),
         None,
     )
     if model is None or any(
@@ -102,7 +180,9 @@ def refresh(saved, market):
         for k in ("market_slope", "gap_slope", "trained_through")
     ):
         raise ValueError("unknown trading snapshot")
-    p = combine(float(saved["raw_probability"]), float(market), model)
+    p = combine(
+        float(saved["raw_probability"]), float(market), model, data.get("clip", 1e-6)
+    )
     if p is None:
         raise ValueError("invalid current trading probability")
     return p

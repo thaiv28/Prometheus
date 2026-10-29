@@ -38,6 +38,7 @@
 | `prometheus/player_tables.py` | Shared lazy `PlayerTables`: AURA/Elo/logs reads/joins. |
 | `scripts/deploy_site.py` | Hash-changed uploads to bucket `current/`; `deploy/manifest.json`; see `docs/steering/deployment.md`. |
 | `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtests and weight fits; report `docs/metric_backtest.md`. |
+| `prometheus/game_blends/*.json` | CS2/Valorant blends copied from the model repos; S3 refits append later months. |
 | `prometheus/markets.py`, `prometheus/alerts.py` | Kalshi parsing/quotes/aliases, logged prices/alerts/candidates. |
 | `scripts/update_prices.py` | Hourly `prices.yml`: prices, `kalshi.json`, `predictions.json`, saved candidates/alerts. |
 | `scripts/research/`, `docs/research/` | Research scripts, reports and tests outside published metrics. |
@@ -283,7 +284,9 @@ Stdlib `market_blend.py` loads packaged `market_blend.json`: `logit(p)=market_sl
 
 `trading.quote(..., execution_fees=True)` calls executor stdlib `core.fee_bound` with `ALERT_FEE_RATE=0.07`, `ALERT_BALANCE_PRECISION=0.0001`; `alerts.select`/`alerts._current` opt in, default paper fees remain. Decimal subtraction precedes float conversion. `alerts.record` deep-copies optional new `fee_policy` (version, rate bound, balance precision, unit fee). Fee-setting changes need coordinated public-profile updates. Publishers make no account calls; fee import excludes API/signing adapter.
 
-Stdlib `alert_contract.saved_candidates` adapts private `execution_candidate` forecasts (≤3h, unstarted, no future timestamp) into both sides with the current available blend snapshot. Fresh-price writers mark eligible fixtures independently of `KALSHI_ALERTS`, edge and lead; IDs share legacy alert fixture fences. `saved_alerts` remains compatible. `validate_alert` applies identity/group/veto/start/probability guards; candidates bypass alert activation/age and original-ask limits. One bulk market fetch screens canonical two-outcome, narrow two-sided quotes for positive after-fee edge and maximum price before full resolution; filtered/duplicate candidates never write skips. Full books refresh raw/snapshot against the backed midpoint and retain execution probability/net edge. Cloud9 and anti-NA international vetoes remain. Reconciliation posts private fill issues through optional Secrets Manager credentials and revision-safe `notified` marking; public issue workflows stopped. Private account/fill/skip data never enters public predictions. See [execution setup](../kalshi_execution.md).
+CS2/Valorant: `games` switches, per-game accounts, `GAME_CANDIDATE_KEYS`, per-game blends and series quotes; live maps stay League-only.
+
+Stdlib `alert_contract.saved_candidates` adapts private `execution_candidate` forecasts (≤3h, unstarted, no future timestamp) into both sides with the available blend snapshot. Writers ignore `KALSHI_ALERTS`, edge and lead; IDs share legacy fences. `saved_alerts` stays compatible. `validate_alert` checks identity/group/veto/start/probability; candidates bypass alert activation/age and original-ask limits. Bulk quotes screen canonical two-outcome, narrow two-sided markets for positive after-fee edge and maximum price; filtered/duplicate candidates write nothing. Full books refresh raw/snapshot against backed midpoint, retaining probability/net edge. Cloud9/League anti-NA vetoes apply. Private fill issues use optional Secrets Manager credentials and revision-safe `notified`; public posting stopped. Account/fill/skip data stays private. See [execution setup](../kalshi_execution.md).
 
 ### Sizing and release control
 

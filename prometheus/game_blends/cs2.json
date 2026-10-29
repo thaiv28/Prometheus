@@ -1,0 +1,65 @@
+{
+  "version": "game-blend-v1",
+  "game": "cs2",
+  "series_ticker": "KXCS2GAME",
+  "clip": 0.01,
+  "protocol": "Tradeable quote, no intercept, monthly earlier-only fits from 2026-01-01, player_round_glicko_rookie_weights + stage-1 series temperature.",
+  "snapshots": [
+    {
+      "available_from": "2026-04-01T00:00:00+00:00",
+      "trained_through": "2026-03-31T23:00:00+00:00",
+      "training_series": 479,
+      "market_slope": 1.3874665707092477,
+      "gap_slope": 0.7795218757590746
+    },
+    {
+      "available_from": "2026-05-01T00:00:00+00:00",
+      "trained_through": "2026-04-30T21:30:00+00:00",
+      "training_series": 781,
+      "market_slope": 1.378587741989444,
+      "gap_slope": 0.8225272638078043
+    },
+    {
+      "available_from": "2026-06-01T00:00:00+00:00",
+      "trained_through": "2026-05-31T17:00:00+00:00",
+      "training_series": 1106,
+      "market_slope": 1.338913088544618,
+      "gap_slope": 0.6646474652272407
+    },
+    {
+      "available_from": "2026-07-01T00:00:00+00:00",
+      "trained_through": "2026-06-30T21:30:00+00:00",
+      "training_series": 1426,
+      "market_slope": 1.2821379736899619,
+      "gap_slope": 0.6800898259039133
+    },
+    {
+      "available_from": "2026-08-01T00:00:00+00:00",
+      "trained_through": "2026-07-31T22:00:00+00:00",
+      "training_series": 1907,
+      "market_slope": 1.2356648509663377,
+      "gap_slope": 0.609197258422758
+    },
+    {
+      "available_from": "2026-09-01T00:00:00+00:00",
+      "trained_through": "2026-08-31T22:00:00+00:00",
+      "training_series": 2565,
+      "market_slope": 1.22891832095011,
+      "gap_slope": 0.6349811927990859
+    },
+    {
+      "available_from": "2026-10-01T00:00:00+00:00",
+      "trained_through": "2026-09-30T22:00:00+00:00",
+      "training_series": 3417,
+      "market_slope": 1.2382306621070043,
+      "gap_slope": 0.6657010181521578
+    },
+    {
+      "available_from": "2026-11-01T00:00:00+00:00",
+      "trained_through": "2026-10-28T19:20:00+00:00",
+      "training_series": 4136,
+      "market_slope": 1.2430272359052423,
+      "gap_slope": 0.6534396418294961
+    }
+  ]
+}

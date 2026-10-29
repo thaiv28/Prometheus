@@ -82,7 +82,7 @@ jobs:
               git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$BEFORE_SHA"
               git diff --name-only "$BEFORE_SHA" HEAD > "$RUNNER_TEMP/changed-files"
             fi
-            if grep -qE '^(prometheus/(__init__\.py|alert_contract\.py|market_blend\.(py|json)|live_map\.py|live_map_blend\.json|live/(draft\.py|feed\.py|timeline\.py|time_model[^/]*\.json|__init__\.py)|markets\.py|execution/)|deploy/execution/|.github/workflows/publish\.yml$)' "$RUNNER_TEMP/changed-files"; then
+            if grep -qE '^(prometheus/(__init__\.py|alert_contract\.py|market_blend\.(py|json)|game_blends/|live_map\.py|live_map_blend\.json|live/(draft\.py|feed\.py|timeline\.py|time_model[^/]*\.json|__init__\.py)|markets\.py|execution/)|deploy/execution/|.github/workflows/publish\.yml$)' "$RUNNER_TEMP/changed-files"; then
               echo "execution=true" >> "$GITHUB_OUTPUT"
             fi
           fi

@@ -44,6 +44,10 @@ def source_hash(root=ROOT):
     paths.update(
         str(p.relative_to(root)) for p in (root / "prometheus/execution").glob("*.py")
     )
+    paths.update(
+        str(p.relative_to(root))
+        for p in (root / "prometheus/game_blends").glob("*.json")
+    )
     digest = hashlib.sha256()
     for name in sorted(paths):
         digest.update(name.encode() + b"\0" + (root / name).read_bytes() + b"\0")

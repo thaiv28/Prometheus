@@ -8,6 +8,7 @@ from pathlib import Path
 FIELDS = frozenset(
     (
         "live_maps",
+        "games",
         "starting_bankroll_usd",
         "kelly_fraction",
         "series_fraction",

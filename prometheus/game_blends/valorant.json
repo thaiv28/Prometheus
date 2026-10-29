@@ -1,0 +1,58 @@
+{
+  "version": "game-blend-v1",
+  "game": "valorant",
+  "series_ticker": "KXVALORANTGAME",
+  "clip": 0.01,
+  "protocol": "Tradeable quotes, no intercept, monthly earlier-only fits from 2025-09-01, adopted player_round_glicko_rookie_tier_revert model with stage-1 series temperature.",
+  "snapshots": [
+    {
+      "available_from": "2026-05-01T00:00:00+00:00",
+      "trained_through": "2026-04-30T23:35:00+00:00",
+      "training_series": 357,
+      "market_slope": 1.0788832928193837,
+      "gap_slope": 0.6605296473472116
+    },
+    {
+      "available_from": "2026-06-01T00:00:00+00:00",
+      "trained_through": "2026-05-31T15:00:00+00:00",
+      "training_series": 556,
+      "market_slope": 1.0203795333439178,
+      "gap_slope": 0.644239074690056
+    },
+    {
+      "available_from": "2026-07-01T00:00:00+00:00",
+      "trained_through": "2026-06-30T18:20:00+00:00",
+      "training_series": 677,
+      "market_slope": 1.0876046959117265,
+      "gap_slope": 0.6590575851880238
+    },
+    {
+      "available_from": "2026-08-01T00:00:00+00:00",
+      "trained_through": "2026-07-31T21:00:00+00:00",
+      "training_series": 914,
+      "market_slope": 1.0835462390007504,
+      "gap_slope": 0.627222018144086
+    },
+    {
+      "available_from": "2026-09-01T00:00:00+00:00",
+      "trained_through": "2026-08-31T00:10:00+00:00",
+      "training_series": 1107,
+      "market_slope": 1.041173856340322,
+      "gap_slope": 0.5748801820688074
+    },
+    {
+      "available_from": "2026-10-01T00:00:00+00:00",
+      "trained_through": "2026-09-30T11:55:00+00:00",
+      "training_series": 1195,
+      "market_slope": 1.0456578583038656,
+      "gap_slope": 0.5572352452492755
+    },
+    {
+      "available_from": "2026-11-01T00:00:00+00:00",
+      "trained_through": "2026-10-28T19:40:00+00:00",
+      "training_series": 1263,
+      "market_slope": 1.0697424650767098,
+      "gap_slope": 0.5354104782508893
+    }
+  ]
+}

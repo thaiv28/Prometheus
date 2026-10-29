@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 
 from prometheus import live_map, market_blend
-from prometheus.alert_contract import CANDIDATE_KIND, TRADE_GROUPS, trade_veto
+from prometheus.alert_contract import CANDIDATE_KIND, GAMES, TRADE_GROUPS, trade_veto
 from prometheus.execution.sizing import QUANTITY_STEP, kelly_order
 
 ZERO = Decimal(0)
@@ -44,6 +44,23 @@ class Config:
         mode = value.get("mode", "off")
         if mode not in {"off", "demo", "live"}:
             raise ValueError("invalid execution mode")
+        games = value.get("games", {})
+        if not isinstance(games, dict):
+            raise ValueError("invalid games configuration")
+        for game, settings in games.items():
+            if (
+                game not in {"cs2", "valorant"}
+                or not isinstance(settings, dict)
+                or set(settings) - {"enabled", "starting_bankroll_usd"}
+                or not isinstance(settings.get("enabled"), bool)
+            ):
+                raise ValueError("invalid games configuration")
+            if settings["enabled"] and mode != "off":
+                try:
+                    if decimal(settings["starting_bankroll_usd"]) <= 0:
+                        raise ValueError("non-positive bankroll")
+                except (KeyError, ValueError, ArithmeticError):
+                    raise ValueError("invalid games starting bankroll") from None
         if mode != "off":
             timestamp(value["activation_at"])
             for name in (
@@ -124,6 +141,12 @@ def fee_bound(price, count, rate, precision):
 
 
 def validate_alert(alert, config, now):
+    game = alert.get("game", "lol")
+    if (
+        game != "lol"
+        and config.raw.get("games", {}).get(game, {}).get("enabled") is not True
+    ):
+        raise ValueError("game_disabled")
     if alert.get("kind") == live_map.VERSION:
         if alert.get("schema_version") != 1 or alert.get("group") != "live-map":
             raise ValueError("unsupported_live_alert")
@@ -178,7 +201,14 @@ def plan_order(
     committed, exposure = decimal(committed), decimal(exposure)
     if held < 0 or committed < 0 or exposure < 0:
         raise ValueError("invalid_bankroll_state")
-    capital = config.number("starting_bankroll_usd") + realized - held
+    game = alert.get("game", "lol")
+    starting = (
+        config.number("starting_bankroll_usd")
+        if game == "lol"
+        else decimal(config.raw["games"][game]["starting_bankroll_usd"])
+    )
+    total_held = decimal(account.get("total_held", held))
+    capital = starting + realized - held
     is_map = alert.get("kind") == live_map.VERSION
     fraction = (
         decimal(config.raw["live_maps"]["kelly_fraction"])
@@ -189,8 +219,8 @@ def plan_order(
     budget = min(
         config.number("order_budget_usd"),
         config.number("fixture_budget_usd"),
-        balance - config.number("min_balance_usd") - held,
-        config.number("max_exposure_usd") - exposure - held,
+        balance - config.number("min_balance_usd") - total_held,
+        config.number("max_exposure_usd") - exposure - total_held,
         config.number("daily_budget_usd") - committed,
         effective,
     )
@@ -286,6 +316,7 @@ def plan_order(
     return {
         "alert": copy.deepcopy(alert),
         "environment": config.mode,
+        "account": "ACCOUNT" if game == "lol" else f"ACCOUNT#{game}",
         "series_id": alert["series_id"] if is_map else alert["event_ticker"],
         "series_key": (
             f"MAPSERIES#{alert['series_id']}"
@@ -298,7 +329,7 @@ def plan_order(
         "execution_net_edge": str(net_edge),
         "sizing": {
             "method": "kelly-v1",
-            "starting_bankroll_usd": str(config.number("starting_bankroll_usd")),
+            "starting_bankroll_usd": str(starting),
             "kelly_fraction": str(fraction),
             "held_before": str(held),
             "realized_before": str(realized),
@@ -472,7 +503,12 @@ def prefilter(proposals, quotes, now, config, canonical):
                 continue
             sides = {}
             for market in markets:
-                name = canonical(market["yes_sub_title"], proposal["teams"])
+                game = proposal.get("game", "lol")
+                name = (
+                    canonical(market["yes_sub_title"], proposal["teams"])
+                    if game == "lol"
+                    else canonical(market["yes_sub_title"], proposal["teams"], game)
+                )
                 bid, ask = decimal(market["yes_bid"]), decimal(market["yes_ask"])
                 if (
                     name in sides
@@ -559,9 +595,15 @@ def run(
     if candidates:
         try:
             api = api_for(config.mode)
-            screened = prefilter(
-                candidates, api.open_markets(), now, config, api.canonical
+            series = tuple(
+                sorted({GAMES[a.get("game", "lol")]["series"] for a in candidates})
             )
+            quotes = (
+                api.open_markets()
+                if series == ("KXLOLGAME",)
+                else api.open_markets(series)
+            )
+            screened = prefilter(candidates, quotes, now, config, api.canonical)
         except Exception:
             result["errors"] += 1
             screened = []
@@ -603,12 +645,27 @@ def run(
             # Real time after network reads, injectable for deterministic tests.
             checked = api.now() if hasattr(api, "now") else dt.datetime.now(dt.UTC)
             validate_alert(alert, config, checked)
-            account = ledger.get(config.mode, "ACCOUNT") or {}
+            game = alert.get("game", "lol")
+            accounts = {
+                name: ledger.get(config.mode, name) or {}
+                for name in ("ACCOUNT", "ACCOUNT#cs2", "ACCOUNT#valorant")
+            }
+            account = {
+                **accounts["ACCOUNT" if game == "lol" else f"ACCOUNT#{game}"],
+                "total_held": sum(
+                    (decimal(row.get("held", 0)) for row in accounts.values()), ZERO
+                ),
+            }
+            starting = (
+                config.number("starting_bankroll_usd")
+                if game == "lol"
+                else decimal(config.raw["games"][game]["starting_bankroll_usd"])
+            )
             day = ledger.get(config.mode, f"DAY#{checked.date().isoformat()}") or {}
             is_map = alert.get("kind") == live_map.VERSION
             event = alert["series_id"] if is_map else alert["event_ticker"]
             capital = (
-                config.number("starting_bankroll_usd")
+                starting
                 + decimal(account.get("realized", 0))
                 - decimal(account.get("held", 0))
             )

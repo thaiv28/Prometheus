@@ -1,0 +1,138 @@
+{
+  "now": "2026-10-29T12:00:00+00:00",
+  "document": {
+    "matches": [
+      {
+        "execution_candidate": {
+          "kind": "candidate-v1",
+          "schema_version": 1,
+          "at": "2026-10-29T12:00:00+00:00",
+          "fixture_id": "dfe252db87119b7109dfbdf106af8cd4dabe8a54971eeac2b9a81720a495d30d",
+          "event_ticker": "KXLOLGAME-F",
+          "teams": [
+            "A",
+            "B"
+          ],
+          "team_homes": {
+            "A": null,
+            "B": null
+          },
+          "international": false,
+          "group": "minor-domestic",
+          "start": "2026-10-30T12:00Z",
+          "raw": {
+            "A": 0.7,
+            "B": 0.3
+          },
+          "provenance": {
+            "calibration": null,
+            "method": null,
+            "p_game": null,
+            "p_series": 0.7,
+            "home1": null,
+            "home2": null,
+            "data_through": null,
+            "start": "2026-10-30T12:00Z"
+          }
+        }
+      }
+    ]
+  },
+  "proposals": [
+    {
+      "schema_version": 1,
+      "kind": "candidate-v1",
+      "alert_id": "51c8f3052cfe0ffc1d49330e178cbd639b3b5678ced2c271fce3815b0fbbc8bb",
+      "fixture_id": "dfe252db87119b7109dfbdf106af8cd4dabe8a54971eeac2b9a81720a495d30d",
+      "start": "2026-10-30T12:00Z",
+      "teams": [
+        "A",
+        "B"
+      ],
+      "team_homes": {
+        "A": null,
+        "B": null
+      },
+      "international": false,
+      "event_ticker": "KXLOLGAME-F",
+      "group": "minor-domestic",
+      "provenance": {
+        "calibration": null,
+        "method": null,
+        "p_game": null,
+        "p_series": 0.7,
+        "home1": null,
+        "home2": null,
+        "data_through": null,
+        "start": "2026-10-30T12:00Z"
+      },
+      "alert_at": "2026-10-29T12:00:00+00:00",
+      "backed_team": "A",
+      "probability": "0.7",
+      "trading": {
+        "version": "market-blend-v1",
+        "policy": "blended-net-v1",
+        "model": "2026-10-01T00:00:00+00:00",
+        "trained_through": "2026-09-30T21:00:00+00:00",
+        "market_slope": 1.087254056134923,
+        "gap_slope": 0.34280025852274704,
+        "raw_probability": 0.7
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "candidate-v1",
+      "alert_id": "76eddefbc5aa9e70fcf30d4e57264bdf1f7fbf7426d81057495ba32f404cc475",
+      "fixture_id": "dfe252db87119b7109dfbdf106af8cd4dabe8a54971eeac2b9a81720a495d30d",
+      "start": "2026-10-30T12:00Z",
+      "teams": [
+        "A",
+        "B"
+      ],
+      "team_homes": {
+        "A": null,
+        "B": null
+      },
+      "international": false,
+      "event_ticker": "KXLOLGAME-F",
+      "group": "minor-domestic",
+      "provenance": {
+        "calibration": null,
+        "method": null,
+        "p_game": null,
+        "p_series": 0.7,
+        "home1": null,
+        "home2": null,
+        "data_through": null,
+        "start": "2026-10-30T12:00Z"
+      },
+      "alert_at": "2026-10-29T12:00:00+00:00",
+      "backed_team": "B",
+      "probability": "0.3",
+      "trading": {
+        "version": "market-blend-v1",
+        "policy": "blended-net-v1",
+        "model": "2026-10-01T00:00:00+00:00",
+        "trained_through": "2026-09-30T21:00:00+00:00",
+        "market_slope": 1.087254056134923,
+        "gap_slope": 0.34280025852274704,
+        "raw_probability": 0.3
+      }
+    }
+  ],
+  "estimate": {
+    "version": "market-blend-v1",
+    "policy": "blended-net-v1",
+    "model": "2026-10-01T00:00:00+00:00",
+    "trained_through": "2026-09-30T21:00:00+00:00",
+    "market_slope": 1.087254056134923,
+    "gap_slope": 0.34280025852274704,
+    "raw_probability": 0.7,
+    "market_probability": 0.4,
+    "probability": 0.49715100234758314
+  },
+  "refresh": [
+    0.49715100234758314,
+    0.35610639251225196
+  ]
+}
