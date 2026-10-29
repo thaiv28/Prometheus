@@ -1,0 +1,44 @@
+name: Other games
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "27 * * * *"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: games
+  cancel-in-progress: false
+
+jobs:
+  games:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - name: Install dependencies
+        run: uv sync --frozen --no-dev
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-2
+      - name: Restore game feeds
+        env:
+          DATA_BACKUP_BUCKET: ${{ vars.DATA_BACKUP_BUCKET }}
+        run: bash scripts/game_feeds.sh restore
+      - name: Render Other games
+        run: |
+          set -o pipefail
+          uv run python scripts/render_games.py | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Publish Other games
+        env:
+          DEPLOYMENT_BUCKET: ${{ vars.DEPLOYMENT_BUCKET }}
+        run: |
+          if [[ -d output/other ]]; then
+            uv run python scripts/deploy_games.py
+          fi

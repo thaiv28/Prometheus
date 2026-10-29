@@ -4,6 +4,8 @@ Code baseline; read `db/prometheus.db` or the live site for current rankings. Ev
 
 ## Working
 
+- **Other games:** local version-1 JSON feeds render game predictions, live scores, monthly results and downloads with tier filters. DB-free `games.yml` restores S3 feeds and uploads by hash; publish restores the same feeds for navigation. GitHub execution and external dispatch remain unverified.
+
 - **Fresh calls:** hourly prices resumes published Elo with Leaguepedia and worker maps; the worker uploads finished maps and dispatches prices (five-minute debounce). Hourly runs also render Predictions/results and feed refreshed live ratings every five minutes. Registers, head-to-head and home ratings use an hourly build-matched overlay; Form and OE dates stay intact. Fake-based checks cover the handoff; live token/SSM grant and deploy pending.
 
 - **Live-map execution:** live with shared capital, full Kelly, 5% map / 10% map-series caps (validator maxima; pregame $250 order, $1k exposure, $2k day) and same-team filled-contract offsets across strategies; uses 30-second last-trade stability, an earlier-only model/market blend and 5-cent net edge during minutes 5–30. A private outbox feeds an immediate SQS executor with map/Bo1 validation and shared bankroll, with separate map event fences; Bo1s use KXLOLGAME after a KXLOLMAP-…-1 absence check; unarmed maps journal reasons; historical kernel parity passes, but actual asks, fills and latency remain unverified. [Rollout guide](../live_map_execution.md); draft v2 failed the trading benchmark and is not wired in ([evidence](../research/live_map_draft_trading.md)).
@@ -42,6 +44,8 @@ Code baseline; read `db/prometheus.db` or the live site for current rankings. Ev
 - **Live collection:** wake-up depends on the prediction log and can miss fixtures or late starts; historical map-1 discovery gaps remain and future feed availability is provider-dependent. Estimated clocks miss pauses before joining, pregame ratings omit earlier maps that day, and pre-draft book history is absent before worker startup; books record top-five levels every 2s in draft/in game. Production match-day wake/collection/publish/shutdown still needs observation; stream embeds vary and Twitch needs the correct `parent` host (`localhost`, not `127.0.0.1`) ([deployment](deployment.md), [release validation](../research/live_model_release.md)).
 
 ## Future work
+
+- **Other games:** add pre-series trading in the trading Lambda; refresh model DBs and feeds as soon as a series ends.
 
 - Deciding maps (Bo3 map 3, Bo5 map 5): trade the KXLOLGAME market when the series is level
 

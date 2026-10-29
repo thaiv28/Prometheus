@@ -37,7 +37,7 @@ from prometheus.player_tables import PlayerTables
 from prometheus.ranking import load_glory_games
 from prometheus.season import get_luck, get_record, load_season_games
 from prometheus.site import config as site_config
-from prometheus.site import live_results
+from prometheus.site import games, live_results
 from prometheus.site.alert_history import render_alert_history
 from prometheus.site.call_performance import render_call_performance
 from prometheus.site.config import (
@@ -385,6 +385,8 @@ def props_page(fc: Forecasts, teams, pl) -> None:
 
 
 def main():
+    feeds = games.load_feeds()
+    games.install_nav(feeds)
     os.makedirs(site_config.OUTPUT_DIR, exist_ok=True)
     copy_static()
     last_update = datetime.datetime.now().strftime("%B %-d, %Y")
@@ -438,6 +440,7 @@ def main():
     write_team_index(pages)
     render_player_pages(pl.pages)
     write_player_index(pl.listed)
+    games.render_game_pages(feeds, datetime.datetime.now(datetime.UTC))
 
     print(
         f"Static site generated in {site_config.OUTPUT_DIR}/ ({len(pages)} team pages, {len(pl.pages)} player pages)"

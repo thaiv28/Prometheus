@@ -14,17 +14,17 @@
 
 | Path | Purpose |
 |---|---|
-| `prometheus/` | Python metrics and data access. |
-| `prometheus/types.py` | Column enums and feature lists. |
+| `prometheus/` | Metrics/data access. |
+| `prometheus/types.py` | Column enums/features. |
 | `prometheus/matches.py` | Raw-SQL stats joins. |
 | `prometheus/regression.py` | GLORY: `StandardScaler` + `LinearRegression`, target win. |
-| `prometheus/ranking.py` | `get_glory_ranking()`: yearly models, team-season scores and z-scores; published `opponent_adjusted="record"`, retired `"elo"` GLORY+. |
-| `prometheus/season.py` | Record and Luck season stats. |
+| `prometheus/ranking.py` | Yearly GLORY/z-scores; `opponent_adjusted="record"`; retired `"elo"` GLORY+. |
+| `prometheus/season.py` | Record/Luck season stats. |
 | `prometheus/form.py` | Opponent-adjusted recency-weighted pre-game states; league-relative Form; `form_weights.json`. |
 | `prometheus/forge.py` | Within-league Elo/Form blend; cross-league Elo; ratings, head-to-head odds and `forge_weights.json`. |
-| `prometheus/elo.py` | Team/player game-length Elo bootstrap and queries for forecasts, rankings and site. |
+| `prometheus/elo.py` | Team/player game-length Elo bootstrap/queries. |
 | `prometheus/schedule.py`, `team_aliases.json` | Leaguepedia schedule, name matching, odds, S3-backed `data/predictions.json` and scorecard. |
-| `prometheus/live/archive.py`, `scripts/live_archive.sh`, `prometheus/site/live_results.py` | Compact `*.min.json` backups restored for linked results and per-series figures. |
+| `prometheus/live/archive.py`, `scripts/live_archive.sh`, `prometheus/site/live_results.py` | `*.min.json` backups for results/series figures. |
 | `prometheus/live/`, `deploy/live/`, `scripts/live_data.py` | Feed, forecasts, Kalshi, pages, EC2; `deploy/live/cloudwatch-agent.json` ships logs. |
 | `scripts/live_markouts.py` | Offline candidate quote markouts. |
 | `scripts/research/live_latency.py` | Offline lag/veto study; `docs/research/live_latency.md`. |
@@ -34,31 +34,44 @@
 | `scripts/NNN_*.sql\|py` | Ordered DB build steps. |
 | `scripts/download_data.py` | Oracle’s Elixir CSVs; current year/`--full`; newer files only. |
 | `scripts/prediction_log.sh` | S3 log restore/save: fail except missing object, reject shrinking logs; `--if-unchanged` prevents concurrent overwrites. |
-| `scripts/build_site.py`, `prometheus/site/` | Load once, ordered site parts; `site/config.py` registries, columns, paths/limits; modules read patched config paths at call time. |
-| `prometheus/player_tables.py` | Lazy shared `PlayerTables` reads and pandas joins for AURA, Elo history and player logs. |
+| `scripts/build_site.py`, `prometheus/site/` | Ordered site modules; `site/config.py` registries/columns/paths/limits, read at call time. |
+| `prometheus/player_tables.py` | Shared lazy `PlayerTables`: AURA/Elo/logs reads/joins. |
 | `scripts/deploy_site.py` | Hash-changed uploads to bucket `current/`; `deploy/manifest.json`; see `docs/steering/deployment.md`. |
 | `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtests and weight fits; report `docs/metric_backtest.md`. |
-| `prometheus/markets.py`, `prometheus/alerts.py` | Kalshi parsing, quotes, aliases, logged prices and saved alert history and execution candidates. |
+| `prometheus/markets.py`, `prometheus/alerts.py` | Kalshi parsing/quotes/aliases, logged prices/alerts/candidates. |
 | `scripts/update_prices.py` | Hourly `prices.yml`: prices, `kalshi.json`, `predictions.json`, saved candidates/alerts. |
 | `scripts/research/`, `docs/research/` | Research scripts, reports and tests outside published metrics. |
-| `scripts/oneoff/extend_log.py` | `--since` extends logged history using day-before ratings, like the new-log 30-day reconstruction. |
+| `scripts/oneoff/extend_log.py` | `--since`: extend history with day-before ratings (new-log reconstruction). |
 | `scripts/oneoff/backfill_market_prices.py` | `markets.backfill_prices`: last pre-start price for unpriced started matches; marks `backfilled`. |
 | `scripts/research/elo_variants.py`, `scripts/research/elo_variants_*.py` | Opt-in margin replay; tune through 2021, evaluate from 2022; `docs/research/elo_variants_*.md`. |
 | `scripts/evaluate_live.py`, `scripts/live_bench_data.json` | Weekly CI-rebuilt feed/trade replay (release pin fallback); report `docs/live_report.md`; `--dump` minute-band PR guards. |
-| `scripts/evaluate_markets.py` | Calls versus Kalshi pre-match series/map-1 prices and incremental information; report `docs/market_report.md`. |
+| `scripts/evaluate_markets.py` | Calls versus Kalshi series/map-1 prices; `docs/market_report.md`. |
 | `scripts/compare_benchmarks.py`, `scripts/benchmark_comment.sh` | `benchmarks.yml`: paired base/head dumps, regression exit status and sticky PR comment. |
-| `prometheus/props.py`, `props_weights.json`, `scripts/evaluate_props.py` | Published player prop distributions; fitted `props_weights.json`; `--write-weights`, `--dump`; report `docs/props_report.md`. |
+| `prometheus/props.py`, `props_weights.json`, `scripts/evaluate_props.py` | Prop distributions/weights; `--write-weights`, `--dump`; `docs/props_report.md`. |
 | `prometheus/prop_lines.py`, `scripts/collect_props.py`, `scripts/prop_data.sh` | Hourly changed Underdog/Pick6/PrizePicks lines in `data/prop_lines.jsonl`; guarded backups with `data/prop_calls.json`. |
 | `prometheus/props_live.py`, `prometheus/site/props.py`, `scripts/update_props.py` | Props page/results, build `props-dist.json`, hourly DB-free pricing, frozen calls and `props-lines.json`. |
 | `scripts/evaluate_season_stats.py` | Split-half reliability, games to 0.5 and same-season fit; `docs/season_stats_report.md`. |
-| `templates/*.html.j2` | Page templates and `_marks`/`_entry` macros; shared rankings driven by column config. |
+| `prometheus/site/games.py` | Game-feed loading/views/navigation/rendering. |
+| `scripts/game_feeds.sh`, `scripts/render_games.py` | Nonfatal S3 feed restore; DB-free Other games render. |
+| `scripts/deploy_games.py`, `.github/workflows/games.yml` | Hash uploads to `current/other/`, separate `deploy/other-manifest.json`; dispatched/hourly. |
+| `templates/game.html.j2`, `templates/game_results.html.j2` | Game/monthly fixture registers. |
+| `tests/test_games.py`, `tests/fixtures/game_feed.json` | Offline feed checks. |
+| `templates/*.html.j2` | Templates, `_marks`/`_entry` macros; column-config rankings. |
 | `site_static/{css,js,fonts}` | Verbatim copied CSS, vanilla JS and self-hosted OFL Source Serif 4; `tokens.css` colors, league inks and `@font-face`. |
 | `PRODUCT.md`, `.impeccable/surfaces/` | Product and visual direction contract; read before UI work. |
 | `tests/` | Mocked unit, in-memory integration, sample/full-DB `e2e`, and Node `js/` tests. |
 
-**Build cost.** `get_glory_ranking()` reads/fits per year per call. `build_site.py` shares `load_glory_games()` through `games=` across GLORY qualified/all, unadjusted GLORY, GLORB and Luck, one Record fit through `record=`, and `PlayerTables` across player Elo history, AURA and logs. Reads, Form states, AURA snapshot fits, game logs and roughly 7,000 pages/log files dominate builds.
+**Build cost.** Per-year GLORY fits, reads, Form, AURA, logs and ~7,000 pages dominate. Build shares `load_glory_games()` (`games=`), Record (`record=`), and `PlayerTables` across player Elo/AURA/logs.
 
-Site orchestration: `main` loads once, then `render.py` Jinja/small pages, `registers.py` home/rankings, `teams.py`, `players.py`, `predictions.py` page/log/alert and `gamelogs.py`. Tests patch `prometheus.site.config.OUTPUT_DIR`/`PREDICTIONS_LOG` at call time. Templates include `base`, `index`, `rankings`, `predictions`, `team`, `player`, `sunset`, `redirect`, `404`; `_marks` supplies league/signed/ordinal/fixture macros, `_entry` navigation/logs. Assets: `nav.js` menus, `forecast.js` head-to-head, `team.js` Elo SVG, `search.js` header search, `entry.js` logs/section marking with `entry.css`.
+Tests patch `prometheus.site.config.OUTPUT_DIR`/`PREDICTIONS_LOG`. `_marks`: fixture/league macros; `_entry`: navigation/logs.
+
+## Game feeds
+
+`data/games/*.json` (`PROMETHEUS_GAME_FEEDS` override): version-1 feeds; invalid/missing warn/skip. Outputs: navigation, `other/{<game>.html,<game>/<YYYY-MM>.html,<game>.json}`. Publish restores feeds; DB-free `games.yml` restores/renders/uploads `other/`.
+
+Top-level: `version`, `game` (slug), `name`, `model`, `generated`, `data_through`, `source` (`name`, `url`, nullable `license`), ordered `sections` (`key`, `label`, `major`), `matches`. UTC times: `%Y-%m-%dT%H:%MZ`; data-through: date.
+
+Matches: `match_id`, `start`, `status`, `section`, `event`, `best_of` (1/3/5/null), `name1/name2`, `p_game/p_series` (team-1 map/series chances), `reconstructed`, `score1/score2`, `winner` (1/2/null), `url`, `market`. Scores/URLs/market are nullable. Status `upcoming`/`live`/`final`: scheduled/current/finished; live scores are current map wins. Finals form monthly archives; reconstructed calls replay earlier ratings. Market `p/at/url`: Kalshi team-1 mid/timestamp/link; current at export for upcoming/live, last hourly candle at/before start for finals.
 
 ## Metric change rules
 

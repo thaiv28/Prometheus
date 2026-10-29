@@ -21,7 +21,7 @@ Prometheus is served at **https://prometheus.thaiv.dev** from AWS, through the `
 
 The deploy writes straight into `s3://$DEPLOYMENT_BUCKET/current/` and sends only files whose content changed. `s3://$DEPLOYMENT_BUCKET/deploy/manifest.json` (outside `current/`, so not served) holds the SHA-256 of every file of the last deploy. Each run hashes `output/`, uploads the changed and new files, deletes the removed ones, re-uploads `kalshi.json`, `predictions.json` and `alerts.html` with `Cache-Control: max-age=300` every time (see *Hourly Kalshi prices*), and writes the new manifest. The manifest is deleted before any file changes and written only after the upload succeeds, so a failed run leaves none and the next run uploads every file (`aws s3 cp --recursive`, then `aws s3 sync --delete` to remove leftovers). Dispatch the workflow with **full_upload** checked to force that. `aws s3 sync` alone can't skip unchanged files: it compares size and timestamp, and every artifact download is new.
 
-Pages carry no build date (the footer's "Last updated" was removed; only the home page's title line has it), so a page changes only when its content does. Before this, each deploy uploaded all ~11,200 files to `releases/<run id>` and then copied them into `current/` (~22k requests, ~6 of a push run's ~10 minutes).
+Pages carry no build date (the footer's "Last updated" was removed; only the home page's title line has it), so a page changes only when its content does.
 
 The game-log JSON (~110 MB) is uploaded uncompressed: CloudFront's `CachingOptimized` policy already compresses JSON at the edge, and with changed-only uploads most of it isn't re-sent.
 
@@ -120,6 +120,12 @@ The live pages' files (`current/live/index.json`, one per match, `<match>/map<n>
 - No CloudFront invalidation: the distribution’s `CachingOptimized` policy (min TTL 1 s) honours these cache headers. Publish sets the same 30-second headers on both JSON files; alerts and props retain five minutes. `predictions.js` uses `cache: "no-store"` to skip the browser cache; CloudFront still honours the object TTL.
 - Uses the same role as the publish workflow (`AWS_ROLE_ARN`: backup bucket read-write, site bucket write) and the `DATA_BACKUP_BUCKET` and `DEPLOYMENT_BUCKET` variables.
 - **Prop lines (job `props-lines`, added 2026-10-12, backup parser fixed 2026-10-13).** A second job in the same workflow, so the cron-job.org dispatch drives it too: restore `s3://$DATA_BACKUP_BUCKET/prometheus/props/prop_lines.jsonl` (`scripts/prop_data.sh restore`; a missing file starts a new log, any other S3 error fails the job), run `scripts/collect_props.py` (Underdog, Pick6, PrizePicks; a refused source is reported and skipped, never fails the run; only lines that are new or changed are appended), save it back (`prop_data.sh save` refuses a log shorter than the backup). Then it prices the lines (2026-10-14): restore `.../props/prop_calls.json`, copy the last build's projections from the site bucket (`current/props-dist.json`; none yet is fine), run `scripts/update_props.py` (no DB; about a second), save the calls back and upload `props-lines.json` to `current/` with `Cache-Control: max-age=300` (five minutes). It doesn't wait for a publish run: the lines log and the calls are written only by this job (concurrency group `prop-lines`), and the build only reads them. Run 38437402399 read all three sources successfully (Underdog 80, Pick6 24, PrizePicks 128 lines), then failed while saving the extensionless JSONL backup; `prop_data.sh` now counts that backup using the original file format.
+
+## Other games (`.github/workflows/games.yml`)
+
+Main-only, DB-free. Dispatched by cs2-model/valorant-model `feed.yml` (~10 minutes, `PROMETHEUS_DISPATCH_TOKEN`); hourly :27 backup.
+
+`game_feeds.sh restore` reads backup-bucket `<prefix>/feed/<slug>.json.gz` (`cs2:cs2-model`, `valorant:valorant-model`); errors skip. `render_games.py` renders; `deploy_games.py` uploads hash-changed files to `current/other/`, with manifest `deploy/other-manifest.json` removed before changes, saved after success. HTML/JSON: `public, max-age=60`; no invalidation. Publish also restores feeds and writes `other/`; newer content wins. PRs skip restore. Uses publish's role/buckets.
 
 ## International calibration artifact (release 2026-10-15)
 
