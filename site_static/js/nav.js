@@ -15,7 +15,7 @@
       return r.ok ? r.json() : null;
     })
     .then((data) => {
-      if (!data || !Array.isArray(data.matches) || !data.matches.some((m) => ["live", "between_games"].includes(m.status))) return;
+      if (!data || !Array.isArray(data.matches) || !data.matches.some((m) => ["live", "paused", "between_games"].includes(m.status))) return;
       if (!(served - Date.parse(data.published_at) < 600000)) return;
       const link = [...document.querySelectorAll("nav a")].find((a) => a.getAttribute("href") === root + "predictions.html");
       if (!link) return;
