@@ -164,7 +164,7 @@ class CollectorTests(unittest.TestCase):
                 data["frames"][0]["gameState"] = "paused"
                 self.assertEqual(
                     c.process(response("2026-10-04T20:33:33Z", data))["status"],
-                    "unavailable",
+                    "paused",
                 )
                 data["frames"][0]["gameState"] = "finished"
                 self.assertEqual(

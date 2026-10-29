@@ -2,6 +2,34 @@
 
 Older entries moved from `work_log.md`, newest first. Add nothing here by hand.
 
+## 2026-10-26 — Result rows link to series pages minutes after a map
+
+Branch `result-links`, base `origin/main`. Worker uploads maps, results and final pages before dispatch; unsettled snapshots preserve settlement's debounce. Prices restores archives, overlays local links and stages live-results HTML with Predictions/Results; missing/broken archives retain fetched links. Figures embed SVG. Checks: pytest 1,065 passed, 2 skipped (10.14 s); ruff format/check and diff --check passed. Local filesystem-backed S3 shim: `live_archive.sh` 0.770 s new map, 0.093 s cached (one map, cached series record). Warm render medians, five runs: absent 0.0037 s, restored 0.0057 s (+0.0020 s). Added cost enables prompt links without full builds. AWS/API latency and Actions timing unmeasured. Copy review: PASS (no copy changed).
+
+## 2026-10-26 — Shared capital, series cap, position-aware live maps, idle-only restarts
+
+Removed the map budget; pregame and live maps share free capital. Optional global `series_fraction` caps combined held cost; live targets subtract same-team active filled contracts across strategies. Existing map-only caps and legacy budget releases remain. Refresh flags wait until no tracked game is live; worker exit 5 requests systemd restart. Root `deploy/live/install.sh` must run once for the unit change. Added [sizing evidence](../research/pregame_sizing.md) and its CSV-driven script. Checks: ruff format/check; full pytest (1,082 passed, 2 skipped); feed/steering checks (21 passed); research script --help; bash -n; diff --check. Regression checks add no CI job/build step; Actions timing unmeasured. Limit: the global series cap is not enforced atomically across concurrent pregame and map reservations. No SSM values changed; 10% awaits configuration.
+
+## 2026-10-26 — Live model: fixed FORGE offset tested, rejected
+
+Branch `live-offset`, base `1a74d73`. `scripts/research/live_offset.py` ([report](../research/live_offset.md)); viewed test split. D enters logit(FORGE) as an offset (calls start at the pre-map call), fits its fade, drops Elo and calibration: −0.0024 (−0.0062 to +0.0011), 0–20 min better, 30+ worse (+0.0072): FAIL. Diagnosis: production refit on D's maps loses the same at 30+; Elo, calibration and prior source don't matter, the 1,237 dropped maps without FORGE do. F (all maps, Elo prior where FORGE is missing): −0.0008 (−0.0035 to +0.0019), ECE 0.0194 → 0.0086, 30+ still worse (+0.0030, +0.0006 to +0.0054): FAIL; FORGE maps −0.0037 (significant). No runtime change. Checks: ruff, full pytest.
+
+## 2026-10-26 — Live worker: feed back-off, game retries, start tolerance, CloudWatch logs
+
+Audit (Oct 23–26): 13 tracked maps, 2,059 decisions; 1,153 pause-bug skips fixed earlier in #124. GEN v LYON began 20:59Z against Riot's 22:00Z start; ten matches went untracked; HLE v IG dropped on HTTP 404. Shared two-hour start tolerance preserves earlier-day ratings. HTTP 400 doubles per-game lag (30–600s); 30 successes halve it. Other window errors retry for 30 polls; failed IDs expire after 300s. Decisions carry match/game/map; worker events persist except cycles. Rerunnable install configures CloudWatch collection for both logs. Checks: ruff; pytest 1,060 passed, 2 skipped (10.01s; existing cases 11.80s); 13 recovery tests 0.30s; bash -n; diff --check. Actions timing unmeasured. Limit: Riot's longer delay on Oct 24 is inferred, not observed; agent and log groups need the infrastructure PR and an install.sh rerun.
+
+## 2026-10-26 — Live maps: pregame positions, pause check, executor log
+
+BLG v KC 18:20Z: KC (18¢ ask, 30.7% blended) skipped with `existing_fixture_exposure`; pregame KC held the same Bo1 tickers (PR #123 fixed only ledger fences). That exchange check is now pregame-only; positions still count toward exposure. The worker's `flat` compared the last two frames (0.17 s apart), rejecting 81% of BLG v KC polls as paused; it now needs ten seconds of unchanged gold after two minutes, as `feed_timelines.py` defines it for the benchmark. The live handler prints one JSON line per signal (outcome, reason) to CloudWatch. New end-to-end test (outbox → SQS pointer → handler → real Kalshi over faked HTTP → ledger with a pregame position) failed before the fix. Checks: ruff; pause and log tests; full pytest 1,044 passed, 2 skipped. Limit: one candidate per map; worker needs a restart.
+
+## 2026-10-26 — Live maps no longer blocked by pregame fences
+
+Both live candidates so far (DK v G2 10-23, DK at 25¢ vs 34% model; G2 v TES 10-25, TES at 42¢ vs 52%) were rejected: same-side pregame orders held their Bo1 event fences, and pregame held ($4.09, $2.48) exceeded the shared ~$0.93 2% series cap. It would also have blocked Bo3/Bo5 maps. Maps now use MAPEVENT#/MAPSERIES# (shadow sizing too); pregame unchanged apart from storing series_key; old intents release against SERIES#. Checks: ruff; tests for the Bo1 collision, map fence, MAPSERIES# cap and release, legacy release; full pytest (1,037 passed, 2 skipped). Limit: correlated exposure (the live prior reuses the pregame rating) is bounded only by map/series/budget caps; executor redeploys on merge.
+
+## 2026-10-23 — Live feed polls on the window boundary; recorded-page guard
+
+Feed windows start on 10 s boundaries 30 s back, so the newest frame's age is ~20.6 s plus the poll's offset into the cycle (BLG v MKOI: 20.6 s at +0 s rising to 29.8 s at +9 s; median 25.6 s). The worker now polls once per 10 s slot, 0.5 s after it opens (`feed_slot`), and wakes for it: ~5 s fresher on average, no extra requests (`--interval` must be 10, 20 or 30). After a restart the old code wrote BLG v MKOI's waiting page over its recorded map page (restored from `map1.json`); `without_recorded` now skips waiting pages for matches whose file holds frames. Checks: new timing and guard tests; cadence test on slot-aligned clock; full pytest; ruff. Limit: alignment unmeasured live.
+
 ## 2026-10-23 — Live-map delay and fight-veto research; markout script
 
 Research only (`docs/research/live_latency.md`). Production newest-frame age is 22–26 s (median, two maps; ~20 s Riot floor); the replay assumes 21 s. `evaluate_live.py --build-data --lag N --data PATH` builds at another delay. Lag 26 vs 21 (1,772 maps, 30 s rule): 171 vs 183 bets, +8.6% vs +21.3% ROI; paired −1.4¢/map (−3.5 to +0.6), includes zero. Fixed fight/objective veto: −2.0¢/map (−4.0 to −0.2); the 71 bets it removed had +48.7% ROI and +3.9¢ CLV, so no veto. New `scripts/live_markouts.py` reads backed-up candidates (30/60/120 s quote markouts). Checks: ruff; full pytest; both builds and the report run locally. No production, CI or pin change. Limits: reused history, minute samples, tape costs.

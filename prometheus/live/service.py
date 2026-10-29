@@ -1158,7 +1158,11 @@ class Game:
                 p_map = map_prior(p_map, self.forge["rho"], *before)
             game["pregame"] = dict(game["pregame"] or {}, p=p_map, by="FORGE")
             calls = game["calls"]
-            live = calls[-1]["p"] if calls and page["status"] == "live" else None
+            live = (
+                calls[-1]["p"]
+                if calls and page["status"] in {"live", "paused"}
+                else None
+            )
             page["match"]["series"] = {
                 "ours": series_chance(
                     self.forge["p_game"],

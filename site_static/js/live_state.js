@@ -136,7 +136,7 @@ const PrometheusLive = (function () {
     const fold = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const pair = teams.map(fold).sort().join("|");
     return teams.length === 2 && teams.every(Boolean) && matches.some((m) =>
-      ["live", "between_games", "completed"].includes(m.status) &&
+      ["live", "paused", "between_games", "completed"].includes(m.status) &&
       Array.isArray(m.teams) && m.teams.length === 2 &&
       m.teams.map((t) => fold(t.name)).sort().join("|") === pair &&
       (!m.start || Math.abs(time(m.start) - time(start)) < 12 * 3600000));

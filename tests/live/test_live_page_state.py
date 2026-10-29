@@ -79,6 +79,21 @@ class LivePageTests(unittest.TestCase):
             self.assertEqual(page["quality"]["source_age_seconds"], 30)
             self.assertIn("stale", page["note"])
 
+    def test_long_pause_stays_paused_not_unavailable(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = self.make_collector(root)
+            c = Collector(path, "simulated_replay")
+            data = fixture()
+            data["frames"][0]["rfc460Timestamp"] = "2026-10-04T20:33:32Z"
+            data["frames"][0]["gameState"] = "paused"
+            c.process(response("2026-10-04T20:33:33Z", data))
+            c.process(response("2026-10-04T20:45:00Z", data))
+            c.close()
+            state, rows = read_collector(path)
+            page = build_state(state, rows, mapping(), "2026-10-04T20:45:00Z", True)
+            self.assertEqual(page["status"], "paused")
+            self.assertTrue(page["game"]["frames"])
+
     def test_new_swapped_map_has_no_old_frames_and_failure_retains_evidence(self):
         with tempfile.TemporaryDirectory() as root:
             path = self.make_collector(root)

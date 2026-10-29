@@ -11,6 +11,14 @@ from datetime import timedelta
 from pathlib import Path
 
 from .feed import WindowSession, timestamp
+
+# Rejections a paused frame may carry and still mean "paused".
+PAUSE_REASONS = {
+    "source_not_in_game",
+    "duplicate",
+    "out_of_order",
+    "stale_source_timestamp",
+}
 from .requests import utc_now
 
 MODES = {"simulated_replay", "recorded_replay", "network_probe"}
@@ -156,6 +164,8 @@ class Collector:
             status = "finished"
         elif state["unavailable_reason"]:
             status = "unavailable"
+        elif state.get("paused"):
+            status = "paused"
         elif age is not None and age > selection["max_age_seconds"]:
             status = "stale"
         elif last is None:
@@ -249,6 +259,7 @@ class Collector:
             window=window_dump(window),
             last_good=None,
             unavailable_reason=None,
+            paused=False,
         )
         self.state["used_sessions"][selection["session"]] = selection
         return {"selection_changed": True}
@@ -304,11 +315,21 @@ class Collector:
             if row["status"] == "research_candidate":
                 candidates.append(row)
         self.state["window"] = window_dump(window)
+        # A paused game sends frozen frames marked `paused`: not usable, but the
+        # match is still on, so the page says paused rather than unavailable.
+        self.state["paused"] = bool(
+            rows
+            and not candidates
+            and rows[-1]["source_reported_state"] == "paused"
+            and set(rows[-1]["rejection_reasons"]) <= PAUSE_REASONS
+        )
         if candidates:
             self.state["last_good"] = candidates[-1]
             self.state["unavailable_reason"] = None
         elif not rows:
             self.state["unavailable_reason"] = "empty_source_window"
+        elif self.state["paused"]:
+            self.state["unavailable_reason"] = None
         else:
             last_reasons = rows[-1]["rejection_reasons"]
             if any(
@@ -358,7 +379,11 @@ class Collector:
                 result = {"error": self.state["unavailable_reason"]}
             elif action == "deselect":
                 self.state.update(
-                    selection=None, window=None, last_good=None, unavailable_reason=None
+                    selection=None,
+                    window=None,
+                    last_good=None,
+                    unavailable_reason=None,
+                    paused=False,
                 )
                 result = {"selection_cleared": True}
             else:
