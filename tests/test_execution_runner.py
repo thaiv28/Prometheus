@@ -324,7 +324,12 @@ def test_dashboard_wiring_is_best_effort(monkeypatch, failure):
 
     def render(rows, accounts, config, now):
         assert rows == [{"fixture": True}]
-        assert set(accounts) == {"ACCOUNT", "ACCOUNT#cs2", "ACCOUNT#valorant"}
+        assert set(accounts) == {
+            "ACCOUNT",
+            "ACCOUNT#cs2",
+            "ACCOUNT#valorant",
+            "ACCOUNT#dota2",
+        }
         assert config["mode"] == "demo" and now.tzinfo == datetime.UTC
         step("render")
         return "dashboard"
@@ -356,6 +361,7 @@ def test_dashboard_wiring_is_best_effort(monkeypatch, failure):
         assert calls == [
             "get",
             "intents",
+            "get",
             "get",
             "get",
             "get",

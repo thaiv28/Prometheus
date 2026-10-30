@@ -38,7 +38,8 @@
 | `prometheus/player_tables.py` | Shared lazy `PlayerTables`: AURA/Elo/logs reads/joins. |
 | `scripts/deploy_site.py` | Hash-changed uploads to bucket `current/`; `deploy/manifest.json`; see `docs/steering/deployment.md`. |
 | `scripts/evaluate_metrics.py`, `prometheus/evaluation.py` | Forecast backtests and weight fits; report `docs/metric_backtest.md`. |
-| `prometheus/game_blends/*.json` | CS2/Valorant blends copied from the model repos; S3 refits append later months. |
+| `prometheus/other_games.py` | Stdlib non-League registry. |
+| `prometheus/game_blends/*.json` | CS2/Valorant blends; S3 refits append months. |
 | `prometheus/markets.py`, `prometheus/alerts.py` | Kalshi parsing/quotes/aliases, logged prices/alerts/candidates. |
 | `scripts/update_prices.py` | Hourly `prices.yml`: prices, `kalshi.json`, `predictions.json`, saved candidates/alerts. |
 | `scripts/research/`, `docs/research/` | Research scripts, reports and tests outside published metrics. |

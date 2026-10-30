@@ -10,7 +10,7 @@ uv run --no-project --python 3.12 --with pip python -m pip install \
   --platform manylinux2014_x86_64 --implementation cp --python-version 3.12 \
   --target "$stage" -r "$root/deploy/execution/requirements.txt"
 mkdir -p "$stage/prometheus" "$stage/deploy/execution"
-cp "$root/prometheus/__init__.py" "$root/prometheus/alert_contract.py" "$stage/prometheus/"
+cp "$root/prometheus/__init__.py" "$root/prometheus/alert_contract.py" "$root/prometheus/other_games.py" "$stage/prometheus/"
 cp "$root/prometheus/market_blend.py" "$root/prometheus/market_blend.json" "$stage/prometheus/"
 cp "$root/prometheus/live_map.py" "$root/prometheus/live_map_blend.json" "$stage/prometheus/"
 mkdir -p "$stage/prometheus/game_blends"

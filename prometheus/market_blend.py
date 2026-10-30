@@ -11,6 +11,8 @@ import math
 from functools import lru_cache
 from pathlib import Path
 
+from prometheus.other_games import GAMES
+
 VERSION = "market-blend-v1"
 POLICY = "blended-net-v1"
 GAME_VERSION = "game-blend-v1"
@@ -67,7 +69,7 @@ def _validate(game, data):
 def load(game="lol"):
     if game in _INSTALLED:
         return _INSTALLED[game]
-    if game not in {"lol", "cs2", "valorant"}:
+    if game != "lol" and game not in GAMES:
         raise ValueError("unsupported game")
     return _validate(
         game,
@@ -77,7 +79,7 @@ def load(game="lol"):
 
 def install(game, data):
     """Install a validated append-only game refit; failures retain current models."""
-    if game not in {"cs2", "valorant"}:
+    if game not in GAMES:
         return False
     try:
         if isinstance(data, (str, bytes, bytearray)):

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-GAMES=(cs2:cs2-model valorant:valorant-model)
+GAMES=(cs2:cs2-model valorant:valorant-model dota2:dota2-model)
 
 [[ "${1:-}" == restore ]] || { echo "Usage: $0 restore" >&2; exit 2; }
 restored=()

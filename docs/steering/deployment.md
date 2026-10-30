@@ -123,9 +123,9 @@ The live pages' files (`current/live/index.json`, one per match, `<match>/map<n>
 
 ## Other games (`.github/workflows/games.yml`)
 
-Main-only, DB-free. Dispatched by cs2-model/valorant-model `feed.yml` (~10 minutes, `PROMETHEUS_DISPATCH_TOKEN`); hourly :27 backup.
+`prometheus/other_games.py` registers non-League identities/groups/accounts/labels. Dota 2: wired, disabled; blend/infra keys pending. Main-only, DB-free; cs2-model/valorant-model `feed.yml` dispatch (~10 minutes, `PROMETHEUS_DISPATCH_TOKEN`), hourly :27 backup.
 
-`game_feeds.sh restore` reads backup-bucket `<prefix>/feed/<slug>.json.gz` (`cs2:cs2-model`, `valorant:valorant-model`); errors skip. `render_games.py` renders; `deploy_games.py` uploads hash-changed files to `current/other/`, with manifest `deploy/other-manifest.json` removed before changes, saved after success. HTML/JSON: `public, max-age=60`; no invalidation. Publish also restores feeds and writes `other/`; newer content wins. PRs skip restore. Uses publish's role/buckets.
+`game_feeds.sh restore` reads backup-bucket `<prefix>/feed/<slug>.json.gz` (CS2, Valorant, Dota 2); errors skip. `render_games.py` renders; `deploy_games.py` uploads `current/other/` changes; `deploy/other-manifest.json` removed beforehand, saved on success. HTML/JSON: `public, max-age=60`; no invalidation. Publish restores `other/` feeds; newer content wins. PRs skip restore. Shares publish role/buckets.
 
 ## International calibration artifact (release 2026-10-15)
 

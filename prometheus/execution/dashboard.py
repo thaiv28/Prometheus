@@ -6,12 +6,12 @@ from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from zoneinfo import ZoneInfo
 
 from prometheus.alert_contract import kalshi_url
+from prometheus.other_games import GAMES, account_key
 
 PT = ZoneInfo("America/Los_Angeles")
 MARKETS = {
     "lol": ("League", "🟦", "#2563eb"),
-    "cs2": ("CS2", "🟥", "#dc2626"),
-    "valorant": ("Valorant", "🟩", "#16a34a"),
+    **{slug: (game.label, game.emoji, game.color) for slug, game in GAMES.items()},
 }
 ZERO = Decimal(0)
 
@@ -153,7 +153,7 @@ def render(rows, accounts, config, now):
             ),
             ZERO,
         )
-        account = accounts.get("ACCOUNT" if game == "lol" else f"ACCOUNT#{game}") or {}
+        account = accounts.get("ACCOUNT" if game == "lol" else account_key(game)) or {}
         free = max(
             ZERO,
             seeds[game] + number(account.get("realized")) - number(account.get("held")),
