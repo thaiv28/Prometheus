@@ -1,3 +1,7 @@
+## 2026-10-30 — Dota 2 trading live
+
+With the Lambda on main (source hash checked), execution was set off, `games` gained `dota2` ($50; CS2 and Valorant unchanged), and mode set back to live at 19:54 UTC through the configure and mode workflows. Live maps stayed live. Docs only; checks: steering test.
+
 ## 2026-10-30 — Dota 2 blend packaged; live candidates resolve
 
 Added `prometheus/game_blends/dota2.json`, copied from dota2-model's `promdota/blend_artifact.json` (8 monthly snapshots; latest a 1.18, b 0.84, 992 series). A real dota2-model export (10 candidates) gives 20 proposals through `saved_candidates`; read-only `PublicKalshi.resolve` on the 10 events: 6 resolved, 4 had no two-sided quote, none failed identity checks. Dota stays disabled. Checks: pytest, ruff.
