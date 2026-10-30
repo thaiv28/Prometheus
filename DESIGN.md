@@ -285,7 +285,7 @@ Square. Rules are 1 device pixel (0.5px on high-density screens), 2px for bookta
 - Predictions: title and freeze lede with a Record link; hidden-until-active Live now register (Table I); filters and Coming up (Table II); compact Results for seven days (Table III), download and month links. Record and Kalshi comparison are Tables I–II on Call performance; existing edge tables follow as III–IV. The method stays in the duel tooltip and notes.
 
 ### Other games
-- Game pages reuse the fixture register with a Tier column, a Live now score table, Coming up without Blend, recent results and monthly archives. Tier marks use default ink; filters and local times follow Predictions.
+- Game pages reuse the fixture register with a Tier column, a Live now score table (hidden, like Predictions', when the filters leave no live match), Coming up without Blend, recent results and monthly archives. Tier marks use default ink; filters and local times follow Predictions.
 
 ### Market Blend methodology
 

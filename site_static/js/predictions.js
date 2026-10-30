@@ -217,6 +217,8 @@
       if (count) count.textContent = shown === total ? `${total.toLocaleString()} matches.` : `${shown.toLocaleString()}/${total.toLocaleString()} matches.`;
       const empty = $(`[data-empty-for="${which}"]`);
       if (empty) empty.hidden = shown > 0;
+      const section = $(`[data-section-for="${which}"]`);
+      if (section) section.hidden = !shown;
       // The last visible row closes the register with the heavy rule.
       $$("tr.fx-last", table).forEach((tr) => tr.classList.remove("fx-last"));
       const visible = $$("tr.fx:not([hidden])", table);

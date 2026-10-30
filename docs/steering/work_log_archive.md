@@ -2,6 +2,10 @@
 
 Older entries moved from `work_log.md`, newest first. Add nothing here by hand.
 
+## 2026-10-26 — Result rows link to series pages minutes after a map
+
+Branch `result-links`, base `origin/main`. Worker uploads maps, results and final pages before dispatch; unsettled snapshots preserve settlement's debounce. Prices restores archives, overlays local links and stages live-results HTML with Predictions/Results; missing/broken archives retain fetched links. Figures embed SVG. Checks: pytest 1,065 passed, 2 skipped (10.14 s); ruff format/check and diff --check passed. Local filesystem-backed S3 shim: `live_archive.sh` 0.770 s new map, 0.093 s cached (one map, cached series record). Warm render medians, five runs: absent 0.0037 s, restored 0.0057 s (+0.0020 s). Added cost enables prompt links without full builds. AWS/API latency and Actions timing unmeasured. Copy review: PASS (no copy changed).
+
 ## 2026-10-26 — Shared capital, series cap, position-aware live maps, idle-only restarts
 
 Removed the map budget; pregame and live maps share free capital. Optional global `series_fraction` caps combined held cost; live targets subtract same-team active filled contracts across strategies. Existing map-only caps and legacy budget releases remain. Refresh flags wait until no tracked game is live; worker exit 5 requests systemd restart. Root `deploy/live/install.sh` must run once for the unit change. Added [sizing evidence](../research/pregame_sizing.md) and its CSV-driven script. Checks: ruff format/check; full pytest (1,082 passed, 2 skipped); feed/steering checks (21 passed); research script --help; bash -n; diff --check. Regression checks add no CI job/build step; Actions timing unmeasured. Limit: the global series cap is not enforced atomically across concurrent pregame and map reservations. No SSM values changed; 10% awaits configuration.
