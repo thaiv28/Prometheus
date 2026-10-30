@@ -12,6 +12,7 @@ Read only what your change touches. If your task came with a spec naming files a
 - **Metrics, audience, vision:** [Product](docs/steering/product.md).
 - **CI, publishing, data backup, AWS:** [Deployment](docs/steering/deployment.md).
 - **Templates, CSS, JS:** [UI](docs/steering/ui.md), `DESIGN.md` and `PRODUCT.md`. Use the impeccable skill.
+- **Starting a model for a new esport:** [the new-game playbook](docs/playbooks/new_game.md) (Claude skill `new-esport`).
 - **Research that changed no published metric** (in-game models, champions, gol.gg objectives, the broadcast pilot): [`docs/research/README.md`](docs/research/README.md).
 
 Read large docs by section (`grep -n '^## '`, then the lines you need), not whole.
