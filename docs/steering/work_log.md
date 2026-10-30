@@ -1,5 +1,9 @@
 
 
+## 2026-10-30 — Playbook: infra deploy and cron jobs need no human
+
+The owner allowed the agent to merge the infra PR, run the execution `diff`, and deploy when the diff holds only the game's two read keys; anything else stops. Removed H5/H6; cron-job.org jobs use the saved API key. Docs only; checks: steering test.
+
 ## 2026-10-30 — Playbook: cron-job.org key location
 
 Recorded where the cron-job.org API key lives (owner's `~/.config/cron-job.org/api_key`, value not in the repo) and how jobs are created from an existing job's headers; H6 no longer needs the owner. Docs only; checks: steering test.

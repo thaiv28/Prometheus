@@ -26,11 +26,12 @@ Stop, report what is done and exactly what is needed, and wait. Nothing else nee
 | H2 | Phase 1, after `gh repo create` | Adds the new repo to the shared fine-grained token (see **Where things live**) so it can be the repo's `PROMETHEUS_DISPATCH_TOKEN` and the cron-job.org bearer. The agent sets `AWS_ROLE_ARN` and `DATA_BACKUP_BUCKET` itself; if AWS SSO has expired the user runs `! aws sso login`. Until then work offline. |
 | H3 | A data source needs a paid key, a login, or its terms forbid automated access | Decides; never work around terms (HLTV is not scraped) |
 | H4 | Phase 5 gate fails | Chooses: stop; keep the model frozen and recheck the same gate after more holdout months; or override and go to Phase 6 candidate-only (Dota: gate missed by 0.4 points with a significant log-loss edge; the user overrode). Ask with `AskUserQuestion`. |
-| H5 | Phase 6, infra PR opened | Approves the merge and the deploy. The agent runs `deploy-prometheus-execution.yml` with `operation=diff` first and shows the diff; `operation=deploy` only with the user's OK. Merging alone deploys nothing. |
-| H6 | Phase 6, workflows ready | Nothing: the agent creates the cron-job.org jobs with the saved API key (see **Where things live**). The owner only adds the new repo to the shared token at H2. |
-| H7 | Phase 7, candidate-only period done | Configures the game's bankroll in the execution config and flips mode (demo, then live) with `kalshi-execution-control.yml` |
+| H5 | Phase 7, candidate-only period done | Configures the game's bankroll in the execution config and flips mode (demo, then live) with `kalshi-execution-control.yml` |
 
-The agent may on its own: create the GitHub repo, open the holdout once, open infra PRs, and open and merge Prometheus PRs (games stay disabled in the execution config).
+The agent may on its own: create the GitHub repo, open the holdout once, open and merge Prometheus and infra PRs (games stay disabled in the execution config), deploy the execution infra, and create the cron-job.org jobs.
+
+- **Infra deploy (no human step).** After the infra PR's checks pass, merge it, dispatch `deploy-prometheus-execution.yml` with `operation=diff`, and read the diff. Deploy (`operation=deploy`) when it changes only what the PR meant to: for a new game, the Lambda's `GAME_CANDIDATE_KEYS`/`GAME_BLEND_KEYS` and read access to those two `<game>-model/feed/` objects. Anything else (deleted or replaced resources, new roles or permissions beyond those objects, other stacks) is a stop: report it instead of deploying. Check the deploy run succeeded.
+- **cron-job.org (no human step).** The API key is saved (see **Where things live**); create the jobs as described there and confirm the first dispatched runs appear in the repo's Actions.
 
 ## Phase 0: Feasibility (half a day)
 
@@ -121,7 +122,7 @@ Only after the gate passes (or the user overrides at H4). Reuse the CS2, Valoran
 - Docs: `deployment.md` (Other games, execution), `current_state.md`, `docs/kalshi_execution.md`, work log. Site copy review per Prometheus `AGENTS.md` if the game page shows anything new.
 - The game starts disabled in the execution config.
 
-**Infra** (`project-platform-infrastructure`, PR only): add `<game>-model/feed/candidates.json` to `GAME_CANDIDATE_KEYS` and `<game>: <game>-model/feed/blend_artifact.json` to `GAME_BLEND_KEYS` in `lib/prometheus-execution-stack.ts`, plus any bucket permissions the model repo's role needs. Then H5 and H6.
+**Infra** (`project-platform-infrastructure`, PR only): add `<game>-model/feed/candidates.json` to `GAME_CANDIDATE_KEYS` and `<game>: <game>-model/feed/blend_artifact.json` to `GAME_BLEND_KEYS` in `lib/prometheus-execution-stack.ts`, plus any bucket permissions the model repo's role needs. Then merge, diff and deploy as in **Human stops** (no human step), and create the cron-job.org jobs.
 
 Check the wiring live before the first scheduled run: a real `export`, then Prometheus's `saved_candidates` on its `candidates.json` (needs the packaged blend), then read-only `PublicKalshi.resolve` on each event with a parsed test config. Dota: 10 candidates → 20 proposals; 6 resolved, 4 thin books, 0 identity failures.
 
@@ -146,7 +147,7 @@ Dota measured: cold feed 248 s on GitHub (64 page fetches), next run 39 s (1 fet
 
 With the workflows live and the game still disabled, check for at least a week (or 50 fixtures): candidates are fresh (≤3 h), the Lambda resolves the Kalshi markets (read-only `PublicKalshi.resolve`; `no_two_sided_blend_quote` is expected for thin books: the blend needs a contract quoted within 10¢, so count it separately from identity failures), team aliases don't collide across games (League aliases apply only to League), and the frozen calls match the model repo's feed. Fix and record anything that fails.
 
-Then report to the user (H7): gate numbers, trade set, proposed bankroll ($50 seed, League's limits: $250 per order and fixture, $1k exposure, $2k per day, same Kelly settings), what was checked, and what was not. The user configures and flips the mode.
+Then report to the user (H5): gate numbers, trade set, proposed bankroll ($50 seed, League's limits: $250 per order and fixture, $1k exposure, $2k per day, same Kelly settings), what was checked, and what was not. The user configures and flips the mode.
 
 ## Where things live
 
