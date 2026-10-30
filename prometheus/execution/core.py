@@ -13,6 +13,8 @@ from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from prometheus import live_map, market_blend
 from prometheus.alert_contract import CANDIDATE_KIND, GAMES, TRADE_GROUPS, trade_veto
 from prometheus.execution.sizing import QUANTITY_STEP, kelly_order
+from prometheus.other_games import ACCOUNT_KEYS, account_key
+from prometheus.other_games import GAMES as OTHER_GAMES
 
 ZERO = Decimal(0)
 CENT = Decimal(".01")
@@ -49,7 +51,7 @@ class Config:
             raise ValueError("invalid games configuration")
         for game, settings in games.items():
             if (
-                game not in {"cs2", "valorant"}
+                game not in OTHER_GAMES
                 or not isinstance(settings, dict)
                 or set(settings) - {"enabled", "starting_bankroll_usd"}
                 or not isinstance(settings.get("enabled"), bool)
@@ -316,7 +318,7 @@ def plan_order(
     return {
         "alert": copy.deepcopy(alert),
         "environment": config.mode,
-        "account": "ACCOUNT" if game == "lol" else f"ACCOUNT#{game}",
+        "account": "ACCOUNT" if game == "lol" else account_key(game),
         "series_id": alert["series_id"] if is_map else alert["event_ticker"],
         "series_key": (
             f"MAPSERIES#{alert['series_id']}"
@@ -670,11 +672,10 @@ def run(
             validate_alert(alert, config, checked)
             game = alert.get("game", "lol")
             accounts = {
-                name: ledger.get(config.mode, name) or {}
-                for name in ("ACCOUNT", "ACCOUNT#cs2", "ACCOUNT#valorant")
+                name: ledger.get(config.mode, name) or {} for name in ACCOUNT_KEYS
             }
             account = {
-                **accounts["ACCOUNT" if game == "lol" else f"ACCOUNT#{game}"],
+                **accounts["ACCOUNT" if game == "lol" else account_key(game)],
                 "total_held": sum(
                     (decimal(row.get("held", 0)) for row in accounts.values()), ZERO
                 ),

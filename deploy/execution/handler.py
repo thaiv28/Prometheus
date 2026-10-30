@@ -8,6 +8,8 @@ from pathlib import Path
 
 from prometheus import market_blend
 from prometheus.alert_contract import saved_candidates
+from prometheus.other_games import ACCOUNT_KEYS
+from prometheus.other_games import GAMES as OTHER_GAMES
 
 ALIASES_PATH = Path(__file__).with_name("market_aliases.json")
 _BLEND_CHECKED = {}
@@ -21,7 +23,7 @@ def refresh_blends(clients, games):
         if not (entry := entry.strip()):
             continue
         game, separator, key = entry.partition(":")
-        if game not in {"cs2", "valorant"} or not games.get(game, {}).get("enabled"):
+        if game not in OTHER_GAMES or not games.get(game, {}).get("enabled"):
             continue
         if game in _BLEND_CHECKED and now - _BLEND_CHECKED[game] < 3600:
             continue
@@ -178,10 +180,7 @@ def handler(event, context, *, clients=None):
         try:
             state = ledger.get(mode, "DASHBOARD") or {}
             rows = ledger.intents(mode)
-            accounts = {
-                key: ledger.get(mode, key)
-                for key in ("ACCOUNT", "ACCOUNT#cs2", "ACCOUNT#valorant")
-            }
+            accounts = {key: ledger.get(mode, key) for key in ACCOUNT_KEYS}
             body = render(rows, accounts, initial, dt.datetime.now(dt.UTC))
             state = sync_dashboard(
                 cached_secret(clients["secretsmanager"], secret_id),
