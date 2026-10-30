@@ -1,3 +1,7 @@
+## 2026-10-30 — Dota 2 blend packaged; live candidates resolve
+
+Added `prometheus/game_blends/dota2.json`, copied from dota2-model's `promdota/blend_artifact.json` (8 monthly snapshots; latest a 1.18, b 0.84, 992 series). A real dota2-model export (10 candidates) gives 20 proposals through `saved_candidates`; read-only `PublicKalshi.resolve` on the 10 events: 6 resolved, 4 had no two-sided quote, none failed identity checks. Dota stays disabled. Checks: pytest, ruff.
+
 ## 2026-10-30 — Non-League registry and disabled Dota 2
 
 Existing worktree based on origin/main. Added stdlib game registry for execution validation, account scans, blends, alert groups and dashboard identities; included in Lambda packaging, release hashing and change detection. Feed restore includes dota2-model. Dota 2 stays disabled without explicit configuration; no production blend placeholder, since missing artifacts already yield no snapshot. Synthetic tests cover Dota candidates/rules, separate bankroll depletion, untouched other accounts, env parsing and DB-free page rendering. Production blend and infrastructure env keys remain pending. Checks: offline/no-sync full pytest (1,255 passed, 2 skipped; ~10s versus prior log 10.44s), ruff format/check, shell syntax and diff checks passed. No dependencies/CI jobs; one additional account read per scan. AWS/package deployment and Dota URL slug unverified. Copy review: PASS (no site copy changed).

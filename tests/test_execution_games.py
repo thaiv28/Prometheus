@@ -817,9 +817,14 @@ def test_other_game_registry():
     assert core.Config.parse(settings()).raw.get("games", {}) == {}
 
 
-def test_dota_missing_packaged_blend_stays_unavailable():
-    assert not (mb.GAME_PATH / "dota2.json").exists()
-    assert mb.snapshot(NOW, "dota2") is None
+def test_dota_packaged_blend_and_missing_file(monkeypatch, tmp_path):
+    assert mb.load("dota2")["series_ticker"] == "KXDOTA2GAME"
+    monkeypatch.setattr(mb, "GAME_PATH", tmp_path)
+    mb.load.cache_clear()
+    try:
+        assert mb.snapshot(NOW, "dota2") is None
+    finally:
+        mb.load.cache_clear()
 
 
 def test_dota_blend_env_refit(game_artifacts, monkeypatch):
