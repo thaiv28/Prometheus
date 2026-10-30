@@ -307,3 +307,66 @@ def test_fractional_reserve_bounds_maximum_fragment_rounding_without_rebates():
         assert (
             fee_bound(price, quantity, Decimal(".07"), precision) >= worst_fragment_fees
         )
+
+
+@pytest.mark.parametrize("p,c,bankroll", [(".6", ".5", 50), (".73", ".63", 100)])
+def test_held_position_kelly_offsets_contracts_and_preserves_defaults(p, c, bankroll):
+    original = kelly_order(p, c, bankroll, 1000)
+    assert original == kelly_order(p, c, bankroll, 1000, 0, 0)
+    held = Decimal("3.25")
+    extra = kelly_order(p, c, bankroll, 1000, held, held * Decimal(c))
+    assert (
+        abs(Decimal(extra["count"]) - (Decimal(original["count"]) - held))
+        <= QUANTITY_STEP
+    )
+    for n in (Decimal(original["count"]), Decimal(original["count"]) + 1):
+        assert kelly_order(p, c, bankroll, 1000, n, n * Decimal(c)) is None
+
+
+@pytest.mark.parametrize("held_cost", [50, 51])
+def test_held_position_cannot_exhaust_loss_wealth(held_cost):
+    assert kelly_order(".6", ".5", 50, 100, 100, held_cost) is None
+
+
+@pytest.mark.parametrize("position", [("NaN", 0), (0, "Infinity"), (-1, 0), (0, -1)])
+def test_held_position_inputs_must_be_finite_and_nonnegative(position):
+    with pytest.raises(ValueError):
+        kelly_order(".6", ".5", 50, 100, *position)
+
+
+def test_held_position_unequal_cost_matches_exhaustive_growth():
+    p, c, capital, held, cost = 0.75, 0.6, 10, 2.3, 1.1
+    chosen = kelly_order(p, c, capital, 20, held, cost)
+    win_base, loss_base = capital + held - cost, capital - cost
+
+    def value(n):
+        if loss_base - n * c <= 0:
+            return -math.inf
+        return p * math.log1p(n * (1 - c) / win_base) + (1 - p) * math.log1p(
+            -n * c / loss_base
+        )
+
+    optimum = max(value(k / 100) for k in range(2001))
+    assert value(float(chosen["count"])) == pytest.approx(optimum, abs=1e-12)
+
+
+@pytest.mark.parametrize("fixture_cost,expected", [(".63", "1.00"), (".70", None)])
+def test_topup_minimum_and_cumulative_fixture_budget(fixture_cost, expected):
+    _, api, _, _ = harness()
+    account = {
+        "held": fixture_cost,
+        "fixture_leg": 2,
+        "fixture_contracts": "1",
+        "fixture_cost": fixture_cost,
+    }
+    config = Config.parse({**roomy().raw, "fixture_budget_usd": "1.26"})
+    if expected is None:
+        config = Config.parse({**config.raw, "fixture_budget_usd": "1.19"})
+        with pytest.raises(ValueError, match="existing_position_covers_target"):
+            plan_order(saved(), api.routes, config, Decimal(100), NOW, account)
+    else:
+        row = plan_order(saved(), api.routes, config, Decimal(100), NOW, account)
+        assert row["request"]["count"] == expected
+        assert Decimal(row["held"]) + Decimal(fixture_cost) <= config.number(
+            "fixture_budget_usd"
+        )

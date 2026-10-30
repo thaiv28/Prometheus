@@ -1,4 +1,6 @@
-"""Current fixture decisions, at most one IOC order. Money is Decimal, never float.
+"""Current fixture decisions: one IOC per leg, top-ups to the Kelly target.
+
+Money is Decimal, never float.
 
 The ledger owns atomic fixture/event fences and spending reservations. An intent
 that might have reached the exchange is never automatically submitted again.
@@ -19,6 +21,8 @@ from prometheus.other_games import GAMES as OTHER_GAMES
 ZERO = Decimal(0)
 CENT = Decimal(".01")
 GROUPS = TRADE_GROUPS
+MAX_LEGS = 4
+MIN_TOPUP_USD = Decimal(".50")
 
 
 def decimal(value):
@@ -186,6 +190,62 @@ def validate_alert(alert, config, now):
             raise ValueError("invalid_probability_or_price")
 
 
+def topup_position(alert, legs, fences):
+    """Validate a resolved, same-side fixture position before adding a leg."""
+    fixture, event = fences["FIXTURE"], fences["EVENT"]
+    if fixture is None and event is None:
+        return None
+    if (
+        alert.get("kind") != CANDIDATE_KIND
+        or fixture is None
+        or event is None
+        or fixture["intent"] != event["intent"]
+        or not legs
+    ):
+        raise ValueError("duplicate_fixture_or_event")
+    if any(
+        row["alert"]["event_ticker"] != alert["event_ticker"]
+        or row["alert"]["backed_team"] != alert["backed_team"]
+        for row in legs
+    ):
+        raise ValueError("existing_position_other_side")
+    if any(
+        row["status"] in {"intent", "submitting", "submitted", "unknown"}
+        for row in legs
+    ):
+        raise ValueError("pending_order")
+    if any(row["status"] == "settled" for row in legs):
+        raise ValueError("duplicate_fixture_or_event")
+    if len(legs) >= MAX_LEGS:
+        raise ValueError("max_legs")
+    filled = [row for row in legs if row["status"] == "filled"]
+    return {
+        "leg": len(legs) + 1,
+        "contracts": sum(
+            (decimal(row["order"]["fill_count_fp"]) for row in filled), ZERO
+        ),
+        "cost": sum((decimal(row["held"]) for row in filled), ZERO),
+    }
+
+
+def _fixture_position(ledger, alert, environment):
+    # Local import avoids the ledger's dependency on decimal() above.
+    from .ledger import fence_keys
+
+    if alert.get("kind") == live_map.VERSION:
+        if ledger.seen(alert, environment):
+            raise ValueError("duplicate_fixture_or_event")
+        return None
+    fences = dict(
+        zip(
+            ("FIXTURE", "EVENT"),
+            (ledger.get(environment, sk) for sk in fence_keys(alert)),
+        )
+    )
+    legs = ledger.legs(alert, environment) if any(fences.values()) else []
+    return topup_position(alert, legs, fences)
+
+
 def plan_order(
     alert, routes, config, balance, now, account=None, committed=ZERO, exposure=ZERO
 ):
@@ -217,6 +277,8 @@ def plan_order(
         if is_map
         else config.number("kelly_fraction")
     )
+    is_topup = not is_map and "fixture_leg" in account
+    fixture_cost = decimal(account["fixture_cost"]) if is_topup else ZERO
     effective = capital * fraction
     budget = min(
         config.number("order_budget_usd"),
@@ -226,6 +288,8 @@ def plan_order(
         config.number("daily_budget_usd") - committed,
         effective,
     )
+    if is_topup:
+        budget = min(budget, config.number("fixture_budget_usd") - fixture_cost)
     if "series_fraction" in config.raw:
         budget = min(budget, decimal(account["series_room"]))
     if is_map:
@@ -238,6 +302,7 @@ def plan_order(
     if effective <= 0 or budget <= 0:
         raise ValueError("bankroll_or_spending_cap_exhausted")
     candidates = []
+    covers_target = False
     for route in routes:
         age = (now - timestamp(route["at"])).total_seconds()
         age_limit = (
@@ -288,10 +353,30 @@ def plan_order(
             decimal(route["quantity"]),
             budget / (price + unit_fee),
         ).quantize(QUANTITY_STEP, rounding=ROUND_FLOOR)
-        sizing = kelly_order(p, price + unit_fee, effective, cap)
+        if is_topup:
+            # Fractional Kelly scales the free bankroll only; held values stay unscaled.
+            base = capital + fixture_cost
+            sizing = kelly_order(
+                p,
+                price + unit_fee,
+                base * fraction,
+                cap,
+                held_contracts=account["fixture_contracts"],
+                held_cost=fixture_cost,
+            )
+            covers_target |= sizing is None and cap >= QUANTITY_STEP
+            if sizing:
+                sizing.update(
+                    held_contracts=str(account["fixture_contracts"]),
+                    held_cost=str(fixture_cost),
+                )
+        else:
+            sizing = kelly_order(p, price + unit_fee, effective, cap)
         if sizing:
             candidates.append((price, route, sizing, unit_fee, p, net_edge))
     if not candidates:
+        if covers_target:
+            raise ValueError("existing_position_covers_target")
         raise ValueError("price_edge_liquidity_or_balance")
     price, route, sizing, unit_fee, probability, net_edge = min(
         candidates,
@@ -310,12 +395,19 @@ def plan_order(
             "held_contracts": str(held_contracts),
             "count": f"{count:.2f}",
         }
+    if is_topup and count * (price + unit_fee) < MIN_TOPUP_USD:
+        raise ValueError("existing_position_covers_target")
+    identity = alert["fixture_id"]
+    leg_fields = {}
+    if is_topup:
+        leg = account["fixture_leg"]
+        identity = f"{identity}#L{leg}"
+        leg_fields = {"leg": leg, "intent_id": identity}
     client_id = str(
-        uuid.uuid5(
-            uuid.NAMESPACE_URL, f"prometheus:{config.mode}:{alert['fixture_id']}"
-        )
+        uuid.uuid5(uuid.NAMESPACE_URL, f"prometheus:{config.mode}:{identity}")
     )
     return {
+        **leg_fields,
         "alert": copy.deepcopy(alert),
         "environment": config.mode,
         "account": "ACCOUNT" if game == "lol" else account_key(game),
@@ -612,8 +704,7 @@ def run(
             continue
         try:
             validate_alert(alert, config, now)
-            if ledger.seen(alert, config.mode):
-                raise ValueError("duplicate_fixture_or_event")
+            _fixture_position(ledger, alert, config.mode)
             candidates.append(alert)
         except (ValueError, KeyError, TypeError, ArithmeticError):
             result["filtered"] += 1
@@ -650,8 +741,7 @@ def run(
                 and config.raw["live_maps"]["mode"] != "live"
             ):
                 raise ValueError("live_maps_not_activated")
-            if ledger.seen(alert, config.mode):
-                raise ValueError("duplicate_fixture_or_event")
+            position = _fixture_position(ledger, alert, config.mode)
             api = api_for(config.mode)
             resolving = True
             routes = api.resolve(alert, now, config)
@@ -680,6 +770,10 @@ def run(
                     (decimal(row.get("held", 0)) for row in accounts.values()), ZERO
                 ),
             }
+            if position is not None:
+                account.update(
+                    {f"fixture_{key}": value for key, value in position.items()}
+                )
             starting = (
                 config.number("starting_bankroll_usd")
                 if game == "lol"
