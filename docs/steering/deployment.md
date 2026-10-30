@@ -143,6 +143,8 @@ Infrastructure PR #16 provisions `ThaivPrometheusExecution`, separate from EC2/l
 
 Manual `.github/workflows/kalshi-execution-control.yml` exposes off/demo/live through a dedicated main-branch OIDC role limited to the one SSM configuration parameter; it cannot read API credentials or write the ledger. Mode changes renew the activation epoch; candidate forecast timestamps are independent of activation. Initial configuration is off with no budgets; active modes require explicit complete limits. No execution dependency or trading network request is added to site-build/hourly jobs. The existing check job runs two signing tests with the isolated pinned dependency only when execution files change (local warm run 0.723 s); normal tests cover the remaining mocked execution paths. Follow the [execution guide](../kalshi_execution.md).
 
+Pre-match fixtures allow four resolved same-side IOC legs toward Kelly, $0.50 minimum top-up, within caps.
+
 Candidate execution needs a 1-minute schedule (currently 5), Secrets Manager access, and `GITHUB_ISSUES_SECRET_ID` / `GITHUB_ISSUES_REPO` (default `thaiv28/prometheus-trades`). Token: `prometheus/execution/github-issues`, Issues read/write; rotate yearly. Missing secret disables issues; failures never affect trading. Settlements comment and close trade issues without retry. Public writes are disabled; public alert history remains.
 
 Lambda maintains one pinned **📊 Trading dashboard** issue from its ledger, storing issue/hash in the environment's `DASHBOARD` row; updates occur only on content changes.
@@ -155,11 +157,11 @@ Secrets are cached for an hour per warm container (`handler.cached_secret`), so 
 
 ### Blended policy release (deployed 2026-10-16)
 
-The Lambda package now includes stdlib `market_blend.py` and its fitted JSON artifact. The reviewed blended/Kelly runtime is now version-pinned and deployed through main publish `38988256036`. The independent schedule/credential/storage boundaries remain; mode was last verified off. Alerts/page signals include Cloud9 and anti-NA international signals; the private executor vetoes these. A zero `min_after_fee_edge` is supported but still requires strictly positive net edge under conservative execution fees. Existing off/demo/live controls and spending caps remain.
+The Lambda package now includes stdlib `market_blend.py` and its fitted JSON artifact. The reviewed blended/Kelly runtime is now version-pinned and deployed through main publish `38988256036`. Independent schedule/credential/storage boundaries remain. Alerts/page signals include Cloud9 and anti-NA international signals; the private executor vetoes these. `min_after_fee_edge: 0` still requires positive net edge after fees. Existing off/demo/live controls and spending caps remain.
 
 ### Kelly runtime/configuration (deployed 2026-10-16)
 
-The existing package automatically includes stdlib `execution/sizing.py`. New active-mode validation requires explicit positive `starting_bankroll_usd` and `kelly_fraction` in (0,1], alongside all existing limits; off remains valid with unset budgets. Control preserves these fields and never supplies defaults. ACCOUNT gains numeric `realized` through the existing transactional ledger, with no table/index/IAM/schedule change. The new runtime and approved limits are deployed/configured through the workflows below. No live mode switch, order or deposit was performed; funding and activation remain user steps.
+The package includes stdlib `execution/sizing.py`. New active-mode validation requires explicit positive `starting_bankroll_usd` and `kelly_fraction` in (0,1], alongside all existing limits; off remains valid with unset budgets. Control preserves these fields and never supplies defaults. ACCOUNT gains numeric `realized` through the existing transactional ledger, with no table/index/IAM/schedule change. The new runtime and approved limits are deployed/configured through the workflows below. No live mode switch, order or deposit was performed; funding and activation remain user steps.
 
 ### Live preparation (2026-10-16)
 

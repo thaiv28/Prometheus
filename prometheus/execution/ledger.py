@@ -14,6 +14,10 @@ from prometheus import live_map
 from .core import decimal
 
 
+def intent_id(row):
+    return row.get("intent_id") or row["alert"]["fixture_id"]
+
+
 def fence_keys(alert):
     event_prefix = "MAPEVENT" if alert.get("kind") == live_map.VERSION else "EVENT"
     return [
@@ -83,6 +87,32 @@ class DynamoLedger:
             result.extend(
                 json.loads(_decode(item)["payload"]) for item in page.get("Items", [])
             )
+            if not page.get("LastEvaluatedKey"):
+                return result
+            query["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+
+    def legs(self, alert, environment):
+        """Read all fixture legs consistently, retaining their CAS revisions."""
+        query = {
+            "TableName": self.table,
+            "KeyConditionExpression": "pk = :pk AND begins_with(sk, :prefix)",
+            "ExpressionAttributeValues": _item(
+                {
+                    ":pk": f"ENV#{environment}",
+                    ":prefix": f"INTENT#{alert['fixture_id']}",
+                }
+            ),
+            "ConsistentRead": True,
+        }
+        result = []
+        while True:
+            page = self.client.query(**query)
+            for item in page.get("Items", []):
+                item = _decode(item)
+                row = json.loads(item["payload"])
+                if row["alert"]["fixture_id"] == alert["fixture_id"]:
+                    row["revision"] = int(item["revision"])
+                    result.append(row)
             if not page.get("LastEvaluatedKey"):
                 return result
             query["ExclusiveStartKey"] = page["LastEvaluatedKey"]
@@ -210,25 +240,38 @@ class DynamoLedger:
                     {":amount": amount, ":available": cap_value - amount}
                 )
             transactions.append({"Update": update})
-        for sk in fence_keys(plan["alert"]):
+        if plan.get("leg", 1) > 1:
             transactions.append(
                 {
-                    "Put": {
+                    "ConditionCheck": {
                         "TableName": self.table,
-                        "Item": _item(
-                            {**self.key(env, sk), "intent": plan["client_order_id"]}
+                        "Key": _item(
+                            self.key(env, f"FIXTURE#{plan['alert']['fixture_id']}")
                         ),
-                        "ConditionExpression": "attribute_not_exists(pk)",
+                        "ConditionExpression": "attribute_exists(pk)",
                     }
                 }
             )
+        else:
+            for sk in fence_keys(plan["alert"]):
+                transactions.append(
+                    {
+                        "Put": {
+                            "TableName": self.table,
+                            "Item": _item(
+                                {**self.key(env, sk), "intent": plan["client_order_id"]}
+                            ),
+                            "ConditionExpression": "attribute_not_exists(pk)",
+                        }
+                    }
+                )
         transactions.append(
             {
                 "Put": {
                     "TableName": self.table,
                     "Item": _item(
                         {
-                            **self.key(env, f"INTENT#{plan['alert']['fixture_id']}"),
+                            **self.key(env, f"INTENT#{intent_id(plan)}"),
                             "revision": 0,
                             "payload": json.dumps(row, separators=(",", ":")),
                         }
@@ -243,8 +286,8 @@ class DynamoLedger:
                     "TableName": self.table,
                     "Item": _item(
                         {
-                            **self.key(env, f"ACTIVE#{plan['alert']['fixture_id']}"),
-                            "intent_key": f"INTENT#{plan['alert']['fixture_id']}",
+                            **self.key(env, f"ACTIVE#{intent_id(plan)}"),
+                            "intent_key": f"INTENT#{intent_id(plan)}",
                         }
                     ),
                     "ConditionExpression": "attribute_not_exists(pk)",
@@ -269,7 +312,7 @@ class DynamoLedger:
                 self.evidence(row, kind, evidence)
                 row[kind] = {
                     "count": len(evidence),
-                    "prefix": f"EVIDENCE#{row['alert']['fixture_id']}#{kind}#",
+                    "prefix": f"EVIDENCE#{intent_id(row)}#{kind}#",
                 }
         changes = [
             {
@@ -277,9 +320,7 @@ class DynamoLedger:
                     "TableName": self.table,
                     "Item": _item(
                         {
-                            **self.key(
-                                env, f"INTENT#{previous['alert']['fixture_id']}"
-                            ),
+                            **self.key(env, f"INTENT#{intent_id(previous)}"),
                             "revision": row["revision"],
                             "payload": json.dumps(row, separators=(",", ":")),
                         }
@@ -361,9 +402,7 @@ class DynamoLedger:
                 {
                     "Delete": {
                         "TableName": self.table,
-                        "Key": _item(
-                            self.key(env, f"ACTIVE#{previous['alert']['fixture_id']}")
-                        ),
+                        "Key": _item(self.key(env, f"ACTIVE#{intent_id(previous)}")),
                     }
                 }
             )
@@ -384,7 +423,7 @@ class DynamoLedger:
             identity = (
                 value.get("fill_id") or hashlib.sha256(payload.encode()).hexdigest()
             )
-            sk = f"EVIDENCE#{row['alert']['fixture_id']}#{kind}#{identity}"
+            sk = f"EVIDENCE#{intent_id(row)}#{kind}#{identity}"
             try:
                 self.client.put_item(
                     TableName=self.table,

@@ -81,7 +81,12 @@ class AtomicDynamo:
             self.requests.append(copy.deepcopy(TransactItems))
             next_data = copy.deepcopy(self.data)
             for action in TransactItems:
-                op = action.get("Put") or action.get("Update") or action["Delete"]
+                op = (
+                    action.get("Put")
+                    or action.get("Update")
+                    or action.get("Delete")
+                    or action["ConditionCheck"]
+                )
                 item = op.get("Item") or op["Key"]
                 key = self.key(item)
                 old = _decode(next_data.get(key, {}))
@@ -102,6 +107,10 @@ class AtomicDynamo:
                     expected = values.get(f":expected_{field}")
                     if expected is not None and old.get(field, Decimal(0)) != expected:
                         raise Conditional
+                if condition == "attribute_exists(pk)" and not old:
+                    raise Conditional
+                if "ConditionCheck" in action:
+                    continue
                 if "Put" in action:
                     next_data[key] = copy.deepcopy(item)
                 elif "Delete" in action:
@@ -988,3 +997,201 @@ def test_settlement_closes_once_and_preserves_issue_number(close_result, notify_
     assert stored["issue"] == 42 and stored["notified"]
     assert len(closed) == len(notified) == 1
     assert ledger.pending() == []
+
+
+@pytest.mark.parametrize(
+    "case,reason",
+    [
+        ("fresh", None),
+        ("filled", None),
+        ("unfilled", None),
+        ("aborted", None),
+        ("intent", "pending_order"),
+        ("submitting", "pending_order"),
+        ("submitted", "pending_order"),
+        ("unknown", "pending_order"),
+        ("other_team", "existing_position_other_side"),
+        ("other_event", "existing_position_other_side"),
+        ("settled", "duplicate_fixture_or_event"),
+        ("four", "max_legs"),
+        ("different_intent", "duplicate_fixture_or_event"),
+        ("legacy", "duplicate_fixture_or_event"),
+        ("missing_fixture", "duplicate_fixture_or_event"),
+        ("missing_event", "duplicate_fixture_or_event"),
+        ("no_legs", "duplicate_fixture_or_event"),
+    ],
+)
+def test_topup_position_guards(case, reason):
+    from prometheus.execution.core import topup_position
+
+    alert = candidate_proposal()
+    row = {
+        "alert": copy.deepcopy(alert),
+        "status": "filled",
+        "held": "1.89",
+        "order": {"fill_count_fp": "3.00"},
+    }
+    legs = [row]
+    fences = {"FIXTURE": {"intent": "first"}, "EVENT": {"intent": "first"}}
+    if case == "fresh":
+        fences = {"FIXTURE": None, "EVENT": None}
+    elif case in {
+        "intent",
+        "submitting",
+        "submitted",
+        "unknown",
+        "settled",
+        "unfilled",
+        "aborted",
+    }:
+        row["status"] = case
+    elif case == "other_team":
+        row["alert"]["backed_team"] = "B"
+    elif case == "other_event":
+        row["alert"]["event_ticker"] = "OTHER"
+    elif case == "four":
+        legs *= 4
+    elif case == "different_intent":
+        fences["EVENT"]["intent"] = "another-fixture"
+    elif case == "legacy":
+        alert = saved()
+    elif case.startswith("missing_"):
+        fences[case.removeprefix("missing_").upper()] = None
+    elif case == "no_legs":
+        legs = []
+    if reason:
+        with pytest.raises(ValueError, match=reason):
+            topup_position(alert, legs, fences)
+    else:
+        result = topup_position(alert, legs, fences)
+        assert result == (
+            None
+            if case == "fresh"
+            else {
+                "leg": 2,
+                "contracts": Decimal(0 if case in {"unfilled", "aborted"} else 3),
+                "cost": Decimal(0)
+                if case in {"unfilled", "aborted"}
+                else Decimal("1.89"),
+            }
+        )
+
+
+@pytest.mark.parametrize("first_count", ["3.00", "0.00"])
+def test_candidate_ioc_topup_reaches_target_with_distinct_keys(first_count):
+    from prometheus.execution.core import plan_order
+
+    config = settings(
+        order_budget_usd="100",
+        fixture_budget_usd="100",
+        daily_budget_usd="200",
+        max_exposure_usd="100",
+        max_contracts=100,
+    )
+    client, api, ledger, execute = harness(config)
+    candidate_api(api)
+    proposal = candidate_proposal()
+    api.routes[0]["quantity"] = "100"
+    target = Decimal(
+        plan_order(proposal, api.routes, Config.parse(config), Decimal(100), NOW)[
+            "request"
+        ]["count"]
+    )
+    api.routes[0]["quantity"] = "3"
+    assert execute([proposal])["submitted"] == 1
+    if Decimal(first_count):
+        fill(api, count=first_count, price=".60", fee=".09")
+    api.routes[0]["quantity"] = "100"
+    assert execute([proposal])["submitted"] == 1
+    second = ledger.legs(proposal, "demo")[1]
+    assert second["intent_id"] == "f#L2" and second["leg"] == 2
+    assert second["request"]["count"] == f"{target - Decimal(first_count):.2f}"
+    assert api.calls[0]["client_order_id"] != api.calls[1]["client_order_id"]
+    assert ledger.get("demo", "INTENT#f#L2") and ledger.get("demo", "ACTIVE#f#L2")
+    # Give each fake order independent exchange evidence for reconciliation.
+    api.orders[1]["order_id"] = "o2"
+    api.orders[1]["fill_count_fp"] = second["request"]["count"]
+    count = Decimal(second["request"]["count"])
+    api.fill_rows.append(
+        {
+            "fill_id": "fill2",
+            "order_id": "o2",
+            "ticker": api.routes[0]["ticker"],
+            "count_fp": str(count),
+            "yes_price_dollars": ".60",
+            "no_price_dollars": ".40",
+            "fee_cost": str(count * Decimal(".03")),
+            "book_side": "bid",
+        }
+    )
+    api.fills = lambda order_id, expected=None: copy.deepcopy(
+        [f for f in api.fill_rows if f["order_id"] == order_id]
+    )
+    result = execute([proposal])
+    assert result["submitted"] == 0 and result["skipped"] == 1 and result["errors"] == 0
+    assert (
+        next(
+            _decode(v)["reason"]
+            for (_, sk), v in client.data.items()
+            if sk.startswith("SKIP#")
+        )
+        == "existing_position_covers_target"
+    )
+    assert ledger.get("demo", "EVIDENCE#f#L2#fills#fill2")
+    assert ledger.get("demo", "ACTIVE#f#L2")
+    # A later replacement targets only the second leg and removes its active pointer.
+    previous = next(r for r in ledger.legs(proposal, "demo") if r.get("leg") == 2)
+    ledger.abort(previous, "test_cleanup")
+    assert ledger.get("demo", "ACTIVE#f#L2") is None
+    assert ledger.get("demo", "INTENT#f")
+    assert len(api.calls) == 2
+
+
+def test_topup_reserve_requires_fixture_and_does_not_rewrite_fences():
+    client, _, ledger, execute = harness()
+    execute([saved()])
+    execute([])
+    plan = json.loads(ledger.get("demo", "INTENT#f")["payload"])
+    plan.update(leg=2, intent_id="f#L2", client_order_id="second")
+    fences = {
+        key: copy.deepcopy(value)
+        for key, value in client.data.items()
+        if key[1].startswith(("FIXTURE#", "EVENT#"))
+    }
+    del client.data[("ENV#demo", "FIXTURE#f")]
+    assert ledger.reserve(plan, Config.parse(settings()), Decimal(100)) is None
+    client.data.update(fences)
+    assert ledger.reserve(plan, Config.parse(settings()), Decimal(100))
+    puts = [a["Put"]["Item"]["sk"]["S"] for a in client.requests[-1] if "Put" in a]
+    assert puts == ["INTENT#f#L2", "ACTIVE#f#L2"]
+    assert all(client.data[key] == value for key, value in fences.items())
+    assert ledger.reserve(plan, Config.parse(settings()), Decimal(100)) is None
+
+
+def test_fixture_legs_paginate_consistently_filter_prefix_and_preserve_revision():
+    client, _, ledger, execute = harness()
+    execute([saved()])
+    execute([])
+    original_query = client.query
+    item = client.data[("ENV#demo", "INTENT#f")]
+    other = copy.deepcopy(item)
+    payload = json.loads(other["payload"]["S"])
+    payload["alert"]["fixture_id"] = "foobar"
+    other["payload"]["S"] = json.dumps(payload)
+    cursor = _item({"pk": "ENV#demo", "sk": "INTENT#foobar"})
+    calls = []
+
+    def paginated(**query):
+        calls.append(query)
+        assert query["ConsistentRead"] is True
+        assert _decode(query["ExpressionAttributeValues"])[":prefix"] == "INTENT#f"
+        if "ExclusiveStartKey" not in query:
+            return {"Items": [other], "LastEvaluatedKey": cursor}
+        assert query["ExclusiveStartKey"] == cursor
+        return original_query(**query)
+
+    client.query = paginated
+    legs = ledger.legs(saved(), "demo")
+    assert len(calls) == 2 and len(legs) == 1
+    assert legs[0]["revision"] == int(item["revision"]["N"])
+    assert ledger.replace(legs[0], {**legs[0], "reason": "revision_test"})
