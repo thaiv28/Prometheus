@@ -60,6 +60,33 @@ class DynamoLedger:
         )
         return _decode(result["Item"]) if result.get("Item") else None
 
+    def put_meta(self, environment, sk, value):
+        """Store small execution metadata in the environment partition."""
+        self.client.put_item(
+            TableName=self.table,
+            Item=_item({**self.key(environment, sk), **value}),
+        )
+
+    def intents(self, environment):
+        """All intent payloads, including settled history, in one environment."""
+        query = {
+            "TableName": self.table,
+            "KeyConditionExpression": "pk = :pk AND begins_with(sk, :prefix)",
+            "ExpressionAttributeValues": _item(
+                {":pk": f"ENV#{environment}", ":prefix": "INTENT#"}
+            ),
+            "ConsistentRead": True,
+        }
+        result = []
+        while True:
+            page = self.client.query(**query)
+            result.extend(
+                json.loads(_decode(item)["payload"]) for item in page.get("Items", [])
+            )
+            if not page.get("LastEvaluatedKey"):
+                return result
+            query["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+
     def pending(self, environment=None):
         result = []
         environments = (environment,) if environment else ("demo", "live")

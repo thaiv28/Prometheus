@@ -81,7 +81,11 @@ class Response(io.BytesIO):
 
 
 @pytest.mark.parametrize(
-    "game,series", [("cs2", "kxcs2game"), ("valorant", "kxvalorantgame")]
+    "game,series",
+    [
+        ("cs2", "kxcs2game/counter-strike-2-game"),
+        ("valorant", "kxvalorantgame/valorant-game-winner"),
+    ],
 )
 def test_game_issue_link(game, series):
     saved = row()

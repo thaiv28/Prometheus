@@ -1,6 +1,6 @@
-# Work log
+## 2026-10-29 — Private trading dashboard
 
-Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
+Branch `dashboard`, base `close-issues` (PR #136). Added ledger-derived market bankrolls, P&L/ROI, dated charts, positions and results; shared canonical Kalshi links include game slugs. Lambda paginates history, reads accounts and stores issue/hash in `DASHBOARD`. Initialization finds/creates and pins the issue; changed content PATCHes, matching hashes skip GitHub. Failures never affect trading. Checks: offline/no-sync full pytest (1,242 passed, 2 skipped; 10.44s), ruff format/check and diff check passed. Initial document-budget failures were trimmed. Focused dashboard/notify tests: 30 passed, 0.05s. No dependencies/CI jobs added. Copy review: PASS for supplied dashboard headings, tables, chart keys, empty state and footer; copy already minimal. No network or commits. GitHub desktop/phone rendering, pin permissions and deployment unverified. Plain uv startup panicked; checks use the synced environment with offline/no-sync settings.
 
 ## 2026-10-29 — Close settled fill issues
 

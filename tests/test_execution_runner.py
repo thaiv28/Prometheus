@@ -280,3 +280,87 @@ def test_cached_secret_reuses_reads_for_an_hour_and_never_caches_failures():
         with pytest.raises(RuntimeError):
             handler.cached_secret(client, "broken", clock)
     assert reads == ["key", "key", "broken", "broken"]
+
+
+@pytest.mark.parametrize(
+    "failure", [None, "get", "intents", "render", "secret", "sync", "put", "unchanged"]
+)
+def test_dashboard_wiring_is_best_effort(monkeypatch, failure):
+    from prometheus.execution import dashboard, notify
+
+    monkeypatch.setattr(core.Config, "parse", lambda value: value)
+    aws, _ = clients(monkeypatch, {"mode": "demo", "starting_bankroll_usd": "50"})
+    monkeypatch.setenv("GITHUB_ISSUES_SECRET_ID", "issues-secret")
+    monkeypatch.setenv("GITHUB_ISSUES_REPO", "owner/private")
+    aws["s3"] = SimpleNamespace(
+        get_object=lambda **kwargs: {"Body": io.BytesIO(b'{"matches": []}')}
+    )
+    calls = []
+
+    def step(name):
+        calls.append(name)
+        if failure == name:
+            raise RuntimeError("PRIVATE failure")
+
+    def get(mode, key):
+        assert mode == "demo"
+        step("get")
+        return {"issue": 42, "hash": "old"} if key == "DASHBOARD" else {"held": "0"}
+
+    def intents(mode):
+        assert mode == "demo"
+        step("intents")
+        return [{"fixture": True}]
+
+    def put(mode, key, state):
+        assert (mode, key, state) == ("demo", "DASHBOARD", {"issue": 42, "hash": "new"})
+        step("put")
+
+    private = SimpleNamespace(get=get, intents=intents, put_meta=put)
+    monkeypatch.setattr(ledger, "DynamoLedger", lambda *args: private)
+    monkeypatch.setattr(
+        core, "run", lambda *args, **kwargs: {"errors": 0, "submitted": 1}
+    )
+
+    def render(rows, accounts, config, now):
+        assert rows == [{"fixture": True}]
+        assert set(accounts) == {"ACCOUNT", "ACCOUNT#cs2", "ACCOUNT#valorant"}
+        assert config["mode"] == "demo" and now.tzinfo == datetime.UTC
+        step("render")
+        return "dashboard"
+
+    def secret(**kwargs):
+        step("secret")
+        return {"SecretString": "token"}
+
+    def sync(token, repo, body, state):
+        assert (token, repo, body, state) == (
+            "token",
+            "owner/private",
+            "dashboard",
+            {"issue": 42, "hash": "old"},
+        )
+        step("sync")
+        return None if failure == "unchanged" else {"issue": 42, "hash": "new"}
+
+    aws["secretsmanager"] = SimpleNamespace(get_secret_value=secret)
+    monkeypatch.setattr(dashboard, "render", render)
+    monkeypatch.setattr(notify, "sync_dashboard", sync)
+    result = handler.handler({}, None, clients=aws)
+    assert result == {
+        "errors": 0,
+        "submitted": 1,
+        **({"dashboard_updated": 1} if failure is None else {}),
+    }
+    if failure is None:
+        assert calls == [
+            "get",
+            "intents",
+            "get",
+            "get",
+            "get",
+            "render",
+            "secret",
+            "sync",
+            "put",
+        ]
