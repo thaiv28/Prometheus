@@ -2,6 +2,10 @@
 
 Newest first. One entry per substantive change, at most 150 words: what changed, the checks actually run, remaining limits. Put detail in the docs or reports the entry names. Older entries move to [the archive](work_log_archive.md) automatically (see `AGENTS.md`, Work log).
 
+## 2026-10-29 — Close settled fill issues
+
+Branch `close-issues`, base `main`. Fill notifications save the GitHub issue number; settlement comments with won/lost/even and realized P&L, then closes the issue. Legacy rows match exact Ticker/Environment lines across at most three open-issue pages, excluding pull requests and ambiguous matches. CS2/Valorant links use their game series; League links stay unchanged. The execution handler shares its cached token with the close callback. Notification/closure failures remain best effort; settled rows leave pending reconciliation, so failed closes are not retried. No trading, permissions, dependencies or CI jobs changed. Checks: offline/no-sync pytest (1,221 passed, 2 skipped); ruff format/check; diff check. New mocked tests add no external calls; full suite 10.71 seconds. No network or commits; GitHub/Lambda deployment unverified.
+
 ## 2026-10-29 — Game pages hide an empty Live now table
 
 Branch `live-pause`, base `origin/main`. The CS2 page showed Live now with "No matches fit these filters." when its only live matches were tier 3 and the default filter is Majors; Valorant, with nothing live, had no section. `predictions.js` now hides a `data-section-for` section when the filters leave its table empty, matching the LoL Live now (hidden when nothing is in progress); the empty-filter line for live is gone. Checks: pytest, ruff, rendered CS2 page with the live feed at desktop and phone. Copy review: PASS (Live now, Coming up, Results on the CS2 page; cut the live empty-filter line).

@@ -360,7 +360,7 @@ def plan_order(
     }
 
 
-def reconcile(row, api, ledger, pause=False, notify=None):
+def reconcile(row, api, ledger, pause=False, notify=None, close=None):
     """Only release an uncertain reservation after exchange evidence is complete."""
     order = api.lookup(row["client_order_id"], row.get("order_id"))
     if order is None:
@@ -479,14 +479,31 @@ def reconcile(row, api, ledger, pause=False, notify=None):
                 ),
             )
     stored = ledger.replace(row, update)
-    if stored is not None and total > 0 and not row.get("notified") and notify:
+    if stored is not None and total > 0 and not stored.get("notified") and notify:
         try:
-            if notify(update):
-                ledger.replace(
-                    stored, {**update, "notified": dt.datetime.now(dt.UTC).isoformat()}
-                )
+            issue = notify(update)
+            if issue:
+                update = {**stored, "notified": dt.datetime.now(dt.UTC).isoformat()}
+                if type(issue) is int:
+                    update["issue"] = issue
+                stored = ledger.replace(stored, update)
         except Exception:
             pass  # Best effort; pending filled intents retry on reconciliation.
+    if (
+        stored is not None
+        and stored["status"] == "settled"
+        and total > 0
+        and not stored.get("issue_closed")
+        and close
+    ):
+        try:
+            if close(stored):
+                ledger.replace(
+                    stored,
+                    {**stored, "issue_closed": dt.datetime.now(dt.UTC).isoformat()},
+                )
+        except Exception:
+            pass  # Settled rows leave pending(); failed closes are not retried.
     return True
 
 
@@ -548,6 +565,7 @@ def run(
     *,
     reconcile_existing=True,
     notify=None,
+    close=None,
 ):
     """Run privately; return counters only, never credentials/account contents.
 
@@ -570,7 +588,12 @@ def run(
             api = api_for(row["environment"])
             result["reconciled"] += int(
                 reconcile(
-                    row, api, ledger, config.mode != row["environment"], notify=notify
+                    row,
+                    api,
+                    ledger,
+                    config.mode != row["environment"],
+                    notify=notify,
+                    close=close,
                 )
             )
         except Exception:

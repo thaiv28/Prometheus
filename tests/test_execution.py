@@ -934,3 +934,57 @@ def test_bulk_quotes_fetched_once_and_only_good_side_reaches_resolve():
     assert result["submitted"] == 1 and result["filtered"] == 1
     assert fetched == [True] and resolved == ["A"]
     assert not any("SKIP#" in key[1] for key in client.data)
+
+
+@pytest.mark.parametrize("close_result", [True, False, "raise"])
+@pytest.mark.parametrize("notify_first", [True, False])
+def test_settlement_closes_once_and_preserves_issue_number(close_result, notify_first):
+    _, api, ledger, execute = harness()
+    execute([saved()])
+    fill(api)
+    notified, closed = [], []
+
+    def notify(row):
+        notified.append(row)
+        return 42
+
+    def close(row):
+        closed.append(copy.deepcopy(row))
+        assert row["status"] == "settled" and row["issue"] == 42
+        assert row["notified"] and row["realized_profit"] == "1.19"
+        if close_result == "raise":
+            raise RuntimeError("private close failure")
+        return close_result
+
+    def reconcile():
+        result = run(
+            [],
+            lambda: settings(),
+            ledger,
+            lambda env: api,
+            NOW,
+            notify=notify,
+            close=close,
+        )
+        assert result["errors"] == 0
+
+    if notify_first:
+        reconcile()
+        assert ledger.pending()[0]["issue"] == 42
+        assert closed == []
+    api.settlement_rows = [
+        {
+            "ticker": "KXLOLGAME-F-A",
+            "market_result": "yes",
+            "yes_count_fp": "3",
+            "no_count_fp": "0",
+            "revenue": 300,
+        }
+    ]
+    reconcile()
+    reconcile()
+    stored = json.loads(ledger.get("demo", "INTENT#f")["payload"])
+    assert bool(stored.get("issue_closed")) is (close_result is True)
+    assert stored["issue"] == 42 and stored["notified"]
+    assert len(closed) == len(notified) == 1
+    assert ledger.pending() == []
