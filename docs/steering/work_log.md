@@ -1,3 +1,9 @@
+
+
+## 2026-10-30 — Playbook: lessons from the Dota 2 run
+
+`docs/playbooks/new_game.md` now names dota2-model as a reference and records what the run taught: commit only on green tests, never print secrets, verify workers live; concrete H2/H4/H5/H6 steps (shared fine-grained token, override option, diff-then-deploy, cron-job.org API); Kalshi live vs historical endpoints; Liquipedia, OpenDota and local-setup traps; stage-1-only runs and the stage-2 look budget; Dota ladder results; the Prometheus game registry; live wiring check; CI backups and single rebuild; a **Where things live** section with lookups, no values. The cron-job.org key location is pending. Docs only; checks: steering test.
+
 ## 2026-10-30 — Playbook: seeding S3 from a Mac
 
 Phase 6 now lists what to seed before the first scheduled run and the macOS `tar` flags that keep `._*` files out (they broke dota2-model's first refresh). Docs only; checks: steering test.
@@ -33,27 +39,3 @@ CS2/Valorant configuration now requires enabled objects with their own positive 
 ## 2026-10-29 — CS2 and domestic Valorant series execution prepared
 
 Branch `game-trading`, base `main`. Lambda accepts private CS2/domestic Valorant series candidates keyed by Kalshi names, blends current mids with frozen per-game coefficients (`prometheus/game_blends/`, copied from the model repos' `blend_artifact.json`; clip 0.01), then uses shared fees, Kelly, caps and ledger fences. League output is regression-pinned; League team aliases apply only to League ("DRX" → "Kiwoom DRX" would block Valorant DRX). Games start off: execution off → Configure `games` → mode on. `GAME_CANDIDATE_KEYS` (infra PR #25) names `cs2-model/feed/candidates.json`, `valorant-model/feed/candidates.json`. Valorant international never trades; Cloud9 veto stays universal. Checks: pytest (1,150 passed), ruff; real candidates give 62 CS2 / 6 Valorant proposals; blend matches the model repos' formula; read-only `PublicKalshi.resolve` on 11 live events: 6 resolved, 5 had no two-sided quote, none failed identity checks.
-
-## 2026-10-29 — Executor caches its Kalshi key for an hour
-
-Branch `secret-cache`, base `main`. The 1-minute execution Lambda read its Kalshi key (and the fill-issue token) from Secrets Manager on every live invocation; each read is a KMS request, which reached 18,271 of KMS's 20,000 free monthly requests on 2026-10-29 (`aws freetier get-free-tier-usage`). `handler.cached_secret` keeps each secret for an hour in a warm container, keyed by secret ID because each invocation makes new boto3 clients (failures are never cached); the live-map handler uses it too. Expected: a few hundred KMS requests a month instead of ~43,000. A rotated key takes effect within an hour. Checks: pytest (execution tests and full suite), ruff. No schedule, IAM or config change; ships through the usual execution release.
-
-## 2026-10-29 — Other games CI publishing
-
-Branch `game-feed`, building on phase 1 HEAD. Added DB-free `games.yml` (model-job dispatch/hourly backup), nonfatal `game_feeds.sh` restore, `render_games.py`, shared navigation installation and `deploy_games.py`. Inputs: backup bucket `{cs2-model,valorant-model}/feed/{cs2,valorant}.json.gz`; outputs: site `current/other/`, hash manifest `deploy/other-manifest.json`, 60-second cache. Publish restores the same feeds. Real-feed render: cs2 + valorant, 22 HTML pages, 7.136 s (previously no standalone job); added CI cost keeps calls fresh without a full build. Checks: pytest (1,104 passed, 2 skipped), ruff format/check, bash syntax, diff check; seven new tests: 1.04 s including startup. Limits: not run on GitHub yet; depends on model repos' `feed.yml` and cron-job.org dispatch; S3 timing and deployment unverified offline. No UI/copy changes.
-
-## 2026-10-29 — Generic game-feed predictions and results
-
-Branch `game-feed`, base `main`. Added an Other games menu and pages `other/<game>.html` (with monthly results and a JSON download) rendered from `data/games/*.json` feeds (`PROMETHEUS_GAME_FEEDS` override), written by cs2-model and valorant-model `export`. `games/` already holds the game logs, so pages live under `other/`. The fixture register gains Tier/filter labels, unknown best-of and optional Blend; League pages render byte-identically. Invalid feeds warn and skip; no feeds means no menu. Feeds are local only. Cost: full build 78 s with both real feeds; game pages alone 5 ms per fixture feed. CS2 month pages run to 3.7 MB (all tiers). Checks: pytest (1,097 passed), ruff, `node --check`, JS tests, full build, desktop/phone screenshots. Copy review: PASS (game page, month page: lede, captions, notes, empty states; already minimal, nothing cut).
-
-## 2026-10-28 — Raised trading limits from a 2027 sizing simulation
-
-Branch `map-caps`, base `main`. A scratch Monte Carlo (46 weeks; pregame picks and live 30 s-stability bets bootstrapped by week) ranked 90 configs with fills 1¢ worse. Best downside/median: pregame full Kelly, 10% series cap, live maps full Kelly at 5% map/10% series, $250 order/$1k exposure/$2k day: median $13.3k from $50, 10th percentile $1.1k, 1% below seed; old config median $1.7k, 7% below seed. Applied in SSM (off → configure → live): $250 order/fixture, $1k exposure, $2k day. Live-map validator maxima raised to Kelly 1, 5% map, 10% series; values applied after deploy. Checks: pytest, ruff. Limits: edges selected on the same history; live edge priced from tapes; book depth for $250 orders unmodelled.
-
-## 2026-10-28 — Kalshi markets listed a day off still match
-
-Branch `kalshi-day`, base `main`. Kalshi listed T1 v MKOI (Worlds, 28 Oct 4 PM EDT) as 29 Oct, so the live worker's exact-date `contract()` and the static page's 18-hour `MATCH_WINDOW` both skipped it. `contract()` now falls back to a lone event a day either side when none is on the date; `attach_prices`/`backfill_prices` take a lone market within 18h + `DAY_SLIP` (1 day) when none is within 18h. Ambiguous fallbacks give nothing. Pregame and live trading use the same `contract()`. Checked: the fix matches the real open T1 v MKOI series and map 1–2 markets. Checks: pytest (1,089 passed, 2 skipped), ruff format/check. No forecast or benchmark input changed; no CI cost. Copy review: PASS (no copy changed).
-
-## 2026-10-28 — Live table: start time for waiting matches
-
-Branch `waiting-start`, base `main`. Predictions page Table I caption drops the match count and "updated N s ago"; it keeps "Matches in progress." plus the stalled/unreachable warnings. A row waiting for its first map shows the start time in Pacific time (`2:00 AM PDT`) under "Waiting". Checks: pytest (1,087 passed, 2 skipped), ruff check, `node --check`, JS tests. Not checked against a live feed. Copy review: PASS (Table I caption cut to its heading; warnings kept as material caveats).
