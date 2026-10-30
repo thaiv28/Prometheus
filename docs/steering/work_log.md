@@ -1,3 +1,7 @@
+## 2026-10-30 — Playbook: CI cost rules
+
+Added **CI cost rules** to `docs/playbooks/new_game.md` Phase 6 (public repo, cadence from the consumer, stdlib gate before setup, incremental fetching, skip unchanged work, cheap setup) and changed Phase 1 to create model repos public: dota2-model was created private, which made its 10-minute feed billable (estimated 4,320–11,520 minutes a month). Phase 6 cadences now 15 min (gated) and 3 h; Phase 7 notes thin-book `no_two_sided_blend_quote`. Docs only; checks: pytest (steering).
+
 ## 2026-10-29 — New-esport playbook
 
 Branch `new-game-playbook`, base `origin/main`. Added `docs/playbooks/new_game.md`: the CS2/Valorant path for a new game in eight phases (feasibility, scaffold, data, baseline, refinement ladder, holdout gate, trading wiring, candidate-only run), with seven human stops and the steps an agent may take alone (repo creation, opening the holdout, infra PRs, Prometheus PRs). Gate: holdout blended flat ROI interval excludes 0 on a trade set fixed before opening; the plateau is the end of the nine-idea ladder. A `new-esport` skill and an AGENTS.md link point to it. Checks: pytest, ruff; links checked by hand. Limit: Phase 6 file list reflects the hard-coded game sets of 2026-10-29.

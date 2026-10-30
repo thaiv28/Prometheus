@@ -44,7 +44,7 @@ Copy the newer of the two reference repos for the data source type (cs2-model fo
 - `AGENTS.md` (edit: what this is, data source rules, window dates), `README.md`, `pyproject.toml` (package `<pkg>`, CLI `prom<abbr>`), `.githooks/`, `.github/workflows/ci.yml`, `scripts/work_log.py`, `tests/test_steering.py`.
 - `docs/steering/{product,tech,current_state,deployment}.md`, empty `work_log.md` and `work_log_archive.md`, `docs/research/README.md` with the rules header.
 - `uv sync`, `git config core.hooksPath .githooks`, tests green, first commit.
-- `gh repo create thaiv28/<game>-model --private --source . --push`. Then H2 (don't block on it; keep going offline).
+- `gh repo create thaiv28/<game>-model --public --source . --push` (public like cs2-model and valorant-model: Actions minutes are free on public repos; private data goes to S3, never the repo, and `.env` stays gitignored). Then H2 (don't block on it; keep going offline).
 
 ## Phase 2: Data
 
@@ -97,7 +97,7 @@ Only after the gate passes. Reuse the CS2 and Valorant wiring throughout.
 **Model repo** (copy from cs2-model):
 
 - `<pkg>/feed.py` and `<pkg>/trading.py`: `feed-state` snapshot (`feed/state.pkl.gz`), `export` (public site feed `feed/<game>.json`, version 1), private `feed/candidates.json` (raw series chances keyed by Kalshi team names, group `<game>-series`), `feed/blend_artifact.json` (`game-blend-v1`, monthly earlier-only fits, clip 0.01). Edit the Kalshi rules regex for the game's wording.
-- Workflows: `kalshi-collect.yml` (6-hourly), `refresh-db.yml` (hourly crawl, input-hash cache, seed tarball), `feed.yml` (10 minutes, DB-free, dispatches Prometheus `games.yml`). All use OIDC in us-west-2 and keys under `<game>-model/`. Measure their runtime.
+- Workflows: `kalshi-collect.yml` (6-hourly), `refresh-db.yml` (every 3 hours, input-hash cache, seed tarball), `feed.yml` (every 15 minutes behind a stdlib change gate, DB-free, dispatches Prometheus `games.yml` only when the public feed changed). Follow **CI cost rules** below. All use OIDC in us-west-2 and keys under `<game>-model/`. Measure their runtime.
 
 **Prometheus** (PR, merge yourself). The game list is currently hard-coded as `{"cs2", "valorant"}`; if it still is, first replace those sets with one registry (slug → series ticker, rules word, groups), then add the game:
 
@@ -111,9 +111,20 @@ Only after the gate passes. Reuse the CS2 and Valorant wiring throughout.
 
 **Infra** (`project-platform-infrastructure`, PR only): add `<game>-model/feed/candidates.json` to `GAME_CANDIDATE_KEYS` and `<game>: <game>-model/feed/blend_artifact.json` to `GAME_BLEND_KEYS` in `lib/prometheus-execution-stack.ts`, plus any bucket permissions the model repo's role needs. Then H5 and H6.
 
+### CI cost rules
+
+Scheduled jobs run thousands of times a month, so design them for cost before writing them, and record the estimate and the measured minutes in the model repo's `deployment.md` Cost section.
+
+- **Public repo.** Standard runners are free on public repos; on private repos GitHub bills each job rounded up to a whole minute. A 10-minute job on a private repo is ≥ 4,320 billed minutes a month on its own.
+- **Cadence follows the consumer.** Execution candidates only need to be younger than the Lambda's `CANDIDATE_MAX_AGE` (3 h) and to pick up new fixtures; site prices are the only reason for minutes-level runs. Ratings change only when results land.
+- **Gate before setup.** A stdlib script that checks whether inputs changed (source revision IDs, Kalshi's open events) runs before checkout of the full repo and `uv sync`, and ends the run in seconds when nothing changed, with a forced run often enough to keep candidates fresh.
+- **Fetch incrementally.** Ask sources for revision IDs first and download only changed content; cache listings; never refetch finished games.
+- **Skip unchanged work.** Cache builds by input hash; skip uploads whose content hash matches; dispatch downstream only on change.
+- **Cheap setup.** `uv sync --frozen --no-dev` with the uv cache, sparse checkout where possible, `timeout-minutes` on every job; docs-only pushes run only lint and the steering test.
+
 ## Phase 7: Candidate-only run and handoff
 
-With the workflows live and the game still disabled, check for at least a week (or 50 fixtures): candidates are fresh (≤3 h), the Lambda resolves the Kalshi markets (read-only `PublicKalshi.resolve`), team aliases don't collide across games (League aliases apply only to League), and the frozen calls match the model repo's feed. Fix and record anything that fails.
+With the workflows live and the game still disabled, check for at least a week (or 50 fixtures): candidates are fresh (≤3 h), the Lambda resolves the Kalshi markets (read-only `PublicKalshi.resolve`; `no_two_sided_blend_quote` is expected for thin books: the blend needs a contract quoted within 10¢, so count it separately from identity failures), team aliases don't collide across games (League aliases apply only to League), and the frozen calls match the model repo's feed. Fix and record anything that fails.
 
 Then report to the user (H7): gate numbers, trade set, proposed bankroll ($50 seed, League's limits: $250 per order and fixture, $1k exposure, $2k per day, same Kelly settings), what was checked, and what was not. The user configures and flips the mode.
 
