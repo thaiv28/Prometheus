@@ -1,5 +1,9 @@
 
 
+## 2026-10-30 — Playbook: cron-job.org key location
+
+Recorded where the cron-job.org API key lives (owner's `~/.config/cron-job.org/api_key`, value not in the repo) and how jobs are created from an existing job's headers; H6 no longer needs the owner. Docs only; checks: steering test.
+
 ## 2026-10-30 — Playbook: lessons from the Dota 2 run
 
 `docs/playbooks/new_game.md` now names dota2-model as a reference and records what the run taught: commit only on green tests, never print secrets, verify workers live; concrete H2/H4/H5/H6 steps (shared fine-grained token, override option, diff-then-deploy, cron-job.org API); Kalshi live vs historical endpoints; Liquipedia, OpenDota and local-setup traps; stage-1-only runs and the stage-2 look budget; Dota ladder results; the Prometheus game registry; live wiring check; CI backups and single rebuild; a **Where things live** section with lookups, no values. The cron-job.org key location is pending. Docs only; checks: steering test.
