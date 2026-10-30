@@ -1,12 +1,13 @@
 """Best-effort private fill issues; credentials and response bodies stay private."""
 
 import datetime as dt
+import hashlib
 import json
 import re
 import urllib.request
 from decimal import Decimal
 
-from prometheus.alert_contract import GAMES
+from prometheus.alert_contract import kalshi_url
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -27,16 +28,12 @@ def github_issue(token, repo, row, opener=None):
         start = dt.datetime.fromisoformat(
             alert["start"].replace("Z", "+00:00")
         ).astimezone(dt.UTC)
-        market_path = "kxlolgame/league-of-legends-game"
-        if alert.get("game") in {"cs2", "valorant"}:
-            market_path = GAMES[alert["game"]]["series"].lower()
         payload = {
             "title": f"Bought {count} {alert['backed_team']} at {average:.2f}",
             "body": "\n".join(
                 [
                     f"{' vs '.join(alert['teams'])} — {start:%Y-%m-%d %H:%M} UTC",
-                    f"https://kalshi.com/markets/{market_path}/"
-                    + alert["event_ticker"].lower(),
+                    kalshi_url(alert),
                     f"Contracts: {count}",
                     f"Average price: {average:.2f}",
                     f"Fees: ${Decimal(row['actual_fees']):.4f}",
@@ -142,3 +139,83 @@ def close_issue(token, repo, row, opener=None) -> bool:
             return response.status == 200
     except Exception:
         return False
+
+
+def sync_dashboard(token, repo, body, state, opener=None) -> dict | None:
+    """Update one dashboard only on content changes; failures stay private."""
+    try:
+        digest = hashlib.sha256(body.encode()).hexdigest()
+        if digest == state.get("hash"):
+            return None
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+            return None
+        transport = opener or urllib.request.build_opener(NoRedirect())
+        base = f"https://api.github.com/repos/{repo}/issues"
+        title = "📊 Trading dashboard"
+
+        def request(url, method="GET", payload=None):
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode() if payload is not None else None,
+                method=method,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                    "User-Agent": "prometheus-executor",
+                    "Content-Type": "application/json",
+                },
+            )
+            with transport.open(req, timeout=10) as response:
+                if response.status != (
+                    201 if method == "POST" and url == base else 200
+                ):
+                    raise ValueError("dashboard_request_failed")
+                return json.load(response)
+
+        number = state.get("issue")
+        if isinstance(number, Decimal) and number == number.to_integral_value():
+            number = int(number)
+        initial = not number
+        issue = None
+        created = False
+        if initial:
+            page = 1
+            while True:
+                issues = request(f"{base}?state=open&per_page=100&page={page}")
+                issue = next(
+                    (
+                        item
+                        for item in issues
+                        if item.get("title") == title and "pull_request" not in item
+                    ),
+                    None,
+                )
+                if issue or len(issues) < 100:
+                    break
+                page += 1
+            if issue:
+                number = issue["number"]
+            else:
+                issue = request(base, "POST", {"title": title, "body": body})
+                created = True
+                number = issue["number"]
+        if type(number) is not int or number <= 0:
+            return None
+        if not created and (not initial or issue.get("body") != body):
+            request(f"{base}/{number}", "PATCH", {"body": body})
+        if initial:
+            # Pin once when adopting/creating the issue, never on steady-state updates.
+            pinned = request(
+                "https://api.github.com/graphql",
+                "POST",
+                {
+                    "query": "mutation($id: ID!) { pinIssue(input: {issueId: $id}) { issue { id } } }",
+                    "variables": {"id": issue["node_id"]},
+                },
+            )
+            if pinned.get("errors"):
+                return None
+        return {"issue": number, "hash": digest}
+    except Exception:
+        return None

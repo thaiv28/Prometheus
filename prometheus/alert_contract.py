@@ -13,9 +13,21 @@ from decimal import Decimal, InvalidOperation
 from prometheus import market_blend
 
 GAMES = {
-    "lol": {"series": "KXLOLGAME", "rules_word": "League of Legends"},
-    "cs2": {"series": "KXCS2GAME", "rules_word": "CS2"},
-    "valorant": {"series": "KXVALORANTGAME", "rules_word": "Valorant"},
+    "lol": {
+        "series": "KXLOLGAME",
+        "rules_word": "League of Legends",
+        "kalshi_slug": "league-of-legends-game",
+    },
+    "cs2": {
+        "series": "KXCS2GAME",
+        "rules_word": "CS2",
+        "kalshi_slug": "counter-strike-2-game",
+    },
+    "valorant": {
+        "series": "KXVALORANTGAME",
+        "rules_word": "Valorant",
+        "kalshi_slug": "valorant-game-winner",
+    },
 }
 GAME_GROUPS = {"cs2-series": "cs2", "valorant-domestic": "valorant"}
 
@@ -44,6 +56,15 @@ TRADE_GROUPS = GROUPS - {"other-cross-league", "valorant-international"}
 _PLAIN_LETTERS = str.maketrans(
     {"ø": "o", "æ": "ae", "œ": "oe", "ß": "ss", "đ": "d", "ł": "l", "þ": "th"}
 )
+
+
+def kalshi_url(alert):
+    """Canonical event link shared by execution issues and the dashboard."""
+    game = GAMES[alert.get("game", "lol")]
+    return (
+        f"https://kalshi.com/markets/{game['series'].lower()}/"
+        f"{game['kalshi_slug']}/{alert['event_ticker'].lower()}"
+    )
 
 
 def fold(name):
