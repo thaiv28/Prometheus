@@ -111,6 +111,8 @@ Only after the gate passes. Reuse the CS2 and Valorant wiring throughout.
 
 **Infra** (`project-platform-infrastructure`, PR only): add `<game>-model/feed/candidates.json` to `GAME_CANDIDATE_KEYS` and `<game>: <game>-model/feed/blend_artifact.json` to `GAME_BLEND_KEYS` in `lib/prometheus-execution-stack.ts`, plus any bucket permissions the model repo's role needs. Then H5 and H6.
 
+Seed S3 before the first scheduled run: the Kalshi archive (`kalshi manifest` + `kalshi_data.sh push`), the raw source prefixes, and `seed/raw.tar.zst`. On a Mac build the tarball with `COPYFILE_DISABLE=1 tar --no-mac-metadata --no-xattrs`: plain macOS `tar` adds `._*` files that break cache loaders and get synced back to S3 (dota2-model, 2026-10-30).
+
 ### CI cost rules
 
 Scheduled jobs run thousands of times a month, so design them for cost before writing them, and record the estimate and the measured minutes in the model repo's `deployment.md` Cost section.

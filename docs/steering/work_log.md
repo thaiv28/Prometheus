@@ -1,3 +1,7 @@
+## 2026-10-30 — Playbook: seeding S3 from a Mac
+
+Phase 6 now lists what to seed before the first scheduled run and the macOS `tar` flags that keep `._*` files out (they broke dota2-model's first refresh). Docs only; checks: steering test.
+
 ## 2026-10-30 — Playbook: CI cost rules
 
 Added **CI cost rules** to `docs/playbooks/new_game.md` Phase 6 (public repo, cadence from the consumer, stdlib gate before setup, incremental fetching, skip unchanged work, cheap setup) and changed Phase 1 to create model repos public: dota2-model was created private, which made its 10-minute feed billable (estimated 4,320–11,520 minutes a month). Phase 6 cadences now 15 min (gated) and 3 h; Phase 7 notes thin-book `no_two_sided_blend_quote`. Docs only; checks: pytest (steering).
