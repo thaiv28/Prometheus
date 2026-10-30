@@ -1,5 +1,9 @@
 
 
+## 2026-10-30 — Playbook: Liquipedia 429s and secret writes
+
+Phase 6 now says CI feeds must survive Liquipedia `HTTP 429` on shared runner IPs by reusing the last raw snapshot (`liquipedia_stale=1`), as cs2-model and dota2-model now do, and that `tee` steps need `shell: bash` for pipefail. H2 notes that a blocked secret write goes to the user as a `!` command. Docs only; checks: steering test.
+
 ## 2026-10-30 — Playbook: infra deploy and cron jobs need no human
 
 The owner allowed the agent to merge the infra PR, run the execution `diff`, and deploy when the diff holds only the game's two read keys; anything else stops. Removed H5/H6; cron-job.org jobs use the saved API key. Docs only; checks: steering test.

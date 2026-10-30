@@ -23,7 +23,7 @@ Stop, report what is done and exactly what is needed, and wait. Nothing else nee
 | # | When | What the user does |
 |---|---|---|
 | H1 | Phase 0 says no-go | Accepts the verdict or names another data source |
-| H2 | Phase 1, after `gh repo create` | Adds the new repo to the shared fine-grained token (see **Where things live**) so it can be the repo's `PROMETHEUS_DISPATCH_TOKEN` and the cron-job.org bearer. The agent sets `AWS_ROLE_ARN` and `DATA_BACKUP_BUCKET` itself; if AWS SSO has expired the user runs `! aws sso login`. Until then work offline. |
+| H2 | Phase 1, after `gh repo create` | Adds the new repo to the shared fine-grained token (see **Where things live**) so it can be the repo's `PROMETHEUS_DISPATCH_TOKEN` and the cron-job.org bearer. The agent sets `AWS_ROLE_ARN` and `DATA_BACKUP_BUCKET` itself (if a permission check blocks secret writes, give the user the `!` command; until set, every AWS workflow fails at `configure-aws-credentials`); if AWS SSO has expired the user runs `! aws sso login`. Until then work offline. |
 | H3 | A data source needs a paid key, a login, or its terms forbid automated access | Decides; never work around terms (HLTV is not scraped) |
 | H4 | Phase 5 gate fails | Chooses: stop; keep the model frozen and recheck the same gate after more holdout months; or override and go to Phase 6 candidate-only (Dota: gate missed by 0.4 points with a significant log-loss edge; the user overrode). Ask with `AskUserQuestion`. |
 | H5 | Phase 7, candidate-only period done | Configures the game's bankroll in the execution config and flips mode (demo, then live) with `kalshi-execution-control.yml` |
@@ -112,6 +112,7 @@ Only after the gate passes (or the user overrides at H4). Reuse the CS2, Valoran
 
 - `<pkg>/feed.py` and `<pkg>/trading.py`: `feed-state` snapshot (`feed/state.pkl.gz`), `export` (public site feed `feed/<game>.json`, version 1), private `feed/candidates.json` (raw series chances keyed by Kalshi team names, group `<game>-series`), `feed/blend_artifact.json` (`game-blend-v1`, monthly earlier-only fits, clip 0.01). Edit the Kalshi rules regex for the game's wording.
 - Workflows: `kalshi-collect.yml` (6-hourly), `refresh-db.yml` (every 3 hours, input-hash cache, seed tarball), `feed.yml` (every 15 minutes behind a stdlib change gate, DB-free, dispatches Prometheus `games.yml` only when the public feed changed). Follow **CI cost rules** below. All use OIDC in us-west-2 and keys under `<game>-model/`. Measure their runtime.
+- **Expect source rate limits on CI.** Liquipedia returns `HTTP 429` to GitHub's shared runner IPs now and then, outlasting the fetcher's retries (cs2 and dota2 feeds, 2026-10-30, ~1 run in 8). `export` must fall back to the last raw snapshot (`feed/upcoming/latest.json.gz`, restored from S3), leave it unchanged and log `liquipedia_stale=1`; fail only when no snapshot exists. Copy `export` from cs2-model/dota2-model `origin/main`, which already do this, with a test that a 429 fetcher still exports. Give any step that pipes through `tee` `shell: bash`: the default `bash -e` has no pipefail, so a crashed export passes and the next step fails confusingly.
 
 **Prometheus** (PR, merge yourself). Non-League games live in one registry, `prometheus/other_games.py` (since PR #140). Adding a game:
 
