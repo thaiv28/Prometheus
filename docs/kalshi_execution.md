@@ -12,6 +12,8 @@ Execution vetoes Cloud9 fixtures and international bets against North American t
 
 ## Runner and durable state
 
+A private GitHub health issue opens after 10 consecutive failing executor runs and closes on recovery. Reasons contain only step:type strings.
+
 The existing 5-minute EventBridge rule invokes Python 3.12 Lambda independently of site jobs. An infrastructure PR must change it to one minute. Each run reads the latest private log and decides again on eligible fixtures until the earlier provider start. Activation timestamps gate mode changes only; they do not reject candidate forecasts made before activation. Buying up to start remains unproven by the execution timing backtest, PR #111.
 
 On reconciled fills, the executor posts one issue to the private `thaiv28/prometheus-trades` repository and records `notified` after success. Issues contain fixture/start, Kalshi link, count, actual average price/fees, execution probability/net edge, environment and ticker; no bankroll/balance. `GITHUB_ISSUES_SECRET_ID` enables a lazy raw-token read from Secrets Manager `prometheus/execution/github-issues`; rotate yearly. `GITHUB_ISSUES_REPO` overrides the repository. Missing configuration disables notifications; failures do not interrupt execution and retry while the intent remains pending. Immediate settlement or a crash between posting and marking can lose a retry or duplicate an issue. GitHub transport permits only `api.github.com` and refuses redirects; Kalshi hosts are unchanged.

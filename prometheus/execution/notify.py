@@ -219,3 +219,88 @@ def sync_dashboard(token, repo, body, state, opener=None) -> dict | None:
         return {"issue": number, "hash": digest}
     except Exception:
         return None
+
+
+HEALTH_THRESHOLD = 10
+
+
+def sync_health(token, repo, state, reasons, now, opener=None) -> dict | None:
+    """Track consecutive failures and maintain a best-effort private health issue."""
+    try:
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+            return None
+        now = now.astimezone(dt.UTC)
+        failures = int(state.get("failures", 0))
+        number = state.get("issue")
+        if isinstance(number, Decimal) and number == number.to_integral_value():
+            number = int(number)
+        if number and (type(number) is not int or number <= 0):
+            return None
+        transport = opener or urllib.request.build_opener(NoRedirect())
+        base = f"https://api.github.com/repos/{repo}/issues"
+
+        def request(url, method, payload):
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode(),
+                method=method,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                    "User-Agent": "prometheus-executor",
+                    "Content-Type": "application/json",
+                },
+            )
+            with transport.open(req, timeout=10) as response:
+                if response.status != (201 if method == "POST" else 200):
+                    raise ValueError("health_request_failed")
+                return json.load(response)
+
+        if not reasons:
+            if number:
+                request(
+                    f"{base}/{number}/comments",
+                    "POST",
+                    {
+                        "body": f"Recovered at {now:%Y-%m-%d %H:%M} after {failures} failing runs."
+                    },
+                )
+                request(f"{base}/{number}", "PATCH", {"state": "closed"})
+            return {} if number or failures > 0 else None
+
+        failures += 1
+        since = state.get("since") or now.isoformat()
+        encoded = json.dumps(reasons, sort_keys=True)
+        updated = state.get("updated")
+        if failures >= HEALTH_THRESHOLD:
+            started = dt.datetime.fromisoformat(since).astimezone(dt.UTC)
+            body = (
+                f"Failing since {started:%Y-%m-%d %H:%M} UTC ({failures} consecutive runs).\n\n"
+                + "\n".join(f"- `{key}` × {reasons[key]}" for key in sorted(reasons))
+                + "\n\nDetails: SKIP rows in the private ledger and the Lambda's CloudWatch logs."
+            )
+            if not number:
+                issue = request(
+                    base, "POST", {"title": "⚠️ Executor unhealthy", "body": body}
+                )
+                number = issue["number"]
+                if type(number) is not int or number <= 0:
+                    return None
+                updated = now.isoformat()
+            elif (
+                encoded != state.get("reasons")
+                or not updated
+                or now - dt.datetime.fromisoformat(updated) > dt.timedelta(hours=1)
+            ):
+                request(f"{base}/{number}", "PATCH", {"body": body})
+                updated = now.isoformat()
+        return {
+            "failures": failures,
+            "since": since,
+            **({"issue": number} if number else {}),
+            "reasons": encoded,
+            "updated": updated or now.isoformat(),
+        }
+    except Exception:
+        return None

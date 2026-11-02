@@ -243,11 +243,14 @@ class DynamoLedger:
         if plan.get("leg", 1) > 1:
             transactions.append(
                 {
-                    "ConditionCheck": {
+                    "Update": {
                         "TableName": self.table,
                         "Key": _item(
                             self.key(env, f"FIXTURE#{plan['alert']['fixture_id']}")
                         ),
+                        # The executor role has no ConditionCheckItem permission; this no-op update requires the fence and leaves it unchanged.
+                        "UpdateExpression": "SET #intent = #intent",
+                        "ExpressionAttributeNames": {"#intent": "intent"},
                         "ConditionExpression": "attribute_exists(pk)",
                     }
                 }

@@ -1,5 +1,9 @@
 
 
+## 2026-11-02 — Executor: top-up reserve permission and health issue
+
+Branch `executor-health` from `main`. The role lacks ConditionCheckItem, so every top-up reserve failed with AccessDeniedException (2026-10-30 21:40 to 2026-11-02 12:59 on an unfilled first leg, again from 20:38 after the guard fix), surfacing as "Execution incomplete" every minute. Reserve now uses a no-op conditional Update, previously validated against DynamoDB with a forced-cancel probe (nothing written). The test fake rejects operations outside the role. Errors record step:type; a private GitHub issue opens after 10 consecutive failing runs and closes on recovery. Checks: full pytest (1,323 passed, 2 skipped), focused execution/steering (265 passed), Ruff format/check, diff check. Used UV_NO_SYNC=1 to bypass a uv macOS startup panic; focused tests needed PYTHONPATH=. Limit: GitHub publication and Lambda execution not exercised against production.
+
 ## 2026-11-02 — Polymarket US checked against Kalshi
 
 Branch `polymarket-check` from `main`. Closes the Future work item "investigate Polymarket books". Polymarket US (public API `gateway.polymarket.us`, LoL series 33, minute bid/ask history from April 2026) matched to the cached Kalshi frame: 1,199 series priced on both 12 h before the start. Mid gap median 0.005 (3% over 3 points), spreads 1 point on both; log loss Polymarket − Kalshi −0.0015 (−0.0039 to +0.0008). Buying at the cheaper venue after fees (Polymarket taker 0.0695, Kalshi 0.07) gained nothing over Kalshi alone at any edge (all intervals span 0). Limits: top of book only, no depth; scratch scripts, not committed. Checks: pytest (steering). No code change.
