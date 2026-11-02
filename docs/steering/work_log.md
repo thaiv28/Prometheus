@@ -1,5 +1,9 @@
 
 
+## 2026-11-02 — Game models moved to prometheus-models
+
+Docs only. `cs2-model`, `dota2-model` and `valorant-model` were merged with history into `thaiv28/prometheus-models` (`games/<game>/`) and archived; their scheduled workflows and the cron-job.org dispatches now target that repo. S3 prefixes are unchanged, so `other_games.py`, `game_feeds.sh` and the execution Lambda need no change. Updated the Other games paragraph in `deployment.md`. Checks: every new-repo workflow ran green once; Prometheus `games.yml` publishes after their feeds; pytest (steering).
+
 ## 2026-11-02 — Polymarket US checked against Kalshi
 
 Branch `polymarket-check` from `main`. Closes the Future work item "investigate Polymarket books". Polymarket US (public API `gateway.polymarket.us`, LoL series 33, minute bid/ask history from April 2026) matched to the cached Kalshi frame: 1,199 series priced on both 12 h before the start. Mid gap median 0.005 (3% over 3 points), spreads 1 point on both; log loss Polymarket − Kalshi −0.0015 (−0.0039 to +0.0008). Buying at the cheaper venue after fees (Polymarket taker 0.0695, Kalshi 0.07) gained nothing over Kalshi alone at any edge (all intervals span 0). Limits: top of book only, no depth; scratch scripts, not committed. Checks: pytest (steering). No code change.
