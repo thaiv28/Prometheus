@@ -219,12 +219,22 @@ def topup_position(alert, legs, fences):
     if len(legs) >= MAX_LEGS:
         raise ValueError("max_legs")
     filled = [row for row in legs if row["status"] == "filled"]
+    # Kalshi's signed position per ticker these fills leave: a "bid" buys YES
+    # (+), an "ask" sells YES, i.e. buys the opponent's NO (-).
+    tickers = {}
+    for row in filled:
+        count = decimal(row["order"]["fill_count_fp"])
+        if count:
+            ticker = row["request"]["ticker"]
+            sign = 1 if row["request"]["side"] == "bid" else -1
+            tickers[ticker] = tickers.get(ticker, ZERO) + sign * count
     return {
         "leg": len(legs) + 1,
         "contracts": sum(
             (decimal(row["order"]["fill_count_fp"]) for row in filled), ZERO
         ),
         "cost": sum((decimal(row["held"]) for row in filled), ZERO),
+        "tickers": tickers,
     }
 
 
@@ -746,6 +756,8 @@ def run(
             resolving = True
             routes = api.resolve(alert, now, config)
             balance = decimal(api.balance())
+            # A top-up may hold exactly what its earlier legs filled; nothing else.
+            api._expected_fixture = dict(position["tickers"]) if position else {}
             exposure = decimal(api.exposure())
             if exposure < 0:
                 raise ValueError("invalid_account_exposure")
@@ -772,7 +784,11 @@ def run(
             }
             if position is not None:
                 account.update(
-                    {f"fixture_{key}": value for key, value in position.items()}
+                    {
+                        f"fixture_{key}": value
+                        for key, value in position.items()
+                        if key != "tickers"
+                    }
                 )
             starting = (
                 config.number("starting_bankroll_usd")

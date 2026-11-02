@@ -494,15 +494,24 @@ class Kalshi:
         Our own filled exposure is counted again by the ledger until settlement;
         this intentionally errs toward smaller spending. No accountwide cancel.
         Map orders may add to their own tickers (our pregame bet); ledger fences prevent duplicate map orders.
+        A pregame top-up may find only the signed positions its filled legs left
+        (`_expected_fixture`, ticker -> position_fp); any other fixture position blocks.
         """
         positions = self.pages("/portfolio/positions", "market_positions", subaccount=0)
         fixture_tickers = getattr(self, "_fixture_tickers", set())
-        if not getattr(self, "_map_alert", False) and any(
-            p["ticker"] in fixture_tickers
-            and decimal(p["market_exposure_dollars"]) != 0
-            for p in positions
-        ):
-            raise ValueError("existing_fixture_exposure")
+        if not getattr(self, "_map_alert", False):
+            expected = getattr(self, "_expected_fixture", None) or {}
+            if not set(expected) <= fixture_tickers:
+                raise ValueError("existing_fixture_exposure")
+            held = {}
+            for p in positions:
+                if p["ticker"] in fixture_tickers and (
+                    decimal(p["market_exposure_dollars"]) != 0
+                    or decimal(p.get("position_fp") or 0) != 0
+                ):
+                    held[p["ticker"]] = decimal(p.get("position_fp") or 0)
+            if held != {t: n for t, n in expected.items() if n != 0}:
+                raise ValueError("existing_fixture_exposure")
         exposure = sum(
             (abs(decimal(p["market_exposure_dollars"])) for p in positions), Decimal(0)
         )

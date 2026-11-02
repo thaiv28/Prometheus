@@ -1,5 +1,9 @@
 
 
+## 2026-11-02 — Pre-match top-ups pass the account guard
+
+Branch `retrade-backtest`. Every top-up failed `kalshi.exposure()` (`existing_fixture_exposure`), so none was ever placed. `topup_position` now returns each ticker's signed filled count (bid +, ask −); the executor passes it to the client, which accepts fixture positions only when Kalshi's `position_fp` matches exactly. Extra, missing or other-ticker positions, and any position before the first leg, still block. Checks: new client cases and an end-to-end top-up through the real guard (fail before the fix); full pytest; ruff. Limit: a live-map Bo1 fill on the series ticker makes positions differ and blocks top-ups (fails closed). Not yet exercised live.
+
 ## 2026-11-02 — Pre-match re-trading backtest
 
 Branch `retrade-backtest` from `main`. Live ledger: no top-up ever placed; `kalshi.exposure()` raises `existing_fixture_exposure` on any held fixture (63 skip rows). Added `scripts/research/pregame_retrading.py` and [the report](../research/pregame_retrading.md): 8,553 series over four games on hourly candles. Top-ups +6.4 bp P&L per series [+1.0, +11.9] but +0.8 bp log growth [−4.4, +5.8]; selling and side swaps no better; first-hour entry beats last-hour by ~30 bp. Model rows were exported from each game repo's adopted replay (Valorant weights from `game-candidates`). Checks: script runs (6 s), sensitivity windows/caps; ruff; pytest. No production change.

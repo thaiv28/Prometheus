@@ -27,5 +27,5 @@ alone. The large effect is timing: the first priced hour beats the last by
 
 Limits: hourly closes miss moves inside the hour; no book depth (early
 quotes are thin); series don't share a bankroll; blend weights were fit on
-overlapping months. Live top-ups also never ran: `kalshi.exposure()` rejects
+overlapping months. Live top-ups never ran before the 2026-11-02 fix: `kalshi.exposure()` rejected
 any pre-match order on a fixture already held (`existing_fixture_exposure`).

@@ -1030,6 +1030,7 @@ def test_topup_position_guards(case, reason):
         "status": "filled",
         "held": "1.89",
         "order": {"fill_count_fp": "3.00"},
+        "request": {"ticker": "KXLOLGAME-F-A", "side": "bid"},
     }
     legs = [row]
     fences = {"FIXTURE": {"intent": "first"}, "EVENT": {"intent": "first"}}
@@ -1073,6 +1074,9 @@ def test_topup_position_guards(case, reason):
                 "cost": Decimal(0)
                 if case in {"unfilled", "aborted"}
                 else Decimal("1.89"),
+                "tickers": {}
+                if case in {"unfilled", "aborted"}
+                else {"KXLOLGAME-F-A": Decimal(3)},
             }
         )
 
@@ -1145,6 +1149,49 @@ def test_candidate_ioc_topup_reaches_target_with_distinct_keys(first_count):
     assert ledger.get("demo", "ACTIVE#f#L2") is None
     assert ledger.get("demo", "INTENT#f")
     assert len(api.calls) == 2
+
+
+@pytest.mark.parametrize("held, submitted", [("3.00", 1), ("4.00", 0)])
+def test_topup_passes_real_exposure_guard_only_for_ledger_position(held, submitted):
+    """The Kalshi client's fixture guard sees the ledger's filled legs."""
+    from prometheus.execution.kalshi import Kalshi
+
+    config = settings(
+        order_budget_usd="100",
+        fixture_budget_usd="100",
+        daily_budget_usd="200",
+        max_exposure_usd="100",
+        max_contracts=100,
+    )
+    client, api, _ledger, execute = harness(config)
+    candidate_api(api)
+    proposal = candidate_proposal()
+    api.routes[0]["quantity"] = "3"
+    assert execute([proposal])["submitted"] == 1
+    fill(api, count="3.00", price=".60", fee=".09")
+    api.routes[0]["quantity"] = "100"
+    api._fixture_tickers = {"KXLOLGAME-F-A", "KXLOLGAME-F-B"}
+    api.pages = lambda path, field, **query: (
+        [
+            {
+                "ticker": "KXLOLGAME-F-A",
+                "position_fp": held,
+                "market_exposure_dollars": str(Decimal(held) * Decimal(".6")),
+            }
+        ]
+        if path == "/portfolio/positions"
+        else []
+    )
+    api.exposure = lambda: Kalshi.exposure(api)
+    result = execute([proposal])
+    assert result["submitted"] == submitted
+    if not submitted:
+        reasons = [
+            _decode(v)["reason"]
+            for (_, sk), v in client.data.items()
+            if sk.startswith("SKIP#")
+        ]
+        assert reasons == ["existing_fixture_exposure"]
 
 
 def test_topup_reserve_requires_fixture_and_does_not_rewrite_fences():
