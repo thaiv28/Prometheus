@@ -79,7 +79,12 @@ def handler(event, context, *, clients=None):
     from prometheus.execution.dashboard import render
     from prometheus.execution.kalshi import Kalshi
     from prometheus.execution.ledger import DynamoLedger
-    from prometheus.execution.notify import close_issue, github_issue, sync_dashboard
+    from prometheus.execution.notify import (
+        close_issue,
+        github_issue,
+        sync_dashboard,
+        sync_health,
+    )
 
     notify = close = None
     if secret_id := os.environ.get("GITHUB_ISSUES_SECRET_ID"):
@@ -193,6 +198,23 @@ def handler(event, context, *, clients=None):
                 result["dashboard_updated"] = 1
         except Exception:
             pass  # Dashboard reads, rendering and publication never affect execution.
+    if secret_id:
+        try:
+            reasons = dict(result.get("error_reasons", {}))
+            if source_failed:
+                reasons["source:unavailable"] = 1
+            state = ledger.get(mode, "HEALTH") or {}
+            state = sync_health(
+                cached_secret(clients["secretsmanager"], secret_id),
+                os.environ.get("GITHUB_ISSUES_REPO", "thaiv28/prometheus-trades"),
+                state,
+                reasons,
+                dt.datetime.now(dt.UTC),
+            )
+            if isinstance(state, dict):
+                ledger.put_meta(mode, "HEALTH", state)
+        except Exception:
+            pass
     if blend_rejected:
         result["blend_rejected"] = blend_rejected
     # Only aggregate counters reach function logs/response. Detailed account,

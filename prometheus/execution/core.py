@@ -660,6 +660,11 @@ def prefilter(proposals, quotes, now, config, canonical):
     return kept
 
 
+def error_kind(error) -> str:
+    code = getattr(error, "response", {}).get("Error", {}).get("Code")
+    return code if isinstance(code, str) and code else type(error).__name__
+
+
 def run(
     alerts,
     config_provider,
@@ -680,6 +685,13 @@ def run(
     now = now or dt.datetime.now(dt.UTC)
     config = Config.parse(config_provider())
     result = {"submitted": 0, "skipped": 0, "reconciled": 0, "errors": 0, "filtered": 0}
+
+    def record_error(step, error):
+        result["errors"] += 1
+        reasons = result.setdefault("error_reasons", {})
+        reason = f"{step}:{error_kind(error)}"
+        reasons[reason] = reasons.get(reason, 0) + 1
+
     apis = {}
 
     def api_for(environment):
@@ -700,11 +712,11 @@ def run(
                     close=close,
                 )
             )
-        except Exception:
+        except Exception as error:
             # Unknown status, missing credentials or cancellation failure retains
             # the durable reservation and is visible in the private intent.
             ledger.note_error(row, "reconciliation_failed", now)
-            result["errors"] += 1
+            record_error("reconcile", error)
     if config.mode == "off":
         return result
     alerts = list(alerts)
@@ -730,8 +742,8 @@ def run(
                 else api.open_markets(series)
             )
             screened = prefilter(candidates, quotes, now, config, api.canonical)
-        except Exception:
-            result["errors"] += 1
+        except Exception as error:
+            record_error("markets", error)
             screened = []
         result["filtered"] += len(candidates) - len(screened)
         candidates = screened
@@ -886,9 +898,9 @@ def run(
                 response = api.place(plan["request"])
                 ledger.ack(reserved, response)
                 result["submitted"] += 1
-            except Exception:
+            except Exception as error:
                 ledger.note_error(reserved, "submission_uncertain", checked)
-                result["errors"] += 1
+                record_error("submit", error)
         except (ValueError, KeyError, TypeError, ArithmeticError) as error:
             if resolving or alert.get("kind") == live_map.VERSION:
                 ledger.skip(alert, config.mode, str(error), now)
@@ -898,8 +910,13 @@ def run(
                 else "skipped"
             )
             result[key] += 1
-        except Exception:
+        except Exception as error:
             if resolving or alert.get("kind") == live_map.VERSION:
-                ledger.skip(alert, config.mode, "exchange_or_ledger_unavailable", now)
-            result["errors"] += 1
+                ledger.skip(
+                    alert,
+                    config.mode,
+                    f"exchange_or_ledger_unavailable:{error_kind(error)}",
+                    now,
+                )
+            record_error("alert", error)
     return result

@@ -81,12 +81,11 @@ class AtomicDynamo:
             self.requests.append(copy.deepcopy(TransactItems))
             next_data = copy.deepcopy(self.data)
             for action in TransactItems:
-                op = (
-                    action.get("Put")
-                    or action.get("Update")
-                    or action.get("Delete")
-                    or action["ConditionCheck"]
-                )
+                if len(action) != 1 or not set(action) <= {"Put", "Update", "Delete"}:
+                    raise AssertionError(
+                        "operation not allowed by the executor IAM role"
+                    )
+                op = next(iter(action.values()))
                 item = op.get("Item") or op["Key"]
                 key = self.key(item)
                 old = _decode(next_data.get(key, {}))
@@ -109,13 +108,13 @@ class AtomicDynamo:
                         raise Conditional
                 if condition == "attribute_exists(pk)" and not old:
                     raise Conditional
-                if "ConditionCheck" in action:
-                    continue
                 if "Put" in action:
                     next_data[key] = copy.deepcopy(item)
                 elif "Delete" in action:
                     next_data.pop(key, None)
                 else:
+                    if op["UpdateExpression"].startswith("SET "):
+                        continue
                     old.update(_decode(op["Key"]))
                     for addition in (
                         op["UpdateExpression"].removeprefix("ADD ").split(",")
@@ -384,7 +383,9 @@ def test_intent_precedes_submission_and_v2_body():
 def test_timeout_unknown_keeps_reservation_across_process_restart_and_id_change():
     client, api, ledger, execute = harness()
     api.timeout, api.invisible = True, True
-    assert execute([saved()])["errors"] == 1
+    result = execute([saved()])
+    assert result["errors"] == 1
+    assert result["error_reasons"] == {"submit:TimeoutError": 1}
     reserve = held(ledger)
     restarted = DynamoLedger("private", client)
     result = run(
@@ -450,7 +451,9 @@ def test_eventual_fill_visibility_and_bad_fill_keep_full_reservation():
     execute([])
     assert held(ledger) == original
     fill(api, price=".61")
-    assert execute([])["errors"] == 1
+    result = execute([])
+    assert result["errors"] == 1
+    assert result["error_reasons"] == {"reconcile:ValueError": 1}
     assert held(ledger) == original
 
 
@@ -845,6 +848,7 @@ def test_candidate_bulk_failure_submits_nothing_and_writes_nothing():
     api.open_markets = failed
     result = execute([candidate_proposal()])
     assert result["errors"] == 1 and result["filtered"] == 1
+    assert result["error_reasons"] == {"markets:TimeoutError": 1}
     assert not api.calls and not client.data
 
 
@@ -1242,3 +1246,71 @@ def test_fixture_legs_paginate_consistently_filter_prefix_and_preserve_revision(
     assert len(calls) == 2 and len(legs) == 1
     assert legs[0]["revision"] == int(item["revision"]["N"])
     assert ledger.replace(legs[0], {**legs[0], "reason": "revision_test"})
+
+
+def test_topup_transaction_uses_conditional_fixture_update():
+    client, _, ledger, execute = harness()
+    execute([saved()])
+    execute([])
+    plan = json.loads(ledger.get("demo", "INTENT#f")["payload"])
+    plan.update(leg=2, intent_id="f#L2", client_order_id="second")
+    del client.data[("ENV#demo", "FIXTURE#f")]
+    before = copy.deepcopy(client.data)
+    assert ledger.reserve(plan, Config.parse(settings()), Decimal(100)) is None
+    assert client.data == before
+    transaction = client.requests[-1]
+    assert all("ConditionCheck" not in action for action in transaction)
+    fixture = [
+        action["Update"]
+        for action in transaction
+        if "Update" in action and action["Update"]["Key"]["sk"]["S"] == "FIXTURE#f"
+    ]
+    assert len(fixture) == 1
+    assert fixture[0]["UpdateExpression"] == "SET #intent = #intent"
+    assert fixture[0]["ExpressionAttributeNames"] == {"#intent": "intent"}
+    assert fixture[0]["ConditionExpression"] == "attribute_exists(pk)"
+
+
+@pytest.mark.parametrize("operation", ["ConditionCheck", "Unknown"])
+def test_atomic_dynamo_rejects_operations_outside_executor_role(operation):
+    with pytest.raises(
+        AssertionError, match="operation not allowed by the executor IAM role"
+    ):
+        AtomicDynamo().transact_write_items(TransactItems=[{operation: {}}])
+
+
+def test_alert_error_records_aws_kind_and_private_skip_reason():
+    client, _, ledger, execute = harness()
+
+    class Denied(Exception):
+        def __init__(self, message):
+            super().__init__(message)
+            self.response = {"Error": {"Code": "AccessDeniedException"}}
+
+    def reserve(*args):
+        raise Denied("private details")
+
+    ledger.reserve = reserve
+    result = execute([saved(), saved(alert_id="b")])
+    assert result["errors"] == 2
+    assert result["error_reasons"] == {"alert:AccessDeniedException": 2}
+    reasons = [
+        _decode(item)["reason"]
+        for (_, sk), item in client.data.items()
+        if sk.startswith("SKIP#")
+    ]
+    assert reasons and set(reasons) == {
+        "exchange_or_ledger_unavailable:AccessDeniedException"
+    }
+
+
+@pytest.mark.parametrize("code", [None, "", 123, "ThrottlingException"])
+def test_error_kind_uses_only_nonempty_aws_string(code):
+    from prometheus.execution.core import error_kind
+
+    error = RuntimeError("private details")
+    error.response = {"Error": {"Code": code}}
+    assert error_kind(error) == (
+        code if isinstance(code, str) and code else "RuntimeError"
+    )
+    assert error_kind(TimeoutError()) == "TimeoutError"
