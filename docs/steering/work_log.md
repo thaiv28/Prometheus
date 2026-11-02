@@ -1,5 +1,9 @@
 
 
+## 2026-11-02 — Polymarket US checked against Kalshi
+
+Branch `polymarket-check` from `main`. Closes the Future work item "investigate Polymarket books". Polymarket US (public API `gateway.polymarket.us`, LoL series 33, minute bid/ask history from April 2026) matched to the cached Kalshi frame: 1,199 series priced on both 12 h before the start. Mid gap median 0.005 (3% over 3 points), spreads 1 point on both; log loss Polymarket − Kalshi −0.0015 (−0.0039 to +0.0008). Buying at the cheaper venue after fees (Polymarket taker 0.0695, Kalshi 0.07) gained nothing over Kalshi alone at any edge (all intervals span 0). Limits: top of book only, no depth; scratch scripts, not committed. Checks: pytest (steering). No code change.
+
 ## 2026-11-02 — Pre-match top-ups pass the account guard
 
 Branch `retrade-backtest`. Every top-up failed `kalshi.exposure()` (`existing_fixture_exposure`), so none was ever placed. `topup_position` now returns each ticker's signed filled count (bid +, ask −); the executor passes it to the client, which accepts fixture positions only when Kalshi's `position_fp` matches exactly. Extra, missing or other-ticker positions, and any position before the first leg, still block. Checks: new client cases and an end-to-end top-up through the real guard (fail before the fix); full pytest; ruff. Limit: a live-map Bo1 fill on the series ticker makes positions differ and blocks top-ups (fails closed). Not yet exercised live.
