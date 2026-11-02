@@ -1,5 +1,9 @@
 
 
+## 2026-11-02 — Pre-match re-trading backtest
+
+Branch `retrade-backtest` from `main`. Live ledger: no top-up ever placed; `kalshi.exposure()` raises `existing_fixture_exposure` on any held fixture (63 skip rows). Added `scripts/research/pregame_retrading.py` and [the report](../research/pregame_retrading.md): 8,553 series over four games on hourly candles. Top-ups +6.4 bp P&L per series [+1.0, +11.9] but +0.8 bp log growth [−4.4, +5.8]; selling and side swaps no better; first-hour entry beats last-hour by ~30 bp. Model rows were exported from each game repo's adopted replay (Valorant weights from `game-candidates`). Checks: script runs (6 s), sensitivity windows/caps; ruff; pytest. No production change.
+
 ## 2026-11-02 — Live page: deciding map awaiting its result
 
 Branch `deciding-map-wait` from `main`. After the deciding map ended, the live page showed "Between maps." at the old score until Kalshi or Riot reported the winner (TL vs LØS map 3 had no map contract; ~5+ minutes at 1–1). A finished map with no result that could end the series now sets `awaiting_result` and the note "Map N is over; waiting for the result."; `live.js` drops "Between maps." for it. Checks: new `GameStateTest` case; full pytest 1,288 passed, 2 skipped (34.3 s); JS tests 26 passed; ruff format/check. Limit: the score and series close still wait on Kalshi settlement or Riot's completed state.

@@ -1,5 +1,7 @@
 # Research
 
+- [Pre-match re-trading](pregame_retrading.md): top-ups, selling and side swaps on hourly Kalshi paths, all four games (2026-11-02). Top-ups add profit but not log growth; selling doesn't help; trading early beats the close.
+
 - [Pregame sizing and live overlap](pregame_sizing.md): Kelly/cap backtest and same-side live-map exposure evidence (2026-10-26).
 
 - [Live-map delay and fight-veto research](live_latency.md) (2026-10-23): fixed lag and post-event entry comparisons; offline candidate markouts. Changed no published metric or production behaviour.
