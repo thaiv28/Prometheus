@@ -1,5 +1,9 @@
 
 
+## 2026-11-02 — Live page: deciding map awaiting its result
+
+Branch `deciding-map-wait` from `main`. After the deciding map ended, the live page showed "Between maps." at the old score until Kalshi or Riot reported the winner (TL vs LØS map 3 had no map contract; ~5+ minutes at 1–1). A finished map with no result that could end the series now sets `awaiting_result` and the note "Map N is over; waiting for the result."; `live.js` drops "Between maps." for it. Checks: new `GameStateTest` case; full pytest 1,288 passed, 2 skipped (34.3 s); JS tests 26 passed; ruff format/check. Limit: the score and series close still wait on Kalshi settlement or Riot's completed state.
+
 ## 2026-10-30 — Pre-match top-ups to the Kelly target
 
 Branch `prematch-topups` from `main`. Ledger scan: 44 live intents; 5 depth-capped (≈$2.91 of $156.51 ideal), 9 limited by the 10% series cap (≈$47), which top-ups cannot lift; one unfilled. Added sequenced intent/active/evidence legs and exact held-position Kelly, same-side resolved-order guards, MAX_LEGS 4 and $0.50 minimum; first-leg identities and spending caps remain. Checks: existing `.venv` focused pytest 219 passed (0.26s; prior cases alone 187 passed, 0.21s); full pytest 1,287 passed, 2 skipped (10.53s); 144 legacy sizing payloads identical; ruff format/check and diff checks passed. `uv run --offline` panicked at startup. No dependencies, CI jobs or build steps added. ACK status `submitted` also blocks top-ups until reconciliation. Limits: live-map path still sizes on capital net of its own held cost (unchanged); each top-up fill opens its own trade issue; not exercised against the real exchange.
