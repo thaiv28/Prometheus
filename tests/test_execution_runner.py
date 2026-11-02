@@ -351,6 +351,7 @@ def test_dashboard_wiring_is_best_effort(monkeypatch, failure):
     aws["secretsmanager"] = SimpleNamespace(get_secret_value=secret)
     monkeypatch.setattr(dashboard, "render", render)
     monkeypatch.setattr(notify, "sync_dashboard", sync)
+    monkeypatch.setattr(notify, "sync_health", lambda *args: None)
     result = handler.handler({}, None, clients=aws)
     assert result == {
         "errors": 0,
@@ -369,4 +370,56 @@ def test_dashboard_wiring_is_best_effort(monkeypatch, failure):
             "secret",
             "sync",
             "put",
+            "get",
         ]
+
+
+@pytest.mark.parametrize("outcome", ["failure", "success", "source", "off"])
+def test_handler_persists_health_before_raising_or_returning(monkeypatch, outcome):
+    from prometheus.execution import notify
+
+    monkeypatch.setattr(core.Config, "parse", lambda value: value)
+    mode = "off" if outcome == "off" else "demo"
+    aws, _ = clients(monkeypatch, {"mode": mode})
+    monkeypatch.setenv("GITHUB_ISSUES_SECRET_ID", "issues-secret")
+    monkeypatch.setenv("GITHUB_ISSUES_REPO", "owner/private")
+    aws["secretsmanager"] = SimpleNamespace(
+        get_secret_value=lambda **kw: {"SecretString": "token"}
+    )
+
+    def source(**kwargs):
+        if outcome == "source":
+            raise OSError("private source")
+        return {"Body": io.BytesIO(b'{"matches": []}')}
+
+    aws["s3"] = SimpleNamespace(get_object=source)
+    reasons = {"alert:AccessDeniedException": 1} if outcome == "failure" else {}
+    result = {
+        "errors": int(bool(reasons)),
+        **({"error_reasons": reasons} if reasons else {}),
+    }
+    monkeypatch.setattr(core, "run", lambda *a, **kw: result)
+    previous = {"failures": 12, "issue": 42}
+    writes = []
+    private = SimpleNamespace(
+        get=lambda env, key: previous if key == "HEALTH" else {},
+        put_meta=lambda *args: writes.append(args),
+    )
+    monkeypatch.setattr(ledger, "DynamoLedger", lambda *args: private)
+    new = {"failures": 13} if outcome in {"failure", "source"} else {}
+
+    def sync(token, repo, state, actual_reasons, now):
+        assert (token, repo, state) == ("token", "owner/private", previous)
+        assert actual_reasons == (
+            {"source:unavailable": 1} if outcome == "source" else reasons
+        )
+        assert now.tzinfo == datetime.UTC
+        return new
+
+    monkeypatch.setattr(notify, "sync_health", sync)
+    if outcome in {"failure", "source"}:
+        with pytest.raises(RuntimeError):
+            handler.handler({}, None, clients=aws)
+    else:
+        assert handler.handler({}, None, clients=aws) == result
+    assert writes == [(mode, "HEALTH", new)]
