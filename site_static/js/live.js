@@ -405,7 +405,7 @@
     if (state.status === "waiting") parts.push(state.match.score && state.match.score.some((n) => n > 0) ? "Waiting for next map." : "Waiting for match to start.");
     if (failed) parts.push("Feed unreachable.");
     if (state.status === "paused") parts.push("Paused.");
-    if (state.status === "between_games") parts.push("Between maps.");
+    if (state.status === "between_games" && !state.awaiting_result) parts.push("Between maps.");
     if (state.status !== "waiting" || age > STALE_MS) parts.push(age > STALE_MS ? `Stalled: last update ${ago(age)}.` : `Updated ${ago(age)}.`);
     if (state.note) parts.push(state.note);
     status.textContent = parts.join(" ");

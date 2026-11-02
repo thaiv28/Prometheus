@@ -374,6 +374,49 @@ class GameStateTest(unittest.TestCase):
             finally:
                 g.close()
 
+    def test_finished_deciding_map_waits_for_its_result(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            mapping = mapping_for(event(), CATALOG, {})
+            game = {
+                "id": "g4",
+                "number": 4,
+                "teams": [{"id": "c9", "side": "blue"}, {"id": "kc", "side": "red"}],
+            }
+            g = Game(root, mapping, game, None, None, "2026-10-15T18:00:00Z")
+            built = {
+                "status": "between_games",
+                "note": None,
+                "match": {"teams": mapping["teams"]},
+                "game": {"number": 4, "frames": [{"at": "2026-10-15T19:00:00Z"}]},
+            }
+            try:
+                g.state = "finished"
+                with mock.patch(
+                    "prometheus.live.service.build_page",
+                    side_effect=lambda *a, **k: json.loads(json.dumps(built)),
+                ):
+                    # 1-2 in a Bo5: map 4 can end the series, so no "next map".
+                    page = g.page(CATALOG, "2026-10-15T19:01:00Z")
+                    self.assertTrue(page["awaiting_result"])
+                    self.assertEqual(
+                        page["note"], "Map 4 is over; waiting for the result."
+                    )
+                    (root / "m1" / "results.json").write_text(
+                        json.dumps({"4": {"winner": 1, "at": "t"}})
+                    )
+                    page = g.page(CATALOG, "2026-10-15T19:02:00Z")
+                    self.assertNotIn("awaiting_result", page)
+                    self.assertIn("won the series 3–1", page["note"])
+                    # Map 3 at 1-1 in a Bo5 cannot end the series.
+                    g.number, built["game"]["number"] = 3, 3
+                    g.mapping["score"] = [1, 1]
+                    (root / "m1" / "results.json").unlink()
+                    page = g.page(CATALOG, "2026-10-15T19:03:00Z")
+                    self.assertNotIn("awaiting_result", page)
+            finally:
+                g.close()
+
     def test_score_before_this_map(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
