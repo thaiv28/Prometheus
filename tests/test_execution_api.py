@@ -367,6 +367,46 @@ def test_fixture_positions_block_pregame_but_count_toward_map_exposure():
     assert api.exposure() == Decimal("5.40")
 
 
+@pytest.mark.parametrize(
+    "positions, expected, ok",
+    [
+        ([("A", "3.00", "1.80")], {"A": Decimal(3)}, True),  # exactly our legs
+        ([("B", "-3.00", "1.20")], {"B": Decimal(-3)}, True),  # opponent NO route
+        ([("A", "4.00", "2.40")], {"A": Decimal(3)}, False),  # extra contracts
+        ([("A", "3.00", "1.80"), ("B", "1.00", ".40")], {"A": Decimal(3)}, False),
+        ([], {"A": Decimal(3)}, False),  # ledger fill missing on the exchange
+        ([("A", "3.00", "1.80")], {}, False),  # first leg: any position blocks
+        ([("A", "3.00", "1.80")], {"OTHER": Decimal(3)}, False),
+    ],
+)
+def test_topup_allows_only_the_positions_its_legs_filled(positions, expected, ok):
+    api = object.__new__(Kalshi)
+    api._fixture_tickers = {"A", "B"}
+    api._map_alert = False
+    api._expected_fixture = expected
+
+    def pages(path, field, **query):
+        if path == "/portfolio/positions":
+            return [
+                {"ticker": t, "position_fp": n, "market_exposure_dollars": d}
+                for t, n, d in positions
+            ] + [
+                {
+                    "ticker": "unrelated",
+                    "position_fp": "1.00",
+                    "market_exposure_dollars": "1",
+                }
+            ]
+        return []
+
+    api.pages = pages
+    if ok:
+        assert api.exposure() == sum(Decimal(d) for *_, d in positions) + 1
+    else:
+        with pytest.raises(ValueError, match=r"^existing_fixture_exposure$"):
+            api.exposure()
+
+
 def test_fills_preserve_actual_fees_and_deduplicate_current_historical_overlap():
     api = object.__new__(Kalshi)
     row = {"fill_id": "f", "fee_cost": ".02", "order_id": "o"}

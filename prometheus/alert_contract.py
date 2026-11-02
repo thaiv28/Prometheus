@@ -11,6 +11,7 @@ import unicodedata
 from decimal import Decimal, InvalidOperation
 
 from prometheus import market_blend
+from prometheus.other_games import GAMES as OTHER_GAMES
 
 GAMES = {
     "lol": {
@@ -18,18 +19,18 @@ GAMES = {
         "rules_word": "League of Legends",
         "kalshi_slug": "league-of-legends-game",
     },
-    "cs2": {
-        "series": "KXCS2GAME",
-        "rules_word": "CS2",
-        "kalshi_slug": "counter-strike-2-game",
-    },
-    "valorant": {
-        "series": "KXVALORANTGAME",
-        "rules_word": "Valorant",
-        "kalshi_slug": "valorant-game-winner",
+    **{
+        slug: {
+            "series": game.series_ticker,
+            "rules_word": game.rules_word,
+            "kalshi_slug": game.kalshi_slug,
+        }
+        for slug, game in OTHER_GAMES.items()
     },
 }
-GAME_GROUPS = {"cs2-series": "cs2", "valorant-domestic": "valorant"}
+GAME_GROUPS = {
+    group: slug for slug, game in OTHER_GAMES.items() for group in game.trade_groups
+}
 
 SCHEMA_VERSION = 1
 CANDIDATE_KIND = "candidate-v1"
@@ -44,12 +45,14 @@ GROUPS = frozenset(
         "mixed-international",
         "minor-international",
         "other-cross-league",
-        "cs2-series",
-        "valorant-domestic",
-        "valorant-international",
     )
 )
-TRADE_GROUPS = GROUPS - {"other-cross-league", "valorant-international"}
+TRADE_GROUPS = (GROUPS - {"other-cross-league"}) | frozenset(
+    group for game in OTHER_GAMES.values() for group in game.trade_groups
+)
+GROUPS = GROUPS | frozenset(
+    group for game in OTHER_GAMES.values() for group in game.groups
+)
 
 
 # Letters that Unicode doesn't split into a base letter and an accent.

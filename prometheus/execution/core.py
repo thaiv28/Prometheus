@@ -1,4 +1,6 @@
-"""Current fixture decisions, at most one IOC order. Money is Decimal, never float.
+"""Current fixture decisions: one IOC per leg, top-ups to the Kelly target.
+
+Money is Decimal, never float.
 
 The ledger owns atomic fixture/event fences and spending reservations. An intent
 that might have reached the exchange is never automatically submitted again.
@@ -13,10 +15,14 @@ from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 from prometheus import live_map, market_blend
 from prometheus.alert_contract import CANDIDATE_KIND, GAMES, TRADE_GROUPS, trade_veto
 from prometheus.execution.sizing import QUANTITY_STEP, kelly_order
+from prometheus.other_games import ACCOUNT_KEYS, account_key
+from prometheus.other_games import GAMES as OTHER_GAMES
 
 ZERO = Decimal(0)
 CENT = Decimal(".01")
 GROUPS = TRADE_GROUPS
+MAX_LEGS = 4
+MIN_TOPUP_USD = Decimal(".50")
 
 
 def decimal(value):
@@ -49,7 +55,7 @@ class Config:
             raise ValueError("invalid games configuration")
         for game, settings in games.items():
             if (
-                game not in {"cs2", "valorant"}
+                game not in OTHER_GAMES
                 or not isinstance(settings, dict)
                 or set(settings) - {"enabled", "starting_bankroll_usd"}
                 or not isinstance(settings.get("enabled"), bool)
@@ -184,6 +190,72 @@ def validate_alert(alert, config, now):
             raise ValueError("invalid_probability_or_price")
 
 
+def topup_position(alert, legs, fences):
+    """Validate a resolved, same-side fixture position before adding a leg."""
+    fixture, event = fences["FIXTURE"], fences["EVENT"]
+    if fixture is None and event is None:
+        return None
+    if (
+        alert.get("kind") != CANDIDATE_KIND
+        or fixture is None
+        or event is None
+        or fixture["intent"] != event["intent"]
+        or not legs
+    ):
+        raise ValueError("duplicate_fixture_or_event")
+    if any(
+        row["alert"]["event_ticker"] != alert["event_ticker"]
+        or row["alert"]["backed_team"] != alert["backed_team"]
+        for row in legs
+    ):
+        raise ValueError("existing_position_other_side")
+    if any(
+        row["status"] in {"intent", "submitting", "submitted", "unknown"}
+        for row in legs
+    ):
+        raise ValueError("pending_order")
+    if any(row["status"] == "settled" for row in legs):
+        raise ValueError("duplicate_fixture_or_event")
+    if len(legs) >= MAX_LEGS:
+        raise ValueError("max_legs")
+    filled = [row for row in legs if row["status"] == "filled"]
+    # Kalshi's signed position per ticker these fills leave: a "bid" buys YES
+    # (+), an "ask" sells YES, i.e. buys the opponent's NO (-).
+    tickers = {}
+    for row in filled:
+        count = decimal(row["order"]["fill_count_fp"])
+        if count:
+            ticker = row["request"]["ticker"]
+            sign = 1 if row["request"]["side"] == "bid" else -1
+            tickers[ticker] = tickers.get(ticker, ZERO) + sign * count
+    return {
+        "leg": len(legs) + 1,
+        "contracts": sum(
+            (decimal(row["order"]["fill_count_fp"]) for row in filled), ZERO
+        ),
+        "cost": sum((decimal(row["held"]) for row in filled), ZERO),
+        "tickers": tickers,
+    }
+
+
+def _fixture_position(ledger, alert, environment):
+    # Local import avoids the ledger's dependency on decimal() above.
+    from .ledger import fence_keys
+
+    if alert.get("kind") == live_map.VERSION:
+        if ledger.seen(alert, environment):
+            raise ValueError("duplicate_fixture_or_event")
+        return None
+    fences = dict(
+        zip(
+            ("FIXTURE", "EVENT"),
+            (ledger.get(environment, sk) for sk in fence_keys(alert)),
+        )
+    )
+    legs = ledger.legs(alert, environment) if any(fences.values()) else []
+    return topup_position(alert, legs, fences)
+
+
 def plan_order(
     alert, routes, config, balance, now, account=None, committed=ZERO, exposure=ZERO
 ):
@@ -215,6 +287,8 @@ def plan_order(
         if is_map
         else config.number("kelly_fraction")
     )
+    is_topup = not is_map and "fixture_leg" in account
+    fixture_cost = decimal(account["fixture_cost"]) if is_topup else ZERO
     effective = capital * fraction
     budget = min(
         config.number("order_budget_usd"),
@@ -224,6 +298,8 @@ def plan_order(
         config.number("daily_budget_usd") - committed,
         effective,
     )
+    if is_topup:
+        budget = min(budget, config.number("fixture_budget_usd") - fixture_cost)
     if "series_fraction" in config.raw:
         budget = min(budget, decimal(account["series_room"]))
     if is_map:
@@ -236,6 +312,7 @@ def plan_order(
     if effective <= 0 or budget <= 0:
         raise ValueError("bankroll_or_spending_cap_exhausted")
     candidates = []
+    covers_target = False
     for route in routes:
         age = (now - timestamp(route["at"])).total_seconds()
         age_limit = (
@@ -286,10 +363,30 @@ def plan_order(
             decimal(route["quantity"]),
             budget / (price + unit_fee),
         ).quantize(QUANTITY_STEP, rounding=ROUND_FLOOR)
-        sizing = kelly_order(p, price + unit_fee, effective, cap)
+        if is_topup:
+            # Fractional Kelly scales the free bankroll only; held values stay unscaled.
+            base = capital + fixture_cost
+            sizing = kelly_order(
+                p,
+                price + unit_fee,
+                base * fraction,
+                cap,
+                held_contracts=account["fixture_contracts"],
+                held_cost=fixture_cost,
+            )
+            covers_target |= sizing is None and cap >= QUANTITY_STEP
+            if sizing:
+                sizing.update(
+                    held_contracts=str(account["fixture_contracts"]),
+                    held_cost=str(fixture_cost),
+                )
+        else:
+            sizing = kelly_order(p, price + unit_fee, effective, cap)
         if sizing:
             candidates.append((price, route, sizing, unit_fee, p, net_edge))
     if not candidates:
+        if covers_target:
+            raise ValueError("existing_position_covers_target")
         raise ValueError("price_edge_liquidity_or_balance")
     price, route, sizing, unit_fee, probability, net_edge = min(
         candidates,
@@ -308,15 +405,22 @@ def plan_order(
             "held_contracts": str(held_contracts),
             "count": f"{count:.2f}",
         }
+    if is_topup and count * (price + unit_fee) < MIN_TOPUP_USD:
+        raise ValueError("existing_position_covers_target")
+    identity = alert["fixture_id"]
+    leg_fields = {}
+    if is_topup:
+        leg = account["fixture_leg"]
+        identity = f"{identity}#L{leg}"
+        leg_fields = {"leg": leg, "intent_id": identity}
     client_id = str(
-        uuid.uuid5(
-            uuid.NAMESPACE_URL, f"prometheus:{config.mode}:{alert['fixture_id']}"
-        )
+        uuid.uuid5(uuid.NAMESPACE_URL, f"prometheus:{config.mode}:{identity}")
     )
     return {
+        **leg_fields,
         "alert": copy.deepcopy(alert),
         "environment": config.mode,
-        "account": "ACCOUNT" if game == "lol" else f"ACCOUNT#{game}",
+        "account": "ACCOUNT" if game == "lol" else account_key(game),
         "series_id": alert["series_id"] if is_map else alert["event_ticker"],
         "series_key": (
             f"MAPSERIES#{alert['series_id']}"
@@ -556,6 +660,11 @@ def prefilter(proposals, quotes, now, config, canonical):
     return kept
 
 
+def error_kind(error) -> str:
+    code = getattr(error, "response", {}).get("Error", {}).get("Code")
+    return code if isinstance(code, str) and code else type(error).__name__
+
+
 def run(
     alerts,
     config_provider,
@@ -576,6 +685,13 @@ def run(
     now = now or dt.datetime.now(dt.UTC)
     config = Config.parse(config_provider())
     result = {"submitted": 0, "skipped": 0, "reconciled": 0, "errors": 0, "filtered": 0}
+
+    def record_error(step, error):
+        result["errors"] += 1
+        reasons = result.setdefault("error_reasons", {})
+        reason = f"{step}:{error_kind(error)}"
+        reasons[reason] = reasons.get(reason, 0) + 1
+
     apis = {}
 
     def api_for(environment):
@@ -596,11 +712,11 @@ def run(
                     close=close,
                 )
             )
-        except Exception:
+        except Exception as error:
             # Unknown status, missing credentials or cancellation failure retains
             # the durable reservation and is visible in the private intent.
             ledger.note_error(row, "reconciliation_failed", now)
-            result["errors"] += 1
+            record_error("reconcile", error)
     if config.mode == "off":
         return result
     alerts = list(alerts)
@@ -610,8 +726,7 @@ def run(
             continue
         try:
             validate_alert(alert, config, now)
-            if ledger.seen(alert, config.mode):
-                raise ValueError("duplicate_fixture_or_event")
+            _fixture_position(ledger, alert, config.mode)
             candidates.append(alert)
         except (ValueError, KeyError, TypeError, ArithmeticError):
             result["filtered"] += 1
@@ -627,8 +742,8 @@ def run(
                 else api.open_markets(series)
             )
             screened = prefilter(candidates, quotes, now, config, api.canonical)
-        except Exception:
-            result["errors"] += 1
+        except Exception as error:
+            record_error("markets", error)
             screened = []
         result["filtered"] += len(candidates) - len(screened)
         candidates = screened
@@ -648,12 +763,13 @@ def run(
                 and config.raw["live_maps"]["mode"] != "live"
             ):
                 raise ValueError("live_maps_not_activated")
-            if ledger.seen(alert, config.mode):
-                raise ValueError("duplicate_fixture_or_event")
+            position = _fixture_position(ledger, alert, config.mode)
             api = api_for(config.mode)
             resolving = True
             routes = api.resolve(alert, now, config)
             balance = decimal(api.balance())
+            # A top-up may hold exactly what its earlier legs filled; nothing else.
+            api._expected_fixture = dict(position["tickers"]) if position else {}
             exposure = decimal(api.exposure())
             if exposure < 0:
                 raise ValueError("invalid_account_exposure")
@@ -670,15 +786,22 @@ def run(
             validate_alert(alert, config, checked)
             game = alert.get("game", "lol")
             accounts = {
-                name: ledger.get(config.mode, name) or {}
-                for name in ("ACCOUNT", "ACCOUNT#cs2", "ACCOUNT#valorant")
+                name: ledger.get(config.mode, name) or {} for name in ACCOUNT_KEYS
             }
             account = {
-                **accounts["ACCOUNT" if game == "lol" else f"ACCOUNT#{game}"],
+                **accounts["ACCOUNT" if game == "lol" else account_key(game)],
                 "total_held": sum(
                     (decimal(row.get("held", 0)) for row in accounts.values()), ZERO
                 ),
             }
+            if position is not None:
+                account.update(
+                    {
+                        f"fixture_{key}": value
+                        for key, value in position.items()
+                        if key != "tickers"
+                    }
+                )
             starting = (
                 config.number("starting_bankroll_usd")
                 if game == "lol"
@@ -775,9 +898,9 @@ def run(
                 response = api.place(plan["request"])
                 ledger.ack(reserved, response)
                 result["submitted"] += 1
-            except Exception:
+            except Exception as error:
                 ledger.note_error(reserved, "submission_uncertain", checked)
-                result["errors"] += 1
+                record_error("submit", error)
         except (ValueError, KeyError, TypeError, ArithmeticError) as error:
             if resolving or alert.get("kind") == live_map.VERSION:
                 ledger.skip(alert, config.mode, str(error), now)
@@ -787,8 +910,13 @@ def run(
                 else "skipped"
             )
             result[key] += 1
-        except Exception:
+        except Exception as error:
             if resolving or alert.get("kind") == live_map.VERSION:
-                ledger.skip(alert, config.mode, "exchange_or_ledger_unavailable", now)
-            result["errors"] += 1
+                ledger.skip(
+                    alert,
+                    config.mode,
+                    f"exchange_or_ledger_unavailable:{error_kind(error)}",
+                    now,
+                )
+            record_error("alert", error)
     return result

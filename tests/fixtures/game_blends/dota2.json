@@ -1,0 +1,23 @@
+{
+  "version": "game-blend-v1",
+  "game": "dota2",
+  "series_ticker": "KXDOTA2GAME",
+  "clip": 0.01,
+  "protocol": "Synthetic execution fixture; not production coefficients.",
+  "snapshots": [
+    {
+      "available_from": "2026-02-01T00:00:00+00:00",
+      "trained_through": "2026-01-31T21:00:00+00:00",
+      "training_series": 412,
+      "market_slope": 0.97,
+      "gap_slope": 0.31
+    },
+    {
+      "available_from": "2026-11-01T00:00:00+00:00",
+      "trained_through": "2026-10-31T00:00:00+00:00",
+      "training_series": 412,
+      "market_slope": 0.97,
+      "gap_slope": 0.31
+    }
+  ]
+}

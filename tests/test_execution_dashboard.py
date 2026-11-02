@@ -280,6 +280,12 @@ def test_ledger_intents_paginate_and_put_meta():
         }
     ]
 
+    ledger.put_meta("live", "HEALTH", {})
+    assert writes[-1] == {
+        "TableName": "ledger",
+        "Item": _item({"pk": "ENV#live", "sk": "HEALTH"}),
+    }
+
 
 def test_settled_fees_draw_and_ignored_reservations():
     rows, _, _ = fixture()
@@ -320,3 +326,125 @@ def test_adopt_matching_body_without_rewriting_and_pin_failures(status, pin_erro
     )
     assert (result is not None) == (status == 200 and not pin_errors)
     assert calls == ["GET", "POST"]
+
+
+@pytest.mark.parametrize("failures", [0, 8, 9])
+def test_health_opens_at_threshold(failures):
+    calls = []
+    reasons = {"submit:TimeoutError": 2, "alert:AccessDeniedException": 1}
+    since = (NOW - dt.timedelta(minutes=failures)).isoformat()
+
+    def open(request, timeout):
+        calls.append(request)
+        assert timeout == 10
+        assert request.full_url == "https://api.github.com/repos/owner/repo/issues"
+        assert request.method == "POST"
+        assert request.get_header("Authorization") == "Bearer token"
+        assert json.loads(request.data) == {
+            "title": "⚠️ Executor unhealthy",
+            "body": (
+                f"Failing since {dt.datetime.fromisoformat(since):%Y-%m-%d %H:%M} UTC (10 consecutive runs).\n\n"
+                "- `alert:AccessDeniedException` × 1\n- `submit:TimeoutError` × 2"
+                "\n\nDetails: SKIP rows in the private ledger and the Lambda's CloudWatch logs."
+            ),
+        }
+        return Response({"number": 42}, 201)
+
+    state = {"failures": Decimal(failures), "since": since} if failures else {}
+    result = notify.sync_health(
+        "token", "owner/repo", state, reasons, NOW, SimpleNamespace(open=open)
+    )
+    assert result["failures"] == failures + 1
+    assert result["since"] == (since if failures else NOW.isoformat())
+    assert result["reasons"] == json.dumps(reasons, sort_keys=True)
+    assert result["updated"] == NOW.isoformat()
+    assert len(calls) == int(failures == 9)
+    assert result.get("issue") == (42 if failures == 9 else None)
+
+
+@pytest.mark.parametrize(
+    "changed,seconds", [(False, 3599), (False, 3600), (False, 3601), (True, 1)]
+)
+def test_health_patch_only_for_changed_reasons_or_after_hour(changed, seconds):
+    calls = []
+    reasons = {"submit:TimeoutError": 2 if changed else 1}
+    updated = (NOW - dt.timedelta(seconds=seconds)).isoformat()
+    state = {
+        "failures": Decimal(10),
+        "issue": Decimal(42),
+        "since": NOW.isoformat(),
+        "reasons": json.dumps({"submit:TimeoutError": 1}, sort_keys=True),
+        "updated": updated,
+    }
+
+    def open(request, timeout):
+        calls.append(request)
+        assert request.method == "PATCH" and request.full_url.endswith("/issues/42")
+        assert set(json.loads(request.data)) == {"body"}
+        return Response({})
+
+    result = notify.sync_health(
+        "token", "owner/repo", state, reasons, NOW, SimpleNamespace(open=open)
+    )
+    patched = changed or seconds > 3600
+    assert len(calls) == int(patched)
+    assert result["failures"] == 11
+    assert result["updated"] == (NOW.isoformat() if patched else updated)
+    assert result["reasons"] == json.dumps(reasons, sort_keys=True)
+
+
+@pytest.mark.parametrize(
+    "issue,failures", [(Decimal(42), Decimal(12)), (None, 3), (None, 0)]
+)
+def test_health_recovery_comments_closes_and_resets(issue, failures):
+    calls = []
+
+    def open(request, timeout):
+        calls.append((request.full_url, request.method, json.loads(request.data)))
+        return Response({}, 201 if request.method == "POST" else 200)
+
+    result = notify.sync_health(
+        "token",
+        "owner/repo",
+        {"issue": issue, "failures": failures},
+        {},
+        NOW,
+        SimpleNamespace(open=open),
+    )
+    assert result == ({} if issue or failures else None)
+    assert calls == (
+        [
+            (
+                "https://api.github.com/repos/owner/repo/issues/42/comments",
+                "POST",
+                {"body": f"Recovered at {NOW:%Y-%m-%d %H:%M} after 12 failing runs."},
+            ),
+            (
+                "https://api.github.com/repos/owner/repo/issues/42",
+                "PATCH",
+                {"state": "closed"},
+            ),
+        ]
+        if issue
+        else []
+    )
+
+
+@pytest.mark.parametrize("failure", ["exception", "status", "number", "repo"])
+def test_health_failures_are_best_effort(failure):
+    def open(request, timeout):
+        if failure == "exception":
+            raise TimeoutError
+        return Response({"number": "bad"}, 500 if failure == "status" else 201)
+
+    assert (
+        notify.sync_health(
+            "token",
+            "https://evil/repo" if failure == "repo" else "owner/repo",
+            {"failures": 9},
+            {"alert:OSError": 1},
+            NOW,
+            SimpleNamespace(open=open),
+        )
+        is None
+    )

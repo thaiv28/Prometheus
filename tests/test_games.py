@@ -124,3 +124,25 @@ def test_load_feeds(feed, tmp_path, caplog):
         (tmp_path / f"{name}.json").write_text(contents)
     assert [f["name"] for f in games.load_feeds(tmp_path)] == ["AAA", "Valorant"]
     assert caplog.text.count("skipped") == 6
+
+
+def test_dota_feed_pages(feed, tmp_path, monkeypatch):
+    feed.update(game="dota2", name="Dota 2", model="Synthetic Dota model")
+    feed["source"]["url"] = "https://liquipedia.net/dota2/"
+    source = tmp_path / "feeds"
+    source.mkdir()
+    (source / "dota2.json").write_text(json.dumps(feed))
+    loaded = games.load_feeds(source)
+    assert loaded == [feed]
+    monkeypatch.setattr(config, "OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setitem(env.globals, "nav", [*config.NAV, games.nav_group(loaded)])
+    view = games.game_view(feed, NOW)
+    assert view["upcoming_count"] == 2
+    assert len(rows(view["live"])) == 1 and len(view["months"]) == 2
+    games.render_game_pages(loaded, NOW)
+    folder = tmp_path / "other"
+    assert json.loads((folder / "dota2.json").read_text()) == feed
+    html = (folder / "dota2.html").read_text()
+    assert "Dota 2" in html and 'href="../other/dota2.html"' in html
+    assert 'id="live"' in html and 'id="upcoming"' in html and 'id="past"' in html
+    assert (folder / "dota2" / "2026-09.html").exists()

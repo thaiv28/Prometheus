@@ -25,6 +25,7 @@ def source_hash(root=ROOT):
     paths = {
         "prometheus/__init__.py",
         "prometheus/alert_contract.py",
+        "prometheus/other_games.py",
         "prometheus/market_blend.py",
         "prometheus/market_blend.json",
         "deploy/execution/handler.py",

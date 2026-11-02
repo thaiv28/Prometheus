@@ -5,6 +5,7 @@ import datetime as dt
 import io
 import json
 import math
+import re
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,9 +25,10 @@ from test_execution_runner import Parameter, clients, control, handler
 
 from prometheus import alert_contract as ac
 from prometheus import market_blend as mb
-from prometheus.execution import core
+from prometheus.execution import core, dashboard
 from prometheus.execution.kalshi import Kalshi
 from prometheus.execution.ledger import _item
+from prometheus.other_games import ACCOUNT_KEYS, GAMES, account_key
 
 FIXTURES = Path(__file__).with_name("fixtures")
 
@@ -69,7 +71,7 @@ def game_document(game="cs2", now=NOW, **changes):
     }
 
 
-@pytest.mark.parametrize("game", ["cs2", "valorant"])
+@pytest.mark.parametrize("game", ["cs2", "valorant", "dota2"])
 def test_game_candidates_and_frozen_clipping(game_artifacts, game):
     proposals = ac.saved_candidates(game_document(game), NOW)
     assert len(proposals) == 2
@@ -313,18 +315,27 @@ def test_game_bulk_selection_and_shared_execution(game_artifacts, enabled):
         assert api.calls[0]["count"]
 
 
-@pytest.mark.parametrize("word", ["CS2", "League of Legends"])
-def test_cs2_rule_resolution(word):
+@pytest.mark.parametrize(
+    "game,word",
+    [
+        ("cs2", "CS2"),
+        ("cs2", "League of Legends"),
+        ("dota2", "Dota 2"),
+        ("dota2", "CS2"),
+    ],
+)
+def test_cs2_rule_resolution(game, word):
+    series = GAMES[game].series_ticker
     api = PublicClient()
-    api.event.update(event_ticker="KXCS2GAME-F", series_ticker="KXCS2GAME")
+    api.event.update(event_ticker=f"{series}-F", series_ticker=series)
     books = {}
     for market, team in zip(api.event["markets"], ["GamerLegion", "HOTU"], strict=True):
         book = api.books[market["ticker"]]
         book["no_dollars"] = [[".4", "2"]]
-        books[f"KXCS2GAME-F-{team}"] = book
+        books[f"{series}-F-{team}"] = book
         market.update(
-            ticker=f"KXCS2GAME-F-{team}",
-            event_ticker="KXCS2GAME-F",
+            ticker=f"{series}-F-{team}",
+            event_ticker=f"{series}-F",
             yes_sub_title=team,
             rules_primary=f"If {team} wins the Tesla Cup 2026: GamerLegion vs. HOTU {word} match originally scheduled for Oct 29, 2026 at 2:00 PM EDT",
         )
@@ -332,19 +343,19 @@ def test_cs2_rule_resolution(word):
     original = api.request
 
     def request(method, path, body=None, **query):
-        if path == "/series/KXCS2GAME":
+        if path == f"/series/{series}":
             return {"series": api.series}
         return original(method, path, body, **query)
 
     api.request = request
     proposal = {
-        "game": "cs2",
-        "event_ticker": "KXCS2GAME-F",
+        "game": game,
+        "event_ticker": f"{series}-F",
         "start": "2026-10-29T18:00Z",
         "teams": ["GamerLegion", "HOTU"],
         "backed_team": "HOTU",
     }
-    if word == "CS2":
+    if word == GAMES[game].rules_word:
         assert len(api.resolve(proposal, NOW, config())) == 2
     else:
         with pytest.raises(ValueError, match="unsupported_or_ambiguous_market"):
@@ -376,7 +387,7 @@ def test_open_markets_reads_each_series_and_merges_events():
     quotes = api.open_markets(tickers)
     assert [c[2]["series_ticker"] for c in calls] == list(tickers)
     assert all(c[:2] == ("GET", "/markets") and c[2]["status"] == "open" for c in calls)
-    assert len(quotes["E"]) == 3
+    assert len(quotes["E"]) == 4
 
 
 @pytest.mark.parametrize(
@@ -384,6 +395,12 @@ def test_open_markets_reads_each_series_and_merges_events():
     [
         ("off", {"cs2": {"enabled": True, "starting_bankroll_usd": "50"}}, "cs2.json"),
         ("demo", {}, "cs2.json"),
+        (
+            "demo",
+            {"dota2": {"enabled": True, "starting_bankroll_usd": "50"}},
+            "dota2-model/feed/candidates.json",
+        ),
+        ("demo", {"dota2": {"enabled": False}}, "dota2-model/feed/candidates.json"),
         ("demo", {"cs2": {"enabled": False}}, "cs2.json"),
         ("demo", {"cs2": {"enabled": True, "starting_bankroll_usd": "50"}}, ""),
         (
@@ -493,9 +510,9 @@ def test_game_config_rejects_missing_enabled_and_unknown_fields(game):
         core.Config.parse(settings(games={"cs2": game}))
 
 
-def game_settings(**changes):
+def game_settings(game="cs2", **changes):
     return settings(
-        games={"cs2": {"enabled": True, "starting_bankroll_usd": "50"}},
+        games={game: {"enabled": True, "starting_bankroll_usd": "50"}},
         order_budget_usd="1000",
         fixture_budget_usd="1000",
         daily_budget_usd="1000",
@@ -505,8 +522,11 @@ def game_settings(**changes):
     )
 
 
-def test_game_losses_stop_at_own_bankroll_and_leave_league_untouched():
-    client, api, ledger, execute = harness(game_settings(starting_bankroll_usd="10000"))
+@pytest.mark.parametrize("game", ["cs2", "dota2"])
+def test_game_losses_stop_at_own_bankroll_and_leave_league_untouched(game):
+    client, api, ledger, execute = harness(
+        game_settings(game, starting_bankroll_usd="10000")
+    )
     league = {
         "pk": "ENV#demo",
         "sk": "ACCOUNT",
@@ -514,24 +534,29 @@ def test_game_losses_stop_at_own_bankroll_and_leave_league_untouched():
         "realized": Decimal(12),
     }
     client.put_item(Item=_item(league))
+    untouched = {"ACCOUNT": league}
+    for key in ACCOUNT_KEYS[1:]:
+        if key != account_key(game):
+            untouched[key] = {**league, "sk": key}
+            client.put_item(Item=_item(untouched[key]))
     api.cash = "1000"
     api.routes[0]["quantity"] = "1000"
     losses = Decimal(0)
     for index in range(100):
         proposal = saved(
-            game="cs2",
-            group="cs2-series",
+            game=game,
+            group=f"{game}-series",
             probability=".99",
-            fixture_id=f"cs2-{index}",
-            event_ticker=f"KXCS2GAME-{index}",
+            fixture_id=f"{game}-{index}",
+            event_ticker=f"{GAMES[game].series_ticker}-{index}",
         )
         result = execute([proposal])
         assert result["errors"] == 0
         if not result["submitted"]:
             break
         row = ledger.pending()[0]
-        assert row["account"] == "ACCOUNT#cs2"
-        account = ledger.get("demo", "ACCOUNT#cs2")
+        assert row["account"] == account_key(game)
+        account = ledger.get("demo", account_key(game))
         assert account["held"] <= 50 + account.get("realized", 0)
         count = row["request"]["count"]
         fees = Decimal(row["held"]) - Decimal(".60") * Decimal(count)
@@ -540,7 +565,7 @@ def test_game_losses_stop_at_own_bankroll_and_leave_league_untouched():
         # First reconcile actual fills, then verify a losing settlement.
         api.settlement_rows = []
         assert execute([])["reconciled"] == 1
-        assert ledger.get("demo", "ACCOUNT#cs2")["held"] <= 50 - losses
+        assert ledger.get("demo", account_key(game))["held"] <= 50 - losses
         api.settlement_rows = [
             {
                 "ticker": row["request"]["ticker"],
@@ -551,15 +576,15 @@ def test_game_losses_stop_at_own_bankroll_and_leave_league_untouched():
         ]
         assert execute([])["reconciled"] == 1
         losses += Decimal(row["held"])
-        account = ledger.get("demo", "ACCOUNT#cs2")
+        account = ledger.get("demo", account_key(game))
         assert account["held"] == 0
         assert account["realized"] == -losses >= -50
-        assert ledger.get("demo", "ACCOUNT") == league
+        assert {key: ledger.get("demo", key) for key in untouched} == untouched
     else:
         pytest.fail("Losing game must stop placing orders")
     assert index > 1 and losses > 49
-    assert ledger.get("demo", "ACCOUNT") == league
-    cfg = core.Config.parse(game_settings())
+    assert {key: ledger.get("demo", key) for key in untouched} == untouched
+    cfg = core.Config.parse(game_settings(game))
     with pytest.raises(ValueError, match="exhausted"):
         core.plan_order(
             proposal, api.routes, cfg, Decimal(1000), NOW, {"realized": -50}
@@ -742,13 +767,14 @@ def test_handler_hourly_game_refits_and_missing_objects(
 
 
 @pytest.mark.parametrize("game", ["lol", "cs2"])
-def test_runner_counts_other_games_held_even_when_disabled(game):
+@pytest.mark.parametrize("held_game", ["valorant", "dota2"])
+def test_runner_counts_other_games_held_even_when_disabled(game, held_game):
     client, api, ledger, execute = harness(game_settings())
     client.put_item(
         Item=_item(
             {
                 "pk": "ENV#demo",
-                "sk": "ACCOUNT#valorant",
+                "sk": account_key(held_game),
                 "held": Decimal(95),
             }
         )
@@ -759,3 +785,62 @@ def test_runner_counts_other_games_held_even_when_disabled(game):
     assert result["submitted"] == 0 and result["skipped"] == 1
     assert result["errors"] == 0
     assert api.calls == [] and ledger.pending() == []
+
+
+def test_other_game_registry():
+    assert {slug: game.series_ticker for slug, game in GAMES.items()} == {
+        "cs2": "KXCS2GAME",
+        "valorant": "KXVALORANTGAME",
+        "dota2": "KXDOTA2GAME",
+    }
+    assert ACCOUNT_KEYS == (
+        "ACCOUNT",
+        "ACCOUNT#cs2",
+        "ACCOUNT#valorant",
+        "ACCOUNT#dota2",
+    )
+    root = Path(__file__).resolve().parents[1]
+    shell = (root / "scripts/game_feeds.sh").read_text()
+    entries = re.search(r"^GAMES=\(([^)]+)\)", shell, re.M)[1].split()
+    assert dict(entry.split(":") for entry in entries) == {
+        slug: game.repo for slug, game in GAMES.items()
+    }
+    assert {slug: dashboard.MARKETS[slug] for slug in GAMES} == {
+        "cs2": ("CS2", "🟥", "#dc2626"),
+        "valorant": ("Valorant", "🟩", "#16a34a"),
+        "dota2": ("Dota 2", "🟧", "#ea580c"),
+    }
+    for slug, game in GAMES.items():
+        assert game.slug == slug and game.trade_groups <= game.groups
+        assert game.groups <= ac.GROUPS and game.trade_groups <= ac.TRADE_GROUPS
+    assert "valorant-international" not in ac.TRADE_GROUPS
+    assert core.Config.parse(settings()).raw.get("games", {}) == {}
+
+
+def test_dota_packaged_blend_and_missing_file(monkeypatch, tmp_path):
+    assert mb.load("dota2")["series_ticker"] == "KXDOTA2GAME"
+    monkeypatch.setattr(mb, "GAME_PATH", tmp_path)
+    mb.load.cache_clear()
+    try:
+        assert mb.snapshot(NOW, "dota2") is None
+    finally:
+        mb.load.cache_clear()
+
+
+def test_dota_blend_env_refit(game_artifacts, monkeypatch):
+    aws, _ = clients(monkeypatch, game_settings("dota2"))
+    monkeypatch.setenv("GAME_BLEND_KEYS", "dota2:dota2-model/feed/blend_artifact.json")
+    monkeypatch.setattr(handler, "_BLEND_CHECKED", {})
+    data = copy.deepcopy(mb.load("dota2"))
+    reads = []
+
+    def read(**kw):
+        reads.append(kw["Key"])
+        return {"Body": io.BytesIO(json.dumps(data).encode())}
+
+    aws["s3"] = SimpleNamespace(get_object=read)
+    assert handler.refresh_blends(aws, {"dota2": {"enabled": False}}) == 0
+    assert reads == []
+    assert handler.refresh_blends(aws, {"dota2": {"enabled": True}}) == 0
+    assert reads == ["dota2-model/feed/blend_artifact.json"]
+    assert mb.load("dota2") == data

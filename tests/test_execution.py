@@ -81,7 +81,11 @@ class AtomicDynamo:
             self.requests.append(copy.deepcopy(TransactItems))
             next_data = copy.deepcopy(self.data)
             for action in TransactItems:
-                op = action.get("Put") or action.get("Update") or action["Delete"]
+                if len(action) != 1 or not set(action) <= {"Put", "Update", "Delete"}:
+                    raise AssertionError(
+                        "operation not allowed by the executor IAM role"
+                    )
+                op = next(iter(action.values()))
                 item = op.get("Item") or op["Key"]
                 key = self.key(item)
                 old = _decode(next_data.get(key, {}))
@@ -102,11 +106,15 @@ class AtomicDynamo:
                     expected = values.get(f":expected_{field}")
                     if expected is not None and old.get(field, Decimal(0)) != expected:
                         raise Conditional
+                if condition == "attribute_exists(pk)" and not old:
+                    raise Conditional
                 if "Put" in action:
                     next_data[key] = copy.deepcopy(item)
                 elif "Delete" in action:
                     next_data.pop(key, None)
                 else:
+                    if op["UpdateExpression"].startswith("SET "):
+                        continue
                     old.update(_decode(op["Key"]))
                     for addition in (
                         op["UpdateExpression"].removeprefix("ADD ").split(",")
@@ -375,7 +383,9 @@ def test_intent_precedes_submission_and_v2_body():
 def test_timeout_unknown_keeps_reservation_across_process_restart_and_id_change():
     client, api, ledger, execute = harness()
     api.timeout, api.invisible = True, True
-    assert execute([saved()])["errors"] == 1
+    result = execute([saved()])
+    assert result["errors"] == 1
+    assert result["error_reasons"] == {"submit:TimeoutError": 1}
     reserve = held(ledger)
     restarted = DynamoLedger("private", client)
     result = run(
@@ -441,7 +451,9 @@ def test_eventual_fill_visibility_and_bad_fill_keep_full_reservation():
     execute([])
     assert held(ledger) == original
     fill(api, price=".61")
-    assert execute([])["errors"] == 1
+    result = execute([])
+    assert result["errors"] == 1
+    assert result["error_reasons"] == {"reconcile:ValueError": 1}
     assert held(ledger) == original
 
 
@@ -836,6 +848,7 @@ def test_candidate_bulk_failure_submits_nothing_and_writes_nothing():
     api.open_markets = failed
     result = execute([candidate_proposal()])
     assert result["errors"] == 1 and result["filtered"] == 1
+    assert result["error_reasons"] == {"markets:TimeoutError": 1}
     assert not api.calls and not client.data
 
 
@@ -988,3 +1001,316 @@ def test_settlement_closes_once_and_preserves_issue_number(close_result, notify_
     assert stored["issue"] == 42 and stored["notified"]
     assert len(closed) == len(notified) == 1
     assert ledger.pending() == []
+
+
+@pytest.mark.parametrize(
+    "case,reason",
+    [
+        ("fresh", None),
+        ("filled", None),
+        ("unfilled", None),
+        ("aborted", None),
+        ("intent", "pending_order"),
+        ("submitting", "pending_order"),
+        ("submitted", "pending_order"),
+        ("unknown", "pending_order"),
+        ("other_team", "existing_position_other_side"),
+        ("other_event", "existing_position_other_side"),
+        ("settled", "duplicate_fixture_or_event"),
+        ("four", "max_legs"),
+        ("different_intent", "duplicate_fixture_or_event"),
+        ("legacy", "duplicate_fixture_or_event"),
+        ("missing_fixture", "duplicate_fixture_or_event"),
+        ("missing_event", "duplicate_fixture_or_event"),
+        ("no_legs", "duplicate_fixture_or_event"),
+    ],
+)
+def test_topup_position_guards(case, reason):
+    from prometheus.execution.core import topup_position
+
+    alert = candidate_proposal()
+    row = {
+        "alert": copy.deepcopy(alert),
+        "status": "filled",
+        "held": "1.89",
+        "order": {"fill_count_fp": "3.00"},
+        "request": {"ticker": "KXLOLGAME-F-A", "side": "bid"},
+    }
+    legs = [row]
+    fences = {"FIXTURE": {"intent": "first"}, "EVENT": {"intent": "first"}}
+    if case == "fresh":
+        fences = {"FIXTURE": None, "EVENT": None}
+    elif case in {
+        "intent",
+        "submitting",
+        "submitted",
+        "unknown",
+        "settled",
+        "unfilled",
+        "aborted",
+    }:
+        row["status"] = case
+    elif case == "other_team":
+        row["alert"]["backed_team"] = "B"
+    elif case == "other_event":
+        row["alert"]["event_ticker"] = "OTHER"
+    elif case == "four":
+        legs *= 4
+    elif case == "different_intent":
+        fences["EVENT"]["intent"] = "another-fixture"
+    elif case == "legacy":
+        alert = saved()
+    elif case.startswith("missing_"):
+        fences[case.removeprefix("missing_").upper()] = None
+    elif case == "no_legs":
+        legs = []
+    if reason:
+        with pytest.raises(ValueError, match=reason):
+            topup_position(alert, legs, fences)
+    else:
+        result = topup_position(alert, legs, fences)
+        assert result == (
+            None
+            if case == "fresh"
+            else {
+                "leg": 2,
+                "contracts": Decimal(0 if case in {"unfilled", "aborted"} else 3),
+                "cost": Decimal(0)
+                if case in {"unfilled", "aborted"}
+                else Decimal("1.89"),
+                "tickers": {}
+                if case in {"unfilled", "aborted"}
+                else {"KXLOLGAME-F-A": Decimal(3)},
+            }
+        )
+
+
+@pytest.mark.parametrize("first_count", ["3.00", "0.00"])
+def test_candidate_ioc_topup_reaches_target_with_distinct_keys(first_count):
+    from prometheus.execution.core import plan_order
+
+    config = settings(
+        order_budget_usd="100",
+        fixture_budget_usd="100",
+        daily_budget_usd="200",
+        max_exposure_usd="100",
+        max_contracts=100,
+    )
+    client, api, ledger, execute = harness(config)
+    candidate_api(api)
+    proposal = candidate_proposal()
+    api.routes[0]["quantity"] = "100"
+    target = Decimal(
+        plan_order(proposal, api.routes, Config.parse(config), Decimal(100), NOW)[
+            "request"
+        ]["count"]
+    )
+    api.routes[0]["quantity"] = "3"
+    assert execute([proposal])["submitted"] == 1
+    if Decimal(first_count):
+        fill(api, count=first_count, price=".60", fee=".09")
+    api.routes[0]["quantity"] = "100"
+    assert execute([proposal])["submitted"] == 1
+    second = ledger.legs(proposal, "demo")[1]
+    assert second["intent_id"] == "f#L2" and second["leg"] == 2
+    assert second["request"]["count"] == f"{target - Decimal(first_count):.2f}"
+    assert api.calls[0]["client_order_id"] != api.calls[1]["client_order_id"]
+    assert ledger.get("demo", "INTENT#f#L2") and ledger.get("demo", "ACTIVE#f#L2")
+    # Give each fake order independent exchange evidence for reconciliation.
+    api.orders[1]["order_id"] = "o2"
+    api.orders[1]["fill_count_fp"] = second["request"]["count"]
+    count = Decimal(second["request"]["count"])
+    api.fill_rows.append(
+        {
+            "fill_id": "fill2",
+            "order_id": "o2",
+            "ticker": api.routes[0]["ticker"],
+            "count_fp": str(count),
+            "yes_price_dollars": ".60",
+            "no_price_dollars": ".40",
+            "fee_cost": str(count * Decimal(".03")),
+            "book_side": "bid",
+        }
+    )
+    api.fills = lambda order_id, expected=None: copy.deepcopy(
+        [f for f in api.fill_rows if f["order_id"] == order_id]
+    )
+    result = execute([proposal])
+    assert result["submitted"] == 0 and result["skipped"] == 1 and result["errors"] == 0
+    assert (
+        next(
+            _decode(v)["reason"]
+            for (_, sk), v in client.data.items()
+            if sk.startswith("SKIP#")
+        )
+        == "existing_position_covers_target"
+    )
+    assert ledger.get("demo", "EVIDENCE#f#L2#fills#fill2")
+    assert ledger.get("demo", "ACTIVE#f#L2")
+    # A later replacement targets only the second leg and removes its active pointer.
+    previous = next(r for r in ledger.legs(proposal, "demo") if r.get("leg") == 2)
+    ledger.abort(previous, "test_cleanup")
+    assert ledger.get("demo", "ACTIVE#f#L2") is None
+    assert ledger.get("demo", "INTENT#f")
+    assert len(api.calls) == 2
+
+
+@pytest.mark.parametrize("held, submitted", [("3.00", 1), ("4.00", 0)])
+def test_topup_passes_real_exposure_guard_only_for_ledger_position(held, submitted):
+    """The Kalshi client's fixture guard sees the ledger's filled legs."""
+    from prometheus.execution.kalshi import Kalshi
+
+    config = settings(
+        order_budget_usd="100",
+        fixture_budget_usd="100",
+        daily_budget_usd="200",
+        max_exposure_usd="100",
+        max_contracts=100,
+    )
+    client, api, _ledger, execute = harness(config)
+    candidate_api(api)
+    proposal = candidate_proposal()
+    api.routes[0]["quantity"] = "3"
+    assert execute([proposal])["submitted"] == 1
+    fill(api, count="3.00", price=".60", fee=".09")
+    api.routes[0]["quantity"] = "100"
+    api._fixture_tickers = {"KXLOLGAME-F-A", "KXLOLGAME-F-B"}
+    api.pages = lambda path, field, **query: (
+        [
+            {
+                "ticker": "KXLOLGAME-F-A",
+                "position_fp": held,
+                "market_exposure_dollars": str(Decimal(held) * Decimal(".6")),
+            }
+        ]
+        if path == "/portfolio/positions"
+        else []
+    )
+    api.exposure = lambda: Kalshi.exposure(api)
+    result = execute([proposal])
+    assert result["submitted"] == submitted
+    if not submitted:
+        reasons = [
+            _decode(v)["reason"]
+            for (_, sk), v in client.data.items()
+            if sk.startswith("SKIP#")
+        ]
+        assert reasons == ["existing_fixture_exposure"]
+
+
+def test_topup_reserve_requires_fixture_and_does_not_rewrite_fences():
+    client, _, ledger, execute = harness()
+    execute([saved()])
+    execute([])
+    plan = json.loads(ledger.get("demo", "INTENT#f")["payload"])
+    plan.update(leg=2, intent_id="f#L2", client_order_id="second")
+    fences = {
+        key: copy.deepcopy(value)
+        for key, value in client.data.items()
+        if key[1].startswith(("FIXTURE#", "EVENT#"))
+    }
+    del client.data[("ENV#demo", "FIXTURE#f")]
+    assert ledger.reserve(plan, Config.parse(settings()), Decimal(100)) is None
+    client.data.update(fences)
+    assert ledger.reserve(plan, Config.parse(settings()), Decimal(100))
+    puts = [a["Put"]["Item"]["sk"]["S"] for a in client.requests[-1] if "Put" in a]
+    assert puts == ["INTENT#f#L2", "ACTIVE#f#L2"]
+    assert all(client.data[key] == value for key, value in fences.items())
+    assert ledger.reserve(plan, Config.parse(settings()), Decimal(100)) is None
+
+
+def test_fixture_legs_paginate_consistently_filter_prefix_and_preserve_revision():
+    client, _, ledger, execute = harness()
+    execute([saved()])
+    execute([])
+    original_query = client.query
+    item = client.data[("ENV#demo", "INTENT#f")]
+    other = copy.deepcopy(item)
+    payload = json.loads(other["payload"]["S"])
+    payload["alert"]["fixture_id"] = "foobar"
+    other["payload"]["S"] = json.dumps(payload)
+    cursor = _item({"pk": "ENV#demo", "sk": "INTENT#foobar"})
+    calls = []
+
+    def paginated(**query):
+        calls.append(query)
+        assert query["ConsistentRead"] is True
+        assert _decode(query["ExpressionAttributeValues"])[":prefix"] == "INTENT#f"
+        if "ExclusiveStartKey" not in query:
+            return {"Items": [other], "LastEvaluatedKey": cursor}
+        assert query["ExclusiveStartKey"] == cursor
+        return original_query(**query)
+
+    client.query = paginated
+    legs = ledger.legs(saved(), "demo")
+    assert len(calls) == 2 and len(legs) == 1
+    assert legs[0]["revision"] == int(item["revision"]["N"])
+    assert ledger.replace(legs[0], {**legs[0], "reason": "revision_test"})
+
+
+def test_topup_transaction_uses_conditional_fixture_update():
+    client, _, ledger, execute = harness()
+    execute([saved()])
+    execute([])
+    plan = json.loads(ledger.get("demo", "INTENT#f")["payload"])
+    plan.update(leg=2, intent_id="f#L2", client_order_id="second")
+    del client.data[("ENV#demo", "FIXTURE#f")]
+    before = copy.deepcopy(client.data)
+    assert ledger.reserve(plan, Config.parse(settings()), Decimal(100)) is None
+    assert client.data == before
+    transaction = client.requests[-1]
+    assert all("ConditionCheck" not in action for action in transaction)
+    fixture = [
+        action["Update"]
+        for action in transaction
+        if "Update" in action and action["Update"]["Key"]["sk"]["S"] == "FIXTURE#f"
+    ]
+    assert len(fixture) == 1
+    assert fixture[0]["UpdateExpression"] == "SET #intent = #intent"
+    assert fixture[0]["ExpressionAttributeNames"] == {"#intent": "intent"}
+    assert fixture[0]["ConditionExpression"] == "attribute_exists(pk)"
+
+
+@pytest.mark.parametrize("operation", ["ConditionCheck", "Unknown"])
+def test_atomic_dynamo_rejects_operations_outside_executor_role(operation):
+    with pytest.raises(
+        AssertionError, match="operation not allowed by the executor IAM role"
+    ):
+        AtomicDynamo().transact_write_items(TransactItems=[{operation: {}}])
+
+
+def test_alert_error_records_aws_kind_and_private_skip_reason():
+    client, _, ledger, execute = harness()
+
+    class Denied(Exception):
+        def __init__(self, message):
+            super().__init__(message)
+            self.response = {"Error": {"Code": "AccessDeniedException"}}
+
+    def reserve(*args):
+        raise Denied("private details")
+
+    ledger.reserve = reserve
+    result = execute([saved(), saved(alert_id="b")])
+    assert result["errors"] == 2
+    assert result["error_reasons"] == {"alert:AccessDeniedException": 2}
+    reasons = [
+        _decode(item)["reason"]
+        for (_, sk), item in client.data.items()
+        if sk.startswith("SKIP#")
+    ]
+    assert reasons and set(reasons) == {
+        "exchange_or_ledger_unavailable:AccessDeniedException"
+    }
+
+
+@pytest.mark.parametrize("code", [None, "", 123, "ThrottlingException"])
+def test_error_kind_uses_only_nonempty_aws_string(code):
+    from prometheus.execution.core import error_kind
+
+    error = RuntimeError("private details")
+    error.response = {"Error": {"Code": code}}
+    assert error_kind(error) == (
+        code if isinstance(code, str) and code else "RuntimeError"
+    )
+    assert error_kind(TimeoutError()) == "TimeoutError"

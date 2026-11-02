@@ -1133,6 +1133,15 @@ class Game:
                 game["ended_at"] = game["frames"][-1]["at"] if game["frames"] else at
                 page["note"] = f"{names[result['winner']]} won map {self.number}."
             need = (self.mapping.get("best_of") or 1) // 2 + 1
+            if (
+                not result
+                and score
+                and sum(score) == self.number - 1
+                and max(score) + 1 >= need
+            ):
+                # This map decides the series; no next map until a source has it.
+                page["awaiting_result"] = True
+                page["note"] = f"Map {self.number} is over; waiting for the result."
             if score and max(score) >= need:
                 # The series is over: say so, then leave the index after a while.
                 won = 0 if score[0] > score[1] else 1
