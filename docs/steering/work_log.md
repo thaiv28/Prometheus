@@ -1,5 +1,9 @@
 
 
+## 2026-11-02 — Playbook: one models repo, CI lessons, worktree cleanup
+
+`docs/playbooks/new_game.md` now builds a game as `games/<game>/` in `thaiv28/prometheus-models` (no new repo, secrets or token change; root CI, hook and setup action cover it), copies root `dota2-*` workflows and joins the Kalshi matrix, and records the 2026-11-02 CI audit (drifted copies, content-hash dispatch, ratings in the gate, 500-title listings, cached link helpers, moved pages). Ground rules: remove worktrees once merged. The `new-esport` skill points at the game folder. Docs only; checks: steering test.
+
 ## 2026-11-02 — Executor: top-up reserve permission and health issue
 
 Branch `executor-health` from `main`. The role lacks ConditionCheckItem, so every top-up reserve failed with AccessDeniedException (2026-10-30 21:40 to 2026-11-02 12:59 on an unfilled first leg, again from 20:38 after the guard fix), surfacing as "Execution incomplete" every minute. Reserve now uses a no-op conditional Update, previously validated against DynamoDB with a forced-cancel probe (nothing written). The test fake rejects operations outside the role. Errors record step:type; a private GitHub issue opens after 10 consecutive failing runs and closes on recovery. Checks: full pytest (1,323 passed, 2 skipped), focused execution/steering (265 passed), Ruff format/check, diff check. Used UV_NO_SYNC=1 to bypass a uv macOS startup panic; focused tests needed PYTHONPATH=. Limit: GitHub publication and Lambda execution not exercised against production.
