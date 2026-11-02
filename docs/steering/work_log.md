@@ -1,5 +1,9 @@
 
 
+## 2026-11-02 — Playbook: one models repo, CI lessons, worktree cleanup
+
+`docs/playbooks/new_game.md` now builds a game as `games/<game>/` in `thaiv28/prometheus-models` (no new repo, secrets or token change; root CI, hook and setup action cover it), copies root `dota2-*` workflows and joins the Kalshi matrix, and records the 2026-11-02 CI audit (drifted copies, content-hash dispatch, ratings in the gate, 500-title listings, cached link helpers, moved pages). Ground rules: remove worktrees once merged. The `new-esport` skill points at the game folder. Docs only; checks: steering test.
+
 ## 2026-11-02 — Executor: top-up reserve permission and health issue
 
 Branch `executor-health` from `main`. The role lacks ConditionCheckItem, so every top-up reserve failed with AccessDeniedException (2026-10-30 21:40 to 2026-11-02 12:59 on an unfilled first leg, again from 20:38 after the guard fix), surfacing as "Execution incomplete" every minute. Reserve now uses a no-op conditional Update, previously validated against DynamoDB with a forced-cancel probe (nothing written). The test fake rejects operations outside the role. Errors record step:type; a private GitHub issue opens after 10 consecutive failing runs and closes on recovery. Checks: full pytest (1,323 passed, 2 skipped), focused execution/steering (265 passed), Ruff format/check, diff check. Used UV_NO_SYNC=1 to bypass a uv macOS startup panic; focused tests needed PYTHONPATH=. Limit: GitHub publication and Lambda execution not exercised against production.
@@ -20,42 +24,22 @@ Branch `retrade-backtest` from `main`. Live ledger: no top-up ever placed; `kals
 
 Branch `deciding-map-wait` from `main`. After the deciding map ended, the live page showed "Between maps." at the old score until Kalshi or Riot reported the winner (TL vs LØS map 3 had no map contract; ~5+ minutes at 1–1). A finished map with no result that could end the series now sets `awaiting_result` and the note "Map N is over; waiting for the result."; `live.js` drops "Between maps." for it. Checks: new `GameStateTest` case; full pytest 1,288 passed, 2 skipped (34.3 s); JS tests 26 passed; ruff format/check. Limit: the score and series close still wait on Kalshi settlement or Riot's completed state.
 
-## 2026-10-30 — Pre-match top-ups to the Kelly target
+## 2026-10-30 — Playbook: Liquipedia 429s and secret writes
 
-Branch `prematch-topups` from `main`. Ledger scan: 44 live intents; 5 depth-capped (≈$2.91 of $156.51 ideal), 9 limited by the 10% series cap (≈$47), which top-ups cannot lift; one unfilled. Added sequenced intent/active/evidence legs and exact held-position Kelly, same-side resolved-order guards, MAX_LEGS 4 and $0.50 minimum; first-leg identities and spending caps remain. Checks: existing `.venv` focused pytest 219 passed (0.26s; prior cases alone 187 passed, 0.21s); full pytest 1,287 passed, 2 skipped (10.53s); 144 legacy sizing payloads identical; ruff format/check and diff checks passed. `uv run --offline` panicked at startup. No dependencies, CI jobs or build steps added. ACK status `submitted` also blocks top-ups until reconciliation. Limits: live-map path still sizes on capital net of its own held cost (unchanged); each top-up fill opens its own trade issue; not exercised against the real exchange.
+Phase 6 now says CI feeds must survive Liquipedia `HTTP 429` on shared runner IPs by reusing the last raw snapshot (`liquipedia_stale=1`), as cs2-model and dota2-model now do, and that `tee` steps need `shell: bash` for pipefail. H2 notes that a blocked secret write goes to the user as a `!` command. Docs only; checks: steering test.
 
-## 2026-10-30 — Dota 2 trading live
+## 2026-10-30 — Playbook: infra deploy and cron jobs need no human
 
-With the Lambda on main (source hash checked), execution was set off, `games` gained `dota2` ($50; CS2 and Valorant unchanged), and mode set back to live at 19:54 UTC through the configure and mode workflows. Live maps stayed live. Docs only; checks: steering test.
+The owner allowed the agent to merge the infra PR, run the execution `diff`, and deploy when the diff holds only the game's two read keys; anything else stops. Removed H5/H6; cron-job.org jobs use the saved API key. Docs only; checks: steering test.
 
-## 2026-10-30 — Dota 2 blend packaged; live candidates resolve
+## 2026-10-30 — Playbook: cron-job.org key location
 
-Added `prometheus/game_blends/dota2.json`, copied from dota2-model's `promdota/blend_artifact.json` (8 monthly snapshots; latest a 1.18, b 0.84, 992 series). A real dota2-model export (10 candidates) gives 20 proposals through `saved_candidates`; read-only `PublicKalshi.resolve` on the 10 events: 6 resolved, 4 had no two-sided quote, none failed identity checks. Dota stays disabled. Checks: pytest, ruff.
+Recorded where the cron-job.org API key lives (owner's `~/.config/cron-job.org/api_key`, value not in the repo) and how jobs are created from an existing job's headers; H6 no longer needs the owner. Docs only; checks: steering test.
 
-## 2026-10-30 — Non-League registry and disabled Dota 2
+## 2026-10-30 — Playbook: lessons from the Dota 2 run
 
-Existing worktree based on origin/main. Added stdlib game registry for execution validation, account scans, blends, alert groups and dashboard identities; included in Lambda packaging, release hashing and change detection. Feed restore includes dota2-model. Dota 2 stays disabled without explicit configuration; no production blend placeholder, since missing artifacts already yield no snapshot. Synthetic tests cover Dota candidates/rules, separate bankroll depletion, untouched other accounts, env parsing and DB-free page rendering. Production blend and infrastructure env keys remain pending. Checks: offline/no-sync full pytest (1,255 passed, 2 skipped; ~10s versus prior log 10.44s), ruff format/check, shell syntax and diff checks passed. No dependencies/CI jobs; one additional account read per scan. AWS/package deployment and Dota URL slug unverified. Copy review: PASS (no site copy changed).
+`docs/playbooks/new_game.md` now names dota2-model as a reference and records what the run taught: commit only on green tests, never print secrets, verify workers live; concrete H2/H4/H5/H6 steps (shared fine-grained token, override option, diff-then-deploy, cron-job.org API); Kalshi live vs historical endpoints; Liquipedia, OpenDota and local-setup traps; stage-1-only runs and the stage-2 look budget; Dota ladder results; the Prometheus game registry; live wiring check; CI backups and single rebuild; a **Where things live** section with lookups, no values. The cron-job.org key location is pending. Docs only; checks: steering test.
 
-## 2026-10-29 — Private trading dashboard
+## 2026-10-30 — Playbook: seeding S3 from a Mac
 
-Branch `dashboard`, base `close-issues` (PR #136). Added ledger-derived market bankrolls, P&L/ROI, dated charts, positions and results; shared canonical Kalshi links include game slugs. Lambda paginates history, reads accounts and stores issue/hash in `DASHBOARD`. Initialization finds/creates and pins the issue; changed content PATCHes, matching hashes skip GitHub. Failures never affect trading. Checks: offline/no-sync full pytest (1,242 passed, 2 skipped; 10.44s), ruff format/check and diff check passed. Initial document-budget failures were trimmed. Focused dashboard/notify tests: 30 passed, 0.05s. No dependencies/CI jobs added. Copy review: PASS for supplied dashboard headings, tables, chart keys, empty state and footer; copy already minimal. No network or commits. GitHub desktop/phone rendering, pin permissions and deployment unverified. Plain uv startup panicked; checks use the synced environment with offline/no-sync settings.
-
-## 2026-10-29 — Close settled fill issues
-
-Branch `close-issues`, base `main`. Fill notifications save the GitHub issue number; settlement comments with won/lost/even and realized P&L, then closes the issue. Legacy rows match exact Ticker/Environment lines across at most three open-issue pages, excluding pull requests and ambiguous matches. CS2/Valorant links use their game series; League links stay unchanged. The execution handler shares its cached token with the close callback. Notification/closure failures remain best effort; settled rows leave pending reconciliation, so failed closes are not retried. No trading, permissions, dependencies or CI jobs changed. Checks: offline/no-sync pytest (1,221 passed, 2 skipped); ruff format/check; diff check. New mocked tests add no external calls; full suite 10.71 seconds. No network or commits; GitHub/Lambda deployment unverified.
-
-## 2026-10-29 — Game pages hide an empty Live now table
-
-Branch `live-pause`, base `origin/main`. The CS2 page showed Live now with "No matches fit these filters." when its only live matches were tier 3 and the default filter is Majors; Valorant, with nothing live, had no section. `predictions.js` now hides a `data-section-for` section when the filters leave its table empty, matching the LoL Live now (hidden when nothing is in progress); the empty-filter line for live is gone. Checks: pytest, ruff, rendered CS2 page with the live feed at desktop and phone. Copy review: PASS (Live now, Coming up, Results on the CS2 page; cut the live empty-filter line).
-
-## 2026-10-29 — Paused maps stay on the live pages
-
-Branch `live-pause`, base `origin/main`. During a pause Riot's feed repeats one frozen frame marked `paused`; the collector rejected it (not in game, then stale), the page went `unavailable` and `write_index` dropped the match, so the live pages said no match was on. The collector now records `paused` when the newest frame is a paused one rejected only for pause, duplicate, order or staleness; the page publishes status `paused` (age check skipped), which stays in the index, keeps the last call for the series odds and shows "Paused." (already in `live.js`). `nav.js` and `fixtureOnLive` count `paused` as on. Live-map signals still need `live`. Checks: live tests (164 passed), full pytest, ruff. Confirmed frozen paused frames in recorded feeds. Limit: a feed lost mid-pause shows "Paused." until getLive drops the match. Copy review: PASS (no copy added).
-
-## 2026-10-29 — Isolated game bankrolls and guarded S3 refits
-
-CS2/Valorant configuration now requires enabled objects with their own positive starting bankroll. `ACCOUNT#cs2` / `ACCOUNT#valorant` hold reservations and settlement profit; League retains `ACCOUNT`. Plans use game free capital and aggregate held balance/exposure guards. Atomic held/realized checks bound losses including fees to seed plus realized; a repeated losing-fill/settlement test exhausts a $50 CS2 account without touching League. Shared daily limits remain. Optional `GAME_BLEND_KEYS` fetches enabled games' S3 refits hourly per warm container. Installation requires packaged validation and unchanged identity/clip; months already loaded are kept and only later months are appended (bounded slopes, ≥300 series), since a recomputed refit can nudge past months; rejection keeps current coefficients and is counted. Missing objects are silent. Checks: offline/no-sync pytest (1,186 passed, 2 skipped; 24.60s), ruff format/check, diff check. No CI job/build changes. No network or commits; AWS permissions/latency unverified.
-
-## 2026-10-29 — CS2 and domestic Valorant series execution prepared
-
-Branch `game-trading`, base `main`. Lambda accepts private CS2/domestic Valorant series candidates keyed by Kalshi names, blends current mids with frozen per-game coefficients (`prometheus/game_blends/`, copied from the model repos' `blend_artifact.json`; clip 0.01), then uses shared fees, Kelly, caps and ledger fences. League output is regression-pinned; League team aliases apply only to League ("DRX" → "Kiwoom DRX" would block Valorant DRX). Games start off: execution off → Configure `games` → mode on. `GAME_CANDIDATE_KEYS` (infra PR #25) names `cs2-model/feed/candidates.json`, `valorant-model/feed/candidates.json`. Valorant international never trades; Cloud9 veto stays universal. Checks: pytest (1,150 passed), ruff; real candidates give 62 CS2 / 6 Valorant proposals; blend matches the model repos' formula; read-only `PublicKalshi.resolve` on 11 live events: 6 resolved, 5 had no two-sided quote, none failed identity checks.
+Phase 6 now lists what to seed before the first scheduled run and the macOS `tar` flags that keep `._*` files out (they broke dota2-model's first refresh). Docs only; checks: steering test.
