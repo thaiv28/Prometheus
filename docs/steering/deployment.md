@@ -123,7 +123,7 @@ The live pages' files (`current/live/index.json`, one per match, `<match>/map<n>
 
 ## Other games (`.github/workflows/games.yml`)
 
-`prometheus/other_games.py` registers non-League identities/groups/accounts/labels. Dota 2: wired, disabled; blend/infra keys pending. Main-only, DB-free; cs2-model/valorant-model `feed.yml` dispatch (~10 minutes, `PROMETHEUS_DISPATCH_TOKEN`), hourly :27 backup.
+`prometheus/other_games.py` registers non-League identities/groups/accounts/labels. Main-only, DB-free; `prometheus-models` `<game>-feed.yml` dispatch (~10 minutes, `PROMETHEUS_DISPATCH_TOKEN`), hourly :27 backup. `OtherGame.repo` is the S3 prefix.
 
 `game_feeds.sh restore` reads backup-bucket `<prefix>/feed/<slug>.json.gz` (CS2, Valorant, Dota 2); errors skip. `render_games.py` renders; `deploy_games.py` uploads `current/other/` changes; `deploy/other-manifest.json` removed beforehand, saved on success. HTML/JSON: `public, max-age=60`; no invalidation. Publish restores `other/` feeds; newer content wins. PRs skip restore. Shares publish role/buckets.
 

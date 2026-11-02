@@ -2,29 +2,33 @@
 
 Older entries moved from `work_log.md`, newest first. Add nothing here by hand.
 
-## 2026-10-30 — Playbook: CI cost rules
-
-Added **CI cost rules** to `docs/playbooks/new_game.md` Phase 6 (public repo, cadence from the consumer, stdlib gate before setup, incremental fetching, skip unchanged work, cheap setup) and changed Phase 1 to create model repos public: dota2-model was created private, which made its 10-minute feed billable (estimated 4,320–11,520 minutes a month). Phase 6 cadences now 15 min (gated) and 3 h; Phase 7 notes thin-book `no_two_sided_blend_quote`. Docs only; checks: pytest (steering).
-
-## 2026-10-30 — Pre-match top-ups to the Kelly target
-
-Branch `prematch-topups` from `main`. Ledger scan: 44 live intents; 5 depth-capped (≈$2.91 of $156.51 ideal), 9 limited by the 10% series cap (≈$47), which top-ups cannot lift; one unfilled. Added sequenced intent/active/evidence legs and exact held-position Kelly, same-side resolved-order guards, MAX_LEGS 4 and $0.50 minimum; first-leg identities and spending caps remain. Checks: existing `.venv` focused pytest 219 passed (0.26s; prior cases alone 187 passed, 0.21s); full pytest 1,287 passed, 2 skipped (10.53s); 144 legacy sizing payloads identical; ruff format/check and diff checks passed. `uv run --offline` panicked at startup. No dependencies, CI jobs or build steps added. ACK status `submitted` also blocks top-ups until reconciliation. Limits: live-map path still sizes on capital net of its own held cost (unchanged); each top-up fill opens its own trade issue; not exercised against the real exchange.
-
-## 2026-10-30 — Dota 2 trading live
-
-With the Lambda on main (source hash checked), execution was set off, `games` gained `dota2` ($50; CS2 and Valorant unchanged), and mode set back to live at 19:54 UTC through the configure and mode workflows. Live maps stayed live. Docs only; checks: steering test.
-
-## 2026-10-30 — Dota 2 blend packaged; live candidates resolve
-
-Added `prometheus/game_blends/dota2.json`, copied from dota2-model's `promdota/blend_artifact.json` (8 monthly snapshots; latest a 1.18, b 0.84, 992 series). A real dota2-model export (10 candidates) gives 20 proposals through `saved_candidates`; read-only `PublicKalshi.resolve` on the 10 events: 6 resolved, 4 had no two-sided quote, none failed identity checks. Dota stays disabled. Checks: pytest, ruff.
-
 ## 2026-10-30 — Non-League registry and disabled Dota 2
 
 Existing worktree based on origin/main. Added stdlib game registry for execution validation, account scans, blends, alert groups and dashboard identities; included in Lambda packaging, release hashing and change detection. Feed restore includes dota2-model. Dota 2 stays disabled without explicit configuration; no production blend placeholder, since missing artifacts already yield no snapshot. Synthetic tests cover Dota candidates/rules, separate bankroll depletion, untouched other accounts, env parsing and DB-free page rendering. Production blend and infrastructure env keys remain pending. Checks: offline/no-sync full pytest (1,255 passed, 2 skipped; ~10s versus prior log 10.44s), ruff format/check, shell syntax and diff checks passed. No dependencies/CI jobs; one additional account read per scan. AWS/package deployment and Dota URL slug unverified. Copy review: PASS (no site copy changed).
 
-## 2026-10-29 — New-esport playbook
+## 2026-10-30 — Playbook: Liquipedia 429s and secret writes
 
-Branch `new-game-playbook`, base `origin/main`. Added `docs/playbooks/new_game.md`: the CS2/Valorant path for a new game in eight phases (feasibility, scaffold, data, baseline, refinement ladder, holdout gate, trading wiring, candidate-only run), with seven human stops and the steps an agent may take alone (repo creation, opening the holdout, infra PRs, Prometheus PRs). Gate: holdout blended flat ROI interval excludes 0 on a trade set fixed before opening; the plateau is the end of the nine-idea ladder. A `new-esport` skill and an AGENTS.md link point to it. Checks: pytest, ruff; links checked by hand. Limit: Phase 6 file list reflects the hard-coded game sets of 2026-10-29.
+Phase 6 now says CI feeds must survive Liquipedia `HTTP 429` on shared runner IPs by reusing the last raw snapshot (`liquipedia_stale=1`), as cs2-model and dota2-model now do, and that `tee` steps need `shell: bash` for pipefail. H2 notes that a blocked secret write goes to the user as a `!` command. Docs only; checks: steering test.
+
+## 2026-10-30 — Playbook: infra deploy and cron jobs need no human
+
+The owner allowed the agent to merge the infra PR, run the execution `diff`, and deploy when the diff holds only the game's two read keys; anything else stops. Removed H5/H6; cron-job.org jobs use the saved API key. Docs only; checks: steering test.
+
+## 2026-10-30 — Playbook: cron-job.org key location
+
+Recorded where the cron-job.org API key lives (owner's `~/.config/cron-job.org/api_key`, value not in the repo) and how jobs are created from an existing job's headers; H6 no longer needs the owner. Docs only; checks: steering test.
+
+## 2026-10-30 — Playbook: lessons from the Dota 2 run
+
+`docs/playbooks/new_game.md` now names dota2-model as a reference and records what the run taught: commit only on green tests, never print secrets, verify workers live; concrete H2/H4/H5/H6 steps (shared fine-grained token, override option, diff-then-deploy, cron-job.org API); Kalshi live vs historical endpoints; Liquipedia, OpenDota and local-setup traps; stage-1-only runs and the stage-2 look budget; Dota ladder results; the Prometheus game registry; live wiring check; CI backups and single rebuild; a **Where things live** section with lookups, no values. The cron-job.org key location is pending. Docs only; checks: steering test.
+
+## 2026-10-30 — Playbook: seeding S3 from a Mac
+
+Phase 6 now lists what to seed before the first scheduled run and the macOS `tar` flags that keep `._*` files out (they broke dota2-model's first refresh). Docs only; checks: steering test.
+
+## 2026-10-30 — Playbook: CI cost rules
+
+Added **CI cost rules** to `docs/playbooks/new_game.md` Phase 6 (public repo, cadence from the consumer, stdlib gate before setup, incremental fetching, skip unchanged work, cheap setup) and changed Phase 1 to create model repos public: dota2-model was created private, which made its 10-minute feed billable (estimated 4,320–11,520 minutes a month). Phase 6 cadences now 15 min (gated) and 3 h; Phase 7 notes thin-book `no_two_sided_blend_quote`. Docs only; checks: pytest (steering).
 
 ## 2026-10-29 — Private trading dashboard
 
@@ -61,6 +65,10 @@ Branch `game-feed`, building on phase 1 HEAD. Added DB-free `games.yml` (model-j
 ## 2026-10-29 — Generic game-feed predictions and results
 
 Branch `game-feed`, base `main`. Added an Other games menu and pages `other/<game>.html` (with monthly results and a JSON download) rendered from `data/games/*.json` feeds (`PROMETHEUS_GAME_FEEDS` override), written by cs2-model and valorant-model `export`. `games/` already holds the game logs, so pages live under `other/`. The fixture register gains Tier/filter labels, unknown best-of and optional Blend; League pages render byte-identically. Invalid feeds warn and skip; no feeds means no menu. Feeds are local only. Cost: full build 78 s with both real feeds; game pages alone 5 ms per fixture feed. CS2 month pages run to 3.7 MB (all tiers). Checks: pytest (1,097 passed), ruff, `node --check`, JS tests, full build, desktop/phone screenshots. Copy review: PASS (game page, month page: lede, captions, notes, empty states; already minimal, nothing cut).
+
+## 2026-10-29 — New-esport playbook
+
+Branch `new-game-playbook`, base `origin/main`. Added `docs/playbooks/new_game.md`: the CS2/Valorant path for a new game in eight phases (feasibility, scaffold, data, baseline, refinement ladder, holdout gate, trading wiring, candidate-only run), with seven human stops and the steps an agent may take alone (repo creation, opening the holdout, infra PRs, Prometheus PRs). Gate: holdout blended flat ROI interval excludes 0 on a trade set fixed before opening; the plateau is the end of the nine-idea ladder. A `new-esport` skill and an AGENTS.md link point to it. Checks: pytest, ruff; links checked by hand. Limit: Phase 6 file list reflects the hard-coded game sets of 2026-10-29.
 
 ## 2026-10-28 — Raised trading limits from a 2027 sizing simulation
 
