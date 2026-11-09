@@ -111,7 +111,7 @@ def test_active_runner_reads_exact_private_source_and_lazily_own_environment(
                     "p": 0.7,
                     "price": 0.5,
                     "at": "2026-10-19T10:00Z",
-                    "group": "minor-domestic",
+                    "group": "major-domestic",
                 },
             }
         ]

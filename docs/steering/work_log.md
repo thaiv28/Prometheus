@@ -1,5 +1,9 @@
 
 
+## 2026-11-09 — Paused pre-match slices with no shown edge
+
+Branch `pause-unproven-slices` from `main`. Added `PAUSED_SLICES` to `alert_contract.py`, enforced by `trade_veto`: LoL minor domestic and all international groups, CS2 `INTL` and `T1`, Valorant `GC` and `OFF`. Alerts stay visible; live-map trading is unchanged. CS2 and Valorant candidates must carry `provenance.section` (added in prometheus-models) or they are vetoed. Evidence and on/off table: [`docs/betting_scope.md`](../betting_scope.md). Checks: new veto and doc-sync tests; full pytest; ruff. Limit: not observed on the deployed Lambda or in the private S3 candidates (AWS login expired).
+
 ## 2026-11-02 — Game models moved to prometheus-models
 
 Docs only. `cs2-model`, `dota2-model` and `valorant-model` were merged with history into `thaiv28/prometheus-models` (`games/<game>/`) and archived; their scheduled workflows and the cron-job.org dispatches now target that repo. S3 prefixes are unchanged, so `other_games.py`, `game_feeds.sh` and the execution Lambda need no change. Updated the Other games paragraph in `deployment.md`. Checks: every new-repo workflow ran green once; Prometheus `games.yml` publishes after their feeds; pytest (steering).

@@ -53,6 +53,20 @@ TRADE_GROUPS = (GROUPS - {"other-cross-league"}) | frozenset(
 GROUPS = GROUPS | frozenset(
     group for game in OTHER_GAMES.values() for group in game.groups
 )
+# Pre-match slices with no demonstrated edge; docs/betting_scope.md has the evidence
+# and tests keep it in step. LoL slices are fixture groups, others feed sections.
+PAUSED_SLICES = {
+    "lol": frozenset(
+        {
+            "minor-domestic",
+            "major-international",
+            "mixed-international",
+            "minor-international",
+        }
+    ),
+    "cs2": frozenset({"INTL", "T1"}),
+    "valorant": frozenset({"GC", "OFF"}),
+}
 
 
 # Letters that Unicode doesn't split into a base letter and an accent.
@@ -75,6 +89,19 @@ def fold(name):
     name = str(name).lower().translate(_PLAIN_LETTERS)
     name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
+
+
+def paused_slice_veto(alert):
+    """Veto paused pre-match slices; a game's candidate must name its section."""
+    game = alert.get("game", "lol")
+    if game not in PAUSED_SLICES or alert.get("group") == "live-map":
+        return None
+    if game == "lol":
+        return "paused_slice" if alert.get("group") in PAUSED_SLICES[game] else None
+    section = (alert.get("provenance") or {}).get("section")
+    if section is None:
+        return "missing_trade_section"
+    return "paused_slice" if section in PAUSED_SLICES[game] else None
 
 
 def trade_veto(alert):
@@ -102,7 +129,7 @@ def trade_veto(alert):
                 "backed_team"
             ):
                 return "against_north_america_international"
-    return None
+    return paused_slice_veto(alert)
 
 
 def _digest(parts):
