@@ -63,7 +63,7 @@ def game_document(game="cs2", now=NOW, **changes):
                     "group": next(g for g, v in ac.GAME_GROUPS.items() if v == game),
                     "start": (now + dt.timedelta(days=1)).isoformat(),
                     "raw": {"GamerLegion": 0.999, "HOTU": 0.001},
-                    "provenance": {},
+                    "provenance": {"section": "T3"},
                     **changes,
                 }
             }
@@ -273,12 +273,71 @@ def test_game_veto_keeps_cloud9_but_ignores_home_leagues():
         "teams": ["HOTU", "GamerLegion"],
         "international": True,
         "team_homes": {},
+        "provenance": {"section": "T3"},
     }
     assert ac.trade_veto(proposal) is None
     assert (
         ac.trade_veto({**proposal, "game": "lol"})
         == "missing_international_home_leagues"
     )
+
+
+@pytest.mark.parametrize(
+    "game,group,section,reason",
+    [
+        ("lol", "major-domestic", None, None),
+        ("lol", "minor-domestic", None, "paused_slice"),
+        ("lol", "major-international", None, "paused_slice"),
+        ("lol", "mixed-international", None, "paused_slice"),
+        ("lol", "minor-international", None, "paused_slice"),
+        ("lol", "live-map", None, None),
+        ("cs2", "cs2-series", "T2", None),
+        ("cs2", "cs2-series", "T3", None),
+        ("cs2", "cs2-series", "?", None),
+        ("cs2", "cs2-series", "INTL", "paused_slice"),
+        ("cs2", "cs2-series", "T1", "paused_slice"),
+        ("cs2", "cs2-series", None, "missing_trade_section"),
+        ("valorant", "valorant-domestic", "VCT", None),
+        ("valorant", "valorant-domestic", "VCL", None),
+        ("valorant", "valorant-domestic", "GC", "paused_slice"),
+        ("valorant", "valorant-domestic", "OFF", "paused_slice"),
+        ("valorant", "valorant-domestic", None, "missing_trade_section"),
+        ("dota2", "dota2-series", None, None),
+        ("dota2", "dota2-series", "INTL", None),
+    ],
+)
+def test_paused_slices(game, group, section, reason):
+    provenance = {"section": section} if section else {}
+    alert = {
+        "game": game,
+        "group": group,
+        "teams": ["A", "B"],
+        "backed_team": "A",
+        "team_homes": {"A": "LCK", "B": "LPL"},
+        "provenance": provenance,
+    }
+    assert ac.trade_veto(alert) == reason
+
+
+def test_paused_slice_keeps_north_america_veto_first():
+    alert = {
+        "group": "major-international",
+        "international": True,
+        "teams": ["A", "B"],
+        "team_homes": {"A": "LCK", "B": "LCS"},
+    }
+    assert (
+        ac.trade_veto({**alert, "backed_team": "A"})
+        == "against_north_america_international"
+    )
+    assert ac.trade_veto({**alert, "backed_team": "B"}) == "paused_slice"
+
+
+def test_betting_scope_doc_lists_every_paused_slice():
+    text = (Path(__file__).parents[1] / "docs/betting_scope.md").read_text()
+    for game, slices in ac.PAUSED_SLICES.items():
+        for name in slices:
+            assert f"| Off | {game} | `{name}` |" in text
 
 
 @pytest.mark.parametrize("enabled", [False, True])
@@ -300,6 +359,7 @@ def test_game_bulk_selection_and_shared_execution(game_artifacts, enabled):
         series_ticker="KXCS2GAME",
         event_ticker="KXCS2GAME-F",
         group="cs2-series",
+        provenance={"section": "T3"},
         trading=mb.estimate(0.999, 0.59, NOW, game="cs2"),
     )
     # Include a League proposal that fails the quote screen; only CS2 can submit.
@@ -546,6 +606,7 @@ def test_game_losses_stop_at_own_bankroll_and_leave_league_untouched(game):
         proposal = saved(
             game=game,
             group=f"{game}-series",
+            provenance={"section": "T3"},
             probability=".99",
             fixture_id=f"{game}-{index}",
             event_ticker=f"{GAMES[game].series_ticker}-{index}",
@@ -617,7 +678,7 @@ def test_total_held_balance_and_exposure_guard(game):
     _, api, _, _ = harness()
     cfg = core.Config.parse(game_settings())
     proposal = saved(
-        game=game, group="cs2-series" if game == "cs2" else "minor-domestic"
+        game=game, group="cs2-series" if game == "cs2" else "major-domestic"
     )
     for account, balance, exposure in [
         ({"held": 0, "total_held": 95}, 100, 0),
@@ -780,7 +841,7 @@ def test_runner_counts_other_games_held_even_when_disabled(game, held_game):
         )
     )
     result = execute(
-        [saved(game=game, group="cs2-series" if game == "cs2" else "minor-domestic")]
+        [saved(game=game, group="cs2-series" if game == "cs2" else "major-domestic")]
     )
     assert result["submitted"] == 0 and result["skipped"] == 1
     assert result["errors"] == 0

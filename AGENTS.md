@@ -9,6 +9,7 @@ Read only what your change touches. If your task came with a spec naming files a
 - **Always:** the newest work-log entries, `python3 scripts/work_log.py recent 5` (not the whole file). Search [the archive](docs/steering/work_log_archive.md) with `grep` when a topic may have been tried before.
 - **Pipeline, tables, metric algorithms, tests, file layout:** [Tech](docs/steering/tech.md) (its Layout section maps every file; its Metric change rules section holds the full benchmark rules).
 - **Feature status, known limits, future work:** [Current state](docs/steering/current_state.md).
+- **What we bet on and why:** [Betting scope](docs/betting_scope.md).
 - **Metrics, audience, vision:** [Product](docs/steering/product.md).
 - **CI, publishing, data backup, AWS:** [Deployment](docs/steering/deployment.md).
 - **Templates, CSS, JS:** [UI](docs/steering/ui.md), `DESIGN.md` and `PRODUCT.md`. Use the impeccable skill.

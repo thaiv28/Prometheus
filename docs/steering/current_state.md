@@ -4,6 +4,8 @@ Code baseline; read `db/prometheus.db` or the live site for current rankings. Ev
 
 ## Working
 
+- **Betting scope:** pre-match orders skip the slices paused in `PAUSED_SLICES`; on/off table and evidence in [betting_scope.md](../betting_scope.md).
+
 - **Other games:** local version-1 JSON feeds render game predictions, live scores, monthly results and downloads with tier filters. DB-free `games.yml` restores S3 feeds and uploads by hash; publish restores the same feeds for navigation. GitHub execution and external dispatch remain unverified.
 
 - **Fresh calls:** hourly prices resumes published Elo with Leaguepedia and worker maps; the worker uploads finished maps and dispatches prices (five-minute debounce). Hourly runs also render Predictions/results and feed refreshed live ratings every five minutes. Registers, head-to-head and home ratings use an hourly build-matched overlay; Form and OE dates stay intact. Fake-based checks cover the handoff; live token/SSM grant and deploy pending.

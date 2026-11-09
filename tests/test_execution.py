@@ -50,7 +50,7 @@ def saved(**changes):
         "event_ticker": "KXLOLGAME-F",
         "probability": "0.75",
         "original_ask": "0.60",
-        "group": "minor-domestic",
+        "group": "major-domestic",
         "provenance": {"method": "forge"},
         **changes,
     }
@@ -269,7 +269,7 @@ def test_blended_execution_requires_current_mid_and_excludes_cross_league():
         (["C9", "B"], "B", "minor-domestic", {}, False),
         (["A", "B"], "A", "major-international", {"A": "LCK", "B": "LCS"}, False),
         (["B", "A"], "A", "major-international", {"A": "LCK", "B": "LTA N"}, False),
-        (["A", "B"], "B", "major-international", {"A": "LCK", "B": "LCS"}, True),
+        (["A", "B"], "B", "major-international", {"A": "LCK", "B": "LCS"}, False),
         (["A", "B"], "A", "major-domestic", {"A": "LCS", "B": "LCS"}, True),
         (["A", "B"], "A", "major-international", {}, False),
     ],
